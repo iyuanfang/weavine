@@ -2,10 +2,13 @@ import { z } from 'zod';
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 import { NotFoundError } from '@/lib/errors';
+import { ReminderService } from './reminder';
 
 const eventInput = z.object({
   title: z.string().min(1).max(120),
-  type: z.enum(['meeting', 'birthday', 'anniversary', 'reminder', 'custom']).default('meeting'),
+  type: z
+    .enum(['meeting', 'birthday', 'anniversary', 'reminder', 'custom'])
+    .default('meeting'),
   startAt: z.coerce.date(),
   endAt: z.coerce.date().nullish(),
   location: z.string().max(200).nullish(),
@@ -18,7 +21,7 @@ export type EventInput = z.infer<typeof eventInput>;
 export const EventService = {
   async create(input: EventInput, db: PrismaClient = defaultPrisma) {
     const p = eventInput.parse(input);
-    return db.event.create({
+    const event = await db.event.create({
       data: {
         title: p.title,
         type: p.type,
@@ -30,6 +33,8 @@ export const EventService = {
       },
       include: { attendees: true },
     });
+    await ReminderService.createManyForEvent(event.id, p.startAt, undefined, db);
+    return event;
   },
 
   async get(id: string, db: PrismaClient = defaultPrisma) {
@@ -41,13 +46,17 @@ export const EventService = {
     return e;
   },
 
-  async update(id: string, input: Partial<EventInput>, db: PrismaClient = defaultPrisma) {
+  async update(
+    id: string,
+    input: Partial<EventInput>,
+    db: PrismaClient = defaultPrisma,
+  ) {
     const { attendeeIds, ...rest } = eventInput.partial().parse(input);
     if (attendeeIds !== undefined) {
       await db.eventAttendee.deleteMany({ where: { eventId: id } });
     }
     try {
-      return await db.event.update({
+      const updated = await db.event.update({
         where: { id },
         data: {
           ...rest,
@@ -58,6 +67,13 @@ export const EventService = {
         },
         include: { attendees: { include: { contact: true } } },
       });
+      if (rest.startAt) {
+        await db.reminder.deleteMany({
+          where: { eventId: id, dispatched: false, dismissed: false },
+        });
+        await ReminderService.createManyForEvent(id, rest.startAt, undefined, db);
+      }
+      return updated;
     } catch {
       throw new NotFoundError('事件不存在');
     }
@@ -71,7 +87,11 @@ export const EventService = {
     }
   },
 
-  async listByMonth(year: number, month1to12: number, db: PrismaClient = defaultPrisma) {
+  async listByMonth(
+    year: number,
+    month1to12: number,
+    db: PrismaClient = defaultPrisma,
+  ) {
     const start = new Date(Date.UTC(year, month1to12 - 1, 1));
     const end = new Date(Date.UTC(year, month1to12, 1));
     return db.event.findMany({

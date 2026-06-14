@@ -27,6 +27,7 @@ model Contact {
   events       EventAttendee[]
   interactions Interaction[]
   needs        Need[]
+  reminders    Reminder[] @relation("ContactReminders")
 
   @@index([name])
   @@index([company])
@@ -65,6 +66,7 @@ model Event {
   updatedAt DateTime @updatedAt
 
   attendees EventAttendee[]
+  reminders Reminder[]
 
   @@index([startAt])
 }
@@ -108,4 +110,32 @@ model EventAttendee {
 
   @@id([eventId, contactId])
   @@index([contactId])
+}
+
+model Reminder {
+  id         String   @id @default(cuid())
+  contactId  String?
+  contact    Contact? @relation("ContactReminders", fields: [contactId], references: [id], onDelete: Cascade)
+  eventId    String?
+  event      Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  triggerAt  DateTime
+  kind       String   @default("event")
+  dispatched Boolean  @default(false)
+  dismissed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([triggerAt, dispatched, dismissed])
+  @@index([contactId])
+}
+
+model InboxItem {
+  id        String   @id @default(cuid())
+  kind      String   @default("reminder_due")
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read, createdAt])
 }

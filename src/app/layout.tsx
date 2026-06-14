@@ -2,6 +2,9 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Providers } from './providers';
 import { TopNav } from '@/components/top-nav';
+import { startCron } from '@/server/cron';
+
+startCron();
 
 export const dynamic = 'force-dynamic';
 
