@@ -7,6 +7,7 @@ import { InteractionService } from '@/server/services/interaction';
 import { deleteContactAction } from '@/app/contacts/actions';
 import { InteractionForm } from '@/components/interaction-form';
 import { InteractionTimeline } from '@/components/interaction-timeline';
+import { tagColor } from '@/lib/tag-color';
 
 export default async function ContactDetail({
   params,
@@ -76,15 +77,18 @@ export default async function ContactDetail({
       </dl>
 
       <div className="mt-3 flex flex-wrap gap-1">
-        {c.tags.map((t) => (
-          <span
-            key={t.tag.id}
-            className="rounded px-2 py-0.5 text-xs"
-            style={{ background: t.tag.color ?? '#e5e7eb' }}
-          >
-            {t.tag.name}
-          </span>
-        ))}
+        {c.tags.map((t) => {
+          const tc = tagColor(t.tag.name);
+          return (
+            <span
+              key={t.tag.id}
+              className="rounded px-2.5 py-1 text-xs font-medium"
+              style={{ background: tc.bg, color: tc.text }}
+            >
+              {t.tag.name}
+            </span>
+          );
+        })}
       </div>
 
       {c.notes && (

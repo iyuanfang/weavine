@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import type { Parsed, Chip } from '@/server/search/parser';
+import { tagColor } from '@/lib/tag-color';
 
 type Hit = {
   id: string;
@@ -81,8 +82,8 @@ export function SearchResults({ q }: { q: string }) {
                   {h.tags.map((ct) => (
                     <span
                       key={ct.tag.id}
-                      className="rounded px-1.5 text-xs"
-                      style={{ background: ct.tag.color ?? '#e5e7eb' }}
+                      className="rounded px-2.5 py-1 text-xs font-medium"
+                      style={{ background: tagColor(ct.tag.name).bg, color: tagColor(ct.tag.name).text }}
                     >
                       {ct.tag.name}
                     </span>

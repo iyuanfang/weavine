@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { tagColor } from '@/lib/tag-color';
 
 type Props = {
   contact: {
@@ -24,13 +25,13 @@ export function ContactCard({ contact }: Props) {
           {contact.tags.length > 0 && (
             <div className="flex gap-1">
               {contact.tags.map((t) => (
-                <span
-                  key={t.tag.id}
-                  className="rounded px-2 text-xs leading-5"
-                  style={{ background: t.tag.color ?? '#e5e7eb' }}
-                >
-                  {t.tag.name}
-                </span>
+                  <span
+                    key={t.tag.id}
+                    className="rounded px-2.5 py-1 text-xs font-medium"
+                    style={{ background: tagColor(t.tag.name).bg, color: tagColor(t.tag.name).text }}
+                  >
+                    {t.tag.name}
+                  </span>
               ))}
             </div>
           )}

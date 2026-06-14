@@ -1,5 +1,6 @@
 import { TagService } from '@/server/services/tag';
 import { createTag, renameTag, deleteTag } from './actions';
+import { tagColor } from '@/lib/tag-color';
 
 export default async function TagsPage() {
   const tags = await TagService.list();
@@ -22,8 +23,8 @@ export default async function TagsPage() {
         {tags.map((t) => (
           <li key={t.id} className="flex items-center gap-3 py-2">
             <span
-              className="rounded px-2 py-0.5 text-xs"
-              style={{ background: t.color ?? '#e5e7eb' }}
+              className="rounded px-2.5 py-1 text-xs font-medium"
+              style={{ background: tagColor(t.name).bg, color: tagColor(t.name).text }}
             >
               {t.name}
             </span>
