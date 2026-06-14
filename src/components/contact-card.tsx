@@ -13,7 +13,7 @@ type Props = {
 
 export function ContactCard({ contact }: Props) {
   return (
-    <li className="rounded border p-3 hover:bg-gray-50">
+    <li className="card hover:bg-gray-50">
       <Link href={`/contacts/${contact.id}`} className="block">
         <div className="flex items-center justify-between">
           <div>
@@ -23,16 +23,19 @@ export function ContactCard({ contact }: Props) {
             </div>
           </div>
           {contact.tags.length > 0 && (
-            <div className="flex gap-1">
-              {contact.tags.map((t) => (
+            <div className="flex flex-wrap gap-1">
+              {contact.tags.map((t) => {
+                const c = tagColor(t.tag.name);
+                return (
                   <span
                     key={t.tag.id}
-                    className="rounded px-2.5 py-1 text-xs font-medium"
-                    style={{ background: tagColor(t.tag.name).bg, color: tagColor(t.tag.name).text }}
+                    className="badge"
+                    style={{ background: c.bg, color: c.text }}
                   >
                     {t.tag.name}
                   </span>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -35,9 +35,7 @@ export default async function NeedDetail({
             编辑
           </Link>
           <form action={deleteNeed.bind(null, n.id)}>
-            <button className="rounded border border-red-300 px-3 py-1 text-red-600">
-              删除
-            </button>
+            <button className="btn-danger">删除</button>
           </form>
         </div>
       </div>

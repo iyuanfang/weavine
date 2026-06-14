@@ -58,9 +58,7 @@ export default async function ContactDetail({
             编辑
           </Link>
           <form action={deleteContactAction.bind(null, c.id)}>
-            <button className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
-              删除
-            </button>
+            <button className="btn-danger">删除</button>
           </form>
         </div>
       </div>
@@ -82,7 +80,7 @@ export default async function ContactDetail({
           return (
             <span
               key={t.tag.id}
-              className="rounded px-2.5 py-1 text-xs font-medium"
+              className="badge"
               style={{ background: tc.bg, color: tc.text }}
             >
               {t.tag.name}

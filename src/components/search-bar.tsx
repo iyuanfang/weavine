@@ -20,9 +20,9 @@ export function SearchBar() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="搜索 例：北京 合作 找前端"
-        className="rounded border border-gray-300 px-2 py-1 text-sm w-72"
+        className="input-sm w-64"
       />
-      <button type="submit" className="rounded border border-gray-300 px-2 text-sm hover:bg-gray-50">
+      <button type="submit" className="btn-secondary px-2">
         搜索
       </button>
     </form>

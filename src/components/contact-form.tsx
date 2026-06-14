@@ -29,10 +29,7 @@ type Initial = Partial<typeof blank> & {
 function Submit({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
-    <button
-      disabled={pending}
-      className="btn-primary disabled:opacity-50"
-    >
+    <button disabled={pending} className="btn-primary">
       {label}
     </button>
   );
@@ -98,7 +95,7 @@ export function ContactForm({
           {tags.map((t) => (
             <label
               key={t.id}
-              className="cursor-pointer rounded border px-2 py-1 text-sm"
+              className="cursor-pointer rounded border border-gray-300 px-2 py-1 text-sm hover:bg-gray-50"
             >
               <input
                 type="checkbox"
@@ -116,7 +113,7 @@ export function ContactForm({
         <textarea
           name="notes"
           defaultValue={initial?.notes}
-          className="mt-1 w-full rounded border p-2"
+          className="input-base"
           rows={4}
         />
       </div>
@@ -144,12 +141,7 @@ function Field({
   return (
     <div>
       <label className="block text-sm">{label}</label>
-      <input
-        name={name}
-        type={type}
-        className="input-base mt-1 w-full"
-        {...rest}
-      />
+      <input name={name} type={type} className="input-base" {...rest} />
     </div>
   );
 }

@@ -39,7 +39,7 @@ export function EventForm({
           name="title"
           required
           defaultValue={initial?.title ?? ''}
-          className="input-base mt-1 w-full"
+          className="input-base"
         />
       </div>
 
@@ -48,7 +48,7 @@ export function EventForm({
         <select
           name="type"
           defaultValue={initial?.type ?? 'meeting'}
-          className="input-base mt-1 w-full"
+          className="input-base"
         >
           <option value="meeting">会面</option>
           <option value="birthday">生日</option>
@@ -63,7 +63,7 @@ export function EventForm({
         <input
           name="location"
           defaultValue={initial?.location ?? ''}
-          className="input-base mt-1 w-full"
+          className="input-base"
         />
       </div>
 
@@ -74,7 +74,7 @@ export function EventForm({
           type="datetime-local"
           required
           defaultValue={start}
-          className="input-base mt-1 w-full"
+          className="input-base"
         />
       </div>
 
@@ -84,13 +84,13 @@ export function EventForm({
           name="endAt"
           type="datetime-local"
           defaultValue={end}
-          className="input-base mt-1 w-full"
+          className="input-base"
         />
       </div>
 
       <div className="col-span-2">
         <label className="text-sm font-medium">参与人</label>
-        <div className="mt-1 grid max-h-40 grid-cols-2 gap-1 overflow-y-auto rounded border p-2">
+        <div className="mt-1 grid max-h-40 grid-cols-2 gap-1 overflow-y-auto rounded border border-gray-300 p-2">
           {contacts.map((c) => (
             <label key={c.id} className="flex items-center gap-1 text-sm">
               <input
@@ -112,7 +112,7 @@ export function EventForm({
         <textarea
           name="notes"
           defaultValue={initial?.notes ?? ''}
-          className="input-base mt-1 w-full"
+          className="input-base"
           rows={4}
         />
       </div>

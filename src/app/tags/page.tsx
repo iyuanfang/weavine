@@ -23,7 +23,7 @@ export default async function TagsPage() {
         {tags.map((t) => (
           <li key={t.id} className="flex items-center gap-3 py-2">
             <span
-              className="rounded px-2.5 py-1 text-xs font-medium"
+              className="badge"
               style={{ background: tagColor(t.name).bg, color: tagColor(t.name).text }}
             >
               {t.name}
@@ -39,15 +39,13 @@ export default async function TagsPage() {
               <input
                 name="name"
                 defaultValue={t.name}
-                className="input-base w-24 text-sm"
+                className="input-sm w-24"
               />
-              <button className="btn-secondary text-sm">改名</button>
+              <button className="btn-secondary">改名</button>
             </form>
 
             <form action={deleteTag.bind(null, t.id)}>
-              <button className="rounded border border-red-300 px-2 py-1 text-sm text-red-600 hover:bg-red-50">
-                删除
-              </button>
+              <button className="btn-danger">删除</button>
             </form>
           </li>
         ))}

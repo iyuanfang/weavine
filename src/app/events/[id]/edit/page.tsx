@@ -38,9 +38,7 @@ export default async function EditEvent({
         }}
       />
       <form action={deleteEventAction.bind(null, e.id)} className="mt-6">
-        <button className="rounded border border-red-300 px-3 py-1 text-sm text-red-600">
-          删除
-        </button>
+        <button className="btn-danger">删除</button>
       </form>
     </main>
   );

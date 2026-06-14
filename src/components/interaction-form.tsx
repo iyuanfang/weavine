@@ -8,10 +8,7 @@ import { logInteractionAction } from '@/app/contacts/[id]/actions';
 function SubmitBtn() {
   const { pending } = useFormStatus();
   return (
-    <button
-      disabled={pending}
-      className="btn-primary text-sm disabled:opacity-50"
-    >
+    <button disabled={pending} className="btn-primary">
       {pending ? '记录中…' : '记录'}
     </button>
   );
@@ -30,7 +27,7 @@ export function InteractionForm({ contactId }: { contactId: string }) {
   return (
     <form
       action={handleSubmit}
-      className="mt-3 grid grid-cols-3 gap-2 rounded border p-3 text-sm"
+      className="card mt-3 grid grid-cols-3 gap-2"
     >
       <input
         name="occurredAt"

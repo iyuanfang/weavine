@@ -9,7 +9,7 @@ const CATEGORIES = NeedService.CATEGORIES;
 function Submit({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
-    <button disabled={pending} className="btn-primary disabled:opacity-50">
+    <button disabled={pending} className="btn-primary">
       {label}
     </button>
   );
@@ -46,7 +46,7 @@ export function NeedForm({
           name="title"
           required
           defaultValue={initial?.title ?? ''}
-          className="input-base mt-1 w-full"
+          className="input-base"
         />
       </div>
       <div>
@@ -54,7 +54,7 @@ export function NeedForm({
         <select
           name="category"
           defaultValue={initial?.category ?? '合作'}
-          className="input-base mt-1 w-full"
+          className="input-base"
         >
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>
@@ -71,7 +71,7 @@ export function NeedForm({
           min={0}
           max={10}
           defaultValue={initial?.priority ?? 0}
-          className="input-base mt-1 w-full"
+          className="input-base"
         />
       </div>
       <div className="col-span-2">
@@ -80,7 +80,7 @@ export function NeedForm({
           name="description"
           defaultValue={initial?.description ?? ''}
           rows={4}
-          className="input-base mt-1 w-full"
+          className="input-base"
         />
       </div>
       {state && !state.ok && (

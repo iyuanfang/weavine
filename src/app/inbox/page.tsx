@@ -51,15 +51,11 @@ export default async function InboxPage() {
               </div>
               {!i.read && (
                 <form action={markReadAction.bind(null, i.id)}>
-                  <button className="rounded border px-2 text-xs">
-                    已读
-                  </button>
+                  <button className="btn-secondary">已读</button>
                 </form>
               )}
               <form action={deleteInboxItemAction.bind(null, i.id)}>
-                <button className="rounded border border-red-300 px-2 text-xs text-red-600">
-                  删
-                </button>
+                <button className="btn-danger">删</button>
               </form>
             </li>
           ))

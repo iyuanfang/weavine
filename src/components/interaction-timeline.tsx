@@ -47,7 +47,7 @@ export function InteractionTimeline({
       {items.map((i) => (
         <li
           key={i.id}
-          className="rounded border border-l-4 border-l-accent p-3 text-sm"
+          className="card border-l-4 border-l-accent"
         >
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>

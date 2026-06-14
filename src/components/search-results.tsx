@@ -69,7 +69,7 @@ export function SearchResults({ q }: { q: string }) {
           {data.hits.map((h) => (
             <li
               key={h.id}
-              className="rounded border p-3 text-sm hover:bg-gray-50"
+              className="card hover:bg-gray-50"
             >
               <Link className="font-medium text-accent" href={`/contacts/${h.id}`}>
                 {h.name}
@@ -78,16 +78,19 @@ export function SearchResults({ q }: { q: string }) {
                 {[h.company, h.city].filter(Boolean).join(' · ')}
               </div>
               {h.tags.length > 0 && (
-                <div className="mt-1 flex gap-1">
-                  {h.tags.map((ct) => (
-                    <span
-                      key={ct.tag.id}
-                      className="rounded px-2.5 py-1 text-xs font-medium"
-                      style={{ background: tagColor(ct.tag.name).bg, color: tagColor(ct.tag.name).text }}
-                    >
-                      {ct.tag.name}
-                    </span>
-                  ))}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {h.tags.map((ct) => {
+                    const c = tagColor(ct.tag.name);
+                    return (
+                      <span
+                        key={ct.tag.id}
+                        className="badge"
+                        style={{ background: c.bg, color: c.text }}
+                      >
+                        {ct.tag.name}
+                      </span>
+                    );
+                  })}
                 </div>
               )}
             </li>
