@@ -23,7 +23,8 @@ model Contact {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tags ContactTag[]
+  tags         ContactTag[]
+  events       EventAttendee[]
 
   @@index([name])
   @@index([company])
@@ -48,4 +49,31 @@ model ContactTag {
 
   @@id([contactId, tagId])
   @@index([tagId])
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  title     String
+  type      String   @default("meeting")
+  startAt   DateTime
+  endAt     DateTime?
+  location  String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendees EventAttendee[]
+
+  @@index([startAt])
+}
+
+model EventAttendee {
+  eventId   String
+  contactId String
+
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, contactId])
+  @@index([contactId])
 }
