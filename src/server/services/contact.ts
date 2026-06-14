@@ -78,11 +78,12 @@ export const ContactService = {
     db: PrismaClient = defaultPrisma
   ) {
     const parsed = contactInput.partial().parse(input);
+    const data: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(parsed)) {
+      data[key] = (val === '' || val === undefined) ? null : val;
+    }
     try {
-      return await db.contact.update({
-        where: { id },
-        data: cleanInput(parsed as ContactInput),
-      });
+      return await db.contact.update({ where: { id }, data: data as any });
     } catch {
       throw new NotFoundError('联系人不存在');
     }

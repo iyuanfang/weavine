@@ -12,14 +12,8 @@ export default async function TagsPage() {
         <input
           name="name"
           required
-          placeholder="新标签"
+          placeholder="新标签名"
           className="input-base flex-1"
-        />
-        <input
-          name="color"
-          type="color"
-          defaultValue="#2563eb"
-          className="h-9 w-12 cursor-pointer rounded border"
         />
         <button className="btn-primary">添加</button>
       </form>

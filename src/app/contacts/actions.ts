@@ -24,6 +24,7 @@ export async function createContactAction(
   } catch (e) {
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
+    console.error('createContactAction error:', e);
     return { ok: false, error: '创建失败' };
   }
 }
@@ -55,6 +56,7 @@ export async function updateContactAction(
   } catch (e) {
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
+    console.error('updateContactAction error:', e);
     return { ok: false, error: '更新失败' };
   }
 }

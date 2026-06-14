@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 import { logInteractionAction } from '@/app/contacts/[id]/actions';
 
@@ -16,11 +18,18 @@ function SubmitBtn() {
 }
 
 export function InteractionForm({ contactId }: { contactId: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const today = new Date().toISOString().slice(0, 16);
+
+  async function handleSubmit(formData: FormData) {
+    await logInteractionAction(contactId, formData);
+    startTransition(() => router.refresh());
+  }
 
   return (
     <form
-      action={logInteractionAction.bind(null, contactId)}
+      action={handleSubmit}
       className="mt-3 grid grid-cols-3 gap-2 rounded border p-3 text-sm"
     >
       <input

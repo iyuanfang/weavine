@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
 import { deleteInteractionAction } from '@/app/contacts/[id]/actions';
 
 interface Item {
@@ -7,6 +9,26 @@ interface Item {
   occurredAt: string;
   channel: string | null;
   summary: string;
+}
+
+function DeleteButton({ contactId, id }: { contactId: string; id: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
+  async function handleDelete() {
+    await deleteInteractionAction(contactId, id);
+    startTransition(() => router.refresh());
+  }
+
+  return (
+    <button
+      onClick={handleDelete}
+      className="text-red-600 hover:underline"
+      type="button"
+    >
+      删除
+    </button>
+  );
 }
 
 export function InteractionTimeline({
@@ -32,13 +54,7 @@ export function InteractionTimeline({
               {new Date(i.occurredAt).toLocaleString('zh-CN')}
               {i.channel ? ` · ${i.channel}` : ''}
             </span>
-            <form
-              action={deleteInteractionAction.bind(null, contactId, i.id)}
-            >
-              <button className="text-red-600 hover:underline" type="submit">
-                删除
-              </button>
-            </form>
+            <DeleteButton contactId={contactId} id={i.id} />
           </div>
           <p className="mt-1 whitespace-pre-wrap">{i.summary}</p>
         </li>

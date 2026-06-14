@@ -46,37 +46,40 @@ export async function executeSearch(parsed: Parsed): Promise<Hit[]> {
     }
   }
 
+  // Also search via LIKE (catches notes content, Chinese tokens, etc.)
+  const likeIds: string[] = [];
+  if (parsed.text) {
+    const like = await prisma.contact.findMany({
+      where: {
+        OR: [
+          { name: { contains: parsed.text } },
+          { company: { contains: parsed.text } },
+          { notes: { contains: parsed.text } },
+        ],
+      },
+      select: { id: true },
+    });
+    likeIds.push(...like.map((r) => r.id));
+  }
+
+  // Combine FTS5 + LIKE results
+  const allIds = [...new Set([...idsFromFts, ...likeIds])];
   const where: Record<string, unknown> = {};
 
-  if (idsFromFts.length > 0) {
-    where.id = { in: idsFromFts };
+  if (allIds.length > 0) {
+    where.id = { in: allIds };
   }
 
   if (parsed.city) {
     where.city = parsed.city;
   }
 
-  let candidates = await prisma.contact.findMany({
+  const candidates = await prisma.contact.findMany({
     where: where as any,
     include: { tags: { include: { tag: true } } },
     orderBy: [{ lastContactedAt: 'desc' }, { updatedAt: 'desc' }],
     take: 200,
   });
-
-  if (candidates.length === 0 && parsed.text) {
-    candidates = await prisma.contact.findMany({
-      where: {
-        OR: [
-          ...(parsed.text ? [{ name: { contains: parsed.text } }] : []),
-          ...(parsed.text ? [{ company: { contains: parsed.text } }] : []),
-          ...(parsed.text ? [{ notes: { contains: parsed.text } }] : []),
-        ],
-      },
-      include: { tags: { include: { tag: true } } },
-      orderBy: [{ lastContactedAt: 'desc' }, { updatedAt: 'desc' }],
-      take: 200,
-    });
-  }
 
   return candidates.map((c) => ({
     id: c.id,
