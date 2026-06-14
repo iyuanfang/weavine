@@ -56,6 +56,27 @@ export default async function Home() {
               </ul>
             </section>
           )}
+
+          {snapshot.needsAttention.length > 0 && (
+            <section>
+              <h2 className="font-semibold">需要回访</h2>
+              <ul className="mt-2 space-y-1 text-sm">
+                {snapshot.needsAttention.map((c: any) => (
+                  <li key={c.id} className="flex items-center gap-2">
+                    <Link className="text-accent" href={`/contacts/${c.id}`}>
+                      {c.name}
+                    </Link>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${c.info.badgeColor}`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${c.info.dotColor}`} />
+                      {c.info.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </>
       ) : (
         <p className="text-sm text-gray-500">数据加载失败。</p>

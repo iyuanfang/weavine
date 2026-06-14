@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import { prisma } from '@/lib/prisma';
 import { ReminderService } from './services/reminder';
 import { BirthdayService } from './services/birthday';
+import { readSettings } from '@/app/settings/actions';
 
 let started = false;
 
@@ -18,7 +19,6 @@ export function startCron() {
     webpush.setVapidDetails(sub, pub, priv);
   }
 
-  // Birthday reminders — once a day at 00:05
   cron.schedule('5 0 * * *', async () => {
     try {
       const created = await BirthdayService.ensureBirthdayReminders();
@@ -28,30 +28,99 @@ export function startCron() {
     }
   });
 
-  // Dispatch due reminders — every minute
+  cron.schedule('0 9 * * *', async () => {
+    try {
+      const settings = await readSettings();
+      const firstThreshold = settings.staleDays[0] ?? 90;
+      const cutoff = new Date(Date.now() - firstThreshold * 86400_000);
+      const candidates = await prisma.contact.findMany({
+        where: {
+          OR: [
+            { lastContactedAt: { lt: cutoff } },
+            {
+              AND: [
+                { lastContactedAt: null },
+                { createdAt: { lt: cutoff } },
+              ],
+            },
+          ],
+        },
+        select: { id: true, name: true, lastContactedAt: true },
+        take: 50,
+      });
+
+      const tomorrow9am = new Date();
+      tomorrow9am.setDate(tomorrow9am.getDate() + 1);
+      tomorrow9am.setHours(9, 0, 0, 0);
+
+      let created = 0;
+      for (const c of candidates) {
+        const existing = await prisma.reminder.findFirst({
+          where: {
+            contactId: c.id,
+            kind: 'stale',
+            triggerAt: { gte: new Date() },
+          },
+        });
+        if (existing) continue;
+        const days = c.lastContactedAt
+          ? Math.floor((Date.now() - c.lastContactedAt.getTime()) / 86400_000)
+          : firstThreshold;
+        await prisma.reminder.create({
+          data: {
+            contactId: c.id,
+            kind: 'stale',
+            triggerAt: tomorrow9am,
+          },
+        });
+        await prisma.inboxItem.create({
+          data: {
+            kind: 'reminder_due',
+            title: `该联系 ${c.name} 了`,
+            body: `已 ${days} 天未联系`,
+            link: `/contacts/${c.id}`,
+          },
+        });
+        created++;
+      }
+      if (created > 0) console.log(`cron: created ${created} stale contact reminders`);
+    } catch (e) {
+      console.error('stale cron error', e);
+    }
+  });
+
   cron.schedule('* * * * *', async () => {
     try {
       const due = await ReminderService.dueReminders();
       for (const r of due) {
-        const title =
-          r.event?.title ?? (r.contact ? `${r.contact.name} 生日提醒` : 'PRM 提醒');
-        const body = r.event
-          ? `${r.event.startAt.toLocaleString('zh-CN')}${r.event.location ? ' · ' + r.event.location : ''}`
-          : r.contact
-            ? `${r.contact.name} 的生日就在今天！`
-            : '提醒';
-        const link = r.event
-          ? `/events/${r.event.id}`
-          : r.contact
-            ? `/contacts/${r.contact.id}`
-            : '/';
+        let title: string;
+        let body: string;
+        let link: string;
+        if (r.event) {
+          title = r.event.title;
+          body = `${r.event.startAt.toLocaleString('zh-CN')}${r.event.location ? ' · ' + r.event.location : ''}`;
+          link = `/events/${r.event.id}`;
+        } else if (r.kind === 'stale' && r.contact) {
+          title = `该联系 ${r.contact.name} 了`;
+          const days = r.contact.lastContactedAt
+            ? Math.floor((Date.now() - r.contact.lastContactedAt.getTime()) / 86400_000)
+            : 0;
+          body = `已 ${days} 天未联系`;
+          link = `/contacts/${r.contact.id}`;
+        } else if (r.contact) {
+          title = `${r.contact.name} 生日提醒`;
+          body = `${r.contact.name} 的生日就在今天！`;
+          link = `/contacts/${r.contact.id}`;
+        } else {
+          title = 'PRM 提醒';
+          body = '';
+          link = '/';
+        }
 
-        // In-app notification
         await prisma.inboxItem.create({
           data: { kind: 'reminder_due', title, body, link },
         });
 
-        // Web push
         if (pub && priv) {
           let pushDb: Database.Database | null = null;
           try {

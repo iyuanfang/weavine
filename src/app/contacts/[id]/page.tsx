@@ -7,6 +7,9 @@ import { InteractionService } from '@/server/services/interaction';
 import { deleteContactAction } from '@/app/contacts/actions';
 import { InteractionForm } from '@/components/interaction-form';
 import { InteractionTimeline } from '@/components/interaction-timeline';
+import { RelationshipBadge } from '@/components/relationship-badge';
+import { Avatar } from '@/components/avatar';
+import { readSettings } from '@/app/settings/actions';
 import { tagColor } from '@/lib/tag-color';
 
 export default async function ContactDetail({
@@ -21,9 +24,10 @@ export default async function ContactDetail({
     notFound();
   }
   const tags = await TagService.list();
-  const [interactions, events] = await Promise.all([
+  const [interactions, events, settings] = await Promise.all([
     InteractionService.list(params.id),
     EventService.listByContact(params.id),
+    readSettings(),
   ]);
 
   const lastContacted = c.lastContactedAt
@@ -49,7 +53,22 @@ export default async function ContactDetail({
   return (
     <main className="mx-auto max-w-3xl p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{c.name}</h1>
+        <div className="flex items-center gap-4">
+          <Avatar name={c.name} size={64} src={(c as any).avatarUrl} />
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold">{c.name}</h1>
+              <RelationshipBadge
+                lastContactedAt={c.lastContactedAt}
+                thresholds={settings.staleDays}
+                showDot
+              />
+            </div>
+            <p className="text-sm text-gray-500">
+              {[c.company, c.title].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+        </div>
         <div className="flex gap-2">
           <Link
             className="btn-secondary"

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { SearchBar } from './search-bar';
+import { QuickLog } from './quick-log';
 
-export function TopNav() {
+export function TopNav({ contacts }: { contacts: { id: string; name: string }[] }) {
   return (
     <header className="border-b border-gray-200 bg-white">
       <div className="mx-auto flex max-w-6xl items-center gap-4 p-3">
@@ -14,8 +15,9 @@ export function TopNav() {
           <Link href="/tags" className="hover:text-accent">标签</Link>
           <Link href="/inbox" className="hover:text-accent">收件箱</Link>
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <SearchBar />
+          <QuickLog contacts={contacts} />
         </div>
       </div>
     </header>

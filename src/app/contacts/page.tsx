@@ -2,18 +2,20 @@ import Link from 'next/link';
 import { ContactService } from '@/server/services/contact';
 import { TagService } from '@/server/services/tag';
 import { ContactCard } from '@/components/contact-card';
+import { readSettings } from '@/app/settings/actions';
 
 export default async function ContactsPage({
   searchParams,
 }: {
   searchParams: { q?: string; tag?: string };
 }) {
-  const [list, tags] = await Promise.all([
+  const [list, tags, settings] = await Promise.all([
     ContactService.list({
       q: searchParams.q,
       tagId: searchParams.tag,
     }),
     TagService.list(),
+    readSettings(),
   ]);
 
   return (
@@ -54,7 +56,9 @@ export default async function ContactsPage({
         {list.length === 0 ? (
           <li className="py-6 text-center text-gray-500">暂无联系人</li>
         ) : (
-          list.map((c) => <ContactCard key={c.id} contact={c} />)
+          list.map((c) => (
+            <ContactCard key={c.id} contact={c} thresholds={settings.staleDays} />
+          ))
         )}
       </ul>
     </main>

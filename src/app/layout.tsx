@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Providers } from './providers';
 import { TopNav } from '@/components/top-nav';
 import { startCron } from '@/server/cron';
+import { ContactService } from '@/server/services/contact';
 
 startCron();
 
@@ -13,12 +14,20 @@ export const metadata: Metadata = {
   description: '联系人、日程、需求一站式管理',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const contacts = (await ContactService.list({})).map((c) => ({
+    id: c.id,
+    name: c.name,
+  }));
   return (
     <html lang="zh-CN">
       <body>
         <Providers>
-          <TopNav />
+          <TopNav contacts={contacts} />
           {children}
         </Providers>
       </body>
