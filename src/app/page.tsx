@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { DashboardService } from '@/server/services/dashboard';
+import { PushToggle } from '@/components/push-toggle';
 
 export default async function Home() {
   let snapshot;
@@ -10,17 +11,54 @@ export default async function Home() {
   }
   return (
     <main className="mx-auto max-w-4xl p-6 space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold">PRM · 人脉管理</h1>
-        <p className="mt-2 text-gray-600">记录联系人、见面、需求，保持关系网鲜活。</p>
-      </header>
-      {snapshot && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="联系人" value={snapshot.contacts} href="/contacts" />
-          <Stat label="进行中需求" value={snapshot.activeNeeds} href="/needs" />
-          <Stat label="未读消息" value={snapshot.unreadInbox} href="/inbox" />
-          <Stat label="近期生日" value={snapshot.upcomingBirthdays.length} href="/contacts" />
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">PRM · 人脉管理</h1>
+          <p className="mt-2 text-gray-600">记录联系人、见面、需求，保持关系网鲜活。</p>
         </div>
+        <PushToggle />
+      </header>
+      {snapshot ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="联系人" value={snapshot.contacts} href="/contacts" />
+            <Stat label="进行中需求" value={snapshot.activeNeeds} href="/needs" />
+            <Stat label="未读消息" value={snapshot.unreadInbox} href="/inbox" />
+            <Stat label="近期生日" value={snapshot.upcomingBirthdays.length} href="/contacts" />
+          </div>
+
+          {snapshot.upcomingEvents.length > 0 && (
+            <section>
+              <h2 className="font-semibold">即将到来的事件</h2>
+              <ul className="mt-2 space-y-1 text-sm">
+                {snapshot.upcomingEvents.map((e: any) => (
+                  <li key={e.id}>
+                    <Link className="text-accent" href={`/events/${e.id}`}>
+                      {e.startAt.toLocaleString('zh-CN')} · {e.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {snapshot.upcomingBirthdays.length > 0 && (
+            <section>
+              <h2 className="font-semibold">近期生日</h2>
+              <ul className="mt-2 space-y-1 text-sm">
+                {snapshot.upcomingBirthdays.map((b: { id: string; name: string; when: Date }) => (
+                  <li key={b.id}>
+                    <Link className="text-accent" href={`/contacts/${b.id}`}>
+                      {b.name} · {b.when.toLocaleDateString('zh-CN')}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-gray-500">数据加载失败。</p>
       )}
       <nav className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
         <Link className="btn-secondary" href="/contacts">→ 联系人</Link>
