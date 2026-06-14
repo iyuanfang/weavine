@@ -17,7 +17,7 @@ export async function createContactAction(
     const c = await ContactService.create(input, prismaDb);
     const tags = fd.getAll('tagId').map(String).filter(Boolean);
     for (const t of tags) {
-      await TagService.attach(c.id, t);
+      await TagService.attach(c.id, t, prismaDb);
     }
     revalidatePath('/contacts');
     redirect(`/contacts/${c.id}`);
@@ -39,14 +39,14 @@ export async function updateContactAction(
     await ContactService.update(id, input, prismaDb);
 
     const newTagIds = new Set(fd.getAll('tagId').map(String).filter(Boolean));
-    const current = await TagService.forContact(id);
+    const current = await TagService.forContact(id, prismaDb);
     for (const ct of current) {
       if (!newTagIds.has(ct.tagId)) {
-        await TagService.detach(id, ct.tagId);
+        await TagService.detach(id, ct.tagId, prismaDb);
       }
     }
     for (const t of newTagIds) {
-      await TagService.attach(id, t);
+      await TagService.attach(id, t, prismaDb);
     }
 
     revalidatePath('/contacts');

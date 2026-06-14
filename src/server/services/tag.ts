@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
+import type { PrismaClient } from '@prisma/client';
+import { prisma as defaultPrisma } from '@/lib/prisma';
 
 const tagInput = z.object({
   name: z.string().min(1).max(40),
@@ -9,31 +10,33 @@ const tagInput = z.object({
     .nullish(),
 });
 
+export type TagInput = z.infer<typeof tagInput>;
+
 export const TagService = {
-  async create(input: z.infer<typeof tagInput>) {
+  async create(input: TagInput, db: PrismaClient = defaultPrisma) {
     const parsed = tagInput.parse(input);
-    return prisma.tag.create({
+    return db.tag.create({
       data: { name: parsed.name, color: parsed.color ?? null },
     });
   },
 
-  async list() {
-    return prisma.tag.findMany({
+  async list(db: PrismaClient = defaultPrisma) {
+    return db.tag.findMany({
       orderBy: { name: 'asc' },
       include: { _count: { select: { contacts: true } } },
     });
   },
 
-  async rename(id: string, name: string) {
-    return prisma.tag.update({ where: { id }, data: { name } });
+  async rename(id: string, name: string, db: PrismaClient = defaultPrisma) {
+    return db.tag.update({ where: { id }, data: { name } });
   },
 
-  async remove(id: string) {
-    await prisma.tag.delete({ where: { id } });
+  async remove(id: string, db: PrismaClient = defaultPrisma) {
+    await db.tag.delete({ where: { id } });
   },
 
-  async attach(contactId: string, tagId: string) {
-    await prisma.contactTag
+  async attach(contactId: string, tagId: string, db: PrismaClient = defaultPrisma) {
+    await db.contactTag
       .upsert({
         where: { contactId_tagId: { contactId, tagId } },
         create: { contactId, tagId },
@@ -42,14 +45,14 @@ export const TagService = {
       .catch(() => {});
   },
 
-  async detach(contactId: string, tagId: string) {
-    await prisma.contactTag
+  async detach(contactId: string, tagId: string, db: PrismaClient = defaultPrisma) {
+    await db.contactTag
       .delete({ where: { contactId_tagId: { contactId, tagId } } })
       .catch(() => {});
   },
 
-  async forContact(contactId: string) {
-    return prisma.contactTag.findMany({
+  async forContact(contactId: string, db: PrismaClient = defaultPrisma) {
+    return db.contactTag.findMany({
       where: { contactId },
       include: { tag: true },
     });
