@@ -25,6 +25,8 @@ model Contact {
 
   tags         ContactTag[]
   events       EventAttendee[]
+  interactions Interaction[]
+  needs        Need[]
 
   @@index([name])
   @@index([company])
@@ -65,6 +67,36 @@ model Event {
   attendees EventAttendee[]
 
   @@index([startAt])
+}
+
+model Interaction {
+  id         String   @id @default(cuid())
+  contactId  String
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  occurredAt DateTime
+  channel    String?
+  summary    String
+  createdAt  DateTime @default(now())
+
+  @@index([contactId, occurredAt])
+}
+
+model Need {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  category    String
+  status      String   @default("open")
+  priority    Int      @default(0)
+  contactId   String?
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+
+  @@index([status])
+  @@index([category])
+  @@index([contactId])
 }
 
 model EventAttendee {

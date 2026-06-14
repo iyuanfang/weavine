@@ -2,7 +2,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ContactService } from '@/server/services/contact';
 import { TagService } from '@/server/services/tag';
+import { EventService } from '@/server/services/event';
+import { InteractionService } from '@/server/services/interaction';
 import { deleteContactAction } from '@/app/contacts/actions';
+import { InteractionForm } from '@/components/interaction-form';
+import { InteractionTimeline } from '@/components/interaction-timeline';
 
 export default async function ContactDetail({
   params,
@@ -16,6 +20,14 @@ export default async function ContactDetail({
     notFound();
   }
   const tags = await TagService.list();
+  const [interactions, events] = await Promise.all([
+    InteractionService.list(params.id),
+    EventService.listByContact(params.id),
+  ]);
+
+  const lastContacted = c.lastContactedAt
+    ? new Date(c.lastContactedAt).toLocaleDateString('zh-CN')
+    : null;
 
   const fields: [string, string | null | undefined][] = [
     ['公司', c.company],
@@ -30,6 +42,7 @@ export default async function ContactDetail({
         ? `${String(c.birthdayMonth).padStart(2, '0')}-${String(c.birthdayDay).padStart(2, '0')}`
         : null,
     ],
+    ['最近联系', lastContacted],
   ];
 
   return (
@@ -84,8 +97,37 @@ export default async function ContactDetail({
       )}
 
       <section className="mt-8 border-t pt-6">
-        <h2 className="font-semibold">互动</h2>
-        <p className="text-sm text-gray-500">在 Phase 3 启用。</p>
+        <h2 className="font-semibold">互动时间线</h2>
+        <InteractionForm contactId={c.id} />
+        <InteractionTimeline
+          contactId={c.id}
+          items={interactions.map((i) => ({
+            id: i.id,
+            occurredAt: i.occurredAt.toISOString(),
+            channel: i.channel,
+            summary: i.summary,
+          }))}
+        />
+      </section>
+
+      <section className="mt-8 border-t pt-6">
+        <h2 className="font-semibold">相关事件</h2>
+        {events.length === 0 ? (
+          <p className="mt-1 text-sm text-gray-500">无</p>
+        ) : (
+          <ul className="mt-2 space-y-1">
+            {events.map((e) => (
+              <li key={e.id}>
+                <Link
+                  className="text-sm text-accent hover:underline"
+                  href={`/events/${e.id}`}
+                >
+                  {e.title} · {e.startAt.toLocaleString('zh-CN')}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </main>
   );
