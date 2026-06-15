@@ -8,7 +8,6 @@ import { ValidationError } from '@/lib/errors';
 import type { ActionResult } from '@/lib/action';
 
 export async function createContactAction(
-  _: unknown,
   fd: FormData,
 ): Promise<ActionResult> {
   try {
@@ -31,7 +30,6 @@ export async function createContactAction(
 
 export async function updateContactAction(
   id: string,
-  _: unknown,
   fd: FormData,
 ): Promise<ActionResult> {
   try {

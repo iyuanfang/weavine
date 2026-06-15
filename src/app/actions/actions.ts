@@ -1,15 +1,13 @@
 'use server';
 
+import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { ActionService } from '@/server/services/action';
 import { ValidationError } from '@/lib/errors';
 import type { ActionResult } from '@/lib/action';
 import type { ActionStatus } from '@/server/services/action';
 
-export async function createAction(
-  _: unknown,
-  fd: FormData,
-): Promise<ActionResult> {
+export async function createAction(fd: FormData): Promise<ActionResult> {
   try {
     const dueRaw = fd.get('dueAt') as string;
     const input = {
@@ -27,9 +25,10 @@ export async function createAction(
     const a = await ActionService.create(input, prismaDb);
     revalidatePath('/today');
     revalidatePath('/actions');
-    return { ok: true, data: { id: a.id } };
+    redirect(`/actions/${a.id}`);
   } catch (e) {
     if (e instanceof ValidationError) return { ok: false, error: e.message };
+    if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
     console.error('createAction error', e);
     return { ok: false, error: '创建失败' };
   }

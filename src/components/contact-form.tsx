@@ -1,6 +1,6 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useState } from 'react';
 import type { Tag } from '@prisma/client';
 import type { ActionResult } from '@/lib/action';
 import {
@@ -26,15 +26,6 @@ type Initial = Partial<typeof blank> & {
   tagIds?: string[];
 };
 
-function Submit({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <button disabled={pending} className="btn-primary">
-      {label}
-    </button>
-  );
-}
-
 export function ContactForm({
   initial,
   tags,
@@ -44,23 +35,27 @@ export function ContactForm({
   tags: Tag[];
   mode: 'create' | 'edit';
 }) {
-  const action =
-    mode === 'create'
-      ? createContactAction
-      : mode === 'edit' && initial?.id
-        ? updateContactAction.bind(null, initial.id)
-        : createContactAction;
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [state, formAction] = useFormState(
-    action as unknown as (
-      prev: ActionResult,
-      fd: FormData,
-    ) => Promise<ActionResult>,
-    { ok: true, data: null } as ActionResult,
-  );
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const action =
+      mode === 'create'
+        ? createContactAction
+        : updateContactAction.bind(null, initial!.id!);
+    const result: ActionResult = await action(fd);
+    if (!result.ok) {
+      setError(result.error ?? '操作失败');
+      setSaving(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="mt-4 grid grid-cols-2 gap-3">
+    <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-2 gap-3">
       <Field label="姓名 *" name="name" defaultValue={initial?.name} />
       <Field label="公司" name="company" defaultValue={initial?.company} />
       <Field label="职位" name="title" defaultValue={initial?.title} />
@@ -117,11 +112,13 @@ export function ContactForm({
           rows={4}
         />
       </div>
-      {state && !state.ok && (
-        <p className="col-span-2 text-sm text-red-600">{state.error}</p>
+      {error && (
+        <p className="col-span-2 text-sm text-red-600">{error}</p>
       )}
       <div className="col-span-2">
-        <Submit label={mode === 'create' ? '创建' : '保存'} />
+        <button disabled={saving} className="btn-primary">
+          {saving ? '保存中…' : mode === 'create' ? '创建' : '保存'}
+        </button>
       </div>
     </form>
   );

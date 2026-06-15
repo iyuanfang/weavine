@@ -1,36 +1,19 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
 import { useState } from 'react';
 import { createAction } from '@/app/actions/actions';
 import { parseDateNL } from '@/lib/date-parser';
-import type { ActionResult } from '@/lib/action';
-
-function SubmitBtn() {
-  const { pending } = useFormStatus();
-  return (
-    <button disabled={pending} className="btn-primary">
-      {pending ? '保存中…' : '保存'}
-    </button>
-  );
-}
 
 export function NewActionForm({
   contacts,
 }: {
   contacts: { id: string; name: string }[];
 }) {
-  const [state, formAction] = useFormState(
-    createAction as unknown as (
-      prev: ActionResult,
-      fd: FormData,
-    ) => Promise<ActionResult>,
-    { ok: true, data: null } as ActionResult,
-  );
-
   const [dueText, setDueText] = useState('');
   const [parsed, setParsed] = useState<string>('');
   const [resolvedDate, setResolvedDate] = useState<string>('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function onDueBlur() {
     if (!dueText.trim()) {
@@ -49,8 +32,22 @@ export function NewActionForm({
     }
   }
 
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const result = await createAction(fd);
+    if (!result.ok) {
+      setError(result.error ?? '创建失败');
+      setSaving(false);
+    }
+    // on success, createAction redirects on the server side
+    // we never reach here
+  }
+
   return (
-    <form action={formAction} className="mt-4 grid grid-cols-2 gap-3">
+    <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-2 gap-3">
       <div className="col-span-2">
         <label className="text-sm">标题 *</label>
         <input name="title" required className="input-base" placeholder="例：发合同给李四" />
@@ -113,10 +110,12 @@ export function NewActionForm({
         <textarea name="description" rows={3} className="input-base" />
       </div>
 
-      {state && !state.ok && <p className="col-span-2 text-sm text-red-600">{state.error}</p>}
+      {error && <p className="col-span-2 text-sm text-red-600">{error}</p>}
 
       <div className="col-span-2">
-        <SubmitBtn />
+        <button disabled={saving} className="btn-primary">
+          {saving ? '保存中…' : '保存'}
+        </button>
       </div>
     </form>
   );

@@ -1,26 +1,17 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useState } from 'react';
 import { NeedService } from '@/server/services/need';
 import type { ActionResult } from '@/lib/action';
 
 const CATEGORIES = NeedService.CATEGORIES;
-
-function Submit({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-  return (
-    <button disabled={pending} className="btn-primary">
-      {label}
-    </button>
-  );
-}
 
 export function NeedForm({
   action,
   contacts,
   initial,
 }: {
-  action: (prev: unknown, fd: FormData) => Promise<ActionResult>;
+  action: (fd: FormData) => Promise<ActionResult>;
   contacts: { id: string; name: string }[];
   initial?: {
     title?: string;
@@ -30,16 +21,23 @@ export function NeedForm({
     contactId?: string | null;
   };
 }) {
-  const [state, formAction] = useFormState(
-    action as unknown as (
-      prev: ActionResult,
-      fd: FormData,
-    ) => Promise<ActionResult>,
-    { ok: true, data: null } as ActionResult,
-  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    const result = await action(fd);
+    if (!result.ok) {
+      setError(result.error ?? '操作失败');
+      setSaving(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="mt-4 grid grid-cols-2 gap-3">
+    <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-2 gap-3">
       <div className="col-span-2">
         <label className="text-sm">标题 *</label>
         <input
@@ -83,11 +81,13 @@ export function NeedForm({
           className="input-base"
         />
       </div>
-      {state && !state.ok && (
-        <p className="col-span-2 text-sm text-red-600">{state.error}</p>
+      {error && (
+        <p className="col-span-2 text-sm text-red-600">{error}</p>
       )}
       <div className="col-span-2">
-        <Submit label={initial ? '保存' : '创建'} />
+        <button disabled={saving} className="btn-primary">
+          {saving ? '保存中…' : initial ? '保存' : '创建'}
+        </button>
       </div>
     </form>
   );

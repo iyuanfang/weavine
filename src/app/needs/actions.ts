@@ -17,7 +17,6 @@ function parse(fd: FormData) {
 }
 
 export async function createNeed(
-  _: unknown,
   fd: FormData,
 ): Promise<ActionResult> {
   try {
@@ -34,7 +33,6 @@ export async function createNeed(
 
 export async function updateNeed(
   id: string,
-  _: unknown,
   fd: FormData,
 ): Promise<ActionResult> {
   try {

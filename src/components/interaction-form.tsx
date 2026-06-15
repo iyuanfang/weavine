@@ -1,27 +1,20 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useTransition } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useTransition, useState } from 'react';
 import { logInteractionAction } from '@/app/contacts/[id]/actions';
-
-function SubmitBtn() {
-  const { pending } = useFormStatus();
-  return (
-    <button disabled={pending} className="btn-primary">
-      {pending ? '记录中…' : '记录'}
-    </button>
-  );
-}
 
 export function InteractionForm({ contactId }: { contactId: string }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
   const today = new Date().toISOString().slice(0, 16);
 
   async function handleSubmit(formData: FormData) {
+    setSaving(true);
     await logInteractionAction(contactId, formData);
     startTransition(() => router.refresh());
+    setSaving(false);
   }
 
   return (
@@ -48,7 +41,9 @@ export function InteractionForm({ contactId }: { contactId: string }) {
           placeholder="本次互动概要"
           className="input-base flex-1"
         />
-        <SubmitBtn />
+        <button disabled={saving} className="btn-primary">
+          {saving ? '记录中…' : '记录'}
+        </button>
       </div>
     </form>
   );
