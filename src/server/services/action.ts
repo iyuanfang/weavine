@@ -25,7 +25,9 @@ const createInput = z.object({
   eventId: z.string().nullish(),
 });
 
-const updateInput = createInput.partial();
+const updateInput = createInput.partial().extend({
+  completedAt: z.coerce.date().nullish(),
+});
 
 export const ActionService = {
   STATUSES: ACTION_STATUSES,

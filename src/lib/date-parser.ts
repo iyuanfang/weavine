@@ -1,5 +1,4 @@
 import * as chrono from 'chrono-node';
-import { zhCN, enUS } from 'chrono-node/locale';
 
 const zh = chrono.zh.hans;
 const en = chrono.en;
