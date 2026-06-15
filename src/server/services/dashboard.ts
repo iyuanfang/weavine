@@ -7,16 +7,12 @@ export const DashboardService = {
   async snapshot() {
     const [
       contacts,
-      activeNeeds,
       upcomingEvents,
       allContacts,
       staleContactsRaw,
       settings,
     ] = await Promise.all([
       prisma.contact.count(),
-      prisma.need.count({
-        where: { status: { in: ['open', 'matched', 'in_progress'] } },
-      }),
       prisma.event.findMany({
         where: { startAt: { gte: new Date() } },
         orderBy: { startAt: 'asc' },
@@ -63,7 +59,6 @@ export const DashboardService = {
 
     return {
       contacts,
-      activeNeeds,
       upcomingBirthdays,
       upcomingEvents,
       needsAttention,

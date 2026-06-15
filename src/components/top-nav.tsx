@@ -13,7 +13,6 @@ export function TopNav({ contacts }: { contacts: { id: string; name: string }[] 
           <Link href="/contacts" className="hover:text-accent">联系人</Link>
           <Link href="/calendar" className="hover:text-accent">日程</Link>
           <Link href="/actions" className="hover:text-accent">Action</Link>
-          <Link href="/needs" className="hover:text-accent">需求</Link>
           <Link href="/search" className="hover:text-accent">搜索</Link>
           <Link href="/tags" className="hover:text-accent">标签</Link>
         </nav>

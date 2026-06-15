@@ -8,7 +8,6 @@ async function main() {
   await p.interaction.deleteMany();
   await p.eventAttendee.deleteMany();
   await p.reminder.deleteMany();
-  await p.need.deleteMany();
   await p.event.deleteMany();
   await p.tag.deleteMany();
   await p.contact.deleteMany();
@@ -70,33 +69,6 @@ async function main() {
       startAt: new Date(Date.now() + 7 * 86_400_000),
       location: '腾讯会议',
       attendees: { create: [{ contactId: li.id }] },
-    },
-  });
-
-  await p.need.create({
-    data: {
-      title: '找前端工程师',
-      category: '合作',
-      description: '需要 3 年以上 React + TypeScript 经验，负责核心产品开发',
-      priority: 5,
-    },
-  });
-
-  await p.need.create({
-    data: {
-      title: '介绍投资人',
-      category: '介绍',
-      description: '种子轮，SaaS 方向，已有 MVP',
-      contactId: wang.id,
-      status: 'matched',
-    },
-  });
-
-  await p.need.create({
-    data: {
-      title: '请教 AI 落地经验',
-      category: '咨询',
-      priority: 3,
     },
   });
 
