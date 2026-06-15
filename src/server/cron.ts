@@ -6,11 +6,14 @@ import { ReminderService } from './services/reminder';
 import { BirthdayService } from './services/birthday';
 import { readSettings } from '@/app/settings/actions';
 
-let started = false;
+declare global {
+  // eslint-disable-next-line no-var
+  var __prmCronStarted: boolean | undefined;
+}
 
 export function startCron() {
-  if (started) return;
-  started = true;
+  if (globalThis.__prmCronStarted) return;
+  globalThis.__prmCronStarted = true;
 
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
@@ -117,9 +120,21 @@ export function startCron() {
           link = '/';
         }
 
-        await prisma.inboxItem.create({
-          data: { kind: 'reminder_due', title, body, link },
-        });
+        // Atomic: create inbox item + mark dispatched. If either fails, neither commits.
+        try {
+          await prisma.$transaction([
+            prisma.inboxItem.create({
+              data: { kind: 'reminder_due', title, body, link },
+            }),
+            prisma.reminder.update({
+              where: { id: r.id },
+              data: { dispatched: true },
+            }),
+          ]);
+        } catch (dispatchErr) {
+          console.error('reminder dispatch error', dispatchErr);
+          continue;
+        }
 
         if (pub && priv) {
           let pushDb: Database.Database | null = null;
@@ -149,8 +164,6 @@ export function startCron() {
             pushDb?.close();
           }
         }
-
-        await ReminderService.markDispatched(r.id);
       }
     } catch (e) {
       console.error('reminder cron error', e);

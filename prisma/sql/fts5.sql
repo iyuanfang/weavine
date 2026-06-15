@@ -31,11 +31,11 @@ CREATE TRIGGER IF NOT EXISTS contact_ai AFTER INSERT ON Contact BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS contact_ad AFTER DELETE ON Contact BEGIN
-  DELETE FROM contact_fts WHERE rowid = old.rowid;
+  INSERT INTO contact_fts(contact_fts, rowid) VALUES('delete', old.rowid);
 END;
 
 CREATE TRIGGER IF NOT EXISTS contact_au AFTER UPDATE ON Contact BEGIN
-  DELETE FROM contact_fts WHERE rowid = old.rowid;
+  INSERT INTO contact_fts(contact_fts, rowid) VALUES('delete', old.rowid);
   INSERT INTO contact_fts(rowid, name, company, title, city, email, phone, wechat, notes)
   VALUES (
     new.rowid,
