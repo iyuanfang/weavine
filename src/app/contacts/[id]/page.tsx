@@ -56,7 +56,7 @@ export default async function ContactDetail({
     <main className="mx-auto max-w-3xl p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Avatar name={c.name} size={64} src={(c as any).avatarUrl} />
+          <Avatar name={c.name} size={64} src={undefined} />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold">{c.name}</h1>

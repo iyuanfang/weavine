@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { SearchBar } from './search-bar';
 import { QuickLog } from './quick-log';
@@ -15,10 +16,11 @@ export function TopNav({ contacts }: { contacts: { id: string; name: string }[] 
           <Link href="/needs" className="hover:text-accent">需求</Link>
           <Link href="/search" className="hover:text-accent">搜索</Link>
           <Link href="/tags" className="hover:text-accent">标签</Link>
-          <Link href="/inbox" className="hover:text-accent">收件箱</Link>
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          <SearchBar />
+          <Suspense fallback={null}>
+            <SearchBar />
+          </Suspense>
           <QuickLog contacts={contacts} />
         </div>
       </div>

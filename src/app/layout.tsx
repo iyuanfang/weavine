@@ -2,12 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Providers } from './providers';
 import { TopNav } from '@/components/top-nav';
-import { startCron } from '@/server/cron';
 import { ContactService } from '@/server/services/contact';
-
-startCron();
-
-export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'PRM · 人脉管理',

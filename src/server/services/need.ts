@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError } from '@/lib/errors';
 import type { PrismaClient } from '@prisma/client';
 
 const STATUS = ['open', 'matched', 'in_progress', 'closed', 'cancelled'] as const;
+export type NeedStatus = (typeof STATUS)[number];
 const CATEGORIES = ['交流', '合作', '咨询', '介绍', '帮忙', '其他'] as const;
 
 const createSchema = z.object({
@@ -42,7 +43,8 @@ export const NeedService = {
         where: { id },
         data: updateSchema.parse(input),
       });
-    } catch {
+    } catch (e) {
+      console.error('[NeedService] update:', e);
       throw new NotFoundError('需求不存在');
     }
   },
@@ -50,7 +52,8 @@ export const NeedService = {
   async remove(id: string, db: PrismaClient = defaultPrisma) {
     try {
       await db.need.delete({ where: { id } });
-    } catch {
+    } catch (e) {
+      console.error('[NeedService] remove:', e);
       throw new NotFoundError('需求不存在');
     }
   },
@@ -67,7 +70,8 @@ export const NeedService = {
     if (to === 'closed') data.closedAt = new Date();
     try {
       return await db.need.update({ where: { id }, data });
-    } catch {
+    } catch (e) {
+      console.error('[NeedService] transition:', e);
       throw new NotFoundError('需求不存在');
     }
   },
@@ -82,7 +86,8 @@ export const NeedService = {
         where: { id },
         data: { contactId, status: 'matched' },
       });
-    } catch {
+    } catch (e) {
+      console.error('[NeedService] assignContact:', e);
       throw new NotFoundError('需求不存在');
     }
   },

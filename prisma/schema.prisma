@@ -155,14 +155,3 @@ model Reminder {
   @@index([contactId])
 }
 
-model InboxItem {
-  id        String   @id @default(cuid())
-  kind      String   @default("reminder_due")
-  title     String
-  body      String?
-  link      String?
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@index([read, createdAt])
-}

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
@@ -83,8 +83,9 @@ export const ContactService = {
       data[key] = (val === '' || val === undefined) ? null : val;
     }
     try {
-      return await db.contact.update({ where: { id }, data: data as any });
-    } catch {
+      return await db.contact.update({ where: { id }, data: data as Prisma.ContactUpdateInput });
+    } catch (e) {
+      console.error('[ContactService] update:', e);
       throw new NotFoundError('联系人不存在');
     }
   },
@@ -92,7 +93,8 @@ export const ContactService = {
   async remove(id: string, db: PrismaClient = defaultPrisma) {
     try {
       await db.contact.delete({ where: { id } });
-    } catch {
+    } catch (e) {
+      console.error('[ContactService] remove:', e);
       throw new NotFoundError('联系人不存在');
     }
   },

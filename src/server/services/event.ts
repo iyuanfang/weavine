@@ -74,7 +74,8 @@ export const EventService = {
         await ReminderService.createManyForEvent(id, rest.startAt, undefined, db);
       }
       return updated;
-    } catch {
+    } catch (e) {
+      console.error('[EventService] update:', e);
       throw new NotFoundError('事件不存在');
     }
   },
@@ -82,7 +83,8 @@ export const EventService = {
   async remove(id: string, db: PrismaClient = defaultPrisma) {
     try {
       await db.event.delete({ where: { id } });
-    } catch {
+    } catch (e) {
+      console.error('[EventService] remove:', e);
       throw new NotFoundError('事件不存在');
     }
   },

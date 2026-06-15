@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { NeedService } from '@/server/services/need';
+import type { NeedStatus } from '@/server/services/need';
+import { NeedCreateInput } from '@/server/services/need';
 import { ValidationError } from '@/lib/errors';
 import type { ActionResult } from '@/lib/action';
 
@@ -10,7 +12,7 @@ function parse(fd: FormData) {
   return {
     title: String(fd.get('title') ?? ''),
     description: (fd.get('description') as string) || null,
-    category: String(fd.get('category')) as any,
+    category: (fd.get('category') ?? '其他') as NeedCreateInput['category'],
     priority: Number(fd.get('priority') ?? 0),
     contactId: (fd.get('contactId') as string) || null,
   };
@@ -50,14 +52,14 @@ export async function updateNeed(
 
 export async function transitionNeed(id: string, to: string) {
   const prismaDb = (await import('@/lib/prisma')).prisma;
-  await NeedService.transition(id, to as any, prismaDb);
+  await NeedService.transition(id, to as NeedStatus, prismaDb);
   revalidatePath('/needs');
   revalidatePath(`/needs/${id}`);
 }
 
 export async function moveNeed(id: string, to: string) {
   const prismaDb = (await import('@/lib/prisma')).prisma;
-  await NeedService.transition(id, to as any, prismaDb);
+  await NeedService.transition(id, to as NeedStatus, prismaDb);
   revalidatePath('/needs');
 }
 

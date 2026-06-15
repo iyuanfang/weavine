@@ -8,7 +8,6 @@ async function main() {
   await p.interaction.deleteMany();
   await p.eventAttendee.deleteMany();
   await p.reminder.deleteMany();
-  await p.inboxItem.deleteMany();
   await p.need.deleteMany();
   await p.event.deleteMany();
   await p.tag.deleteMany();

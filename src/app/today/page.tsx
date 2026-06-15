@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ActionService } from '@/server/services/action';
+import type { ActionStatus } from '@/server/services/action';
 import { PushToggle } from '@/components/push-toggle';
 import { TransitionAction } from './transition-action';
 
@@ -80,7 +81,7 @@ function ActionRow({
         </div>
       </div>
       {showTransition && status && (
-        <TransitionAction id={id} currentStatus={status as any} />
+        <TransitionAction id={id} currentStatus={status as ActionStatus} />
       )}
     </li>
   );

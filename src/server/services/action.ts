@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 import { NotFoundError, ValidationError } from '@/lib/errors';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
 
 export const ACTION_STATUSES = [
   'inbox',
@@ -52,7 +52,7 @@ export const ActionService = {
     db: PrismaClient = defaultPrisma,
   ) {
     const p = updateInput.parse(input);
-    const data: any = { ...p };
+    const data: Record<string, unknown> = { ...p };
     if (p.status === 'done' && !p.completedAt) {
       data.completedAt = new Date();
     } else if (p.status && p.status !== 'done') {
@@ -60,7 +60,8 @@ export const ActionService = {
     }
     try {
       return await db.action.update({ where: { id }, data });
-    } catch {
+    } catch (e) {
+      console.error('[ActionService] update:', e);
       throw new NotFoundError('Action 不存在');
     }
   },
@@ -68,7 +69,8 @@ export const ActionService = {
   async remove(id: string, db: PrismaClient = defaultPrisma) {
     try {
       await db.action.delete({ where: { id } });
-    } catch {
+    } catch (e) {
+      console.error('[ActionService] remove:', e);
       throw new NotFoundError('Action 不存在');
     }
   },
@@ -79,12 +81,13 @@ export const ActionService = {
     db: PrismaClient = defaultPrisma,
   ) {
     if (!ACTION_STATUSES.includes(to)) throw new ValidationError('非法状态');
-    const data: any = { status: to };
+    const data: Record<string, unknown> = { status: to };
     if (to === 'done') data.completedAt = new Date();
     else data.completedAt = null;
     try {
       return await db.action.update({ where: { id }, data });
-    } catch {
+    } catch (e) {
+      console.error('[ActionService] transition:', e);
       throw new NotFoundError('Action 不存在');
     }
   },

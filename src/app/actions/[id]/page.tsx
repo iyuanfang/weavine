@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionService } from '@/server/services/action';
+import type { ActionStatus } from '@/server/services/action';
 import { TransitionAction } from '@/app/today/transition-action';
 import { deleteAction } from '@/app/actions/actions';
 
@@ -32,7 +33,7 @@ export default async function ActionDetail({
       </div>
 
       <div className="mt-4">
-        <TransitionAction id={a.id} currentStatus={a.status as any} />
+        <TransitionAction id={a.id} currentStatus={a.status as ActionStatus} />
       </div>
 
       {a.description && (

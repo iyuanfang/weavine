@@ -76,14 +76,6 @@ export function startCron() {
             triggerAt: tomorrow9am,
           },
         });
-        await prisma.inboxItem.create({
-          data: {
-            kind: 'reminder_due',
-            title: `该联系 ${c.name} 了`,
-            body: `已 ${days} 天未联系`,
-            link: `/contacts/${c.id}`,
-          },
-        });
         created++;
       }
       if (created > 0) console.log(`cron: created ${created} stale contact reminders`);
@@ -120,17 +112,11 @@ export function startCron() {
           link = '/';
         }
 
-        // Atomic: create inbox item + mark dispatched. If either fails, neither commits.
         try {
-          await prisma.$transaction([
-            prisma.inboxItem.create({
-              data: { kind: 'reminder_due', title, body, link },
-            }),
-            prisma.reminder.update({
-              where: { id: r.id },
-              data: { dispatched: true },
-            }),
-          ]);
+          await prisma.reminder.update({
+            where: { id: r.id },
+            data: { dispatched: true },
+          });
         } catch (dispatchErr) {
           console.error('reminder dispatch error', dispatchErr);
           continue;

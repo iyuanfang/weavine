@@ -2,14 +2,16 @@ import Link from 'next/link';
 import { NeedService } from '@/server/services/need';
 import { Kanban } from '@/components/need-kanban';
 
+type KanbanItem = { id: string; title: string; category: string; contact: { id: string; name: string } | null };
+
 export default async function NeedsPage() {
   const groups = await NeedService.kanban();
 
   const total = Object.values(groups).reduce((s, arr) => s + arr.length, 0);
 
-  const safeGroups: Record<string, { id: string; title: string; category: string; contact: { id: string; name: string } | null }[]> = {};
+  const safeGroups: Record<string, KanbanItem[]> = {};
   for (const key of Object.keys(groups)) {
-    safeGroups[key] = (groups as any)[key].map((n: any) => ({
+    safeGroups[key] = groups[key].map((n) => ({
       id: n.id,
       title: n.title,
       category: n.category,

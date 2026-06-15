@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ActionService } from '@/server/services/action';
+import type { ActionStatus } from '@/server/services/action';
 import { TransitionAction } from '../today/transition-action';
 
 const COLS = [
@@ -52,7 +53,7 @@ export default async function ActionsKanban() {
                     </div>
                   )}
                   <div className="mt-2">
-                    <TransitionAction id={a.id} currentStatus={a.status as any} />
+                    <TransitionAction id={a.id} currentStatus={a.status as ActionStatus} />
                   </div>
                 </li>
               ))}

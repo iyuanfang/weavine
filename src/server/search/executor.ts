@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import type { Parsed } from './parser';
 
 export type Hit = {
@@ -75,7 +76,7 @@ export async function executeSearch(parsed: Parsed): Promise<Hit[]> {
   }
 
   const candidates = await prisma.contact.findMany({
-    where: where as any,
+    where: where as Prisma.ContactWhereInput,
     include: { tags: { include: { tag: true } } },
     orderBy: [{ lastContactedAt: 'desc' }, { updatedAt: 'desc' }],
     take: 200,

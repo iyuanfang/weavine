@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import { InboxService } from './inbox';
 import { BirthdayService } from './birthday';
 import { relationshipStrength } from '@/lib/relationship';
 import { readSettings } from '@/app/settings/actions';
@@ -10,7 +9,6 @@ export const DashboardService = {
       contacts,
       activeNeeds,
       upcomingEvents,
-      unreadInbox,
       allContacts,
       staleContactsRaw,
       settings,
@@ -27,7 +25,6 @@ export const DashboardService = {
           attendees: { include: { contact: true } },
         },
       }),
-      InboxService.unreadCount(),
       prisma.contact.findMany({
         where: {
           birthdayMonth: { not: null },
@@ -67,7 +64,6 @@ export const DashboardService = {
     return {
       contacts,
       activeNeeds,
-      unreadInbox,
       upcomingBirthdays,
       upcomingEvents,
       needsAttention,
