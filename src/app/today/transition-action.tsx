@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
-import { transitionAction, NEXT_STATUS } from '@/app/actions/actions';
+import { transitionAction } from '@/app/actions/actions';
+import { NEXT_STATUS } from './transition-status';
 import type { ActionStatus } from '@/server/services/action';
 
 const STATUS_LABEL: Record<ActionStatus, string> = {

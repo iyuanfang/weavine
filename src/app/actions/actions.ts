@@ -6,14 +6,6 @@ import { ValidationError } from '@/lib/errors';
 import type { ActionResult } from '@/lib/action';
 import type { ActionStatus } from '@/server/services/action';
 
-const NEXT_STATUS: Record<ActionStatus, ActionStatus | null> = {
-  inbox: 'open',
-  open: 'done',
-  waiting: 'open',
-  done: 'open',
-  dropped: 'inbox',
-};
-
 export async function createAction(
   _: unknown,
   fd: FormData,
@@ -56,5 +48,3 @@ export async function deleteAction(id: string) {
   revalidatePath('/today');
   revalidatePath('/actions');
 }
-
-export { NEXT_STATUS };
