@@ -28,6 +28,8 @@ model Contact {
   interactions Interaction[]
   needs        Need[]
   reminders    Reminder[] @relation("ContactReminders")
+  actionsFor   Action[]  @relation("ActionForContact")
+  waitingOn    Action[]  @relation("ActionWaitingOn")
 
   @@index([name])
   @@index([company])
@@ -67,6 +69,7 @@ model Event {
 
   attendees EventAttendee[]
   reminders Reminder[]
+  actions   Action[] @relation("ActionForEvent")
 
   @@index([startAt])
 }
@@ -99,6 +102,30 @@ model Need {
   @@index([status])
   @@index([category])
   @@index([contactId])
+}
+
+model Action {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("inbox") // inbox|open|waiting|done|dropped
+  priority    Int      @default(0)
+  category    String?
+  dueAt       DateTime?
+  contactId   String?
+  contact     Contact? @relation("ActionForContact", fields: [contactId], references: [id], onDelete: SetNull)
+  waitingOnId String?
+  waitingOn   Contact? @relation("ActionWaitingOn", fields: [waitingOnId], references: [id], onDelete: SetNull)
+  eventId     String?
+  event       Event?   @relation("ActionForEvent", fields: [eventId], references: [id], onDelete: SetNull)
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, dueAt])
+  @@index([contactId])
+  @@index([waitingOnId])
+  @@index([eventId])
 }
 
 model EventAttendee {
