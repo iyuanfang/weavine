@@ -117,6 +117,35 @@ export function EventForm({
         />
       </div>
 
+      <details className="col-span-2 rounded border border-gray-200 p-3">
+        <summary className="cursor-pointer text-sm font-medium text-gray-700">
+          📌 自动创建会前 Action（可选）
+        </summary>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+          <div className="col-span-2">
+            <label className="text-xs">Action 标题</label>
+            <input
+              name="followupTitle"
+              placeholder="例：会前准备上次的讨论提纲"
+              className="input-sm mt-1 w-full"
+            />
+          </div>
+          <div>
+            <label className="text-xs">提前（分钟）</label>
+            <select name="followupOffsetMinutes" defaultValue="1440" className="input-sm mt-1 w-full">
+              <option value="60">1 小时</option>
+              <option value="120">2 小时</option>
+              <option value="1440">1 天</option>
+              <option value="2880">2 天</option>
+              <option value="10080">1 周</option>
+            </select>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          填了标题就会自动创建一条 Action，截止时间 = 事件开始 - 提前量，关联到第一个参与人。
+        </p>
+      </details>
+
       <div className="col-span-2">
         <button className="btn-primary">保存</button>
       </div>

@@ -109,4 +109,26 @@ export const EventService = {
       include: { attendees: { include: { contact: true } } },
     });
   },
+
+  async createWithFollowup(
+    input: EventInput,
+    followup: { title: string; offsetMinutes: number; contactId?: string },
+    db: PrismaClient = defaultPrisma,
+  ) {
+    const event = await this.create(input, db);
+    const dueAt = new Date(event.startAt.getTime() - followup.offsetMinutes * 60_000);
+    if (dueAt > new Date()) {
+      await db.action.create({
+        data: {
+          title: followup.title,
+          status: 'open',
+          priority: 5,
+          dueAt,
+          contactId: followup.contactId ?? null,
+          eventId: event.id,
+        },
+      });
+    }
+    return event;
+  },
 };

@@ -111,6 +111,14 @@ export const ActionService = {
     });
   },
 
+  async byEvent(eventId: string, db: PrismaClient = defaultPrisma) {
+    return db.action.findMany({
+      where: { eventId, status: { not: 'dropped' } },
+      include: { contact: true, waitingOn: true, event: true },
+      orderBy: [{ status: 'asc' }, { dueAt: 'asc' }],
+    });
+  },
+
   async today(db: PrismaClient = defaultPrisma) {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());

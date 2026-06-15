@@ -11,9 +11,20 @@ export async function createEventAction(
 ): Promise<ActionResult> {
   try {
     const input = parseEventInput(fd);
+    const followupTitle = ((fd.get('followupTitle') as string) ?? '').trim();
+    const followupOffset = Number(fd.get('followupOffsetMinutes') ?? 0);
+    const firstAttendee = input.attendeeIds[0];
     const db = (await import('@/lib/prisma')).prisma;
-    const e = await EventService.create(input, db);
+    const e = followupTitle && followupOffset > 0
+      ? await EventService.createWithFollowup(
+          input,
+          { title: followupTitle, offsetMinutes: followupOffset, contactId: firstAttendee },
+          db,
+        )
+      : await EventService.create(input, db);
     revalidatePath('/calendar');
+    revalidatePath('/today');
+    revalidatePath('/actions');
     redirect(`/events/${e.id}`);
   } catch (e) {
     if (e instanceof ValidationError) return { ok: false, error: e.message };
