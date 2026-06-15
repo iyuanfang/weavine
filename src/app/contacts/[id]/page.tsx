@@ -4,6 +4,7 @@ import { ContactService } from '@/server/services/contact';
 import { TagService } from '@/server/services/tag';
 import { EventService } from '@/server/services/event';
 import { InteractionService } from '@/server/services/interaction';
+import { ActionService } from '@/server/services/action';
 import { deleteContactAction } from '@/app/contacts/actions';
 import { InteractionForm } from '@/components/interaction-form';
 import { InteractionTimeline } from '@/components/interaction-timeline';
@@ -24,10 +25,11 @@ export default async function ContactDetail({
     notFound();
   }
   const tags = await TagService.list();
-  const [interactions, events, settings] = await Promise.all([
+  const [interactions, events, settings, actions] = await Promise.all([
     InteractionService.list(params.id),
     EventService.listByContact(params.id),
     readSettings(),
+    ActionService.byContact(params.id),
   ]);
 
   const lastContacted = c.lastContactedAt
@@ -129,6 +131,38 @@ export default async function ContactDetail({
             summary: i.summary,
           }))}
         />
+      </section>
+
+      <section id="action" className="mt-8 border-t pt-6">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">行动 ({actions.length})</h2>
+          <Link className="btn-primary text-sm" href={`/actions/new?contactId=${c.id}`}>+ Action</Link>
+        </div>
+        {actions.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-500">还没有跟这个人相关的 Action</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {actions.map((a) => {
+              const isForThem = a.contactId === c.id;
+              const isWaiting = a.waitingOnId === c.id;
+              return (
+                <li key={a.id} className="card flex items-center gap-2">
+                  <div className="flex-1">
+                    <Link className="font-medium hover:underline" href={`/actions/${a.id}`}>
+                      {a.title}
+                    </Link>
+                    <div className="text-xs text-gray-500">
+                      <span className="text-accent">{isForThem ? '我答应他' : isWaiting ? '等他回复' : '相关'}</span>
+                      {' · '}
+                      {a.status}
+                      {a.dueAt && ` · ${a.dueAt.toLocaleDateString('zh-CN')}`}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className="mt-8 border-t pt-6">
