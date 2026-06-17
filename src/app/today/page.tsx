@@ -40,7 +40,6 @@ function ActionRow({
   dueAt,
   priority,
   contact,
-  waitingOn,
   status,
   updatedAt,
   showTransition = true,
@@ -50,7 +49,6 @@ function ActionRow({
   dueAt: Date | null;
   priority: number;
   contact: { id: string; name: string } | null;
-  waitingOn: { id: string; name: string } | null;
   status?: string;
   updatedAt?: Date;
   showTransition?: boolean;
@@ -72,7 +70,6 @@ function ActionRow({
         </div>
         <div className="mt-0.5 text-xs text-gray-500">
           {contact && <Link className="text-accent" href={`/contacts/${contact.id}`}>→ {contact.name}</Link>}
-          {waitingOn && <span className="ml-2 text-orange-600">等 {waitingOn.name}</span>}
           {updatedAt && status === 'waiting' && (
             <span className={`ml-2 ${waitingAgeColor(updatedAt)}`}>
               {Math.floor((Date.now() - updatedAt.getTime()) / 86400_000)} 天前
@@ -126,7 +123,6 @@ export default async function TodayPage() {
                 dueAt={a.dueAt}
                 priority={a.priority}
                 contact={a.contact}
-                waitingOn={a.waitingOn}
                 status={a.status}
                 updatedAt={a.updatedAt}
               />
@@ -147,7 +143,6 @@ export default async function TodayPage() {
                 dueAt={a.dueAt}
                 priority={a.priority}
                 contact={a.contact}
-                waitingOn={a.waitingOn}
                 status={a.status}
                 updatedAt={a.updatedAt}
               />
@@ -171,7 +166,6 @@ export default async function TodayPage() {
                 dueAt={a.dueAt}
                 priority={a.priority}
                 contact={a.contact}
-                waitingOn={a.waitingOn}
                 status={a.status}
                 updatedAt={a.updatedAt}
               />

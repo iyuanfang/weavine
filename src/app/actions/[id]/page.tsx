@@ -49,12 +49,6 @@ export default async function ActionDetail({
             <dd><Link className="text-accent" href={`/contacts/${a.contact.id}`}>{a.contact.name}</Link></dd>
           </div>
         )}
-        {a.waitingOn && (
-          <div>
-            <dt className="text-gray-500">在等</dt>
-            <dd><Link className="text-accent" href={`/contacts/${a.waitingOn.id}`}>{a.waitingOn.name}</Link></dd>
-          </div>
-        )}
         {a.event && (
           <div>
             <dt className="text-gray-500">关联事件</dt>

@@ -19,7 +19,6 @@ export async function createAction(fd: FormData): Promise<ActionResult> {
       category: (fd.get('category') as string) || null,
       dueAt: dueRaw ? new Date(dueRaw) : null,
       contactId: (fd.get('contactId') as string) || null,
-      waitingOnId: (fd.get('waitingOnId') as string) || null,
       eventId: (fd.get('eventId') as string) || null,
     };
     const prismaDb = (await import('@/lib/prisma')).prisma;

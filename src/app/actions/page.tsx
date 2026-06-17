@@ -46,10 +46,9 @@ export default async function ActionsKanban() {
                       {a.priority > 0 && ` · P${a.priority}`}
                     </span>
                   </div>
-                  {(a.contact || a.waitingOn) && (
+                  {a.contact && (
                     <div className="mt-1 text-xs">
-                      {a.contact && <span className="text-accent">→ {a.contact.name}</span>}
-                      {a.waitingOn && <span className="ml-2 text-orange-600">等 {a.waitingOn.name}</span>}
+                      <span className="text-accent">→ {a.contact.name}</span>
                     </div>
                   )}
                   <div className="mt-2">

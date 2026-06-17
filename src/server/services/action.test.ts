@@ -42,15 +42,17 @@ describe('ActionService', () => {
     await expect(ActionService.transition(a.id, 'invalid' as any, db())).rejects.toThrow();
   });
 
-  it('byContact returns both contact and waitingOn', async () => {
+  it('byContact returns actions for the contact only (waiting uses status)', async () => {
     const a = await ContactService.create({ name: 'A' }, db());
     const b = await ContactService.create({ name: 'B' }, db());
-    await ActionService.create({ title: '我答应A的', contactId: a.id }, db());
-    await ActionService.create({ title: '等B回复', waitingOnId: b.id }, db());
+    await ActionService.create({ title: '答应A的事', contactId: a.id }, db());
+    await ActionService.create({ title: '等B的事', contactId: b.id, status: 'waiting' }, db());
     const r = await ActionService.byContact(a.id, db());
-    expect(r.some(x => x.title === '我答应A的')).toBe(true);
+    expect(r).toHaveLength(1);
+    expect(r[0].title).toBe('答应A的事');
     const r2 = await ActionService.byContact(b.id, db());
-    expect(r2.some(x => x.title === '等B回复')).toBe(true);
+    expect(r2).toHaveLength(1);
+    expect(r2[0].title).toBe('等B的事');
   });
 
   it('today() groups actions by due bucket', async () => {

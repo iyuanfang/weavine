@@ -21,7 +21,6 @@ const createInput = z.object({
   category: z.string().max(40).nullish(),
   dueAt: z.coerce.date().nullish(),
   contactId: z.string().nullish(),
-  waitingOnId: z.string().nullish(),
   eventId: z.string().nullish(),
 });
 
@@ -40,7 +39,7 @@ export const ActionService = {
   async get(id: string, db: PrismaClient = defaultPrisma) {
     const a = await db.action.findUnique({
       where: { id },
-      include: { contact: true, waitingOn: true, event: true },
+      include: { contact: true, event: true },
     });
     if (!a) throw new NotFoundError('Action 不存在');
     return a;
@@ -95,7 +94,7 @@ export const ActionService = {
   async list(filter: { status?: ActionStatus } = {}, db: PrismaClient = defaultPrisma) {
     return db.action.findMany({
       where: filter.status ? { status: filter.status } : undefined,
-      include: { contact: true, waitingOn: true, event: true },
+      include: { contact: true, event: true },
       orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { priority: 'desc' }, { createdAt: 'desc' }],
     });
   },
@@ -103,13 +102,10 @@ export const ActionService = {
   async byContact(contactId: string, db: PrismaClient = defaultPrisma) {
     return db.action.findMany({
       where: {
-        OR: [
-          { contactId },
-          { waitingOnId: contactId },
-        ],
+        contactId,
         status: { not: 'dropped' },
       },
-      include: { contact: true, waitingOn: true, event: true },
+      include: { contact: true, event: true },
       orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { priority: 'desc' }],
     });
   },
@@ -117,7 +113,7 @@ export const ActionService = {
   async byEvent(eventId: string, db: PrismaClient = defaultPrisma) {
     return db.action.findMany({
       where: { eventId, status: { not: 'dropped' } },
-      include: { contact: true, waitingOn: true, event: true },
+      include: { contact: true, event: true },
       orderBy: [{ status: 'asc' }, { dueAt: 'asc' }],
     });
   },
@@ -138,7 +134,7 @@ export const ActionService = {
           status: { in: ['inbox', 'open'] },
           dueAt: { gte: startOfToday, lt: endOfToday },
         },
-        include: { contact: true, waitingOn: true, event: true },
+        include: { contact: true, event: true },
         orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }],
       }),
       db.action.findMany({
@@ -146,13 +142,13 @@ export const ActionService = {
           status: { in: ['inbox', 'open'] },
           dueAt: { gte: endOfToday, lt: sevenDaysLater },
         },
-        include: { contact: true, waitingOn: true, event: true },
+        include: { contact: true, event: true },
         orderBy: [{ dueAt: 'asc' }],
         take: 20,
       }),
       db.action.findMany({
         where: { status: 'waiting' },
-        include: { contact: true, waitingOn: true, event: true },
+        include: { contact: true, event: true },
         orderBy: { updatedAt: 'asc' },
         take: 20,
       }),
@@ -180,7 +176,7 @@ export const ActionService = {
   async kanban(db: PrismaClient = defaultPrisma) {
     const all = await db.action.findMany({
       where: { status: { not: 'done' } },
-      include: { contact: true, waitingOn: true, event: true },
+      include: { contact: true, event: true },
       orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
     });
     const groups: Record<string, typeof all> = {
@@ -196,7 +192,7 @@ export const ActionService = {
     }
     const todayDone = await db.action.findMany({
       where: { status: 'done', completedAt: { gte: startOfToday() } },
-      include: { contact: true, waitingOn: true, event: true },
+      include: { contact: true, event: true },
       orderBy: { completedAt: 'desc' },
     });
     groups.done = todayDone;

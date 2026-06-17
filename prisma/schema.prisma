@@ -28,7 +28,6 @@ model Contact {
   interactions Interaction[]
   reminders    Reminder[] @relation("ContactReminders")
   actionsFor   Action[]  @relation("ActionForContact")
-  waitingOn    Action[]  @relation("ActionWaitingOn")
 
   @@index([name])
   @@index([company])
@@ -70,21 +69,27 @@ model Event {
 
   attendees EventAttendee[]
   reminders Reminder[]
-  actions   Action[] @relation("ActionForEvent")
+  actions      Action[]      @relation("ActionForEvent")
+  interactions Interaction[] @relation("InteractionFromEvent")
 
   @@index([startAt])
 }
 
 model Interaction {
   id         String   @id @default(cuid())
-  contactId  String
-  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId  String?
+  contact    Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  actionId   String?
+  action     Action?  @relation("InteractionFromAction", fields: [actionId], references: [id], onDelete: SetNull)
+  eventId    String?
+  event      Event?   @relation("InteractionFromEvent", fields: [eventId], references: [id], onDelete: SetNull)
   occurredAt DateTime
   channel    String?
   summary    String
   createdAt  DateTime @default(now())
 
   @@index([contactId, occurredAt])
+  @@index([occurredAt])
 }
 model Action {
   id          String   @id @default(cuid())
@@ -96,17 +101,15 @@ model Action {
   dueAt       DateTime?
   contactId   String?
   contact     Contact? @relation("ActionForContact", fields: [contactId], references: [id], onDelete: SetNull)
-  waitingOnId String?
-  waitingOn   Contact? @relation("ActionWaitingOn", fields: [waitingOnId], references: [id], onDelete: SetNull)
   eventId     String?
   event       Event?   @relation("ActionForEvent", fields: [eventId], references: [id], onDelete: SetNull)
-  completedAt DateTime?
+  completedAt   DateTime?
+  interactions  Interaction[] @relation("InteractionFromAction")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([status, dueAt])
   @@index([contactId])
-  @@index([waitingOnId])
   @@index([eventId])
 }
 

@@ -49,6 +49,6 @@ export const InteractionService = {
     const i = await db.interaction.findUnique({ where: { id } });
     if (!i) throw new NotFoundError('互动不存在');
     await db.interaction.delete({ where: { id } });
-    await recalcLastContactedAt(i.contactId, db);
+    if (i.contactId) await recalcLastContactedAt(i.contactId, db);
   },
 };

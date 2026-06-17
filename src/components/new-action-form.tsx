@@ -95,16 +95,6 @@ export function NewActionForm({
         </select>
       </div>
 
-      <div>
-        <label className="text-sm">在等谁</label>
-        <select name="waitingOnId" defaultValue="" className="input-base">
-          <option value="">无</option>
-          {contacts.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-
       <div className="col-span-2">
         <label className="text-sm">描述</label>
         <textarea name="description" rows={3} className="input-base" />

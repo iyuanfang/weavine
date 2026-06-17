@@ -145,7 +145,6 @@ export default async function ContactDetail({
           <ul className="mt-2 space-y-2">
             {actions.map((a) => {
               const isForThem = a.contactId === c.id;
-              const isWaiting = a.waitingOnId === c.id;
               return (
                 <li key={a.id} className="card flex items-center gap-2">
                   <div className="flex-1">
@@ -153,7 +152,7 @@ export default async function ContactDetail({
                       {a.title}
                     </Link>
                     <div className="text-xs text-gray-500">
-                      <span className="text-accent">{isForThem ? '我答应他' : isWaiting ? '等他回复' : '相关'}</span>
+                      <span className="text-accent">{isForThem ? '我答应他' : '相关'}</span>
                       {' · '}
                       {a.status}
                       {a.dueAt && ` · ${a.dueAt.toLocaleDateString('zh-CN')}`}
