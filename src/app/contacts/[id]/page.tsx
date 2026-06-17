@@ -1,14 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ContactService } from '@/server/services/contact';
-import { TagService } from '@/server/services/tag';
-import { EventService } from '@/server/services/event';
-import { InteractionService } from '@/server/services/interaction';
-import { ActionService } from '@/server/services/action';
+import { TimelineService } from '@/server/services/timeline';
 import { deleteContactAction } from '@/app/contacts/actions';
 import { ConfirmDeleteForm } from '@/components/confirm-delete';
-import { InteractionForm } from '@/components/interaction-form';
-import { InteractionTimeline } from '@/components/interaction-timeline';
 import { RelationshipBadge } from '@/components/relationship-badge';
 import { Avatar } from '@/components/avatar';
 import { readSettings } from '@/app/settings/actions';
@@ -25,12 +20,9 @@ export default async function ContactDetail({
   } catch {
     notFound();
   }
-  const tags = await TagService.list();
-  const [interactions, events, settings, actions] = await Promise.all([
-    InteractionService.list(params.id),
-    EventService.listByContact(params.id),
+  const [settings, timeline] = await Promise.all([
     readSettings(),
-    ActionService.byContact(params.id),
+    TimelineService.forContact(params.id),
   ]);
 
   const lastContacted = c.lastContactedAt
@@ -120,68 +112,38 @@ export default async function ContactDetail({
         </section>
       )}
 
-      <section className="mt-8 border-t pt-6">
-        <h2 className="font-semibold">互动时间线</h2>
-        <InteractionForm contactId={c.id} />
-        <InteractionTimeline
-          contactId={c.id}
-          items={interactions.map((i) => ({
-            id: i.id,
-            occurredAt: i.occurredAt.toISOString(),
-            channel: i.channel,
-            summary: i.summary,
-          }))}
-        />
-      </section>
+      {/* BUTTONS — Action 和 互动 */}
+      <div className="mt-6 flex gap-2">
+        <Link className="btn-primary text-sm" href={`/actions/new?contactId=${c.id}`}>+ Action</Link>
+        <Link className="btn-secondary text-sm" href={`/?quickLog=${c.id}`}>+ 互动</Link>
+      </div>
 
-      <section id="action" className="mt-8 border-t pt-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">行动 ({actions.length})</h2>
-          <Link className="btn-primary text-sm" href={`/actions/new?contactId=${c.id}`}>+ Action</Link>
-        </div>
-        {actions.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">还没有跟这个人相关的 Action</p>
+      {/* Unified timeline */}
+      <section className="mt-6">
+        <h2 className="text-lg font-medium">时间线</h2>
+        {timeline.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500">暂无记录</p>
         ) : (
-          <ul className="mt-2 space-y-2">
-            {actions.map((a) => {
-              const label = a.status === 'waiting' ? '等他回复' : '我答应他';
-              return (
-                <li key={a.id} className="card flex items-center gap-2">
-                  <div className="flex-1">
-                    <Link className="font-medium hover:underline" href={`/actions/${a.id}`}>
-                      {a.title}
-                    </Link>
-                    <div className="text-xs text-gray-500">
-                      <span className="text-accent">{label}</span>
-                      {' · '}
-                      {a.status}
-                      {a.dueAt && ` · ${a.dueAt.toLocaleDateString('zh-CN')}`}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <section className="mt-8 border-t pt-6">
-        <h2 className="font-semibold">相关事件</h2>
-        {events.length === 0 ? (
-          <p className="mt-1 text-sm text-gray-500">无</p>
-        ) : (
-          <ul className="mt-2 space-y-1">
-            {events.map((e) => (
-              <li key={e.id}>
-                <Link
-                  className="text-sm text-accent hover:underline"
-                  href={`/events/${e.id}`}
-                >
-                  {e.title} · {e.startAt.toLocaleString('zh-CN')}
-                </Link>
-              </li>
+          <div className="mt-4 space-y-4">
+            {timeline.map(item => (
+              <div key={`${item.type}-${item.id}`} className="flex items-start gap-3">
+                <span className="mt-0.5 text-lg">
+                  {item.type === 'event' ? '📅' : item.type === 'action' ? '☑' : '📝'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  {item.link && item.link !== '#' ? (
+                    <Link href={item.link} className="text-sm font-medium hover:underline">{item.title}</Link>
+                  ) : (
+                    <p className="text-sm font-medium">{item.title}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-0.5">{item.subtitle}</p>
+                </div>
+                <span className="text-xs text-gray-400 whitespace-nowrap">
+                  {item.timestamp.toLocaleDateString('zh-CN')}
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </main>
