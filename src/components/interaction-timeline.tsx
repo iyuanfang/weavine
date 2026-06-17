@@ -16,6 +16,7 @@ function DeleteButton({ contactId, id }: { contactId: string; id: string }) {
   const [, startTransition] = useTransition();
 
   async function handleDelete() {
+    if (!confirm('确认删除？')) return;
     await deleteInteractionAction(contactId, id);
     startTransition(() => router.refresh());
   }

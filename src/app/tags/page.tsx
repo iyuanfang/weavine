@@ -1,6 +1,7 @@
 import { TagService } from '@/server/services/tag';
 import { createTag, renameTag, deleteTag } from './actions';
 import { tagColor } from '@/lib/tag-color';
+import { ConfirmDeleteForm } from '@/components/confirm-delete';
 
 export default async function TagsPage() {
   const tags = await TagService.list();
@@ -44,9 +45,9 @@ export default async function TagsPage() {
               <button className="btn-secondary">改名</button>
             </form>
 
-            <form action={deleteTag.bind(null, t.id)}>
+            <ConfirmDeleteForm action={deleteTag.bind(null, t.id)}>
               <button className="btn-danger">删除</button>
-            </form>
+            </ConfirmDeleteForm>
           </li>
         ))}
         {tags.length === 0 && (

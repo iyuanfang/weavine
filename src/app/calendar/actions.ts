@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { EventService, type EventInput } from '@/server/services/event';
 import { ValidationError } from '@/lib/errors';
+import { ZodError } from 'zod';
 import type { ActionResult } from '@/lib/action';
 
 export async function createEventAction(
@@ -27,6 +28,7 @@ export async function createEventAction(
     revalidatePath('/actions');
     redirect(`/events/${e.id}`);
   } catch (e) {
+    if (e instanceof ZodError) return { ok: false, error: e.errors[0]?.message || '验证失败' };
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
     return { ok: false, error: '创建失败' };
@@ -45,6 +47,7 @@ export async function updateEventAction(
     revalidatePath(`/events/${id}`);
     redirect(`/events/${id}`);
   } catch (e) {
+    if (e instanceof ZodError) return { ok: false, error: e.errors[0]?.message || '验证失败' };
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
     return { ok: false, error: '更新失败' };

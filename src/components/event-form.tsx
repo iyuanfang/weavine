@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { Contact } from '@prisma/client';
 import type { ActionResult } from '@/lib/action';
 
@@ -24,6 +25,20 @@ export function EventForm({
   initial?: Initial;
   defaultStart?: string;
 }) {
+  const [{ saving, error }, setState] = useState({ saving: false, error: null as string | null });
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setState({ saving: true, error: null });
+    const fd = new FormData(e.currentTarget);
+    const result = await action(fd);
+    if (!result.ok) {
+      setState({ saving: false, error: result.error ?? '保存失败' });
+    } else {
+      setState({ saving: false, error: null });
+    }
+  }
+
   const start = initial?.startAt
     ? new Date(initial.startAt).toISOString().slice(0, 16)
     : defaultStart ?? '';
@@ -32,7 +47,13 @@ export function EventForm({
     : '';
 
   return (
-    <form action={action} className="mt-4 grid grid-cols-2 gap-3">
+    <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-2 gap-3">
+      {error && (
+        <div className="col-span-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="col-span-2">
         <label className="text-sm font-medium">标题 *</label>
         <input
@@ -147,7 +168,9 @@ export function EventForm({
       </details>
 
       <div className="col-span-2">
-        <button className="btn-primary">保存</button>
+        <button disabled={saving} className="btn-primary">
+          {saving ? '保存中…' : '保存'}
+        </button>
       </div>
     </form>
   );

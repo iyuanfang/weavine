@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { ActionService } from '@/server/services/action';
 import { ValidationError } from '@/lib/errors';
+import { ZodError } from 'zod';
 import type { ActionResult } from '@/lib/action';
 import type { ActionStatus } from '@/server/services/action';
 
@@ -27,6 +28,7 @@ export async function createAction(fd: FormData): Promise<ActionResult> {
     revalidatePath('/actions');
     redirect(`/actions/${a.id}`);
   } catch (e) {
+    if (e instanceof ZodError) return { ok: false, error: e.errors[0]?.message || '验证失败' };
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
     console.error('createAction error', e);

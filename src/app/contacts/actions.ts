@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { ContactService, type ContactInput } from '@/server/services/contact';
 import { TagService } from '@/server/services/tag';
 import { ValidationError } from '@/lib/errors';
+import { ZodError } from 'zod';
 import type { ActionResult } from '@/lib/action';
 
 export async function createContactAction(
@@ -21,6 +22,7 @@ export async function createContactAction(
     revalidatePath('/contacts');
     redirect(`/contacts/${c.id}`);
   } catch (e) {
+    if (e instanceof ZodError) return { ok: false, error: e.errors[0]?.message || '验证失败' };
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
     console.error('createContactAction error:', e);
@@ -52,6 +54,7 @@ export async function updateContactAction(
     revalidatePath(`/contacts/${id}`);
     redirect(`/contacts/${id}`);
   } catch (e) {
+    if (e instanceof ZodError) return { ok: false, error: e.errors[0]?.message || '验证失败' };
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     if (typeof e === 'object' && e !== null && 'digest' in e) throw e;
     console.error('updateContactAction error:', e);

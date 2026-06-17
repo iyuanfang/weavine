@@ -1,6 +1,8 @@
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { EventService } from '@/server/services/event';
-import { CalendarView } from '@/components/calendar-view';
+
+const CalendarView = dynamic(() => import('@/components/calendar-view').then((mod) => mod.CalendarView), { ssr: false });
 
 export default async function CalendarPage({
   searchParams,

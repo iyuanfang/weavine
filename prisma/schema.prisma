@@ -13,7 +13,7 @@ model Contact {
   company         String?
   title           String?
   city            String?
-  email           String?
+  email           String?  @unique
   phone           String?
   wechat          String?
   birthdayMonth   Int?
@@ -33,6 +33,8 @@ model Contact {
   @@index([name])
   @@index([company])
   @@index([city])
+  @@index([lastContactedAt, updatedAt])
+  @@index([birthdayMonth, birthdayDay])
 }
 
 model Tag {
@@ -133,5 +135,6 @@ model Reminder {
 
   @@index([triggerAt, dispatched, dismissed])
   @@index([contactId])
+  @@index([contactId, kind, triggerAt])
 }
 

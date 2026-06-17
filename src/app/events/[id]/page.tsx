@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { EventService } from '@/server/services/event';
 import { ActionService } from '@/server/services/action';
 import { deleteEventAction } from '@/app/calendar/actions';
+import { ConfirmDeleteForm } from '@/components/confirm-delete';
 
 export default async function EventDetail({
   params,
@@ -84,9 +85,9 @@ export default async function EventDetail({
         </section>
       )}
 
-      <form action={deleteEventAction.bind(null, e.id)} className="mt-8">
+      <ConfirmDeleteForm action={deleteEventAction.bind(null, e.id)}>
         <button className="btn-danger">删除</button>
-      </form>
+      </ConfirmDeleteForm>
     </main>
   );
 }

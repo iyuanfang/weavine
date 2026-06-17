@@ -4,6 +4,7 @@ import { ActionService } from '@/server/services/action';
 import type { ActionStatus } from '@/server/services/action';
 import { TransitionAction } from '@/app/today/transition-action';
 import { deleteAction } from '@/app/actions/actions';
+import { ConfirmDeleteForm } from '@/components/confirm-delete';
 
 export default async function ActionDetail({
   params,
@@ -27,9 +28,9 @@ export default async function ActionDetail({
             {a.dueAt && ` · ${a.dueAt.toLocaleString('zh-CN')}`}
           </p>
         </div>
-        <form action={deleteAction.bind(null, a.id)}>
+        <ConfirmDeleteForm action={deleteAction.bind(null, a.id)}>
           <button className="btn-danger">删除</button>
-        </form>
+        </ConfirmDeleteForm>
       </div>
 
       <div className="mt-4">

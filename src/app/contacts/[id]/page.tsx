@@ -6,6 +6,7 @@ import { EventService } from '@/server/services/event';
 import { InteractionService } from '@/server/services/interaction';
 import { ActionService } from '@/server/services/action';
 import { deleteContactAction } from '@/app/contacts/actions';
+import { ConfirmDeleteForm } from '@/components/confirm-delete';
 import { InteractionForm } from '@/components/interaction-form';
 import { InteractionTimeline } from '@/components/interaction-timeline';
 import { RelationshipBadge } from '@/components/relationship-badge';
@@ -78,9 +79,9 @@ export default async function ContactDetail({
           >
             编辑
           </Link>
-          <form action={deleteContactAction.bind(null, c.id)}>
+          <ConfirmDeleteForm action={deleteContactAction.bind(null, c.id)}>
             <button className="btn-danger">删除</button>
-          </form>
+          </ConfirmDeleteForm>
         </div>
       </div>
 
