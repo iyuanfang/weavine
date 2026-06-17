@@ -1,9 +1,37 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { EventService } from '@/server/services/event';
 import { ActionService } from '@/server/services/action';
 import { deleteEventAction } from '@/app/calendar/actions';
 import { ConfirmDeleteForm } from '@/components/confirm-delete';
+import { EventNotesForm } from '@/components/event-notes-form';
+
+async function saveEventNotes(formData: FormData) {
+  'use server';
+  const id = formData.get('eventId') as string;
+  const notes = (formData.get('notes') as string)?.trim();
+  if (!notes) return;
+
+  const db = (await import('@/lib/prisma')).prisma;
+  const event = await db.event.findUnique({
+    where: { id },
+    include: { attendees: true },
+  });
+  if (!event) return;
+
+  await db.interaction.create({
+    data: {
+      contactId: event.attendees[0]?.contactId ?? null,
+      summary: notes,
+      channel: '会议纪要',
+      eventId: id,
+      occurredAt: new Date(),
+    },
+  });
+
+  revalidatePath(`/events/${id}`);
+}
 
 export default async function EventDetail({
   params,
@@ -84,6 +112,8 @@ export default async function EventDetail({
           </p>
         </section>
       )}
+
+      <EventNotesForm eventId={e.id} onSave={saveEventNotes} />
 
       <ConfirmDeleteForm action={deleteEventAction.bind(null, e.id)}>
         <button className="btn-danger" aria-label="删除">删除</button>

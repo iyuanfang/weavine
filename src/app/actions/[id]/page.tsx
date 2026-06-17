@@ -1,10 +1,39 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { ActionService } from '@/server/services/action';
 import type { ActionStatus } from '@/server/services/action';
 import { TransitionAction } from '@/app/today/transition-action';
 import { deleteAction } from '@/app/actions/actions';
 import { ConfirmDeleteForm } from '@/components/confirm-delete';
+import { CompleteActionForm } from '@/components/complete-action-form';
+
+async function completeAction(formData: FormData) {
+  'use server';
+  const id = formData.get('actionId') as string;
+  const result = (formData.get('result') as string)?.trim();
+  const db = (await import('@/lib/prisma')).prisma;
+
+  const action = await db.action.update({
+    where: { id },
+    data: { status: 'done', completedAt: new Date() },
+  });
+
+  if (result) {
+    await db.interaction.create({
+      data: {
+        contactId: action.contactId,
+        summary: result,
+        channel: '结果',
+        actionId: id,
+        occurredAt: new Date(),
+      },
+    });
+  }
+
+  revalidatePath(`/actions/${id}`);
+  redirect(`/actions/${id}`);
+}
 
 export default async function ActionDetail({
   params,
@@ -62,6 +91,20 @@ export default async function ActionDetail({
           </div>
         )}
       </dl>
+
+      {a.status !== 'done' && (
+        <>
+          <div className="mt-6">
+            <Link
+              href={`/events/new?title=${encodeURIComponent(a.title)}&contactId=${a.contactId ?? ''}`}
+              className="btn-secondary"
+            >
+              安排时间
+            </Link>
+          </div>
+          <CompleteActionForm actionId={a.id} onComplete={completeAction} />
+        </>
+      )}
     </main>
   );
 }
