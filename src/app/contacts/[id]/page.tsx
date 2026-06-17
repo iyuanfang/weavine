@@ -80,7 +80,7 @@ export default async function ContactDetail({
             编辑
           </Link>
           <ConfirmDeleteForm action={deleteContactAction.bind(null, c.id)}>
-            <button className="btn-danger">删除</button>
+            <button className="btn-danger" aria-label="删除">删除</button>
           </ConfirmDeleteForm>
         </div>
       </div>

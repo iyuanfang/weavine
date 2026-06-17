@@ -90,7 +90,7 @@ model Action {
   id          String   @id @default(cuid())
   title       String
   description String?
-  status      String   @default("inbox") // inbox|open|waiting|done|dropped
+  status      String   @default("inbox")
   priority    Int      @default(0)
   category    String?
   dueAt       DateTime?

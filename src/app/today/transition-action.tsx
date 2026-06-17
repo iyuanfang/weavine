@@ -14,6 +14,14 @@ const STATUS_LABEL: Record<ActionStatus, string> = {
   dropped: '↻ 恢复',
 };
 
+const STATUS_ARIA: Record<ActionStatus, string> = {
+  inbox: '移入待办',
+  open: '标记完成',
+  waiting: '移入待办',
+  done: '重开',
+  dropped: '恢复',
+};
+
 const STATUS_STYLE: Record<ActionStatus, string> = {
   inbox: 'btn-secondary text-sm',
   open: 'btn-primary text-sm',
@@ -37,6 +45,7 @@ export function TransitionAction({
     <button
       type="button"
       className={STATUS_STYLE[currentStatus]}
+      aria-label={STATUS_ARIA[currentStatus]}
       onClick={async () => {
         await transitionAction(id, next);
         startTransition(() => router.refresh());

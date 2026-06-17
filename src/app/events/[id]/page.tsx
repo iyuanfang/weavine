@@ -86,7 +86,7 @@ export default async function EventDetail({
       )}
 
       <ConfirmDeleteForm action={deleteEventAction.bind(null, e.id)}>
-        <button className="btn-danger">删除</button>
+        <button className="btn-danger" aria-label="删除">删除</button>
       </ConfirmDeleteForm>
     </main>
   );

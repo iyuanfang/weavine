@@ -42,13 +42,13 @@ export const TagService = {
         create: { contactId, tagId },
         update: {},
       })
-      .catch(() => {});
+      .catch((e) => { console.error('TagService.attach failed:', e); });
   },
 
   async detach(contactId: string, tagId: string, db: PrismaClient = defaultPrisma) {
     await db.contactTag
       .delete({ where: { contactId_tagId: { contactId, tagId } } })
-      .catch(() => {});
+      .catch((e) => { console.error('TagService.detach failed:', e); });
   },
 
   async forContact(contactId: string, db: PrismaClient = defaultPrisma) {

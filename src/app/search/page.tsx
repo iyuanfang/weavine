@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { SearchBar } from '@/components/search-bar';
 import { SearchResults } from '@/components/search-results';
+import { SearchClientWrapper } from './client-wrapper';
 
 export default function SearchPage({
   searchParams,
@@ -15,7 +16,9 @@ export default function SearchPage({
       <Suspense fallback={<div className="text-sm text-gray-500 mt-2">...</div>}>
         <SearchBar />
       </Suspense>
-      <SearchResults q={q} />
+      <SearchClientWrapper>
+        <SearchResults q={q} />
+      </SearchClientWrapper>
     </main>
   );
 }

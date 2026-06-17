@@ -1,6 +1,5 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Providers } from './providers';
 import { TopNav } from '@/components/top-nav';
 import { ContactService } from '@/server/services/contact';
 
@@ -21,10 +20,8 @@ export default async function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
-        <Providers>
-          <TopNav contacts={contacts} />
-          {children}
-        </Providers>
+        <TopNav contacts={contacts} />
+        {children}
       </body>
     </html>
   );

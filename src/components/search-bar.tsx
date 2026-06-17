@@ -21,8 +21,9 @@ export function SearchBar() {
         onChange={(e) => setQ(e.target.value)}
         placeholder="搜索 例：北京 合作 找前端"
         className="input-sm w-64"
+        aria-label="搜索"
       />
-      <button type="submit" className="btn-secondary px-2">
+      <button type="submit" className="btn-secondary px-2" aria-label="提交搜索">
         搜索
       </button>
     </form>

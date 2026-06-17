@@ -46,7 +46,7 @@ export default async function TagsPage() {
             </form>
 
             <ConfirmDeleteForm action={deleteTag.bind(null, t.id)}>
-              <button className="btn-danger">删除</button>
+              <button className="btn-danger" aria-label="删除">删除</button>
             </ConfirmDeleteForm>
           </li>
         ))}

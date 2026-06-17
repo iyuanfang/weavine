@@ -38,7 +38,7 @@ export default async function EditEvent({
         }}
       />
       <form action={deleteEventAction.bind(null, e.id)} className="mt-6">
-        <button className="btn-danger">删除</button>
+        <button className="btn-danger" aria-label="删除">删除</button>
       </form>
     </main>
   );

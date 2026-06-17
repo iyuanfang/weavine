@@ -26,6 +26,7 @@ function DeleteButton({ contactId, id }: { contactId: string; id: string }) {
       onClick={handleDelete}
       className="text-red-600 hover:underline"
       type="button"
+      aria-label="删除此记录"
     >
       删除
     </button>

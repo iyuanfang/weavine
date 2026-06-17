@@ -29,7 +29,7 @@ export default async function ActionDetail({
           </p>
         </div>
         <ConfirmDeleteForm action={deleteAction.bind(null, a.id)}>
-          <button className="btn-danger">删除</button>
+          <button className="btn-danger" aria-label="删除">删除</button>
         </ConfirmDeleteForm>
       </div>
 
