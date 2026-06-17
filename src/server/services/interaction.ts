@@ -51,4 +51,23 @@ export const InteractionService = {
     await db.interaction.delete({ where: { id } });
     if (i.contactId) await recalcLastContactedAt(i.contactId, db);
   },
+
+  async byContact(contactId: string, db: PrismaClient = defaultPrisma) {
+    return db.interaction.findMany({
+      where: { contactId },
+      orderBy: { occurredAt: 'desc' },
+      include: { action: true, event: true, contact: true },
+    });
+  },
+
+  async recent(days: number = 7, db: PrismaClient = defaultPrisma) {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    return db.interaction.findMany({
+      where: { occurredAt: { gte: since } },
+      orderBy: { occurredAt: 'desc' },
+      include: { contact: true, action: true, event: true },
+      take: 50,
+    });
+  },
 };
