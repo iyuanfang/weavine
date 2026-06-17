@@ -11,6 +11,7 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<QuickLogType>('interaction');
   const [contactId, setContactId] = useState('');
+  const [newContactName, setNewContactName] = useState('');
   const [channel, setChannel] = useState('微信');
   const [summary, setSummary] = useState('');
   const [title, setTitle] = useState('');
@@ -43,6 +44,7 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
       setTimeout(() => firstFieldRef.current?.focus(), 100);
     } else {
       setContactId('');
+      setNewContactName('');
       setSummary('');
       setTitle('');
       setPriority(0);
@@ -75,6 +77,14 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
 
     const fd = new FormData();
     fd.set('type', type);
+    if (contactId === '__new__') {
+      if (!newContactName.trim()) {
+        setError('请输入新联系人姓名');
+        setSubmitting(false);
+        return;
+      }
+      fd.set('newContactName', newContactName.trim());
+    }
     fd.set('contactId', contactId);
 
     if (type === 'interaction') {
@@ -162,7 +172,17 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
                       {c.name}
                     </option>
                   ))}
+                  <option value="__new__">+ 创建新联系人...</option>
                 </select>
+                {contactId === '__new__' && (
+                  <input
+                    value={newContactName}
+                    onChange={(e) => setNewContactName(e.target.value)}
+                    className="input-base mt-1 w-full"
+                    placeholder="输入联系人姓名"
+                    autoFocus
+                  />
+                )}
               </div>
 
               {/* 记录 fields */}
