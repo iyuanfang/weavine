@@ -25,7 +25,7 @@ fi
 # ── 2. Archive (include src for server-side build) ────────────
 echo "==> Archiving..."
 tar --exclude='node_modules' \
-    --exclude='.next/cache' \
+    --exclude='.next' \
     --exclude='.git' \
     --exclude='scripts' \
     --exclude='prisma/seed.ts' \
@@ -34,7 +34,6 @@ tar --exclude='node_modules' \
     --exclude='__tests__' \
     --exclude='__snapshots__' \
     -czf "$ARCHIVE" \
-    .next \
     prisma \
     public \
     src \
@@ -71,6 +70,17 @@ elif [ -f .env ]; then
   set -a
   source .env 2>/dev/null || true
   set +a
+fi
+
+# ── Production env overrides ─────────────────────────────────
+# Force production URL for Auth.js callbacks (server .env may have stale dev value)
+export AUTH_URL="https://$SITE"
+# Trust X-Forwarded-Proto/Host from nginx reverse proxy
+export AUTH_TRUST_HOST="1"
+# Generate AUTH_SECRET if missing
+if [ -z "${AUTH_SECRET:-}" ]; then
+  echo "==> WARNING: AUTH_SECRET is empty — generating one..."
+  export AUTH_SECRET="$(openssl rand -base64 32)"
 fi
 
 # Install dependencies
