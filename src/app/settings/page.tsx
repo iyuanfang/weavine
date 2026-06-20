@@ -49,6 +49,18 @@ export default async function SettingsPage() {
           <PushToggle />
         </div>
       </section>
+
+      <section className="rounded border p-4">
+        <h2 className="font-semibold">数据导出</h2>
+        <p className="mt-1 text-xs text-gray-500">导出全部数据为 JSON 文件，包含联系人、标签、日程、互动、待办、提醒和设置。</p>
+        <a
+          href="/api/export"
+          download
+          className="btn-secondary mt-3 inline-block"
+        >
+          下载 JSON
+        </a>
+      </section>
     </main>
   );
 }
