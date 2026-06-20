@@ -3,23 +3,22 @@ import { EventService } from '@/server/services/event';
 import { ContactService } from '@/server/services/contact';
 import { EventForm } from '@/components/event-form';
 import { updateEventAction, deleteEventAction } from '@/app/calendar/actions';
+import { getCurrentUser } from '@/lib/auth/session';
 
 export default async function EditEvent({
   params,
 }: {
   params: { id: string };
 }) {
+  const { id: ownerId } = await getCurrentUser();
   let e;
   try {
-    e = await EventService.get(params.id);
+    e = await EventService.get(params.id, ownerId);
   } catch {
     notFound();
   }
 
-  const contacts = (await ContactService.list({})).map((c) => ({
-    id: c.id,
-    name: c.name,
-  }));
+  const contacts = await ContactService.listLight(ownerId);
 
   return (
     <main className="mx-auto max-w-2xl p-6">
@@ -34,7 +33,7 @@ export default async function EditEvent({
           endAt: e.endAt?.toISOString() ?? null,
           location: e.location,
           notes: e.notes,
-          attendees: e.attendees.map((a) => ({ contactId: a.contactId })),
+          contactId: e.contactId,
         }}
       />
       <form action={deleteEventAction.bind(null, e.id)} className="mt-6">

@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import type { Contact } from '@prisma/client';
 import type { ActionResult } from '@/lib/action';
+import { DateTimeInput } from './datetime-input';
+import { ContactPicker, type PickerContact } from './contact-picker';
+import { DatalistInput } from './datalist-input';
+import { EVENT_TYPE_OPTIONS, DEFAULT_EVENT_TYPE } from '@/lib/event-type';
 
 interface Initial {
   title?: string;
@@ -11,7 +14,7 @@ interface Initial {
   endAt?: string | null;
   location?: string | null;
   notes?: string | null;
-  attendees?: { contactId: string }[];
+  contactId?: string | null;
 }
 
 export function EventForm({
@@ -21,30 +24,35 @@ export function EventForm({
   defaultStart,
 }: {
   action: (fd: FormData) => Promise<ActionResult>;
-  contacts: Pick<Contact, 'id' | 'name'>[];
+  contacts: PickerContact[];
   initial?: Initial;
   defaultStart?: string;
 }) {
   const [{ saving, error }, setState] = useState({ saving: false, error: null as string | null });
+  const [startDate, setStartDate] = useState<Date | null>(
+    initial?.startAt ? new Date(initial.startAt) : defaultStart ? new Date(defaultStart) : null,
+  );
+  const [endDate, setEndDate] = useState<Date | null>(
+    initial?.endAt ? new Date(initial.endAt) : null,
+  );
+  const [type, setType] = useState<string>(initial?.type ?? '');
+
+  function handleStartChange(d: Date | null) {
+    setStartDate(d);
+    if (d && !endDate) {
+      setEndDate(new Date(d.getTime() + 60 * 60 * 1000));
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setState({ saving: true, error: null });
     const fd = new FormData(e.currentTarget);
     const result = await action(fd);
-    if (!result.ok) {
+    if (result && !result.ok) {
       setState({ saving: false, error: result.error ?? '保存失败' });
-    } else {
-      setState({ saving: false, error: null });
     }
   }
-
-  const start = initial?.startAt
-    ? new Date(initial.startAt).toISOString().slice(0, 16)
-    : defaultStart ?? '';
-  const end = initial?.endAt
-    ? new Date(initial.endAt).toISOString().slice(0, 16)
-    : '';
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-2 gap-3">
@@ -66,17 +74,15 @@ export function EventForm({
 
       <div>
         <label className="text-sm font-medium">类型</label>
-        <select
+        <DatalistInput
           name="type"
-          defaultValue={initial?.type ?? 'meeting'}
-          className="input-base"
-        >
-          <option value="meeting">会面</option>
-          <option value="birthday">生日</option>
-          <option value="anniversary">纪念日</option>
-          <option value="reminder">提醒</option>
-          <option value="custom">其他</option>
-        </select>
+          value={type}
+          onChange={setType}
+          options={EVENT_TYPE_OPTIONS}
+          placeholder="选一个或输入自定义类型"
+          required
+          className="input-base mt-1"
+        />
       </div>
 
       <div>
@@ -88,43 +94,35 @@ export function EventForm({
         />
       </div>
 
-      <div>
-        <label className="text-sm font-medium">开始 *</label>
-        <input
+      <div className="col-span-2">
+        <DateTimeInput
           name="startAt"
-          type="datetime-local"
+          label="开始时间"
           required
-          defaultValue={start}
-          className="input-base"
-        />
-      </div>
-
-      <div>
-        <label className="text-sm font-medium">结束</label>
-        <input
-          name="endAt"
-          type="datetime-local"
-          defaultValue={end}
-          className="input-base"
+          value={startDate}
+          onChange={handleStartChange}
         />
       </div>
 
       <div className="col-span-2">
-        <label className="text-sm font-medium">参与人</label>
-        <div className="mt-1 grid max-h-40 grid-cols-2 gap-1 overflow-y-auto rounded border border-gray-300 p-2">
-          {contacts.map((c) => (
-            <label key={c.id} className="flex items-center gap-1 text-sm">
-              <input
-                type="checkbox"
-                name="attendeeId"
-                value={c.id}
-                defaultChecked={initial?.attendees?.some(
-                  (a) => a.contactId === c.id,
-                )}
-              />
-              {c.name}
-            </label>
-          ))}
+        <DateTimeInput
+          name="endAt"
+          label="结束（可选）"
+          value={endDate}
+          onChange={setEndDate}
+          required={false}
+        />
+      </div>
+
+      <div className="col-span-2">
+        <label className="text-sm font-medium">联系人</label>
+        <div className="mt-1">
+          <ContactPicker
+            contacts={contacts}
+            name="contactId"
+            defaultValue={initial?.contactId ?? ''}
+            placeholder="搜索：昵称 / 姓名 / 公司 / 城市"
+          />
         </div>
       </div>
 
@@ -140,11 +138,11 @@ export function EventForm({
 
       <details className="col-span-2 rounded border border-gray-200 p-3">
         <summary className="cursor-pointer text-sm font-medium text-gray-700">
-          📌 自动创建会前 Action（可选）
+          📌 自动创建会前待办（可选）
         </summary>
         <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
           <div className="col-span-2">
-            <label className="text-xs">Action 标题</label>
+            <label className="text-xs">待办标题</label>
             <input
               name="followupTitle"
               placeholder="例：会前准备上次的讨论提纲"
@@ -163,7 +161,7 @@ export function EventForm({
           </div>
         </div>
         <p className="mt-2 text-xs text-gray-500">
-          填了标题就会自动创建一条 Action，截止时间 = 事件开始 - 提前量，关联到第一个参与人。
+          填了标题就会自动创建一条待办，截止时间 = 日程开始 - 提前量，关联到第一个参与人。
         </p>
       </details>
 

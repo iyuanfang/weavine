@@ -6,23 +6,26 @@ import { ActionService } from '@/server/services/action';
 import { deleteEventAction } from '@/app/calendar/actions';
 import { ConfirmDeleteForm } from '@/components/confirm-delete';
 import { EventNotesForm } from '@/components/event-notes-form';
+import { formatEventType } from '@/lib/event-type';
+import { getCurrentUser } from '@/lib/auth/session';
 
 async function saveEventNotes(formData: FormData) {
   'use server';
+  const { id: ownerId } = await getCurrentUser();
   const id = formData.get('eventId') as string;
   const notes = (formData.get('notes') as string)?.trim();
   if (!notes) return;
 
   const db = (await import('@/lib/prisma')).prisma;
-  const event = await db.event.findUnique({
-    where: { id },
-    include: { attendees: true },
+  const event = await db.event.findFirst({
+    where: { id, ownerId },
   });
   if (!event) return;
 
   await db.interaction.create({
     data: {
-      contactId: event.attendees[0]?.contactId ?? null,
+      ownerId,
+      contactId: event.contactId,
       summary: notes,
       channel: '会议纪要',
       eventId: id,
@@ -38,13 +41,14 @@ export default async function EventDetail({
 }: {
   params: { id: string };
 }) {
+  const { id: ownerId } = await getCurrentUser();
   let e;
   try {
-    e = await EventService.get(params.id);
+    e = await EventService.get(params.id, ownerId);
   } catch {
     notFound();
   }
-  const actions = await ActionService.byEvent(params.id);
+  const actions = await ActionService.byEvent(params.id, ownerId);
 
   return (
     <main className="mx-auto max-w-2xl p-6">
@@ -59,35 +63,29 @@ export default async function EventDetail({
       </div>
 
       <p className="mt-2 text-sm text-gray-500">
-        {e.type} · {e.startAt.toLocaleString('zh-CN')}
+        {formatEventType(e.type)} · {e.startAt.toLocaleString('zh-CN')}
         {e.endAt ? ` – ${e.endAt.toLocaleString('zh-CN')}` : ''}
       </p>
 
       {e.location && <p className="mt-1 text-sm">📍 {e.location}</p>}
 
       <section className="mt-4">
-        <h2 className="font-semibold">参与人</h2>
-        {e.attendees.length === 0 ? (
-          <p className="text-sm text-gray-500">无</p>
+        <h2 className="font-semibold">联系人</h2>
+        {e.contact ? (
+          <Link
+            className="mt-1 inline-block text-sm text-accent hover:underline"
+            href={`/contacts/${e.contact.id}`}
+          >
+            {e.contact.nickname ?? e.contact.name ?? '?'}
+          </Link>
         ) : (
-          <ul className="mt-2 grid gap-1">
-            {e.attendees.map((a) => (
-              <li key={a.contactId}>
-                <Link
-                  className="text-sm text-accent hover:underline"
-                  href={`/contacts/${a.contact.id}`}
-                >
-                  {a.contact.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <p className="mt-1 text-sm text-gray-500">无</p>
         )}
       </section>
 
       {actions.length > 0 && (
         <section className="mt-6">
-          <h2 className="font-semibold">关联 Action ({actions.length})</h2>
+          <h2 className="font-semibold">关联待办 ({actions.length})</h2>
           <ul className="mt-2 space-y-2">
             {actions.map((a) => (
               <li key={a.id} className="card">
