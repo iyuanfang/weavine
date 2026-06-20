@@ -99,6 +99,7 @@ ln -sfn "$RDIR/$RNAME" "$BASE/current"
 
 # Generate PM2 ecosystem config with correct cwd and production env
 AUTH_URL_VAL="https://$SITE"
+AUTH_SECRET_VAL="${AUTH_SECRET:-$(openssl rand -base64 32)}"
 cat > "$BASE/ecosystem.config.js" << EOF
 module.exports = {
   apps: [{
@@ -112,7 +113,8 @@ module.exports = {
       NODE_ENV: "production",
       PORT: "3100",
       AUTH_URL: "$AUTH_URL_VAL",
-      AUTH_TRUST_HOST: "1"
+      AUTH_TRUST_HOST: "1",
+      AUTH_SECRET: "$AUTH_SECRET_VAL"
     }
   }]
 };
