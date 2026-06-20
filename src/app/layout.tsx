@@ -1,7 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { TopNav } from '@/components/top-nav';
-import { ContactService } from '@/server/services/contact';
+import { auth } from '@/auth';
 
 export const metadata: Metadata = {
   title: 'PRM · 人脉管理',
@@ -13,14 +13,26 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const contacts = (await ContactService.list({})).map((c) => ({
-    id: c.id,
-    name: c.name,
-  }));
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return (
+      <html lang="zh-CN">
+        <body>{children}</body>
+      </html>
+    );
+  }
+
   return (
     <html lang="zh-CN">
       <body>
-        <TopNav contacts={contacts} />
+        <TopNav
+          currentUser={{
+            name: session.user.name ?? null,
+            email: session.user.email ?? null,
+            image: session.user.image ?? null,
+          }}
+        />
         {children}
       </body>
     </html>
