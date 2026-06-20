@@ -15,3 +15,4 @@ playwright-report/
 prisma/dev.db-shm
 prisma/dev.db-wal
 prisma/settings.json
+.worktrees/
