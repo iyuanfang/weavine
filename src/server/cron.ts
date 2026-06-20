@@ -1,13 +1,11 @@
 import cron from 'node-cron';
 import webpush from 'web-push';
-import Database from 'better-sqlite3';
 import { prisma } from '@/lib/prisma';
 import { ReminderService } from './services/reminder';
 import { BirthdayService } from './services/birthday';
-import { readSettings } from '@/app/settings/actions';
+import { contactMaintenanceReminderDue } from '@/lib/relationship';
 
 declare global {
-  // eslint-disable-next-line no-var
   var __prmCronStarted: boolean | undefined;
 }
 
@@ -22,10 +20,16 @@ export function startCron() {
     webpush.setVapidDetails(sub, pub, priv);
   }
 
+  const ownerIds = async () =>
+    (await prisma.user.findMany({ select: { id: true } })).map((u) => u.id);
+
   cron.schedule('5 0 * * *', async () => {
     try {
-      const created = await BirthdayService.ensureBirthdayReminders();
-      if (created > 0) console.log(`cron: created ${created} birthday reminders`);
+      let total = 0;
+      for (const ownerId of await ownerIds()) {
+        total += await BirthdayService.ensureBirthdayReminders(ownerId);
+      }
+      if (total > 0) console.log(`cron: created ${total} birthday reminders`);
     } catch (e) {
       console.error('birthday cron error', e);
     }
@@ -33,52 +37,51 @@ export function startCron() {
 
   cron.schedule('0 9 * * *', async () => {
     try {
-      const settings = await readSettings();
-      const firstThreshold = settings.staleDays[0] ?? 90;
-      const cutoff = new Date(Date.now() - firstThreshold * 86400_000);
-      const candidates = await prisma.contact.findMany({
-        where: {
-          OR: [
-            { lastContactedAt: { lt: cutoff } },
-            {
-              AND: [
-                { lastContactedAt: null },
-                { createdAt: { lt: cutoff } },
-              ],
+      const owners = await ownerIds();
+      for (const ownerId of owners) {
+        const candidates = await prisma.contact.findMany({
+          where: { ownerId },
+          select: {
+            id: true,
+            nickname: true,
+            name: true,
+            lastContactedAt: true,
+            createdAt: true,
+            importance: true,
+            reminderEnabled: true,
+            reminderIntervalDays: true,
+          },
+        });
+        const tomorrow9am = new Date();
+        tomorrow9am.setDate(tomorrow9am.getDate() + 1);
+        tomorrow9am.setHours(9, 0, 0, 0);
+        const now = new Date();
+        let created = 0;
+        for (const c of candidates) {
+          if (!contactMaintenanceReminderDue(c, now)) continue;
+          const existing = await prisma.reminder.findFirst({
+            where: {
+              ownerId,
+              contactId: c.id,
+              kind: 'stale',
+              triggerAt: { gte: new Date() },
             },
-          ],
-        },
-        select: { id: true, name: true, lastContactedAt: true },
-        take: 50,
-      });
-
-      const tomorrow9am = new Date();
-      tomorrow9am.setDate(tomorrow9am.getDate() + 1);
-      tomorrow9am.setHours(9, 0, 0, 0);
-
-      let created = 0;
-      for (const c of candidates) {
-        const existing = await prisma.reminder.findFirst({
-          where: {
-            contactId: c.id,
-            kind: 'stale',
-            triggerAt: { gte: new Date() },
-          },
-        });
-        if (existing) continue;
-        const days = c.lastContactedAt
-          ? Math.floor((Date.now() - c.lastContactedAt.getTime()) / 86400_000)
-          : firstThreshold;
-        await prisma.reminder.create({
-          data: {
-            contactId: c.id,
-            kind: 'stale',
-            triggerAt: tomorrow9am,
-          },
-        });
-        created++;
+          });
+          if (existing) continue;
+          await prisma.reminder.create({
+            data: {
+              ownerId,
+              contactId: c.id,
+              kind: 'stale',
+              triggerAt: tomorrow9am,
+            },
+          });
+          created++;
+        }
+        if (created > 0) {
+          console.log(`cron[${ownerId}]: created ${created} stale contact reminders`);
+        }
       }
-      if (created > 0) console.log(`cron: created ${created} stale contact reminders`);
     } catch (e) {
       console.error('stale cron error', e);
     }
@@ -86,7 +89,7 @@ export function startCron() {
 
   cron.schedule('* * * * *', async () => {
     try {
-      const due = await ReminderService.dueReminders();
+      const due = await ReminderService.dueReminders(null);
       for (const r of due) {
         let title: string;
         let body: string;
@@ -112,42 +115,24 @@ export function startCron() {
           link = '/';
         }
 
-        try {
-          await prisma.reminder.update({
-            where: { id: r.id },
-            data: { dispatched: true },
-          });
-        } catch (dispatchErr) {
-          console.error('reminder dispatch error', dispatchErr);
-          continue;
-        }
+        await ReminderService.markDispatched(r.id, r.ownerId);
 
         if (pub && priv) {
-          let pushDb: Database.Database | null = null;
-          try {
-            const url = (process.env.DATABASE_URL ?? 'file:./prisma/dev.db').replace(/^file:/, '');
-            pushDb = new Database(url);
-            const subs = pushDb
-              .prepare('SELECT endpoint, p256dh, auth FROM push_subscription')
-              .all() as { endpoint: string; p256dh: string; auth: string }[];
-            for (const s of subs) {
-              try {
-                await webpush.sendNotification(
-                  { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-                  JSON.stringify({ title, body, link }),
-                );
-              } catch (sendErr: any) {
-                if (sendErr?.statusCode === 410) {
-                  pushDb
-                    .prepare('DELETE FROM push_subscription WHERE endpoint = ?')
-                    .run(s.endpoint);
-                }
+          const subs = await prisma.pushSubscription.findMany({
+            where: { ownerId: r.ownerId },
+            select: { endpoint: true, p256dh: true, auth: true },
+          });
+          for (const s of subs) {
+            try {
+              await webpush.sendNotification(
+                { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+                JSON.stringify({ title, body, link }),
+              );
+            } catch (sendErr: any) {
+              if (sendErr?.statusCode === 410) {
+                await prisma.pushSubscription.deleteMany({ where: { endpoint: s.endpoint } });
               }
             }
-          } catch (dbErr) {
-            console.error('push db error', dbErr);
-          } finally {
-            pushDb?.close();
           }
         }
       }

@@ -19,6 +19,7 @@ export const ReminderService = {
   async createManyForEvent(
     eventId: string,
     startAt: Date,
+    ownerId: string = '',
     offsets: number[] = DEFAULT_OFFSETS,
     db: PrismaClient = defaultPrisma,
   ) {
@@ -26,6 +27,7 @@ export const ReminderService = {
     if (!rows.length) return [];
     await db.reminder.createMany({
       data: rows.map((r) => ({
+        ownerId,
         eventId,
         triggerAt: r.triggerAt,
         kind: 'event',
@@ -36,30 +38,60 @@ export const ReminderService = {
     return rows;
   },
 
-  async dueReminders(now: Date = new Date(), db: PrismaClient = defaultPrisma) {
+  async dueReminders(
+    ownerId: string | null,
+    now: Date = new Date(),
+    db: PrismaClient = defaultPrisma,
+  ) {
     return db.reminder.findMany({
       where: {
+        ...(ownerId ? { ownerId } : {}),
         triggerAt: { lte: now },
         dispatched: false,
         dismissed: false,
       },
-      include: { contact: true, event: true },
+      include: {
+        contact: { select: { id: true, name: true, lastContactedAt: true } },
+        event: { select: { id: true, title: true, startAt: true, location: true } },
+      },
     });
   },
 
-  async markDispatched(id: string, db: PrismaClient = defaultPrisma) {
-    await db.reminder.update({ where: { id }, data: { dispatched: true } });
+  async markDispatched(
+    id: string,
+    ownerId: string = '',
+    db: PrismaClient = defaultPrisma,
+  ) {
+    await db.reminder.updateMany({
+      where: { id, ...(ownerId ? { ownerId } : {}) },
+      data: { dispatched: true },
+    });
   },
 
-  async dismiss(id: string, db: PrismaClient = defaultPrisma) {
-    await db.reminder.update({ where: { id }, data: { dismissed: true } });
+  async dismiss(
+    id: string,
+    ownerId: string = '',
+    db: PrismaClient = defaultPrisma,
+  ) {
+    await db.reminder.updateMany({
+      where: { id, ...(ownerId ? { ownerId } : {}) },
+      data: { dismissed: true },
+    });
   },
 
-  async list(limit = 50, db: PrismaClient = defaultPrisma) {
+  async list(
+    ownerId: string = '',
+    limit = 50,
+    db: PrismaClient = defaultPrisma,
+  ) {
     return db.reminder.findMany({
+      where: { ...(ownerId ? { ownerId } : {}) },
       orderBy: { triggerAt: 'asc' },
       take: limit,
-      include: { contact: true, event: true },
+      include: {
+        contact: { select: { id: true, name: true, lastContactedAt: true } },
+        event: { select: { id: true, title: true, startAt: true, location: true } },
+      },
     });
   },
 };
