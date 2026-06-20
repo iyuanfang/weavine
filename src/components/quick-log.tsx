@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { classifyInput, type QuickLogType } from '@/lib/nl-classify';
+import type { QuickLogType } from '@/lib/nl-classify';
 import { quickLogAction } from '@/app/quick-log/actions';
+import { ACTION_PRIORITIES, PRIORITY_LABEL } from '@/server/services/action';
+import { ContactPicker, type PickerContact } from './contact-picker';
+import { DateTimeInput } from './datetime-input';
+import { toLocalDatetimeString } from '@/lib/date-parser';
 
-type Contact = { id: string; name: string };
-
-export function QuickLog({ contacts }: { contacts: Contact[] }) {
+export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<QuickLogType>('interaction');
   const [contactId, setContactId] = useState('');
@@ -16,13 +18,14 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
   const [summary, setSummary] = useState('');
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState(0);
-  const [dueAt, setDueAt] = useState('');
-  const [startAt, setStartAt] = useState('');
+  const [dueAt, setDueAt] = useState<Date | null>(null);
+  const [startAt, setStartAt] = useState<Date | null>(null);
   const [location, setLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
-  const firstFieldRef = useRef<HTMLSelectElement>(null);
+  const [, startTransition] = useTransition();
+  const firstFieldRef = useRef<HTMLDivElement>(null);
 
   // ⌘K toggle
   useEffect(() => {
@@ -41,33 +44,30 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
   // Focus + reset on open
   useEffect(() => {
     if (open) {
-      setTimeout(() => firstFieldRef.current?.focus(), 100);
+      setTimeout(() => {
+        const el = firstFieldRef.current?.querySelector<HTMLInputElement>('input,button');
+        el?.focus();
+      }, 100);
     } else {
       setContactId('');
       setNewContactName('');
       setSummary('');
       setTitle('');
       setPriority(0);
-      setDueAt('');
-      setStartAt('');
+      setDueAt(null);
+      setStartAt(null);
       setLocation('');
       setError(null);
       setType('interaction');
     }
   }, [open]);
 
-  // Auto-classify on summary/title change
-  useEffect(() => {
-    const text = type === 'interaction' ? summary : title;
-    if (text.length >= 2) {
-      setType(classifyInput(text));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary, title]);
-
   function switchTo(t: QuickLogType) {
     setType(t);
-    setTimeout(() => firstFieldRef.current?.focus(), 50);
+    setTimeout(() => {
+      const el = firstFieldRef.current?.querySelector<HTMLInputElement>('input,button');
+      el?.focus();
+    }, 50);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -93,10 +93,10 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
     } else if (type === 'action') {
       fd.set('title', title);
       fd.set('priority', String(priority));
-      if (dueAt) fd.set('dueAt', dueAt);
+      if (dueAt) fd.set('dueAt', toLocalDatetimeString(dueAt));
     } else if (type === 'event') {
       fd.set('title', title);
-      fd.set('startAt', startAt);
+      if (startAt) fd.set('startAt', toLocalDatetimeString(startAt));
       if (location) fd.set('location', location);
     }
 
@@ -105,14 +105,14 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
 
     if (res.ok) {
       setOpen(false);
-      router.refresh();
+      startTransition(() => router.refresh());
     } else {
       setError(res.error ?? '创建失败');
     }
   }
 
   const tabs: { key: QuickLogType; label: string }[] = [
-    { key: 'interaction', label: ' 记录' },
+    { key: 'interaction', label: ' 互动' },
     { key: 'action', label: '☑ 待办' },
     { key: 'event', label: ' 日程' },
   ];
@@ -158,30 +158,35 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
 
             <form onSubmit={handleSubmit} className="space-y-3">
               {/* Contact — common */}
-              <div>
+              <div ref={firstFieldRef}>
                 <label className="block text-sm text-gray-600">联系人</label>
-                <select
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                  className="input-base"
-                  ref={firstFieldRef}
+                <ContactPicker
+                  contacts={contacts}
+                  name="contactId"
+                  onChangeCustom={(v) => {
+                    setContactId(v);
+                    if (v !== '__new__') setNewContactName('');
+                  }}
+                />
+                <button
+                  type="button"
+                  className="mt-1 text-xs text-blue-600 hover:underline"
+                  onClick={() => setContactId('__new__')}
                 >
-                  <option value="">无（纯想法）</option>
-                  {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                  <option value="__new__">+ 创建新联系人...</option>
-                </select>
+                  + 创建新联系人…
+                </button>
                 {contactId === '__new__' && (
-                  <input
-                    value={newContactName}
-                    onChange={(e) => setNewContactName(e.target.value)}
-                    className="input-base mt-1 w-full"
-                    placeholder="输入联系人姓名"
-                    autoFocus
-                  />
+                  <>
+                    <input type="hidden" name="contactId" value="__new__" />
+                    <input
+                      value={newContactName}
+                      onChange={(e) => setNewContactName(e.target.value)}
+                      className="input-base mt-1 w-full"
+                      placeholder="输入联系人姓名"
+                      autoFocus
+                      name="newContactName"
+                    />
+                  </>
                 )}
               </div>
 
@@ -238,20 +243,18 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
                         onChange={(e) => setPriority(Number(e.target.value))}
                         className="input-base w-full"
                       >
-                        <option value={0}>普通</option>
-                        <option value={1}>P1 重要</option>
-                        <option value={2}>P2 紧急</option>
+                        {ACTION_PRIORITIES.map((p) => (
+                          <option key={p} value={p}>P{p} {PRIORITY_LABEL[p]}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm text-gray-600">
-                        截止
-                      </label>
-                      <input
-                        type="datetime-local"
+                      <DateTimeInput
+                        name="__quick_due"
                         value={dueAt}
-                        onChange={(e) => setDueAt(e.target.value)}
-                        className="input-base w-full"
+                        onChange={setDueAt}
+                        showHelperText={false}
+                        placeholder="截止（可选）"
                       />
                     </div>
                   </div>
@@ -271,14 +274,14 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600">
-                      开始时间
-                    </label>
-                    <input
-                      type="datetime-local"
+                    <DateTimeInput
+                      name="__quick_start"
+                      label="开始时间"
+                      required
                       value={startAt}
-                      onChange={(e) => setStartAt(e.target.value)}
-                      className="input-base w-full"
+                      onChange={setStartAt}
+                      showHelperText={false}
+                      placeholder="明天下午3点 / 周六上午10点"
                     />
                   </div>
                   <div>
@@ -315,8 +318,8 @@ export function QuickLog({ contacts }: { contacts: Contact[] }) {
 
             <p className="mt-3 text-xs text-gray-400">
               按{' '}
-              <kbd className="rounded border bg-gray-50 px-1">Esc</kbd>{' '}
-              关闭 · 输入内容会自动识别类型
+               <kbd className="rounded border bg-gray-50 px-1">Esc</kbd>{' '}
+               关闭
             </p>
           </div>
         </div>

@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
+import { actionStatusLabel } from '@/lib/action-status';
+import { formatEventType } from '@/lib/event-type';
+import { ActionService } from './action';
 
 export type TimelineItemType = 'action' | 'event' | 'interaction';
 
@@ -17,21 +20,24 @@ export type TimelineItem = {
 };
 
 export class TimelineService {
-  // 获取联系人的完整时间线（混排 Action + Event + Interaction，按时间倒序）
-  static async forContact(contactId: string, db: PrismaClient = defaultPrisma): Promise<TimelineItem[]> {
+  static async forContact(
+    contactId: string,
+    ownerId: string = '',
+    db: PrismaClient = defaultPrisma,
+  ): Promise<TimelineItem[]> {
     const [actions, events, interactions] = await Promise.all([
       db.action.findMany({
-        where: { contactId, status: { not: 'dropped' } },
+        where: { ownerId, contactId, status: { not: 'dropped' } },
         include: { contact: true },
         orderBy: { createdAt: 'desc' },
       }),
       db.event.findMany({
-        where: { attendees: { some: { contactId } } },
-        include: { attendees: { include: { contact: true } } },
+        where: { ownerId, contactId },
+        include: { contact: true },
         orderBy: { startAt: 'desc' },
       }),
       db.interaction.findMany({
-        where: { contactId },
+        where: { ownerId, contactId },
         include: { contact: true },
         orderBy: { occurredAt: 'desc' },
       }),
@@ -40,28 +46,28 @@ export class TimelineService {
     const items: TimelineItem[] = [
       ...actions.map(a => ({
         type: 'action' as const, id: a.id, title: a.title,
-        subtitle: a.status === 'done' ? '已完成' : `${statusLabel(a.status)} · P${a.priority}`,
+        subtitle: a.status === 'done' ? '✅ 已完成' : `${actionStatusLabel(a.status)} · P${a.priority}`,
         timestamp: a.dueAt ?? a.createdAt,
         priority: a.priority, status: a.status,
-        contactName: a.contact?.name,
+        contactName: a.contact?.nickname ?? a.contact?.name ?? undefined,
         contactId: a.contactId ?? undefined,
         link: `/actions/${a.id}`,
       })),
       ...events.map(e => ({
         type: 'event' as const, id: e.id, title: e.title,
-        subtitle: `${e.type} · ${e.startAt.toLocaleString('zh-CN')}`,
+        subtitle: `${formatEventType(e.type)} · ${e.startAt.toLocaleString('zh-CN')}`,
         timestamp: e.startAt,
-        contactName: e.attendees[0]?.contact.name,
-        contactId: e.attendees[0]?.contactId,
+        contactName: e.contact?.nickname ?? e.contact?.name ?? undefined,
+        contactId: e.contactId ?? undefined,
         link: `/events/${e.id}`,
       })),
       ...interactions.map(i => ({
         type: 'interaction' as const, id: i.id, title: i.summary,
-        subtitle: i.channel ?? '记录',
+        subtitle: i.channel ?? '互动',
         timestamp: i.occurredAt,
-        contactName: i.contact?.name,
+        contactName: i.contact?.nickname ?? i.contact?.name ?? undefined,
         contactId: i.contactId ?? undefined,
-        link: `#`, // Interaction detail TBD
+        link: `/interactions/${i.id}`,
       })),
     ];
 
@@ -69,65 +75,101 @@ export class TimelineService {
     return items;
   }
 
-  // 获取 /today 时间线（今日日程 + 待处理 Action + 近期互动）
-  static async forToday(db: PrismaClient = defaultPrisma): Promise<{
-    todayEvents: TimelineItem[];
-    dueActions: TimelineItem[];
+  static async forToday(
+    ownerId: string = '',
+    db: PrismaClient = defaultPrisma,
+  ): Promise<{
+    todayDoActions: TimelineItem[];
+    upcomingEvents: TimelineItem[];
     recentInteractions: TimelineItem[];
   }> {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 86400000);
+    const endOfDayAfter = new Date(startOfDay.getTime() + 3 * 86400000);
     const sevenDaysAgo = new Date(startOfDay.getTime() - 7 * 86400000);
 
-    const [events, actions, interactions] = await Promise.all([
+    const [todayDoActions, upcomingEvents, interactions] = await Promise.all([
+      db.action.findMany({
+        where: {
+          ownerId,
+          status: { in: ['inbox', 'open'] },
+          dueAt: { not: null, lt: endOfDayAfter },
+        },
+        select: {
+          id: true, title: true, priority: true, status: true, dueAt: true,
+          contact: { select: { nickname: true, name: true } },
+        },
+        orderBy: [{ priority: 'desc' }, { dueAt: 'asc' }],
+        take: 5,
+      }),
       db.event.findMany({
-        where: { startAt: { gte: startOfDay, lt: endOfDay } },
-        include: { attendees: { include: { contact: true } } },
+        where: { ownerId, startAt: { gte: startOfDay, lt: endOfDayAfter } },
+        select: {
+          id: true, title: true, startAt: true, location: true, contactId: true,
+          contact: { select: { nickname: true, name: true } },
+        },
         orderBy: { startAt: 'asc' },
       }),
-      db.action.findMany({
-        where: { status: { in: ['open', 'waiting'] }, dueAt: { not: null } },
-        include: { contact: true, event: true },
-        orderBy: [{ dueAt: 'asc' }, { priority: 'desc' }],
-        take: 20,
-      }),
       db.interaction.findMany({
-        where: { occurredAt: { gte: sevenDaysAgo } },
-        include: { contact: true },
+        where: { ownerId, occurredAt: { gte: sevenDaysAgo } },
+        select: {
+          id: true, summary: true, channel: true, occurredAt: true,
+          contact: { select: { nickname: true, name: true } },
+        },
         orderBy: { occurredAt: 'desc' },
         take: 10,
       }),
     ]);
 
     return {
-      todayEvents: events.map(e => ({
-        type: 'event' as const, id: e.id, title: e.title,
-        subtitle: `${e.startAt.toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' })}${e.location ? ` · ${e.location}` : ''}`,
-        timestamp: e.startAt, link: `/events/${e.id}`,
-      })),
-      dueActions: actions.map(a => ({
-        type: 'action' as const, id: a.id, title: a.title,
-        subtitle: `P${a.priority} · 截止 ${a.dueAt!.toLocaleString('zh-CN')}${a.contact ? ` · ${a.contact.name}` : ''}`,
-        timestamp: a.dueAt!, priority: a.priority, status: a.status,
-        link: `/actions/${a.id}`,
-      })),
+      todayDoActions: todayDoActions.map(a => {
+        const isOverdue = a.dueAt! < now;
+        const datePart = a.dueAt!.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric' });
+        const timePart = a.dueAt!.toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const contactPart = a.contact ? ` · ${a.contact.nickname ?? a.contact.name}` : '';
+        return {
+          type: 'action' as const,
+          id: a.id,
+          title: a.title,
+          subtitle: `${isOverdue ? '已过期 · ' : '今天 '}${datePart} ${timePart}${contactPart}`,
+          timestamp: a.dueAt!,
+          priority: a.priority,
+          status: a.status,
+          link: `/actions/${a.id}`,
+        };
+      }),
+      upcomingEvents: upcomingEvents.map(e => {
+        const dayDiff = Math.round((e.startAt.getTime() - startOfDay.getTime()) / 86400000);
+        const dayLabel = dayDiff === 0 ? '今天' : dayDiff === 1 ? '明天' : dayDiff === 2 ? '后天'
+          : e.startAt.toLocaleString('zh-CN', { weekday: 'short' });
+        const timePart = e.startAt.toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const contactPart = e.contact ? ` · ${e.contact.nickname ?? e.contact.name}` : '';
+        const locPart = e.location ? ` · ${e.location}` : '';
+        return {
+          type: 'event' as const,
+          id: e.id,
+          title: e.title,
+          subtitle: `${dayLabel} ${timePart}${locPart}${contactPart}`,
+          timestamp: e.startAt,
+          contactName: e.contact?.nickname ?? e.contact?.name ?? undefined,
+          link: `/events/${e.id}`,
+        };
+      }),
       recentInteractions: interactions.map(i => ({
-        type: 'interaction' as const, id: i.id, title: i.summary,
-        subtitle: i.contact ? `${i.contact.name} · ${i.channel ?? '记录'}` : i.channel ?? '记录',
-        timestamp: i.occurredAt, contactName: i.contact?.name,
-        link: '#',
+        type: 'interaction' as const,
+        id: i.id,
+        title: i.summary,
+        subtitle: i.contact
+          ? `${i.contact.nickname ?? i.contact.name} · ${i.channel ?? '互动'}`
+          : (i.channel ?? '互动'),
+        timestamp: i.occurredAt,
+        contactName: i.contact?.nickname ?? i.contact?.name ?? undefined,
+        link: `/interactions/${i.id}`,
       })),
     };
   }
 }
 
 function statusLabel(s?: string): string {
-  switch (s) {
-    case 'inbox': return '收件箱';
-    case 'open': return '待办';
-    case 'waiting': return '等待';
-    case 'done': return '已完成';
-    default: return s ?? '';
-  }
+  return actionStatusLabel(s);
 }
