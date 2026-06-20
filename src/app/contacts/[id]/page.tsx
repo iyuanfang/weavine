@@ -9,6 +9,7 @@ import { RelationshipBadge } from '@/components/relationship-badge';
 import { Avatar } from '@/components/avatar';
 import { InteractionForm } from '@/components/interaction-form';
 import { InlineTagEditor } from '@/components/inline-tag-editor';
+import { NextStepPanel } from '@/components/next-step-panel';
 import { readSettings } from '@/app/settings/actions';
 import { getCurrentUser } from '@/lib/auth/session';
 
@@ -30,10 +31,6 @@ export default async function ContactDetail({
     TagService.list(ownerId),
   ]);
 
-  const lastContacted = c.lastContactedAt
-    ? new Date(c.lastContactedAt).toLocaleDateString('zh-CN')
-    : null;
-
   const importanceLabels: Record<string, string> = {
     important: '重要',
     normal: '普通',
@@ -47,10 +44,6 @@ export default async function ContactDetail({
   const impLabel = importanceLabels[c.importance] ?? null;
   const impColor = importanceColor[c.importance] ?? 'text-gray-500 bg-gray-50';
 
-  const reminderLabel = c.reminderEnabled
-    ? `已启用${c.reminderIntervalDays ? `（每${c.reminderIntervalDays}天）` : ''}`
-    : '已关闭';
-
   const fields: [string, string | null | undefined][] = [
     ['昵称', c.nickname],
     ['姓名', c.name],
@@ -60,7 +53,6 @@ export default async function ContactDetail({
     ['邮箱', c.email],
     ['电话', c.phone],
     ['微信', c.wechat],
-    ['最近联系', lastContacted],
   ];
 
   return (
@@ -132,11 +124,14 @@ export default async function ContactDetail({
         </section>
       )}
 
-      <div className="mt-6 flex gap-2">
-        <Link className="btn-primary text-sm" href={`/actions/new?contactId=${c.id}`}>+ 待办</Link>
+      <div className="mt-4">
+        <NextStepPanel
+          contactId={c.id}
+          lastContactedAt={c.lastContactedAt}
+        />
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4" id="interaction-form">
         <InteractionForm contactId={c.id} />
       </div>
 

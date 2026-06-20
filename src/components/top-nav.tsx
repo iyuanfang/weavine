@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: '/contacts', label: '联系人' },
   { href: '/calendar', label: '日程' },
   { href: '/actions', label: '待办' },
+  { href: '/reminders', label: '提醒' },
   { href: '/tags', label: '标签' },
 ] as const;
 
@@ -46,7 +47,6 @@ export function TopNav({
           </span>
         </Link>
         <div className="ml-auto flex items-center gap-2">
-          <CommandPalette />
           <div className="flex shrink-0 items-center gap-2 pl-2 border-l border-gray-200">
             <div className="h-7 w-7 rounded-full bg-gray-200 text-center text-xs leading-7">
               {display.slice(0, 1).toUpperCase()}
@@ -76,6 +76,8 @@ export function TopNav({
             {label}
           </Link>
         ))}
+        <span className="ml-auto" />
+        <CommandPalette />
       </nav>
     </header>
   );

@@ -2,10 +2,9 @@ import { z } from 'zod';
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 import { NotFoundError } from '@/lib/errors';
-import { ReminderService } from './reminder';
 import { DEFAULT_EVENT_TYPE } from '@/lib/event-type';
 
-const eventInput = z.object({
+const eventSchema = z.object({
   title: z.string().min(1).max(120),
   type: z
     .string()
@@ -18,6 +17,11 @@ const eventInput = z.object({
   notes: z.string().max(8000).nullish(),
   contactId: z.string().nullish(),
 });
+
+const eventInput = eventSchema.refine(
+  (d) => !d.endAt || d.endAt >= d.startAt,
+  { message: '结束时间不能早于开始时间', path: ['endAt'] },
+);
 
 export type EventInput = z.infer<typeof eventInput>;
 
@@ -40,7 +44,6 @@ export const EventService = {
         contactId: p.contactId ?? null,
       },
     });
-    await ReminderService.createManyForEvent(event.id, p.startAt, ownerId, undefined, db);
     return event;
   },
 
@@ -63,7 +66,7 @@ export const EventService = {
     ownerId: string = '',
     db: PrismaClient = defaultPrisma,
   ) {
-    const { contactId, ...rest } = eventInput.partial().parse(input);
+    const { contactId, ...rest } = eventSchema.partial().parse(input);
     try {
       const data: Prisma.EventUncheckedUpdateManyInput = { ...rest };
       if (contactId !== undefined) {
@@ -78,17 +81,6 @@ export const EventService = {
         where: { id },
         include: { contact: true },
       });
-      if (rest.startAt) {
-        await db.reminder.deleteMany({
-          where: {
-            eventId: id,
-            ...(ownerId ? { ownerId } : {}),
-            dispatched: false,
-            dismissed: false,
-          },
-        });
-        await ReminderService.createManyForEvent(id, rest.startAt, ownerId, undefined, db);
-      }
       return updated;
     } catch (e) {
       if (e instanceof NotFoundError) throw e;

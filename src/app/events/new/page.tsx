@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth/session';
 export default async function NewEvent({
   searchParams,
 }: {
-  searchParams: { date?: string };
+  searchParams: { date?: string; contactId?: string };
 }) {
   const { id: ownerId } = await getCurrentUser();
   const contacts = await ContactService.listLight(ownerId);
@@ -18,6 +18,7 @@ export default async function NewEvent({
         action={createEventAction}
         contacts={contacts}
         defaultStart={searchParams.date}
+        initial={searchParams.contactId ? { contactId: searchParams.contactId } : undefined}
       />
     </main>
   );

@@ -39,7 +39,7 @@ export default async function TodayPage() {
 
       <section className="mt-6">
         <SectionHeader
-          title="📅 最近日程"
+          title="近期日程"
           viewAllHref="/calendar"
         />
         {upcomingEvents.length > 0 ? (

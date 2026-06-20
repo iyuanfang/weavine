@@ -39,7 +39,10 @@ export function EventForm({
 
   function handleStartChange(d: Date | null) {
     setStartDate(d);
-    if (d && !endDate) {
+    if (!d) return;
+    if (!endDate) {
+      setEndDate(new Date(d.getTime() + 60 * 60 * 1000));
+    } else if (endDate <= d) {
       setEndDate(new Date(d.getTime() + 60 * 60 * 1000));
     }
   }

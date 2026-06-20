@@ -113,7 +113,7 @@ export function CommandPalette() {
         title="搜索 / 快捷操作 (⌘K)"
         aria-label="打开命令面板"
       >
-        <span>搜索</span>
+        <span>快捷操作</span>
         <kbd className="ml-1 rounded border border-gray-300 bg-gray-50 px-1 text-xs text-gray-500">
           ⌘K
         </kbd>

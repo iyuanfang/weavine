@@ -103,7 +103,7 @@ export class TimelineService {
         take: 5,
       }),
       db.event.findMany({
-        where: { ownerId, startAt: { gte: startOfDay, lt: endOfDayAfter } },
+        where: { ownerId, startAt: { gte: now, lt: endOfDayAfter } },
         select: {
           id: true, title: true, startAt: true, location: true, contactId: true,
           contact: { select: { nickname: true, name: true } },

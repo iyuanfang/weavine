@@ -11,8 +11,10 @@ import { ACTION_CATEGORY_OPTIONS } from '@/lib/action-category';
 
 export function NewActionForm({
   contacts,
+  defaultContactId,
 }: {
   contacts: PickerContact[];
+  defaultContactId?: string;
 }) {
   const [dueAt, setDueAt] = useState<Date | null>(null);
   const [category, setCategory] = useState('');
@@ -82,7 +84,7 @@ export function NewActionForm({
 
       <div>
         <label className="text-sm">关联人（我答应他的）</label>
-        <ContactPicker contacts={contacts} name="contactId" />
+        <ContactPicker contacts={contacts} name="contactId" defaultValue={defaultContactId ?? ''} />
       </div>
 
       <div className="col-span-2">

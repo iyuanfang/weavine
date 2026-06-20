@@ -172,6 +172,20 @@ export const ActionService = {
     });
   },
 
+  async countOpenByContact(
+    contactId: string,
+    ownerId: string = '',
+    db: PrismaClient = defaultPrisma,
+  ) {
+    return db.action.count({
+      where: {
+        contactId,
+        ...(ownerId ? { ownerId } : {}),
+        status: { in: ['inbox', 'open'] },
+      },
+    });
+  },
+
   async byContact(
     contactId: string,
     ownerId: string = '',
