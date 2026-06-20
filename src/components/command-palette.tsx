@@ -12,15 +12,25 @@ type SearchResponse = {
   >;
 };
 
-const SHORTCUTS: { id: string; label: string; hint: string; href?: string; submitKey?: string }[] = [
-  { id: 'new-contact', label: '新联系人', hint: '到联系人新建页', href: '/contacts/new' },
-  { id: 'new-action', label: '新待办', hint: '到详细新建页', href: '/actions/new' },
-  { id: 'new-event', label: '新日程', hint: '到日程新建页', href: '/events/new' },
-  { id: 'go-today', label: '今天', hint: '查看今日待办', href: '/today' },
-  { id: 'go-actions', label: '待办看板', hint: '拖动管理状态', href: '/actions' },
-  { id: 'go-contacts', label: '联系人', hint: '浏览所有联系人', href: '/contacts' },
-  { id: 'go-tags', label: '标签', hint: '管理分类标签', href: '/tags' },
-  { id: 'go-search', label: '高级搜索', hint: '详细筛选 + NL 解析', href: '/search' },
+type ShortcutGroup = 'create' | 'navigation' | 'tool';
+
+const GROUP_LABELS: Record<ShortcutGroup, string> = {
+  create: '快速新建',
+  navigation: '页面导航',
+  tool: '工具',
+};
+
+const SHORTCUTS: { id: string; label: string; hint: string; href?: string; group: ShortcutGroup }[] = [
+  { id: 'new-contact', label: '新联系人', hint: '到联系人新建页', href: '/contacts/new', group: 'create' },
+  { id: 'new-action', label: '新待办', hint: '到详细新建页', href: '/actions/new', group: 'create' },
+  { id: 'new-event', label: '新日程', hint: '到日程新建页', href: '/events/new', group: 'create' },
+  { id: 'go-today', label: '今天', hint: '查看今日待办', href: '/today', group: 'navigation' },
+  { id: 'go-contacts', label: '联系人', hint: '浏览所有联系人', href: '/contacts', group: 'navigation' },
+  { id: 'go-calendar', label: '日程', hint: '查看日程安排', href: '/calendar', group: 'navigation' },
+  { id: 'go-actions', label: '待办', hint: '管理待办事项', href: '/actions', group: 'navigation' },
+  { id: 'go-reminders', label: '提醒', hint: '查看提醒中心', href: '/reminders', group: 'navigation' },
+  { id: 'go-tags', label: '标签', hint: '管理分类标签', href: '/tags', group: 'navigation' },
+  { id: 'go-search', label: '高级搜索', hint: '详细筛选 + NL 解析', href: '/search', group: 'tool' },
 ];
 
 export function CommandPalette() {
@@ -105,6 +115,29 @@ export function CommandPalette() {
 
   const showingResults = q.trim().length > 0;
 
+  function renderGroupedShortcuts() {
+    const groups: ('create' | 'navigation' | 'tool')[] = ['create', 'navigation', 'tool'];
+    return groups.map((group) => {
+      const items = SHORTCUTS.filter((s) => s.group === group);
+      if (items.length === 0) return null;
+      return (
+        <Command.Group key={group} heading={GROUP_LABELS[group]} className="px-1 py-1">
+          {items.map((s) => (
+            <Command.Item
+              key={s.id}
+              value={s.label}
+              onSelect={() => runShortcut(s.id)}
+              className="flex cursor-pointer items-center justify-between gap-3 rounded mx-1 px-3 py-1.5 text-sm aria-selected:bg-blue-50"
+            >
+              <span className="font-medium">{s.label}</span>
+              <span className="text-xs text-gray-500">{s.hint}</span>
+            </Command.Item>
+          ))}
+        </Command.Group>
+      );
+    });
+  }
+
   return (
     <>
       <button
@@ -133,26 +166,14 @@ export function CommandPalette() {
                 ref={inputRef}
                 value={q}
                 onValueChange={setQ}
-                placeholder="搜索联系人 / 待办 / 日程，或输入「新建…」"
+                placeholder="搜索联系人 / 待办 / 日程"
                 className="w-full border-b border-gray-200 px-4 py-3 text-sm outline-none"
               />
 
               <Command.List className="max-h-[60vh] overflow-y-auto py-1">
                 {!showingResults && (
                   <>
-                    <Command.Group heading="快捷操作" className="px-1 py-1">
-                      {SHORTCUTS.map((s) => (
-                        <Command.Item
-                          key={s.id}
-                          value={s.label}
-                          onSelect={() => runShortcut(s.id)}
-                          className="flex cursor-pointer items-center justify-between gap-3 rounded mx-1 px-3 py-1.5 text-sm aria-selected:bg-blue-50"
-                        >
-                          <span className="font-medium">{s.label}</span>
-                          <span className="text-xs text-gray-500">{s.hint}</span>
-                        </Command.Item>
-                      ))}
-                    </Command.Group>
+                    {renderGroupedShortcuts()}
                     <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-400">
                       提示：输入文字搜索，<kbd className="rounded border bg-gray-50 px-1">⌘K</kbd> 再次唤起
                     </div>
@@ -164,7 +185,10 @@ export function CommandPalette() {
                 )}
 
                 {showingResults && !loading && data && data.hits.length === 0 && (
-                  <div className="px-4 py-6 text-center text-sm text-gray-500">无匹配</div>
+                  <>
+                    <div className="px-4 py-6 text-center text-sm text-gray-500">无匹配</div>
+                    {renderGroupedShortcuts()}
+                  </>
                 )}
 
                 {showingResults && contacts.length > 0 && (
