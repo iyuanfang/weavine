@@ -27,7 +27,7 @@ export function CompleteActionForm({
     <form action={onComplete} className="mt-6 space-y-2">
       <input type="hidden" name="actionId" value={actionId} />
       <label className="text-sm text-gray-600">
-        结果如何？写下来会同步到互动记录
+        结果如何？会保存到待办；有关联人时同步到互动记录
       </label>
       <textarea
         name="result"
