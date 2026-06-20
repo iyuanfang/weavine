@@ -36,18 +36,22 @@ export function ActionRow({
     });
   }
 
+  const isUrgent = priority >= 1 || tone === 'overdue';
   const toneClasses = {
     overdue: 'border-red-200 bg-red-50',
     today: 'border-amber-200 bg-amber-50/40',
     inbox: 'border-gray-200 bg-white',
     suggested: 'border-accent/40 bg-accent/5 shadow-sm',
   }[tone];
+  const priorityAccent = isUrgent
+    ? 'border-l-[3px] border-l-red-500 ring-1 ring-inset ring-red-200/70'
+    : '';
 
   return (
     <div
       data-testid="action-row"
       data-action-id={id}
-      className={`action-row flex items-center gap-2 rounded border p-3 transition-all ${toneClasses} ${
+      className={`action-row flex items-center gap-2 rounded border p-3 transition-all ${toneClasses} ${priorityAccent} ${
         hiding ? 'card-out' : ''
       }`}
     >
@@ -65,7 +69,11 @@ export function ActionRow({
 
       <Link href={href} className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="truncate font-medium">{title}</span>
+          <span
+            className={`truncate text-gray-900 ${isUrgent ? 'font-semibold' : 'font-medium'}`}
+          >
+            {title}
+          </span>
           {subtitle && (
             <span className="truncate text-xs text-gray-500">{subtitle}</span>
           )}
@@ -73,7 +81,13 @@ export function ActionRow({
       </Link>
 
       {priority > 0 && (
-        <span className="shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700">
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${
+            isUrgent
+              ? 'border border-red-200 bg-red-50 font-semibold text-red-700'
+              : 'bg-orange-100 font-medium text-orange-700'
+          }`}
+        >
           P{priority}
         </span>
       )}

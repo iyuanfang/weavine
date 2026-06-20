@@ -4,6 +4,8 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import { signOutAction } from '@/app/(auth)/actions';
+import { BRAND } from '@/lib/brand';
+import { BrandMark } from '@/components/brand-mark';
 
 const CommandPalette = dynamic(() => import('./command-palette').then(mod => mod.CommandPalette), { ssr: false });
 
@@ -34,10 +36,14 @@ export function TopNav({
       <div className="mx-auto max-w-6xl flex items-center gap-3 p-3">
         <Link
           href="/"
-          className="shrink-0 font-bold text-lg"
+          className="inline-flex shrink-0 items-center gap-1.5"
+          aria-label={`${BRAND.name} · ${BRAND.slogan}`}
           aria-current={pathname === '/' ? 'page' : undefined}
         >
-          PRM
+          <BrandMark className="h-3.5 w-8 text-accent" aria-hidden />
+          <span className="font-semibold tracking-tight text-gray-900">
+            {BRAND.name} · {BRAND.slogan}
+          </span>
         </Link>
         <div className="ml-auto flex items-center gap-2">
           <CommandPalette />

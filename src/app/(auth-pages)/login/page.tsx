@@ -3,14 +3,22 @@
 import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { signInAction } from "@/app/(auth)/actions";
+import { BRAND } from "@/lib/brand";
+import { BrandMark } from "@/components/brand-mark";
 
 export default function LoginPage() {
   const [state, action] = useFormState(signInAction, undefined);
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold">PRM · 登录</h1>
-        <p className="mt-2 text-sm text-gray-500">使用邮箱登录</p>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <BrandMark className="h-6 w-[54px] text-accent" />
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
+          {BRAND.name}
+        </h1>
+        <p className="text-sm text-gray-500">{BRAND.slogan}</p>
+        <p className="max-w-sm text-xs leading-relaxed text-gray-400">
+          {BRAND.subtitle}
+        </p>
       </div>
 
       <form action={action} className="flex w-full max-w-sm flex-col gap-3">

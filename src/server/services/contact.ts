@@ -22,11 +22,14 @@ export type ContactInput = z.input<typeof contactInput>;
 
 export const CONTACT_PAGE_SIZE = 30;
 
+export type ContactSortMode = 'recent' | 'importance' | 'name';
+
 export type ContactListPageFilter = {
   tagId?: string;
   q?: string;
   ownerId?: string;
   page?: number;
+  sort?: ContactSortMode;
 };
 
 export type ContactListPageDb = {
@@ -112,27 +115,34 @@ export const ContactService = {
       ? Math.floor(filter.page)
       : 1;
     const where = buildContactWhere(filter);
-    // Use count only when page is suspiciously large (more than 2x expected pages from first fetch)
-    // Otherwise use +1 take trick to avoid the count query
+
+    if (filter.sort === 'importance') {
+      return this.listPageByImportance(where, requestedPage, db);
+    }
+
+    let orderBy: Prisma.ContactOrderByWithRelationInput[];
+    if (filter.sort === 'name') {
+      orderBy = [{ nickname: 'asc' }];
+    } else {
+      orderBy = [{ lastContactedAt: 'desc' }, { updatedAt: 'desc' }];
+    }
+
     const items = await db.contact.findMany({
       where,
       include: { tags: { include: { tag: true } } },
-      orderBy: [{ lastContactedAt: 'desc' }, { updatedAt: 'desc' }],
+      orderBy,
       skip: (requestedPage - 1) * CONTACT_PAGE_SIZE,
       take: CONTACT_PAGE_SIZE + 1,
     });
     const hasMore = items.length > CONTACT_PAGE_SIZE;
     const pageItems = hasMore ? items.slice(0, -1) : items;
-    // If we got fewer items than page size, this is the last page
     const isLastPage = pageItems.length < CONTACT_PAGE_SIZE;
-    // Approximate total: if last page, estimate based on what we have
     const total = isLastPage
       ? (requestedPage - 1) * CONTACT_PAGE_SIZE + pageItems.length
       : hasMore
         ? requestedPage * CONTACT_PAGE_SIZE + 1
         : requestedPage * CONTACT_PAGE_SIZE;
     const totalPages = Math.max(1, Math.ceil(total / CONTACT_PAGE_SIZE));
-    // Clamp page to valid range
     const page = isLastPage ? Math.min(requestedPage, totalPages) : requestedPage;
     return {
       items: pageItems,
@@ -141,6 +151,41 @@ export const ContactService = {
       pageSize: CONTACT_PAGE_SIZE,
       totalPages,
     };
+  },
+
+  async listPageByImportance(
+    where: Prisma.ContactWhereInput,
+    requestedPage: number,
+    db: ContactListPageDb = defaultPrisma,
+  ) {
+    const allMatches = await db.contact.findMany({
+      where,
+      select: { id: true, importance: true, lastContactedAt: true },
+      take: 5000,
+    });
+
+    const importanceOrder: Record<string, number> = { important: 0, normal: 1, low: 2 };
+    allMatches.sort((a, b) => {
+      const diff = (importanceOrder[a.importance] ?? 3) - (importanceOrder[b.importance] ?? 3);
+      if (diff !== 0) return diff;
+      return (b.lastContactedAt?.getTime() ?? 0) - (a.lastContactedAt?.getTime() ?? 0);
+    });
+
+    const total = allMatches.length;
+    const totalPages = Math.max(1, Math.ceil(total / CONTACT_PAGE_SIZE));
+    const page = Math.min(requestedPage, totalPages);
+    const start = (page - 1) * CONTACT_PAGE_SIZE;
+    const pageIds = allMatches.slice(start, start + CONTACT_PAGE_SIZE);
+
+    const items = await db.contact.findMany({
+      where: { id: { in: pageIds.map((x) => x.id) } },
+      include: { tags: { include: { tag: true } } },
+    });
+
+    const idOrder = new Map(pageIds.map((x, i) => [x.id, i]));
+    items.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+
+    return { items, total, page, pageSize: CONTACT_PAGE_SIZE, totalPages };
   },
 
   async listAll(

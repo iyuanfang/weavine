@@ -1,19 +1,22 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { ContactService } from '@/server/services/contact';
 import { TagService } from '@/server/services/tag';
 import { ContactCard } from '@/components/contact-card';
 import { readSettings } from '@/app/settings/actions';
 import { getCurrentUser } from '@/lib/auth/session';
+import { ContactsToolbar } from './contacts-toolbar';
 
 function parsePage(value: string | undefined): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
 }
 
-function contactsHref(searchParams: { q?: string; tag?: string }, page: number): string {
+function contactsHref(searchParams: { q?: string; tag?: string; sort?: string }, page: number): string {
   const params = new URLSearchParams();
   if (searchParams.q) params.set('q', searchParams.q);
   if (searchParams.tag) params.set('tag', searchParams.tag);
+  if (searchParams.sort && searchParams.sort !== 'recent') params.set('sort', searchParams.sort);
   if (page > 1) params.set('page', String(page));
   const qs = params.toString();
   return qs ? `/contacts?${qs}` : '/contacts';
@@ -22,16 +25,18 @@ function contactsHref(searchParams: { q?: string; tag?: string }, page: number):
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: { q?: string; tag?: string; page?: string };
+  searchParams: { q?: string; tag?: string; sort?: string; page?: string };
 }) {
   const { id: ownerId } = await getCurrentUser();
   const page = parsePage(searchParams.page);
+  const sort = (searchParams.sort ?? 'recent') as 'recent' | 'importance' | 'name';
   const [contactsPage, tags, settings] = await Promise.all([
     ContactService.listPage({
       q: searchParams.q,
       tagId: searchParams.tag,
       ownerId,
       page,
+      sort,
     }),
     TagService.list(ownerId),
     readSettings(),
@@ -42,35 +47,12 @@ export default async function ContactsPage({
     <main className="mx-auto max-w-4xl p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">联系人</h1>
-        <Link
-          href="/contacts/new"
-          className="btn-primary"
-        >
-          新建
-        </Link>
+        <Link href="/contacts/new" className="btn-primary">新建</Link>
       </div>
 
-      <form action="/contacts" className="mt-4 flex flex-col gap-2 sm:flex-row">
-        <input
-          name="q"
-          defaultValue={searchParams.q ?? ''}
-          placeholder="搜索 昵称/姓名/公司/城市"
-          className="input-base flex-1"
-        />
-        <select
-          name="tag"
-          defaultValue={searchParams.tag ?? ''}
-          className="input-base"
-        >
-          <option value="">全部标签</option>
-          {tags.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name} ({t._count.contacts})
-            </option>
-          ))}
-        </select>
-        <button className="btn-secondary">筛选</button>
-      </form>
+      <Suspense fallback={<div className="mt-4 h-10" />}>
+        <ContactsToolbar tags={tags} />
+      </Suspense>
 
       <div className="mt-4 text-sm text-gray-500">
         共 {total} 位联系人{totalPages > 1 ? ` · 第 ${contactsPage.page} / ${totalPages} 页` : ''}

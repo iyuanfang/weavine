@@ -75,6 +75,7 @@ export function KanbanBoard({ groups, contacts }: KanbanBoardProps) {
           <ul className="space-y-2">
             {(groups[col.key] ?? []).map((a) => {
               const isDragging = a.id === draggedId;
+              const isUrgent = a.priority >= 1 || (!!a.dueAt && new Date(a.dueAt) < new Date());
               return (
                 <li key={a.id} className={!isDragging ? 'opacity-40' : 'invisible'}>
                   <div
@@ -83,21 +84,25 @@ export function KanbanBoard({ groups, contacts }: KanbanBoardProps) {
                       e.dataTransfer!.setData('text/plain', JSON.stringify({ id: a.id, status: a.status }));
                       e.dataTransfer!.effectAllowed = 'move';
                     }}
-                    className="card cursor-grab active:cursor-grabbing"
+                    className={`card cursor-grab active:cursor-grabbing${isUrgent ? ' border-l-[3px] border-l-red-500 ring-1 ring-inset ring-red-200/70' : ''}`}
                   >
                     <a
                       href={`/actions/${a.id}`}
-                      className="block font-medium hover:underline"
+                      className="block truncate font-semibold text-gray-900 hover:underline"
                     >
                       {a.title}
                     </a>
                     <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
                       <span>
                         {a.dueAt
-                          ? new Date(a.dueAt).toLocaleDateString('zh-CN')
+                          ? <span className={isUrgent ? 'font-medium text-red-600' : ''}>{new Date(a.dueAt).toLocaleDateString('zh-CN')}</span>
                           : '无日期'}
-                        {a.priority > 0 && ` · P${a.priority}`}
                       </span>
+                      {a.priority > 0 && (
+                        <span className={`rounded px-1 py-0.5 ${isUrgent ? 'border border-red-200 bg-red-50 font-semibold text-red-700' : 'bg-orange-100 font-medium text-orange-700'}`}>
+                          P{a.priority}
+                        </span>
+                      )}
                     </div>
                     {a.contact && (
                       <div className="mt-1 text-xs">

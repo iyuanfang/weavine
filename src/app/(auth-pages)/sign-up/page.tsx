@@ -3,17 +3,26 @@
 import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { signUpAction } from "@/app/(auth)/actions";
+import { BRAND } from "@/lib/brand";
+import { BrandMark } from "@/components/brand-mark";
 
 export default function SignUpPage() {
   const [state, action] = useFormState(signUpAction, undefined);
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold">注册 PRM</h1>
-        <p className="mt-2 text-sm text-gray-500">用邮箱创建账号</p>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <BrandMark className="h-6 w-[54px] text-accent" />
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
+          {BRAND.name}
+        </h1>
+        <p className="text-sm text-gray-500">{BRAND.slogan}</p>
+        <p className="max-w-sm text-xs leading-relaxed text-gray-400">
+          {BRAND.subtitle}
+        </p>
       </div>
 
       <form action={action} className="flex w-full max-w-sm flex-col gap-3">
+        <h2 className="mb-1 text-sm font-medium text-gray-700">注册新账号</h2>
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-gray-600">邮箱</span>
           <input

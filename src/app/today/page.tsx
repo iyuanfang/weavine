@@ -2,7 +2,6 @@ import { TimelineService } from '@/server/services/timeline';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth/session';
 import { ActionRow } from '@/components/action-row';
-
 export default async function TodayPage() {
   const { id: ownerId } = await getCurrentUser();
   const { todayDoActions, upcomingEvents, recentInteractions } =
