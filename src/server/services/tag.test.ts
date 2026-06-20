@@ -16,7 +16,7 @@ afterAll(async () => {
 describe('TagService', () => {
   it('creates and lists tags', async () => {
     await TagService.create({ name: '同事', color: '#888888' }, db);
-    const t = await TagService.list(db);
+    const t = await TagService.list('user-1', db);
     expect(t).toHaveLength(1);
     expect(t[0].name).toBe('同事');
   });
