@@ -6,18 +6,21 @@ import { InteractionService } from '@/server/services/interaction';
 import { ActionService } from '@/server/services/action';
 import { EventService } from '@/server/services/event';
 import type { EventInput } from '@/server/services/event';
+import { DEFAULT_EVENT_TYPE } from '@/lib/event-type';
+import { getCurrentUser } from '@/lib/auth/session';
 
 export async function quickLogAction(
   fd: FormData,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    const { id: ownerId } = await getCurrentUser();
     const type = fd.get('type') as string;
     const contactId = fd.get('contactId') as string;
     const newContactName = (fd.get('newContactName') as string) || '';
     const db = (await import('@/lib/prisma')).prisma;
     const cid =
       contactId === '__new__'
-        ? (await ContactService.create({ name: newContactName }, db)).id
+        ? (await ContactService.create({ nickname: newContactName }, ownerId, db)).id
         : contactId || '';
 
     if (type === 'interaction') {
@@ -28,6 +31,7 @@ export async function quickLogAction(
 
       await InteractionService.log(
         { contactId: cid, summary, channel, occurredAt: new Date() },
+        ownerId,
         db,
       );
     } else if (type === 'action') {
@@ -38,12 +42,13 @@ export async function quickLogAction(
         {
           title,
           contactId: cid || null,
-          priority: Number(fd.get('priority') ?? 0),
+          priority: (Number(fd.get('priority') ?? 0) as 0 | 1 | 2),
           dueAt: fd.get('dueAt')
             ? new Date(fd.get('dueAt') as string)
             : null,
           status: 'inbox',
         },
+        ownerId,
         db,
       );
     } else if (type === 'event') {
@@ -55,15 +60,15 @@ export async function quickLogAction(
 
       const input: EventInput = {
         title,
-        type: 'meeting',
+        type: DEFAULT_EVENT_TYPE,
         startAt: new Date(startAt),
         endAt: null,
         location: (fd.get('location') as string) || null,
         notes: null,
-        attendeeIds: cid ? [cid] : [],
+        contactId: cid || null,
       };
 
-      await EventService.create(input, db);
+      await EventService.create(input, ownerId, db);
     }
 
     if (contactId === '__new__') {

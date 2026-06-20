@@ -1,21 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import { logInteractionAction } from '@/app/contacts/[id]/actions';
+import { updateInteractionAction } from '@/app/contacts/[id]/actions';
 import { DateTimeInput } from './datetime-input';
 
-export function InteractionForm({ contactId }: { contactId: string }) {
+export function InteractionEditForm({
+  id,
+  initial,
+}: {
+  id: string;
+  initial: { occurredAt: Date; channel: string | null; summary: string };
+}) {
   const [saving, setSaving] = useState(false);
-  const [occurredAt, setOccurredAt] = useState<Date | null>(new Date());
+  const [error, setError] = useState<string | null>(null);
+  const [occurredAt, setOccurredAt] = useState<Date | null>(initial.occurredAt);
 
   async function handleSubmit(formData: FormData) {
     setSaving(true);
-    try {
-      await logInteractionAction(contactId, formData);
-      // revalidatePath is called inside the server action — no router.refresh() needed
-    } finally {
-      setSaving(false);
+    setError(null);
+    const res = await updateInteractionAction(id, formData);
+    setSaving(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
     }
+    // revalidatePath is called inside the server action — no router.refresh() needed
   }
 
   return (
@@ -31,12 +40,12 @@ export function InteractionForm({ contactId }: { contactId: string }) {
           onChange={setOccurredAt}
           size="sm"
           showHelperText={false}
-          placeholder="现在 / 刚才 / 14:30"
         />
       </div>
       <input
         name="channel"
         placeholder="渠道（微信/电话/线下/…）"
+        defaultValue={initial.channel ?? ''}
         className="input-base"
       />
       <div className="col-span-1 sm:col-span-3 flex gap-2">
@@ -44,12 +53,14 @@ export function InteractionForm({ contactId }: { contactId: string }) {
           name="summary"
           required
           placeholder="本次互动概要"
+          defaultValue={initial.summary}
           className="input-base flex-1"
         />
         <button disabled={saving} className="btn-primary">
-          {saving ? '互动中…' : '互动'}
+          {saving ? '保存中…' : '保存'}
         </button>
       </div>
+      {error && <p className="col-span-3 text-sm text-red-600">{error}</p>}
     </form>
   );
 }
