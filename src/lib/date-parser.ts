@@ -94,6 +94,12 @@ export function parseDateNL(input: string, ref: Date = new Date()): ParsedDate |
   return tryCustom(text, ref);
 }
 
+/** Format a Date as local datetime string (YYYY-MM-DDTHH:mm) for datetime-local inputs */
+export function toLocalDatetimeString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function extractDates(input: string, ref: Date = new Date()): ParsedDate[] {
   const text = input.trim();
   if (!text) return [];
