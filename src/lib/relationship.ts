@@ -1,4 +1,5 @@
 export type Strength = 'fresh' | 'warm' | 'stale' | 'cold' | 'unknown';
+export type ContactImportance = 'important' | 'normal' | 'low';
 
 export type RelationshipInfo = {
   days: number | null;
@@ -9,6 +10,53 @@ export type RelationshipInfo = {
 };
 
 const DEFAULT_THRESHOLDS = [30, 90, 180];
+const DEFAULT_MAINTENANCE_INTERVALS: Record<ContactImportance, number> = {
+  important: 14,
+  normal: 45,
+  low: 90,
+};
+
+type MaintenanceContact = {
+  reminderEnabled: boolean;
+  importance: string | null;
+  reminderIntervalDays: number | null;
+  lastContactedAt: Date | string | null;
+  createdAt: Date | string;
+};
+
+export function contactMaintenanceIntervalDays(
+  importance: string | null,
+  reminderIntervalDays: number | null,
+): number {
+  if (reminderIntervalDays && reminderIntervalDays > 0) return reminderIntervalDays;
+  if (importance === 'important' || importance === 'low' || importance === 'normal') {
+    return DEFAULT_MAINTENANCE_INTERVALS[importance];
+  }
+  return DEFAULT_MAINTENANCE_INTERVALS.normal;
+}
+
+export function contactMaintenanceReminderDue(
+  contact: MaintenanceContact,
+  now: Date = new Date(),
+): boolean {
+  if (!contact.reminderEnabled) return false;
+  const base = contact.lastContactedAt ?? contact.createdAt;
+  const baseDate = new Date(base);
+  const days = Math.floor((now.getTime() - baseDate.getTime()) / 86400_000);
+  return days >= contactMaintenanceIntervalDays(contact.importance, contact.reminderIntervalDays);
+}
+
+/**
+ * 计算两个日期之间的日历日差（按天边界，非滚动24小时）
+ */
+function calendarDayDifference(date1: Date, date2: Date): number {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  // 归一化到本地日期的午夜（年/月/日）
+  const d1Start = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate());
+  const d2Start = new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+  return Math.floor((d2Start.getTime() - d1Start.getTime()) / 86400_000);
+}
 
 export function relationshipStrength(
   lastContactedAt: Date | string | null,
@@ -25,7 +73,7 @@ export function relationshipStrength(
     };
   }
   const last = new Date(lastContactedAt);
-  const days = Math.floor((now.getTime() - last.getTime()) / 86400_000);
+  const days = calendarDayDifference(last, now);
   const [tFresh = 30, tWarm = 90, tStale = 180] = thresholds;
   if (days <= tFresh) {
     return {

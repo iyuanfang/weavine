@@ -6,24 +6,44 @@ import { Avatar } from './avatar';
 type Props = {
   contact: {
     id: string;
-    name: string;
+    nickname: string;
+    name?: string | null;
     company: string | null;
     city: string | null;
     avatarUrl?: string | null;
     lastContactedAt: Date | string | null;
+    importance?: string | null;
     tags: { tag: { id: string; name: string; color: string | null } }[];
   };
   thresholds?: number[];
 };
 
+const importanceConfig: Record<string, { label: string; className: string }> = {
+  important: { label: '重要', className: 'bg-red-50 text-red-600 border-red-200' },
+  normal: { label: '普通', className: 'bg-gray-50 text-gray-500 border-gray-200' },
+  low: { label: '次要', className: 'bg-gray-50 text-gray-400 border-gray-200' },
+};
+
 export function ContactCard({ contact, thresholds }: Props) {
+  const display = contact.nickname ?? contact.name ?? '?';
+  const imp = contact.importance && importanceConfig[contact.importance]
+    ? importanceConfig[contact.importance]
+    : null;
   return (
     <li className="card hover:bg-gray-50">
       <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3">
-        <Avatar name={contact.name} size={44} src={contact.avatarUrl} />
+        <Avatar name={display} size={44} src={contact.avatarUrl} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium">{contact.name}</span>
+            <span className="font-medium">{display}</span>
+            {contact.name && contact.name !== contact.nickname && (
+              <span className="text-xs text-gray-500">({contact.name})</span>
+            )}
+            {imp && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border ${imp.className}`}>
+                {imp.label}
+              </span>
+            )}
             <RelationshipBadge
               lastContactedAt={contact.lastContactedAt}
               thresholds={thresholds}
@@ -35,7 +55,7 @@ export function ContactCard({ contact, thresholds }: Props) {
           </div>
         </div>
         {contact.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 max-w-[35%] sm:max-w-none">
             {contact.tags.map((t) => {
               const c = tagColor(t.tag.name);
               return (

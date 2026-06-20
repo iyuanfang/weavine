@@ -1,47 +1,65 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ContactService } from '@/server/services/contact';
+import { TagService } from '@/server/services/tag';
 import { TimelineService } from '@/server/services/timeline';
 import { deleteContactAction } from '@/app/contacts/actions';
 import { ConfirmDeleteForm } from '@/components/confirm-delete';
 import { RelationshipBadge } from '@/components/relationship-badge';
 import { Avatar } from '@/components/avatar';
+import { InteractionForm } from '@/components/interaction-form';
+import { InlineTagEditor } from '@/components/inline-tag-editor';
 import { readSettings } from '@/app/settings/actions';
-import { tagColor } from '@/lib/tag-color';
+import { getCurrentUser } from '@/lib/auth/session';
 
 export default async function ContactDetail({
   params,
 }: {
   params: { id: string };
 }) {
+  const { id: ownerId } = await getCurrentUser();
   let c;
   try {
-    c = await ContactService.get(params.id);
+    c = await ContactService.get(params.id, ownerId);
   } catch {
     notFound();
   }
-  const [settings, timeline] = await Promise.all([
+  const [settings, timeline, allTags] = await Promise.all([
     readSettings(),
-    TimelineService.forContact(params.id),
+    TimelineService.forContact(params.id, ownerId),
+    TagService.list(ownerId),
   ]);
 
   const lastContacted = c.lastContactedAt
     ? new Date(c.lastContactedAt).toLocaleDateString('zh-CN')
     : null;
 
+  const importanceLabels: Record<string, string> = {
+    important: '重要',
+    normal: '普通',
+    low: '次要',
+  };
+  const importanceColor: Record<string, string> = {
+    important: 'text-red-600 bg-red-50',
+    normal: 'text-gray-500 bg-gray-50',
+    low: 'text-gray-400 bg-gray-100',
+  };
+  const impLabel = importanceLabels[c.importance] ?? null;
+  const impColor = importanceColor[c.importance] ?? 'text-gray-500 bg-gray-50';
+
+  const reminderLabel = c.reminderEnabled
+    ? `已启用${c.reminderIntervalDays ? `（每${c.reminderIntervalDays}天）` : ''}`
+    : '已关闭';
+
   const fields: [string, string | null | undefined][] = [
+    ['昵称', c.nickname],
+    ['姓名', c.name],
     ['公司', c.company],
     ['职位', c.title],
     ['城市', c.city],
     ['邮箱', c.email],
     ['电话', c.phone],
     ['微信', c.wechat],
-    [
-      '生日',
-      c.birthdayMonth && c.birthdayDay
-        ? `${String(c.birthdayMonth).padStart(2, '0')}-${String(c.birthdayDay).padStart(2, '0')}`
-        : null,
-    ],
     ['最近联系', lastContacted],
   ];
 
@@ -49,15 +67,26 @@ export default async function ContactDetail({
     <main className="mx-auto max-w-3xl p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Avatar name={c.name} size={64} src={undefined} />
+          <Avatar name={c.nickname ?? c.name ?? '?'} size={64} src={undefined} />
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold">{c.name}</h1>
+              <h1 className="text-2xl font-semibold">{c.nickname ?? c.name}</h1>
+              {c.name && c.nickname && c.name !== c.nickname && (
+                <p className="text-sm text-gray-500">{c.name}</p>
+              )}
               <RelationshipBadge
                 lastContactedAt={c.lastContactedAt}
                 thresholds={settings.staleDays}
                 showDot
               />
+              {impLabel && (
+                <span className={`text-xs px-1.5 py-0.5 rounded ${impColor}`}>
+                  {impLabel}
+                </span>
+              )}
+              {!c.reminderEnabled && (
+                <span className="text-xs text-gray-400">提醒关闭</span>
+              )}
             </div>
             <p className="text-sm text-gray-500">
               {[c.company, c.title].filter(Boolean).join(' · ')}
@@ -88,20 +117,11 @@ export default async function ContactDetail({
           ))}
       </dl>
 
-      <div className="mt-3 flex flex-wrap gap-1">
-        {c.tags.map((t) => {
-          const tc = tagColor(t.tag.name);
-          return (
-            <span
-              key={t.tag.id}
-              className="badge"
-              style={{ background: tc.bg, color: tc.text }}
-            >
-              {t.tag.name}
-            </span>
-          );
-        })}
-      </div>
+      <InlineTagEditor
+        contactId={c.id}
+        initialTags={c.tags.map((t) => ({ id: t.tag.id, name: t.tag.name }))}
+        ownerTags={allTags.map((t) => ({ id: t.id, name: t.name }))}
+      />
 
       {c.notes && (
         <section className="mt-6">
@@ -112,17 +132,19 @@ export default async function ContactDetail({
         </section>
       )}
 
-      {/* BUTTONS — Action 和 互动 */}
       <div className="mt-6 flex gap-2">
-        <Link className="btn-primary text-sm" href={`/actions/new?contactId=${c.id}`}>+ Action</Link>
-        <Link className="btn-secondary text-sm" href={`/?quickLog=${c.id}`}>+ 互动</Link>
+        <Link className="btn-primary text-sm" href={`/actions/new?contactId=${c.id}`}>+ 待办</Link>
+      </div>
+
+      <div className="mt-4">
+        <InteractionForm contactId={c.id} />
       </div>
 
       {/* Unified timeline */}
       <section className="mt-6">
         <h2 className="text-lg font-medium">时间线</h2>
         {timeline.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">暂无记录</p>
+          <p className="mt-3 text-sm text-gray-500">暂无互动</p>
         ) : (
           <div className="mt-4 space-y-4">
             {timeline.map(item => (

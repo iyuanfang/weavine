@@ -4,18 +4,20 @@ import { revalidatePath } from 'next/cache';
 import { InteractionService } from '@/server/services/interaction';
 import type { ActionResult } from '@/lib/action';
 import { ValidationError } from '@/lib/errors';
+import { getCurrentUser } from '@/lib/auth/session';
 
 export async function logInteractionAction(
   contactId: string,
   fd: FormData,
 ): Promise<ActionResult> {
   try {
+    const { id: ownerId } = await getCurrentUser();
     await InteractionService.log({
       contactId,
       occurredAt: new Date(String(fd.get('occurredAt'))),
       channel: (fd.get('channel') as string) || null,
       summary: String(fd.get('summary') ?? ''),
-    });
+    }, ownerId);
     revalidatePath(`/contacts/${contactId}`);
     return { ok: true, data: null };
   } catch (e) {
@@ -29,10 +31,30 @@ export async function deleteInteractionAction(
   id: string,
 ): Promise<ActionResult> {
   try {
-    await InteractionService.remove(id);
+    const { id: ownerId } = await getCurrentUser();
+    await InteractionService.remove(id, ownerId);
     revalidatePath(`/contacts/${contactId}`);
     return { ok: true, data: null };
   } catch {
     return { ok: false, error: '删除失败' };
+  }
+}
+
+export async function updateInteractionAction(
+  id: string,
+  fd: FormData,
+): Promise<ActionResult> {
+  try {
+    const { id: ownerId } = await getCurrentUser();
+    await InteractionService.update(id, {
+      occurredAt: new Date(String(fd.get('occurredAt'))),
+      channel: (fd.get('channel') as string) || null,
+      summary: String(fd.get('summary') ?? ''),
+    }, ownerId);
+    revalidatePath(`/interactions/${id}`);
+    return { ok: true, data: null };
+  } catch (e) {
+    if (e instanceof ValidationError) return { ok: false, error: e.message };
+    return { ok: false, error: '保存失败' };
   }
 }
