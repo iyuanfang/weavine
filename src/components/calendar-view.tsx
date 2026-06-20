@@ -12,6 +12,7 @@ interface CalendarEvent {
   title: string;
   start: string;
   end?: string;
+  contactName?: string;
 }
 
 export function CalendarView({ events }: { events: CalendarEvent[] }) {
@@ -28,6 +29,17 @@ export function CalendarView({ events }: { events: CalendarEvent[] }) {
         right: 'dayGridMonth,timeGridWeek,listWeek',
       }}
       events={events}
+      eventContent={(arg) => {
+        const contactName = arg.event.extendedProps.contactName as string | undefined;
+        return (
+          <div className="fc-event-custom w-full overflow-hidden text-xs leading-tight">
+            <div className="truncate font-medium">{arg.event.title}</div>
+            {contactName && (
+              <div className="truncate text-gray-500">{contactName}</div>
+            )}
+          </div>
+        );
+      }}
       eventClick={(arg) => router.push(`/events/${arg.event.id}`)}
       dateClick={(arg) => router.push(`/events/new?date=${arg.dateStr}`)}
       height="auto"

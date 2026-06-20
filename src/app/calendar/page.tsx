@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { EventService } from '@/server/services/event';
+import { getCurrentUser } from '@/lib/auth/session';
 
 const CalendarView = dynamic(() => import('@/components/calendar-view').then((mod) => mod.CalendarView), { ssr: false });
 
@@ -9,15 +10,17 @@ export default async function CalendarPage({
 }: {
   searchParams: { y?: string; m?: string };
 }) {
+  const { id: ownerId } = await getCurrentUser();
   const now = new Date();
   const y = Number(searchParams.y ?? now.getFullYear());
   const m = Number(searchParams.m ?? now.getMonth() + 1);
-  const list = await EventService.listByMonth(y, m);
+  const list = await EventService.listByMonth(y, m, ownerId);
   const events = list.map((e) => ({
     id: e.id,
     title: e.title,
     start: e.startAt.toISOString(),
     ...(e.endAt ? { end: e.endAt.toISOString() } : {}),
+    contactName: e.contact?.nickname ?? e.contact?.name ?? undefined,
   }));
 
   return (
