@@ -97,24 +97,42 @@ npx next build 2>&1 | tail -5
 # Symlink current (in /opt/prm/)
 ln -sfn "$RDIR/$RNAME" "$BASE/current"
 
-# Generate PM2 ecosystem config with correct cwd and production env
-AUTH_URL_VAL="https://$SITE"
-AUTH_SECRET_VAL="${AUTH_SECRET:-$(openssl rand -base64 32)}"
+# Generate PM2 ecosystem config — reads .env dynamically at runtime
+# so any future env vars are automatically picked up.
 cat > "$BASE/ecosystem.config.js" << EOF
+const fs = require('fs');
+
+const env = {};
+function loadEnvFile(path) {
+  if (!fs.existsSync(path)) return;
+  for (const line of fs.readFileSync(path, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (key && val) env[key] = val;
+  }
+}
+loadEnvFile('/opt/prm/.env');
+loadEnvFile('.env');
+
 module.exports = {
   apps: [{
-    name: "$APP",
-    cwd: "$RDIR/$RNAME",
-    exec_mode: "fork",
-    script: "npm",
-    args: "start",
-    max_memory_restart: "512M",
+    name: '$APP',
+    cwd: '$RDIR/$RNAME',
+    exec_mode: 'fork',
+    script: 'npm',
+    args: 'start',
+    max_memory_restart: '512M',
     env: {
-      NODE_ENV: "production",
-      PORT: "3100",
-      AUTH_URL: "$AUTH_URL_VAL",
-      AUTH_TRUST_HOST: "1",
-      AUTH_SECRET: "$AUTH_SECRET_VAL"
+      NODE_ENV: 'production',
+      PORT: '3100',
+      ...env
     }
   }]
 };
