@@ -19,7 +19,7 @@ echo "==> Deploying $RELEASE_NAME to $SITE"
 # ── 1. Build locally ──────────────────────────────────────────
 if [[ "${1:-}" != "--skip-build" ]]; then
   echo "==> Building locally for type checking..."
-  pnpm build 2>&1 | tail -3
+  pnpm build 2>&1
 fi
 
 # ── 2. Archive (include src for server-side build) ────────────
@@ -97,7 +97,8 @@ npx next build 2>&1 | tail -5
 # Symlink current (in /opt/prm/)
 ln -sfn "$RDIR/$RNAME" "$BASE/current"
 
-# Generate PM2 ecosystem config with correct cwd
+# Generate PM2 ecosystem config with correct cwd and production env
+AUTH_URL_VAL="https://$SITE"
 cat > "$BASE/ecosystem.config.js" << EOF
 module.exports = {
   apps: [{
@@ -109,7 +110,9 @@ module.exports = {
     max_memory_restart: "512M",
     env: {
       NODE_ENV: "production",
-      PORT: "3100"
+      PORT: "3100",
+      AUTH_URL: "$AUTH_URL_VAL",
+      AUTH_TRUST_HOST: "1"
     }
   }]
 };
