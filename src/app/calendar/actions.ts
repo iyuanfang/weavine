@@ -49,6 +49,8 @@ export async function updateEventAction(
     const db = (await import('@/lib/prisma')).prisma;
     await EventService.update(id, input, ownerId, db);
     revalidatePath('/calendar');
+    revalidatePath('/today');
+    revalidatePath('/actions');
     revalidatePath(`/events/${id}`);
     redirect(`/events/${id}`);
   } catch (e) {
@@ -64,6 +66,8 @@ export async function deleteEventAction(id: string) {
   const db = (await import('@/lib/prisma')).prisma;
   await EventService.remove(id, ownerId, db);
   revalidatePath('/calendar');
+  revalidatePath('/today');
+  revalidatePath('/actions');
   redirect('/calendar');
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { deleteInteractionAction } from '@/app/contacts/[id]/actions';
 
 interface Item {
@@ -11,12 +12,15 @@ interface Item {
 }
 
 function DeleteButton({ contactId, id }: { contactId: string; id: string }) {
+  const router = useRouter();
   const [, startTransition] = useTransition();
 
   async function handleDelete() {
     if (!confirm('确认删除？')) return;
-    await deleteInteractionAction(contactId, id);
-    // revalidatePath is called inside the server action — no router.refresh() needed
+    startTransition(async () => {
+      await deleteInteractionAction(contactId, id);
+      router.refresh();
+    });
   }
 
   return (

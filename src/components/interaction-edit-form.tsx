@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { updateInteractionAction } from '@/app/contacts/[id]/actions';
 import { DateTimeInput } from './datetime-input';
 
@@ -11,6 +12,7 @@ export function InteractionEditForm({
   id: string;
   initial: { occurredAt: Date; channel: string | null; summary: string };
 }) {
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [occurredAt, setOccurredAt] = useState<Date | null>(initial.occurredAt);
@@ -24,7 +26,7 @@ export function InteractionEditForm({
       setError(res.error);
       return;
     }
-    // revalidatePath is called inside the server action — no router.refresh() needed
+    router.refresh();
   }
 
   return (

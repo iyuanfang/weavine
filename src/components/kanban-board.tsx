@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { transitionAction } from '@/app/actions/actions';
 import { ACTION_STATUS_LABEL, type ActionStatus } from '@/lib/action-status';
 import { QuickAddAction } from './quick-add-action';
@@ -28,6 +29,8 @@ const COLS: { key: ActionStatus; desc: string; addable: boolean }[] = [
 ];
 
 export function KanbanBoard({ groups, contacts }: KanbanBoardProps) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
 
@@ -58,6 +61,7 @@ export function KanbanBoard({ groups, contacts }: KanbanBoardProps) {
             setDraggedId(id);
             try {
               await transitionAction(id, col.key);
+              startTransition(() => router.refresh());
             } finally {
               setDraggedId(null);
             }

@@ -33,6 +33,8 @@ async function saveEventNotes(formData: FormData) {
     },
   });
 
+  revalidatePath('/today');
+  if (event.contactId) revalidatePath(`/contacts/${event.contactId}`);
   revalidatePath(`/events/${id}`);
 }
 

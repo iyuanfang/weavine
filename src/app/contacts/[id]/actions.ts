@@ -19,6 +19,7 @@ export async function logInteractionAction(
       summary: String(fd.get('summary') ?? ''),
     }, ownerId);
     revalidatePath(`/contacts/${contactId}`);
+    revalidatePath('/today');
     return { ok: true, data: null };
   } catch (e) {
     if (e instanceof ValidationError) return { ok: false, error: e.message };
@@ -34,6 +35,7 @@ export async function deleteInteractionAction(
     const { id: ownerId } = await getCurrentUser();
     await InteractionService.remove(id, ownerId);
     revalidatePath(`/contacts/${contactId}`);
+    revalidatePath('/today');
     return { ok: true, data: null };
   } catch {
     return { ok: false, error: '删除失败' };
@@ -51,6 +53,15 @@ export async function updateInteractionAction(
       channel: (fd.get('channel') as string) || null,
       summary: String(fd.get('summary') ?? ''),
     }, ownerId);
+    const prismaDb = (await import('@/lib/prisma')).prisma;
+    const interaction = await prismaDb.interaction.findUnique({
+      where: { id },
+      select: { contactId: true },
+    });
+    if (interaction?.contactId) {
+      revalidatePath(`/contacts/${interaction.contactId}`);
+    }
+    revalidatePath('/today');
     revalidatePath(`/interactions/${id}`);
     return { ok: true, data: null };
   } catch (e) {

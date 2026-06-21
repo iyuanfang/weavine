@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { logInteractionAction } from '@/app/contacts/[id]/actions';
 import { DateTimeInput } from './datetime-input';
 
 export function InteractionForm({ contactId }: { contactId: string }) {
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [occurredAt, setOccurredAt] = useState<Date | null>(new Date());
 
@@ -12,7 +14,7 @@ export function InteractionForm({ contactId }: { contactId: string }) {
     setSaving(true);
     try {
       await logInteractionAction(contactId, formData);
-      // revalidatePath is called inside the server action — no router.refresh() needed
+      router.refresh();
     } finally {
       setSaving(false);
     }
