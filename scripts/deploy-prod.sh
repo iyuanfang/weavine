@@ -51,9 +51,9 @@ scp "$ARCHIVE" "$REMOTE:$ARCHIVE"
 
 # ── 4. Remote: unbox, install, migrate, symlink, restart ─────
 echo "==> Running remote deployment..."
-ssh "$REMOTE" bash -s -- "$RELEASE_DIR" "$RELEASE_NAME" "$REMOTE_DIR" "$APP" "$HEALTH_URL" "$MAX_KEEP" "$SITE" <<'REMOTESCRIPT'
+ssh "$REMOTE" bash -s -- "$RELEASE_DIR" "$RELEASE_NAME" "$REMOTE_DIR" "$APP" "$HEALTH_URL" "$MAX_KEEP" <<'REMOTESCRIPT'
 set -euo pipefail
-RDIR="$1"; RNAME="$2"; BASE="$3"; APP="$4"; HEALTH="$5"; MAX_KEEP="${6:-5}"; SITE="$7"
+RDIR="$1"; RNAME="$2"; BASE="$3"; APP="$4"; HEALTH="$5"; MAX_KEEP="${6:-5}"
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
