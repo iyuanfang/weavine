@@ -73,10 +73,7 @@ jobs:
         run: node scripts/postbuild-desktop.mjs
 
       - name: Build Electron package
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm exec electron-builder --publish never 2>&1 | tee /dev/stderr | tail -20 >> $GITHUB_STEP_SUMMARY
+        run: npx electron-builder --publish never 2>&1
         env:
           CSC_LINK: ''
           CSC_KEY_PASSWORD: ''

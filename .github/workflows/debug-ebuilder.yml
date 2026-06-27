@@ -1,0 +1,50 @@
+name: Debug electron-builder on Linux
+
+on: workflow_dispatch
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libfuse2 fakeroot dpkg-dev
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Prisma
+        run: |
+          pnpm exec prisma db push --accept-data-loss
+          pnpm exec prisma generate
+        env:
+          DATABASE_URL: 'file:./dev.db'
+      - name: Build Next.js
+        run: pnpm exec next build
+        env:
+          IS_DESKTOP: 'true'
+          DATABASE_URL: 'file:./dev.db'
+          NODE_OPTIONS: '--max-old-space-size=4096'
+      - name: Postbuild
+        run: node scripts/postbuild-desktop.mjs
+      - name: Test electron-builder
+        id: builder
+        continue-on-error: true
+        run: |
+          npx electron-builder --publish never 2>&1 | tee /tmp/ebuilder.log
+      - name: Show error
+        if: steps.builder.outcome == 'failure'
+        run: |
+          echo "=== Full output ==="
+          cat /tmp/ebuilder.log
+          echo "=== Last 50 lines ==="
+          tail -50 /tmp/ebuilder.log
+          echo "=== Exit code ==="
+          echo "See step output above"
