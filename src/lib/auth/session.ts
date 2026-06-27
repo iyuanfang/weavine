@@ -27,9 +27,9 @@ async function ensureLocalUser(): Promise<{
     update: {},
     select: { id: true, name: true, email: true },
   });
+  await prisma.tag.deleteMany({ where: { ownerId: user.id } });
   await prisma.tag.createMany({
     data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
-    skipDuplicates: true,
   });
   return { id: user.id, name: user.name, email: user.email, image: null };
 }
