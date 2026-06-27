@@ -25,11 +25,19 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Cache Electron binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.electron
+          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Create SQLite database
-        run: pnpm exec prisma db push --accept-data-loss
+        run: |
+          pnpm exec prisma db push --accept-data-loss
+          pnpm exec prisma generate
         env:
           DATABASE_URL: 'file:./dev.db'
 
@@ -38,12 +46,15 @@ jobs:
         with:
           path: .next/cache
           key: ${{ runner.os }}-next-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-next-
 
       - name: Build Next.js standalone
         run: pnpm exec next build
         env:
           IS_DESKTOP: 'true'
           DATABASE_URL: 'file:./dev.db'
+          NODE_OPTIONS: '--max-old-space-size=4096'
 
       - name: Copy Prisma engines to standalone
         run: node scripts/postbuild-desktop.mjs
