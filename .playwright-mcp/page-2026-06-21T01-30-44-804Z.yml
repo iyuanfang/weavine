@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - img "PRM" [ref=e4]
+      - heading "PRM" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 把人和事，安排明白
+      - paragraph [ref=e9]: 带有人际维度的日程与任务管理工具
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]: 邮箱
+        - textbox "邮箱" [ref=e13]
+      - generic [ref=e14]:
+        - generic [ref=e15]: 密码
+        - textbox "密码" [ref=e16]
+      - button "登录" [ref=e17] [cursor=pointer]
+    - paragraph [ref=e18]:
+      - text: 还没有账号？
+      - link "注册新账号" [ref=e19] [cursor=pointer]:
+        - /url: /sign-up
+  - alert [ref=e20]

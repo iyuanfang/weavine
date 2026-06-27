@@ -30,7 +30,7 @@ export interface DateTimeInputProps {
  *   <DateTimeInput name="startAt" value={startAt} onChange={setStartAt} required />
  *
  * - 文本框支持中文/英文自然语言（"明天下午3点"、"next monday 10am" 等），
- *   解析成功自动回填并触发 onChange。
+ *   回车或失焦时解析，解析成功触发 onChange。
  * - 点击右侧日历图标弹出原生 picker；若当前为空，预填"现在（分钟对齐 step）"。
  * - picker 选择后 onChange 触发，且文本框同步显示格式化值。
  * - 隐藏的 datetime-local 携带 name 属性，表单提交时 FormData 自动带上。
@@ -49,11 +49,29 @@ export function DateTimeInput({
   size = 'md',
 }: DateTimeInputProps) {
   const [text, setText] = useState<string>(formatForDisplay(value));
+  const [isFocused, setIsFocused] = useState(false);
   const pickerRef = useRef<HTMLInputElement>(null);
 
+  // 仅当用户不在输入状态时，同步外部 value 到文本框
   useEffect(() => {
-    setText(formatForDisplay(value));
-  }, [value]);
+    if (!isFocused) {
+      setText(formatForDisplay(value));
+    }
+  }, [value, isFocused]);
+
+  function commitText() {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      onChange(null);
+      return;
+    }
+    const parsed = parseDateNL(trimmed);
+    if (parsed) {
+      onChange(parsed.date);
+    } else {
+      setText(formatForDisplay(value));
+    }
+  }
 
   function snapToStep(d: Date, stepSeconds: number): Date {
     const out = new Date(d);
@@ -99,14 +117,17 @@ export function DateTimeInput({
           value={text}
           placeholder={placeholder}
           className={inputClass}
-          onChange={(e) => {
-            const v = e.target.value;
-            setText(v);
-            const parsed = parseDateNL(v);
-            if (parsed) {
-              onChange(parsed.date);
-            } else if (v.trim() === '') {
-              onChange(null);
+          onChange={(e) => setText(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => {
+            setIsFocused(false);
+            commitText();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitText();
+              (e.target as HTMLInputElement).blur();
             }
           }}
         />
