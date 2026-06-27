@@ -17,24 +17,25 @@ async function ensureLocalUser(): Promise<{
   email: string | null;
   image: string | null;
 }> {
-  const localUser = await prisma.user.findFirst({
-    where: { isLocal: true },
-    select: { id: true, name: true, email: true },
-  });
-  if (localUser) {
-    return { id: localUser.id, name: localUser.name, email: localUser.email, image: null };
-  }
-  const user = await prisma.user.create({
-    data: {
+  const user = await prisma.user.upsert({
+    where: { email: "local@prm.local" },
+    create: {
       name: "本地用户",
       email: "local@prm.local",
       isLocal: true,
     },
+    update: {},
     select: { id: true, name: true, email: true },
   });
-  await prisma.tag.createMany({
-    data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
+  const existingTag = await prisma.tag.findFirst({
+    where: { ownerId: user.id },
+    select: { id: true },
   });
+  if (!existingTag) {
+    await prisma.tag.createMany({
+      data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
+    });
+  }
   return { id: user.id, name: user.name, email: user.email, image: null };
 }
 
