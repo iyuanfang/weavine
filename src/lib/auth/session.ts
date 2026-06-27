@@ -27,15 +27,10 @@ async function ensureLocalUser(): Promise<{
     update: {},
     select: { id: true, name: true, email: true },
   });
-  const existingTag = await prisma.tag.findFirst({
-    where: { ownerId: user.id },
-    select: { id: true },
+  await prisma.tag.createMany({
+    data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
+    skipDuplicates: true,
   });
-  if (!existingTag) {
-    await prisma.tag.createMany({
-      data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
-    });
-  }
   return { id: user.id, name: user.name, email: user.email, image: null };
 }
 
