@@ -76,26 +76,20 @@ jobs:
         id: build_electron
         shell: bash
         run: |
-          LOGFILE="${{ runner.temp }}/ebuilder.log"
-          npx electron-builder --publish never 2>&1 | tee "$LOGFILE"
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
-          echo "logfile=$LOGFILE" >> "$GITHUB_OUTPUT"
+          npx electron-builder --publish never > ebuilder.log 2>&1
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          exit $EXIT_CODE
         env:
           CSC_LINK: ''
           CSC_KEY_PASSWORD: ''
 
-      - name: Show electron-builder error
-        if: steps.build_electron.outputs.exit_code != '0'
-        shell: bash
-        run: |
-          LOGFILE="${{ runner.temp }}/ebuilder.log"
-          echo "### ⚠️ electron-builder failed with code ${{ steps.build_electron.outputs.exit_code }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          tail -80 "$LOGFILE" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Platform: ${{ runner.os }}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload electron-builder log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebuilder-log-${{ runner.os }}
+          path: ebuilder.log
 
       - uses: actions/upload-artifact@v4
         with:
