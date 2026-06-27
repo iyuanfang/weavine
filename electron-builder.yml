@@ -9,11 +9,11 @@ directories:
 files:
   - electron/*.cjs
   - .next/standalone/**/*
-  - .next/static/**/*
   - public/**/*
   - prisma/**/*
   - package.json
-  - node_modules/**/*
+  - "!node_modules{,/**}"
+  - "!.next/cache{,/**}"
 
 extraResources:
   - from: prisma/
