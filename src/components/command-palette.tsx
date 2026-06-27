@@ -1,8 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Command } from 'cmdk';
+import type { ParsedIntent } from '@/lib/nl-parser';
+import { parseNL } from '@/lib/nl-parser';
+import { quickLogAction } from '@/app/quick-log/actions';
+import { QuickLog } from './quick-log';
+import type { PickerContact } from './contact-picker';
+import { toLocalDatetimeString } from '@/lib/date-parser';
 
 type SearchResponse = {
   hits: Array<
@@ -28,8 +34,13 @@ export function CommandPalette() {
   const [q, setQ] = useState('');
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [parsedIntent, setParsedIntent] = useState<ParsedIntent | null>(null);
+  const [quickLogPending, setQuickLogPending] = useState<ParsedIntent | null>(null);
+  const [contactsCache, setContactsCache] = useState<PickerContact[]>([]);
   const router = useRouter();
+  const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const nlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -78,6 +89,39 @@ export function CommandPalette() {
     return () => clearTimeout(t);
   }, [q, open]);
 
+  // NL parse effect — 300ms debounce, independent from search
+  useEffect(() => {
+    if (!open) {
+      setParsedIntent(null);
+      return;
+    }
+    const query = q.trim();
+    if (query.length < 4) {
+      setParsedIntent(null);
+      return;
+    }
+
+    if (nlTimerRef.current) clearTimeout(nlTimerRef.current);
+    nlTimerRef.current = setTimeout(async () => {
+      // Fetch contacts cache once
+      if (contactsCache.length === 0) {
+        try {
+          const res = await fetch('/api/contacts/light');
+          if (res.ok) {
+            const json = (await res.json()) as { contacts: PickerContact[] };
+            setContactsCache(json.contacts);
+          }
+        } catch {}
+      }
+      // Run NL parser
+      const intent = parseNL(query, contactsCache);
+      setParsedIntent(intent);
+    }, 300);
+    return () => {
+      if (nlTimerRef.current) clearTimeout(nlTimerRef.current);
+    };
+  }, [q, open]);
+
   function runShortcut(id: string) {
     const s = SHORTCUTS.find((x) => x.id === id);
     if (!s?.href) return;
@@ -88,6 +132,44 @@ export function CommandPalette() {
   function go(href: string) {
     setOpen(false);
     router.push(href);
+  }
+
+  const TYPE_LABEL: Record<string, string> = {
+    interaction: '互动',
+    action: '待办',
+    event: '日程',
+  };
+
+  async function handleCreate(intent: ParsedIntent) {
+    if (intent.confidence >= 0.7) {
+      // High confidence — create directly
+      const fd = new FormData();
+      fd.set('type', intent.type);
+      fd.set('contactId', intent.contactId ?? '');
+
+      if (intent.type === 'interaction') {
+        fd.set('summary', intent.title);
+        fd.set('channel', intent.channel ?? '微信');
+      } else if (intent.type === 'action') {
+        fd.set('title', intent.title);
+        if (intent.date) fd.set('dueAt', toLocalDatetimeString(intent.date));
+      } else if (intent.type === 'event') {
+        fd.set('title', intent.title);
+        if (intent.date) fd.set('startAt', toLocalDatetimeString(intent.date));
+        if (intent.location) fd.set('location', intent.location);
+      }
+
+      const res = await quickLogAction(fd);
+      if (res.ok) {
+        setOpen(false);
+        setQ('');
+        setParsedIntent(null);
+        startTransition(() => router.refresh());
+      }
+    } else {
+      // Low confidence — open QuickLog modal
+      setQuickLogPending(intent);
+    }
   }
 
   const contacts = (data?.hits ?? []).filter((h) => h.type === 'contact') as Extract<
@@ -163,8 +245,27 @@ export function CommandPalette() {
                   <div className="px-4 py-3 text-sm text-gray-500">搜索中…</div>
                 )}
 
-                {showingResults && !loading && data && data.hits.length === 0 && (
+                {showingResults && !loading && data && data.hits.length === 0 && !parsedIntent && (
                   <div className="px-4 py-6 text-center text-sm text-gray-500">无匹配</div>
+                )}
+
+                {showingResults && parsedIntent && (
+                  <Command.Group heading="快捷创建" className="px-1 py-1">
+                    <Command.Item
+                      value={`create-${parsedIntent.type}-${parsedIntent.title}`}
+                      onSelect={() => handleCreate(parsedIntent)}
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded mx-1 px-3 py-1.5 text-sm aria-selected:bg-blue-50"
+                    >
+                      <span className="font-medium">
+                        {parsedIntent.confidence >= 0.7 ? '📝' : '✏️'} 创建{TYPE_LABEL[parsedIntent.type]}: {parsedIntent.title}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {parsedIntent.contactName}
+                        {parsedIntent.date && ` · ${parsedIntent.date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                        {parsedIntent.confidence < 0.7 && ' · 补全信息'}
+                      </span>
+                    </Command.Item>
+                  </Command.Group>
                 )}
 
                 {showingResults && contacts.length > 0 && (
@@ -246,6 +347,23 @@ export function CommandPalette() {
             </Command>
           </div>
         </div>
+      )}
+
+      {quickLogPending && (
+        <QuickLog
+          contacts={contactsCache}
+          open
+          initial={{
+            type: quickLogPending.type,
+            title: quickLogPending.title,
+            date: quickLogPending.date,
+            contactId: quickLogPending.contactId ?? undefined,
+            contactName: quickLogPending.contactName ?? undefined,
+            location: quickLogPending.location ?? undefined,
+            channel: quickLogPending.channel ?? undefined,
+          }}
+          onClose={() => setQuickLogPending(null)}
+        />
       )}
     </>
   );

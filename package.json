@@ -2,6 +2,7 @@
   "name": "prm",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.cjs",
   "scripts": {
     "predev": "rm -rf .next",
     "dev": "next dev -p 3100",
@@ -13,7 +14,11 @@
     "test:e2e": "playwright test",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma db push --force-reset"
+    "db:reset": "prisma db push --force-reset",
+    "build:desktop": "IS_DESKTOP=true next build && node scripts/postbuild-desktop.mjs",
+    "electron:dev": "npx electron electron/main.cjs",
+    "electron:build": "pnpm build:desktop && npx electron-builder",
+    "dev:electron": "pnpm dev & sleep 3 && pnpm electron:dev"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
@@ -42,7 +47,9 @@
       "prisma",
       "@prisma/client",
       "@prisma/engines",
-      "esbuild"
+      "esbuild",
+      "electron",
+      "electron-winstaller"
     ]
   },
   "devDependencies": {
@@ -54,6 +61,8 @@
     "@types/react-dom": "18.3.0",
     "@types/web-push": "3.6.3",
     "autoprefixer": "10.4.19",
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
     "postcss": "8.4.40",
     "prisma": "5.18.0",
     "tailwindcss": "3.4.7",

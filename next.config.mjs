@@ -6,6 +6,7 @@ const allowedOrigins = (process.env.NEXT_SERVER_ALLOWED_ORIGINS ?? 'localhost:30
 
 const nextConfig = {
   reactStrictMode: true,
+  output: process.env.IS_DESKTOP === "true" ? "standalone" : undefined,
   experimental: {
     serverActions: { allowedOrigins },
     staleTimes: {

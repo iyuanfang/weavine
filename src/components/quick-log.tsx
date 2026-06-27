@@ -2,15 +2,34 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { QuickLogType } from '@/lib/nl-classify';
+import type { QuickLogType, ParsedIntent } from '@/lib/nl-parser';
 import { quickLogAction } from '@/app/quick-log/actions';
 import { ACTION_PRIORITIES, PRIORITY_LABEL } from '@/server/services/action';
 import { ContactPicker, type PickerContact } from './contact-picker';
 import { DateTimeInput } from './datetime-input';
 import { toLocalDatetimeString } from '@/lib/date-parser';
 
-export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
-  const [open, setOpen] = useState(false);
+type QuickLogInitial = {
+  type: QuickLogType;
+  title?: string;
+  date?: Date | null;
+  contactId?: string;
+  contactName?: string;
+  location?: string;
+  channel?: string;
+};
+
+export function QuickLog({
+  contacts,
+  open: controlledOpen,
+  initial,
+  onClose,
+}: {
+  contacts: PickerContact[];
+  open?: boolean;
+  initial?: QuickLogInitial;
+  onClose?: () => void;
+}) {
   const [type, setType] = useState<QuickLogType>('interaction');
   const [contactId, setContactId] = useState('');
   const [newContactName, setNewContactName] = useState('');
@@ -27,28 +46,39 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
   const [, startTransition] = useTransition();
   const firstFieldRef = useRef<HTMLDivElement>(null);
 
-  // ⌘K toggle
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setOpen((o) => !o);
-      } else if (e.key === 'Escape' && open) {
-        setOpen(false);
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  const open = controlledOpen ?? false;
 
-  // Focus + reset on open
+  // Populate fields from initial values
   useEffect(() => {
-    if (open) {
-      setTimeout(() => {
-        const el = firstFieldRef.current?.querySelector<HTMLInputElement>('input,button');
-        el?.focus();
-      }, 100);
+    if (!open || !initial) return;
+    setType(initial.type);
+    setLocation(initial.location ?? '');
+
+    if (initial.type === 'interaction') {
+      setSummary(initial.title ?? '');
     } else {
+      setTitle(initial.title ?? '');
+    }
+
+    if (initial.type === 'action' && initial.date) {
+      setDueAt(initial.date);
+    }
+    if (initial.type === 'event') {
+      setStartAt(initial.date ?? null);
+    }
+
+    if (initial.contactId) {
+      setContactId(initial.contactId);
+    }
+
+    if (initial.channel) {
+      setChannel(initial.channel);
+    }
+  }, [open, initial]);
+
+  // Reset internal state when closing
+  useEffect(() => {
+    if (!open) {
       setContactId('');
       setNewContactName('');
       setSummary('');
@@ -59,6 +89,16 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
       setLocation('');
       setError(null);
       setType('interaction');
+    }
+  }, [open]);
+
+  // Focus on open
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => {
+        const el = firstFieldRef.current?.querySelector<HTMLInputElement>('input,button');
+        el?.focus();
+      }, 100);
     }
   }, [open]);
 
@@ -104,7 +144,7 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
     setSubmitting(false);
 
     if (res.ok) {
-      setOpen(false);
+      onClose?.();
       startTransition(() => router.refresh());
     } else {
       setError(res.error ?? '创建失败');
@@ -119,27 +159,15 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="btn-secondary flex items-center gap-1"
-        title="快速输入 (⌘K)"
-      >
-        <span>+ 快速</span>
-        <kbd className="ml-1 rounded border border-gray-300 bg-gray-50 px-1 text-xs text-gray-500">
-          ⌘K
-        </kbd>
-      </button>
-
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-20"
-          onClick={() => setOpen(false)}
+          onClick={() => onClose?.()}
         >
           <div
             className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Type tabs — auto-classified */}
             <div className="mb-4 flex gap-1 rounded-lg bg-gray-100 p-1">
               {tabs.map((t) => (
                 <button
@@ -157,7 +185,6 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3">
-              {/* Contact — common */}
               <div ref={firstFieldRef}>
                 <label className="block text-sm text-gray-600">联系人</label>
                 <ContactPicker
@@ -190,7 +217,6 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
                 )}
               </div>
 
-              {/* 记录 fields */}
               {type === 'interaction' && (
                 <>
                   <div>
@@ -221,7 +247,6 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
                 </>
               )}
 
-              {/* 待办 fields */}
               {type === 'action' && (
                 <>
                   <div>
@@ -235,9 +260,7 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
                   </div>
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <label className="block text-sm text-gray-600">
-                        优先级
-                      </label>
+                      <label className="block text-sm text-gray-600">优先级</label>
                       <select
                         value={priority}
                         onChange={(e) => setPriority(Number(e.target.value))}
@@ -261,7 +284,6 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
                 </>
               )}
 
-              {/* 日程 fields */}
               {type === 'event' && (
                 <>
                   <div>
@@ -299,27 +321,17 @@ export function QuickLog({ contacts }: { contacts: PickerContact[] }) {
               {error && <p className="text-sm text-red-600">{error}</p>}
 
               <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="btn-secondary"
-                >
+                <button type="button" onClick={() => onClose?.()} className="btn-secondary">
                   取消
                 </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn-primary"
-                >
+                <button type="submit" disabled={submitting} className="btn-primary">
                   {submitting ? '创建中…' : '创建'}
                 </button>
               </div>
             </form>
 
             <p className="mt-3 text-xs text-gray-400">
-              按{' '}
-               <kbd className="rounded border bg-gray-50 px-1">Esc</kbd>{' '}
-               关闭
+              按 <kbd className="rounded border bg-gray-50 px-1">Esc</kbd> 关闭
             </p>
           </div>
         </div>

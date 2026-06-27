@@ -51,10 +51,10 @@ export async function executeSearch(
         where: {
           ownerId,
           OR: [
-            { nickname: { contains: text, mode: 'insensitive' } },
-            { name: { contains: text, mode: 'insensitive' } },
-            { company: { contains: text, mode: 'insensitive' } },
-            { notes: { contains: text, mode: 'insensitive' } },
+            { nickname: { contains: text } },
+            { name: { contains: text } },
+            { company: { contains: text } },
+            { notes: { contains: text } },
           ],
         },
         select: { id: true },
@@ -64,8 +64,8 @@ export async function executeSearch(
         where: {
           ownerId,
           OR: [
-            { title: { contains: text, mode: 'insensitive' } },
-            { description: { contains: text, mode: 'insensitive' } },
+            { title: { contains: text } },
+            { description: { contains: text } },
           ],
         },
         select: { id: true },
@@ -75,9 +75,9 @@ export async function executeSearch(
         where: {
           ownerId,
           OR: [
-            { title: { contains: text, mode: 'insensitive' } },
-            { notes: { contains: text, mode: 'insensitive' } },
-            { location: { contains: text, mode: 'insensitive' } },
+            { title: { contains: text } },
+            { notes: { contains: text } },
+            { location: { contains: text } },
           ],
         },
         select: { id: true },
@@ -91,7 +91,7 @@ export async function executeSearch(
 
   if (parsed.city) {
     const cityHits = await prisma.contact.findMany({
-      where: { ownerId, city: { contains: parsed.city, mode: 'insensitive' } },
+      where: { ownerId, city: { contains: parsed.city } },
       select: { id: true },
       take: 200,
     });
@@ -104,7 +104,7 @@ export async function executeSearch(
           where: {
             ownerId,
             ...(contactIds.length > 0 ? { id: { in: contactIds } } : {}),
-            ...(parsed.city ? { city: { contains: parsed.city, mode: 'insensitive' } } : {}),
+            ...(parsed.city ? { city: { contains: parsed.city } } : {}),
           } as Prisma.ContactWhereInput,
           include: { tags: { include: { tag: true } } },
           orderBy: [{ lastContactedAt: 'desc' }, { updatedAt: 'desc' }],

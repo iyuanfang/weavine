@@ -1,0 +1,44 @@
+appId: com.prm.desktop
+productName: PRM
+copyright: Copyright (c) 2026
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - electron/*.cjs
+  - .next/standalone/**/*
+  - .next/static/**/*
+  - public/**/*
+  - prisma/**/*
+  - package.json
+  - node_modules/**/*
+
+extraResources:
+  - from: prisma/
+    to: prisma/
+    filter:
+      - "**/*"
+      - "!migrations/**"
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+  icon: resources/icon.png
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+
+win:
+  target:
+    - nsis
+  icon: resources/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

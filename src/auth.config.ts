@@ -36,6 +36,9 @@ const authConfig = {
       const isLoggedIn = !!auth?.user;
       const pathname = nextUrl.pathname;
 
+      // Desktop (Electron) mode: no login required
+      if (process.env.IS_DESKTOP === "true") return true;
+
       const isPublic =
         pathname === "/login" ||
         pathname === "/sign-up" ||
