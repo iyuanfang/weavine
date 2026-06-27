@@ -73,10 +73,24 @@ jobs:
         run: node scripts/postbuild-desktop.mjs
 
       - name: Build Electron package
-        run: npx electron-builder --publish never 2>&1
+        id: build_electron
+        run: |
+          npx electron-builder --publish never 2>&1 | tee /tmp/ebuilder.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         env:
           CSC_LINK: ''
           CSC_KEY_PASSWORD: ''
+
+      - name: Show electron-builder error
+        if: steps.build_electron.outputs.exit_code != '0'
+        run: |
+          echo "### ⚠️ electron-builder failed with code ${{ steps.build_electron.outputs.exit_code }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -80 /tmp/ebuilder.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "See full logs above for details." >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
