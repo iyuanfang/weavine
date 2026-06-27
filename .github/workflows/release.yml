@@ -28,6 +28,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Create SQLite database
+        run: pnpm exec prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: 'file:./dev.db'
+
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:
