@@ -1,6 +1,8 @@
 {
   "name": "prm",
   "version": "0.1.0",
+  "description": "PRM · Personal Relationship Manager — 人脉管理桌面应用",
+  "author": "iyuanfang",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {

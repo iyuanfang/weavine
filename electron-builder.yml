@@ -33,6 +33,9 @@ mac:
   target:
     - dmg
   category: public.app-category.productivity
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
 
 win:
   target:
