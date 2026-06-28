@@ -85,11 +85,21 @@ jobs:
           path: artifacts
 
       - name: List downloaded artifacts
-        run: ls -la artifacts/
+        run: find artifacts/ -type f
 
-      - name: Verify Tauri updater artifacts
+      - name: Create Release
         run: |
-          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json tagName,assets \
-            --jq '.assets[] | select(.name | test("\\.(msi|json|blockmap)$")) | "\(.name) - \(.size) bytes"'
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --generate-notes \
+            --draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload MSI to Release
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            artifacts/weavine-windows-msi/*.msi
         env:
           GH_TOKEN: ${{ github.token }}
