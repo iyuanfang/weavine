@@ -72,20 +72,35 @@ jobs:
       - name: Copy Prisma engines to standalone
         run: node scripts/postbuild-desktop.mjs
 
-      - name: Build Electron package
+      - name: Debug and build Electron package
         id: build_electron
         shell: bash
         run: |
-          TARGETS="${{ runner.os == 'Linux' && '--linux deb --linux tar.gz' || '' }}"
-          npx electron-builder --publish never $TARGETS > ebuilder.log 2>&1
-          EXIT_CODE=$?
-          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
-          exit $EXIT_CODE
+          TARGETS="${{ runner.os == 'Linux' && '--linux dir' || '' }}"
+          # Capture build output and exit code
+          ./node_modules/.bin/electron-builder --publish never $TARGETS > ebuilder.log 2>&1
+          EB_EXIT=$?
+          # Write debug info + build output to step summary
+          {
+            echo '## 🔍 electron-builder debug'
+            echo "**Version:** \`$(./node_modules/.bin/electron-builder --version 2>&1)\`"
+            echo ''
+            echo '**Standalone structure:**'
+            ls -la .next/standalone/ | sed 's/^/    /'
+            echo ''
+            echo '**Build output (ebuilder.log):**'
+            echo '```'
+            cat ebuilder.log
+            echo '```'
+            echo "**Exit code: \`$EB_EXIT\`**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "exit_code=$EB_EXIT" >> "$GITHUB_OUTPUT"
+          exit $EB_EXIT
         env:
           CSC_LINK: ''
           CSC_KEY_PASSWORD: ''
 
-      - name: Upload electron-builder log on failure
+      - name: Upload ebuilder log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
