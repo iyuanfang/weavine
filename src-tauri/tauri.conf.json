@@ -1,26 +1,18 @@
 {
-  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "Weavine",
   "version": "0.1.0",
   "identifier": "com.weavine.app",
   "build": {
-    "frontendDist": "../.next/standalone",
-    "devUrl": "http://localhost:3100",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "IS_DESKTOP=true pnpm build"
+    "frontendDist": "../.next/standalone"
   },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "Weavine · 人脉管理",
+        "title": "Weavine",
         "width": 1280,
-        "height": 820,
-        "minWidth": 800,
-        "minHeight": 600,
-        "resizable": true,
-        "fullscreen": false,
-        "url": "http://127.0.0.1:3199"
+        "height": 820
       }
     ],
     "security": {
@@ -29,47 +21,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "nsis"],
+    "targets": ["msi"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ],
-    "publisher": "Weavine",
-    "category": "Productivity",
-    "shortDescription": "Personal Relationship Manager",
-    "longDescription": "Weavine is a local-first personal relationship manager. Track contacts, interactions, events, and reminders — all stored privately on your device.",
-    "windows": {
-      "webviewInstallMode": {
-        "type": "embedBootstrapper"
-      },
-      "nsis": {
-        "installMode": "perMachine",
-        "displayLanguageSelector": true,
-        "languages": ["SimpChinese", "English"],
-        "customLanguageFiles": []
-      },
-      "wix": {
-        "language": ["zh-CN", "en-US"]
-      },
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": "http://timestamp.digicert.com"
-    },
-    "publisherName": "Weavine"
-  },
-  "plugins": {
-    "updater": {
-      "active": true,
-      "dialog": false,
-      "endpoints": [
-        "https://github.com/iyuanfang/weavine/releases/latest/download/latest.json"
-      ],
-      "pubkey": "kMX9WgTNpGW968GReA54XzcvIauj9vVjZfG6Wk0w8/E=",
-      "windows": {
-        "installMode": "passive"
-      }
-    }
+    ]
   }
 }
