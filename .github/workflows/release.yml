@@ -45,7 +45,14 @@ jobs:
         run: node scripts/copy-tauri-standalone.mjs
 
       - name: Build Tauri app (Windows MSI)
-        run: pnpm tauri build --target x86_64-pc-windows-msvc
+        run: |
+          echo "=== Debug: Rust/Cargo availability ==="
+          rustc --version
+          cargo --version
+          echo "=== Debug: tauri CLI version ==="
+          pnpm exec tauri --version
+          echo "=== Debug: starting build ==="
+          pnpm exec tauri build --target x86_64-pc-windows-msvc --verbose
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
