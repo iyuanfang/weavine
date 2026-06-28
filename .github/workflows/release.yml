@@ -44,15 +44,23 @@ jobs:
       - name: Patch standalone output for Tauri bundling
         run: node scripts/copy-tauri-standalone.mjs
 
-      - name: Build Tauri app (Windows MSI)
+      - name: Debug: Rust/Cargo versions
         run: |
-          echo "=== Debug: Rust/Cargo availability ==="
-          rustc --version
-          cargo --version
-          echo "=== Debug: tauri CLI version ==="
-          pnpm exec tauri --version
-          echo "=== Debug: starting build ==="
-          pnpm exec tauri build --target x86_64-pc-windows-msvc --verbose
+          echo "rustc: $(rustc --version)"
+          echo "cargo: $(cargo --version)"
+          echo "rustup: $(rustup --version 2>&1)"
+        shell: bash
+
+      - name: Debug: Tauri CLI version
+        run: pnpm exec tauri --version
+        shell: bash
+
+      - name: Debug: Verify Rust target installed
+        run: rustup target list --installed
+        shell: bash
+
+      - name: Build Tauri app (Windows MSI)
+        run: pnpm exec tauri build --target x86_64-pc-windows-msvc --verbose 2>&1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
