@@ -4,15 +4,18 @@ const allowedOrigins = (process.env.NEXT_SERVER_ALLOWED_ORIGINS ?? 'localhost:30
   .map((s) => s.trim())
   .filter(Boolean);
 
+const isDesktop = process.env.IS_DESKTOP === "true";
+
 const nextConfig = {
   reactStrictMode: true,
-  output: process.env.IS_DESKTOP === "true" ? "standalone" : undefined,
+  output: isDesktop ? 'export' : undefined,
   experimental: {
-    serverActions: { allowedOrigins },
+    serverActions: isDesktop ? undefined : { allowedOrigins },
     staleTimes: {
       dynamic: 0,
       static: 180,
     },
   },
+  images: isDesktop ? { unoptimized: true } : undefined,
 };
 export default nextConfig;

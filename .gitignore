@@ -19,3 +19,7 @@ prisma/settings.json
 release/
 dist-electron/
 *.exe
+
+# Tauri
+src-tauri/target/
+src-tauri/icons/
