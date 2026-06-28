@@ -125,8 +125,15 @@ jobs:
             --repo "${{ github.repository }}" \
             --generate-notes \
             --verify-tag || true
-          # Upload each artifact file one by one with small delay
-          find artifacts -type f | while read f; do
+          # Upload only installer packages, not unpacked app files
+          find artifacts -type f \( \
+            -name '*.exe' -o \
+            -name '*.dmg' -o \
+            -name '*.AppImage' -o \
+            -name '*.deb' -o \
+            -name '*.tar.gz' -o \
+            -name '*.blockmap' \
+          \) | while read f; do
             echo "Uploading: $f"
             gh release upload "${{ github.ref_name }}" "$f" \
               --repo "${{ github.repository }}" --clobber
