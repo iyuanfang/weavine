@@ -59,6 +59,10 @@ jobs:
         run: rustup target list --installed
         shell: bash
 
+      - name: Debug - tauri info
+        run: pnpm exec tauri info 2>&1 || true
+        shell: bash
+
       - name: Build Tauri app (Windows MSI)
         run: pnpm exec tauri build --target x86_64-pc-windows-msvc --verbose 2>&1
         env:
