@@ -12,10 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "PRM · 人脉管理",
+        "title": "Weavine · 人脉管理",
         "width": 1280,
         "height": 820,
-        "resizable": true
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false
       }
     ],
     "security": {
@@ -24,13 +27,48 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["msi", "nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Weavine",
+    "category": "Productivity",
+    "shortDescription": "Personal Relationship Manager",
+    "longDescription": "Weavine is a local-first personal relationship manager. Track contacts, interactions, events, and reminders — all stored privately on your device.",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "perMachine",
+        "displayLanguageSelector": true,
+        "languages": ["SimpChinese", "English"],
+        "customLanguageFiles": []
+      },
+      "wix": {
+        "language": ["zh-CN", "en-US"]
+      },
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com"
+    },
+    "publisherName": "Weavine"
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "endpoints": [
+        "https://github.com/iyuanfang/weavine/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_GENERATED_PUBLIC_KEY",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

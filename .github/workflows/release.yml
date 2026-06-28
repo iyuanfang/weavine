@@ -1,4 +1,4 @@
-name: Build & Release
+name: Build & Release (Windows)
 
 on:
   push:
@@ -26,75 +26,59 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - name: Cache Electron binary
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry & target
         uses: actions/cache@v4
         with:
-          path: ~/.electron
-          key: ${{ runner.os }}-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Install system dependencies (Linux)
-        if: false
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libfuse2 fakeroot dpkg-dev
-
-      - name: Cache electron-builder
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/electron-builder
-          key: ${{ runner.os }}-builder-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install dependencies
+      - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Create SQLite database
-        run: |
-          pnpm exec prisma db push --accept-data-loss
-          pnpm exec prisma generate
-        env:
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Cache Next.js build
-        uses: actions/cache@v4
-        with:
-          path: .next/cache
-          key: ${{ runner.os }}-next-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-next-
-
-      - name: Build Next.js standalone
-        run: pnpm exec next build
+      - name: Build Next.js for Tauri (static export)
+        run: pnpm build
         env:
           IS_DESKTOP: 'true'
           DATABASE_URL: 'file:./dev.db'
-          NODE_OPTIONS: '--max-old-space-size=4096'
 
-      - name: Copy Prisma engines to standalone
-        run: node scripts/postbuild-desktop.mjs
-
-      - name: Build Electron package
-        id: build_electron
-        shell: bash
-        run: |
-          ./node_modules/.bin/electron-builder --publish never > ebuilder.log 2>&1
-          EB_EXIT=$?
-          echo "exit_code=$EB_EXIT" >> "$GITHUB_OUTPUT"
-          exit $EB_EXIT
+      - name: Build Tauri app (Windows MSI)
+        uses: tauri-apps/tauri-action@v0
         env:
-          CSC_LINK: ''
-          CSC_KEY_PASSWORD: ''
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          WINDOWS_CERT_FILE: ${{ secrets.WINDOWS_CERT_FILE }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Weavine ${{ github.ref_name }}"
+          releaseBody: "See CHANGELOG.md for details."
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: --target x86_64-pc-windows-msvc
 
-      - name: Upload ebuilder log on failure
-        if: failure()
+      - name: Upload MSI installer
         uses: actions/upload-artifact@v4
         with:
-          name: ebuilder-log-${{ runner.os }}
-          path: ebuilder.log
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: PRM-${{ runner.os }}
-          path: release/*
+          name: weavine-windows-msi
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.blockmap
+          if-no-files-found: error
 
   release:
     needs: build
@@ -107,25 +91,12 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create Release with gh CLI
+      - name: List downloaded artifacts
+        run: ls -la artifacts/
+
+      - name: Verify Tauri updater artifacts
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --generate-notes \
-            --verify-tag || true
-          # Upload only installer packages, not unpacked app files
-          find artifacts -type f \( \
-            -name '*.exe' -o \
-            -name '*.dmg' -o \
-            -name '*.AppImage' -o \
-            -name '*.deb' -o \
-            -name '*.tar.gz' -o \
-            -name '*.blockmap' \
-          \) | while read f; do
-            echo "Uploading: $f"
-            gh release upload "${{ github.ref_name }}" "$f" \
-              --repo "${{ github.repository }}" --clobber
-            sleep 1
-          done
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" --json tagName,assets \
+            --jq '.assets[] | select(.name | test("\\.(msi|json|blockmap)$")) | "\(.name) - \(.size) bytes"'
         env:
           GH_TOKEN: ${{ github.token }}
