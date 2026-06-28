@@ -24,6 +24,8 @@ jobs:
 
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -51,13 +53,12 @@ jobs:
           WINDOWS_CERT_FILE: ${{ secrets.WINDOWS_CERT_FILE }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         with:
+          projectPath: .
           tagName: ${{ github.ref_name }}
           releaseName: "Weavine ${{ github.ref_name }}"
           releaseBody: "See CHANGELOG.md for details."
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
-          args: --target x86_64-pc-windows-msvc
 
       - name: Upload MSI installer
         uses: actions/upload-artifact@v4
