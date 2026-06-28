@@ -70,9 +70,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weavine-windows-msi
-          path: |
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.blockmap
+          path: src-tauri/target/release/bundle/msi/*
           if-no-files-found: error
 
   release:
