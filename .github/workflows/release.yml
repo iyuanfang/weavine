@@ -76,7 +76,8 @@ jobs:
         id: build_electron
         shell: bash
         run: |
-          npx electron-builder --publish never > ebuilder.log 2>&1
+          TARGETS="${{ runner.os == 'Linux' && '--linux deb --linux tar.gz' || '' }}"
+          npx electron-builder --publish never $TARGETS > ebuilder.log 2>&1
           EXIT_CODE=$?
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
           exit $EXIT_CODE
