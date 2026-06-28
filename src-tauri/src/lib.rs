@@ -5,7 +5,9 @@ pub mod models;
 use commands::{action, contact, event, interaction, reminder, search, setting, tag};
 use tauri::Manager;
 use db::Database;
-use std::io::{BufRead, BufReader};
+use std::fs;
+use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
@@ -67,6 +69,10 @@ pub fn run() {
             if std::env::var("TAURI_DEV").is_err() {
                 if let Err(e) = spawn_standalone_server(&handle, &server_state) {
                     eprintln!("[weavine] Failed to spawn Next.js server: {e}");
+                    if let Ok(data_dir) = handle.path().app_data_dir() {
+                        let _ = fs::create_dir_all(&data_dir);
+                        let _ = fs::write(data_dir.join("startup-error.log"), &e);
+                    }
                 }
             }
             Ok(())
@@ -82,6 +88,34 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn resolve_db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    fs::create_dir_all(&data_dir).map_err(|e| format!("create app_data_dir: {e}"))?;
+    Ok(data_dir.join("dev.db"))
+}
+
+fn ensure_database(app: &tauri::AppHandle, server_dir: &PathBuf) -> Result<PathBuf, String> {
+    let db_path = resolve_db_path(app)?;
+
+    if db_path.exists() {
+        return Ok(db_path);
+    }
+
+    let bundled_db = server_dir.join("dev.db");
+    if bundled_db.exists() {
+        fs::copy(&bundled_db, &db_path)
+            .map_err(|e| format!("copy dev.db from bundle: {e}"))?;
+        println!("[weavine] Copied pre-initialized dev.db to {:?}", db_path);
+    } else {
+        println!("[weavine] No bundled dev.db found — Prisma will create it");
+    }
+
+    Ok(db_path)
 }
 
 fn spawn_standalone_server(
@@ -105,12 +139,15 @@ fn spawn_standalone_server(
         ));
     }
 
+    let db_path = ensure_database(app, &server_dir)?;
+    let db_url = format!("file:{}", db_path.display());
+
     let mut cmd = Command::new("node");
     cmd.current_dir(&server_dir)
         .arg("server.js")
         .env("PORT", SERVER_PORT.to_string())
         .env("HOSTNAME", SERVER_HOST)
-        .env("DATABASE_URL", "file:./dev.db")
+        .env("DATABASE_URL", &db_url)
         .env("IS_DESKTOP", "true")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -138,7 +175,6 @@ fn spawn_standalone_server(
 
     *state.0.lock().unwrap() = Some(child);
 
-    // Wait for server to be ready
     let url = format!("http://{SERVER_HOST}:{SERVER_PORT}/api/health");
     let deadline = Instant::now() + Duration::from_secs(SERVER_STARTUP_TIMEOUT_SECS);
     while Instant::now() < deadline {
@@ -152,7 +188,6 @@ fn spawn_standalone_server(
 }
 
 fn is_server_up(url: &str) -> bool {
-    // Use std::net for health check (no extra deps)
     let parts: Vec<&str> = url.split(':').collect();
     if parts.len() < 3 {
         return false;

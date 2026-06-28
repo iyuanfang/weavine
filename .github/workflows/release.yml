@@ -35,6 +35,13 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Initialize SQLite database
+        run: |
+          pnpm exec prisma db push
+          cp prisma/dev.db dev.db
+        env:
+          DATABASE_URL: 'file:./dev.db'
+
       - name: Build Next.js standalone
         run: pnpm build
         env:
