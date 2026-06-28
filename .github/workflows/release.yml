@@ -44,18 +44,18 @@ jobs:
       - name: Patch standalone output for Tauri bundling
         run: node scripts/copy-tauri-standalone.mjs
 
-      - name: Debug: Rust/Cargo versions
+      - name: Debug Rust/Cargo versions
         run: |
-          echo "rustc: $(rustc --version)"
-          echo "cargo: $(cargo --version)"
-          echo "rustup: $(rustup --version 2>&1)"
+          echo "rustc=$(rustc --version)"
+          echo "cargo=$(cargo --version)"
+          echo "rustup=$(rustup --version 2>&1)"
         shell: bash
 
-      - name: Debug: Tauri CLI version
+      - name: Debug - Tauri CLI version
         run: pnpm exec tauri --version
         shell: bash
 
-      - name: Debug: Verify Rust target installed
+      - name: Debug - Verify Rust target installed
         run: rustup target list --installed
         shell: bash
 
