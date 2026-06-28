@@ -47,13 +47,24 @@ jobs:
           IS_DESKTOP: 'true'
 
       - name: Build Tauri app (Windows MSI)
-        run: pnpm exec tauri build 2>&1
+        id: build
+        run: |
+          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           WINDOWS_CERT_FILE: ${{ secrets.WINDOWS_CERT_FILE }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+
+      - name: Upload build log on failure
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-build-log
+          path: tauri-build.log
 
       - name: Upload MSI installer
         uses: actions/upload-artifact@v4

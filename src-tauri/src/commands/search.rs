@@ -93,10 +93,12 @@ pub fn search(
                  ORDER BY updatedAt DESC LIMIT ?3",
             )
             .map_err(|e| e.to_string())?;
-        stmt.query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_contact)
+        let results = stmt
+            .query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_contact)
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
-            .collect()
+            .collect::<Vec<Contact>>();
+        results
     };
 
     let interactions: Vec<Interaction> = {
@@ -107,10 +109,12 @@ pub fn search(
                  ORDER BY occurredAt DESC LIMIT ?3",
             )
             .map_err(|e| e.to_string())?;
-        stmt.query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_interaction)
+        let results = stmt
+            .query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_interaction)
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
-            .collect()
+            .collect::<Vec<Interaction>>();
+        results
     };
 
     let events: Vec<Event> = {
@@ -122,10 +126,12 @@ pub fn search(
                  ORDER BY startAt ASC LIMIT ?3",
             )
             .map_err(|e| e.to_string())?;
-        stmt.query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_event)
+        let results = stmt
+            .query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_event)
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
-            .collect()
+            .collect::<Vec<Event>>();
+        results
     };
 
     let actions: Vec<Action> = {
@@ -137,10 +143,12 @@ pub fn search(
                  ORDER BY dueAt ASC LIMIT ?3",
             )
             .map_err(|e| e.to_string())?;
-        stmt.query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_action)
+        let results = stmt
+            .query_map(rusqlite::params![&owner_id, &pattern, &limit], row_to_action)
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
-            .collect()
+            .collect::<Vec<Action>>();
+        results
     };
 
     Ok(SearchResults {

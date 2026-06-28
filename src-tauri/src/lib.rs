@@ -3,6 +3,7 @@ pub mod db;
 pub mod models;
 
 use commands::{action, contact, event, interaction, reminder, search, setting, tag};
+use tauri::Manager;
 use db::Database;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
