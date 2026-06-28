@@ -1,7 +1,7 @@
 const { app, BrowserWindow } = require("electron");
 const { fork } = require("child_process");
 const { join } = require("path");
-const { existsSync } = require("fs");
+const { existsSync, copyFileSync, mkdirSync } = require("fs");
 
 let mainWindow = null;
 let serverProcess = null;
@@ -33,11 +33,23 @@ async function startNextjsServer() {
       return;
     }
 
+    // Ensure database exists in writable user data directory
+    const userDataPath = app.getPath("userData");
+    const dbPath = join(userDataPath, "dev.db");
+    if (!existsSync(dbPath)) {
+      const bundledDb = join(process.resourcesPath, "prisma", "dev.db");
+      if (existsSync(bundledDb)) {
+        mkdirSync(userDataPath, { recursive: true });
+        copyFileSync(bundledDb, dbPath);
+      }
+    }
+
     const env = {
       ...process.env,
       IS_DESKTOP: "true",
       PORT: "3101",
       HOSTNAME: "127.0.0.1",
+      DATABASE_URL: `file:${dbPath}`,
     };
 
     serverProcess = fork(serverPath, [], {
