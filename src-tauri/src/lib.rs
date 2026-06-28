@@ -62,11 +62,11 @@ pub fn run() {
             search::search,
         ])
         .setup(|app| {
-            let handle = app.handle();
+            let handle = app.handle().clone();
             let server_state = handle.state::<ServerProcess>();
 
             if std::env::var("TAURI_DEV").is_err() {
-                if let Err(e) = spawn_standalone_server(&server_state) {
+                if let Err(e) = spawn_standalone_server(&handle, &server_state) {
                     eprintln!("[weavine] Failed to spawn Next.js server: {e}");
                 }
             }
@@ -84,12 +84,16 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn spawn_standalone_server(state: &tauri::State<ServerProcess>) -> Result<(), String> {
-    let resource_dir = tauri::utils::platform::resource_dir();
+fn spawn_standalone_server(
+    app: &tauri::AppHandle,
+    state: &tauri::State<ServerProcess>,
+) -> Result<(), String> {
     let server_dir = if cfg!(dev) {
         std::env::current_dir().unwrap().join(".next/standalone")
     } else {
-        resource_dir.join("dist")
+        app.path()
+            .resource_dir()
+            .map_err(|e| format!("resource_dir: {e}"))?
     };
 
     let server_js = server_dir.join("server.js");
