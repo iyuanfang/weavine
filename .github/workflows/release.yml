@@ -79,43 +79,56 @@ jobs:
         shell: bash
         continue-on-error: true
 
+      - name: Test - scaffold minimal tauri app
+        run: |
+          set +e
+          mkdir -p /tmp/test-tauri
+          cd /tmp/test-tauri
+          echo '{
+            "productName": "TestApp",
+            "version": "0.1.0",
+            "identifier": "com.test.app",
+            "build": { "frontendDist": "../dist" },
+            "app": { "windows": [{"label": "main","title": "Test","width": 800,"height": 600}], "security": { "csp": null } },
+            "bundle": { "active": true, "targets": ["msi"], "icon": [] }
+          }' > tauri.conf.json
+          mkdir -p src dist
+          echo 'fn main() { println!("hello"); }' > src/main.rs
+          echo '[package]
+          name = "test-app"
+          version = "0.1.0"
+          edition = "2021"
+
+          [build-dependencies]
+          tauri-build = "2"
+
+          [dependencies]
+          tauri = "2"' > Cargo.toml
+          echo 'fn main() { tauri_build::build() }' > build.rs
+          echo "hello" > dist/index.html
+          echo "=== Testing: scaffolded app ==="
+          npx @tauri-apps/cli@latest build 2>&1
+          echo "TEST_EXIT=$?"
+        shell: bash
+        continue-on-error: true
+
       - name: Build Tauri app (Windows MSI)
         id: build
         run: |
           set +e -o pipefail
           (
-            echo "=== Attempt 1: pnpm exec tauri build ==="
+            echo "=== Running: pnpm exec tauri build ==="
             pnpm exec tauri build 2>&1
             echo "EXIT1=$?"
-            echo ""
-            echo "=== Attempt 2: npx @tauri-apps/cli@latest build ==="
-            npx @tauri-apps/cli@latest build 2>&1
-            echo "EXIT2=$?"
-            echo ""
-            echo "=== Environment ==="
-            echo "node=$(node --version)"
-            echo "pnpm=$(pnpm --version)"
-            echo "pwd=$(pwd)"
-            echo "frontend dist check: $(ls -la .next/standalone/server.js 2>&1 || echo NOT FOUND)"
-            echo "tauri config check: $(cat src-tauri/tauri.conf.json | head -5)"
           ) 2>&1 | tee tauri-output.log
+          echo "=== frontend dist check ==="
+          ls -la .next/standalone/server.js
+          echo "=== exit ==="
           EXIT=$(grep -m1 'EXIT1=' tauri-output.log | cut -d= -f2)
+          echo "EXIT_CODE=$EXIT"
           echo "EXIT_CODE=$EXIT" >> $GITHUB_OUTPUT
           exit $EXIT
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          WINDOWS_CERT_FILE: ${{ secrets.WINDOWS_CERT_FILE }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-
-      - name: Upload tauri build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tauri-build-log
-          path: tauri-output.log
 
       - name: Upload MSI installer
         uses: actions/upload-artifact@v4
