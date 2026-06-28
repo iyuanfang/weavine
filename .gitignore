@@ -19,6 +19,7 @@ prisma/settings.json
 release/
 dist-electron/
 *.exe
+standalone-bundle/
 
 # Tauri
 src-tauri/target/

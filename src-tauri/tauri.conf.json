@@ -2,15 +2,16 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Weavine",
   "version": "0.1.0",
-  "identifier": "com.weavine.app",
+  "identifier": "com.weavine.prm",
   "build": {
-    "frontendDist": "../.next/standalone"
+    "frontendDist": "../tauri-dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
         "title": "Weavine",
+        "url": "http://127.0.0.1:3199",
         "width": 1280,
         "height": 820
       }
@@ -22,6 +23,7 @@
   "bundle": {
     "active": true,
     "targets": ["msi"],
+    "resources": ["../standalone-bundle/**/*"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

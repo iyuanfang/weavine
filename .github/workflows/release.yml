@@ -43,92 +43,17 @@ jobs:
 
       - name: Patch standalone output for Tauri bundling
         run: node scripts/copy-tauri-standalone.mjs
-
-      - name: Debug Rust/Cargo versions
-        run: |
-          echo "rustc=$(rustc --version)"
-          echo "cargo=$(cargo --version)"
-          echo "rustup=$(rustup --version 2>&1)"
-        shell: bash
-
-      - name: Debug - Tauri CLI version
-        run: pnpm exec tauri --version
-        shell: bash
-
-      - name: Debug - Verify Rust target installed
-        run: rustup target list --installed
-        shell: bash
-
-      - name: Debug - tauri info
-        run: pnpm exec tauri info 2>&1 || true
-        shell: bash
-
-      - name: Debug - manual cargo invocation
-        run: |
-          echo "=== cargo check ==="
-          cd src-tauri && cargo check 2>&1 | tail -30
-          echo "=== check frontend dist exists ==="
-          ls -la .next/standalone/server.js 2>&1
-          echo "=== check src-tauri/Cargo.toml ==="
-          ls -la src-tauri/Cargo.toml
-          echo "=== check src-tauri/build.rs ==="
-          cat src-tauri/build.rs
-          echo "=== try cargo build --release ==="
-          cd src-tauri && cargo build --release 2>&1 | tail -30
-          echo "=== cargo build exit: $? ==="
-        shell: bash
-        continue-on-error: true
-
-      - name: Test - scaffold minimal tauri app
-        run: |
-          set +e
-          mkdir -p /tmp/test-tauri
-          cd /tmp/test-tauri
-          echo '{
-            "productName": "TestApp",
-            "version": "0.1.0",
-            "identifier": "com.test.app",
-            "build": { "frontendDist": "../dist" },
-            "app": { "windows": [{"label": "main","title": "Test","width": 800,"height": 600}], "security": { "csp": null } },
-            "bundle": { "active": true, "targets": ["msi"], "icon": [] }
-          }' > tauri.conf.json
-          mkdir -p src dist
-          echo 'fn main() { println!("hello"); }' > src/main.rs
-          echo '[package]
-          name = "test-app"
-          version = "0.1.0"
-          edition = "2021"
-
-          [build-dependencies]
-          tauri-build = "2"
-
-          [dependencies]
-          tauri = "2"' > Cargo.toml
-          echo 'fn main() { tauri_build::build() }' > build.rs
-          echo "hello" > dist/index.html
-          echo "=== Testing: scaffolded app ==="
-          npx @tauri-apps/cli@latest build 2>&1
-          echo "TEST_EXIT=$?"
-        shell: bash
-        continue-on-error: true
+        env:
+          IS_DESKTOP: 'true'
 
       - name: Build Tauri app (Windows MSI)
-        id: build
-        run: |
-          set +e -o pipefail
-          (
-            echo "=== Running: pnpm exec tauri build ==="
-            pnpm exec tauri build 2>&1
-            echo "EXIT1=$?"
-          ) 2>&1 | tee tauri-output.log
-          echo "=== frontend dist check ==="
-          ls -la .next/standalone/server.js
-          echo "=== exit ==="
-          EXIT=$(grep -m1 'EXIT1=' tauri-output.log | cut -d= -f2)
-          echo "EXIT_CODE=$EXIT"
-          echo "EXIT_CODE=$EXIT" >> $GITHUB_OUTPUT
-          exit $EXIT
-        shell: bash
+        run: pnpm exec tauri build 2>&1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          WINDOWS_CERT_FILE: ${{ secrets.WINDOWS_CERT_FILE }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
 
       - name: Upload MSI installer
         uses: actions/upload-artifact@v4

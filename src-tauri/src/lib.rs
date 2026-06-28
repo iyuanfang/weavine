@@ -92,6 +92,7 @@ fn spawn_standalone_server(
         app.path()
             .resource_dir()
             .map_err(|e| format!("resource_dir: {e}"))?
+            .join("standalone-bundle")
     };
 
     let server_js = server_dir.join("server.js");

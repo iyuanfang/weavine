@@ -16,7 +16,7 @@
  * everything as a single resource directory.
  */
 
-import { cp } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +59,14 @@ async function main() {
     await cp(prismaEnginesSrc, prismaEnginesDst, { recursive: true });
     console.log("  ✓ node_modules/@prisma/engines/");
   }
+
+  // Copy entire standalone to a clean directory for Tauri resource bundling
+  const bundleDir = resolve(ROOT, "standalone-bundle");
+  if (existsSync(bundleDir)) {
+    await rm(bundleDir, { recursive: true });
+  }
+  await cp(standalone, bundleDir, { recursive: true });
+  console.log("  ✓ standalone-bundle/ (for Tauri resource bundling)");
 
   console.log("✅ Standalone output ready for Tauri bundling");
 }
