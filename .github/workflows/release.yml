@@ -119,9 +119,18 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*
-          generate_release_notes: true
-          fail_on_unmatched_files: false
+      - name: Create Release with gh CLI
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --generate-notes \
+            --verify-tag || true
+          # Upload each artifact file one by one with small delay
+          find artifacts -type f | while read f; do
+            echo "Uploading: $f"
+            gh release upload "${{ github.ref_name }}" "$f" \
+              --repo "${{ github.repository }}" --clobber
+            sleep 1
+          done
+        env:
+          GH_TOKEN: ${{ github.token }}
