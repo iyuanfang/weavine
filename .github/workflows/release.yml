@@ -63,8 +63,22 @@ jobs:
         run: pnpm exec tauri info 2>&1 || true
         shell: bash
 
+      - name: Debug - manual cargo invocation
+        run: |
+          echo "=== cd into src-tauri ==="
+          cd src-tauri
+          echo "=== cargo --version ==="
+          cargo --version
+          echo "=== cargo metadata ==="
+          cargo metadata --no-deps --format-version 1 2>&1 | head -50 || true
+          echo "=== cargo check ==="
+          cargo check 2>&1 | tail -30
+        shell: bash
+        continue-on-error: true
+
       - name: Build Tauri app (Windows MSI)
         run: pnpm exec tauri build --verbose 2>&1
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
