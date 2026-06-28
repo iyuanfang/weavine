@@ -9,14 +9,12 @@ let serverProcess = null;
 const isDev = !app.isPackaged;
 
 function getStandaloneServerPath() {
-  const candidates = [
-    join(__dirname, "..", ".next", "standalone", "server.js"),
-    join(__dirname, "server.js"),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
+  if (!isDev) {
+    return join(process.resourcesPath, "app.asar.unpacked", ".next", "standalone", "server.js");
   }
-  return candidates[0];
+  const localPath = join(__dirname, "..", ".next", "standalone", "server.js");
+  if (existsSync(localPath)) return localPath;
+  return localPath;
 }
 
 async function startNextjsServer() {

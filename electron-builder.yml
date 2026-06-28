@@ -15,6 +15,9 @@ files:
   - "!./node_modules{,/**}"
   - "!.next/cache{,/**}"
 
+asarUnpack:
+  - ".next/standalone/**"
+
 extraResources:
   - from: prisma/
     to: prisma/
