@@ -48,11 +48,14 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Next.js for Tauri (static export)
+      - name: Build Next.js standalone
         run: pnpm build
         env:
           IS_DESKTOP: 'true'
           DATABASE_URL: 'file:./dev.db'
+
+      - name: Patch standalone output for Tauri bundling
+        run: node scripts/copy-tauri-standalone.mjs
 
       - name: Build Tauri app (Windows MSI)
         uses: tauri-apps/tauri-action@v0

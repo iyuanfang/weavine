@@ -8,7 +8,7 @@ const isDesktop = process.env.IS_DESKTOP === "true";
 
 const nextConfig = {
   reactStrictMode: true,
-  output: isDesktop ? 'export' : undefined,
+  output: isDesktop ? 'standalone' : undefined,
   experimental: {
     serverActions: isDesktop ? undefined : { allowedOrigins },
     staleTimes: {
