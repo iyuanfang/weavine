@@ -61,7 +61,6 @@ pub fn list_contacts(
             idx
         ));
         param_values.push(Box::new(tag_id.clone()));
-        idx += 1;
     }
 
     sql.push_str(" ORDER BY updatedAt DESC");
