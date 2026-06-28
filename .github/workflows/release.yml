@@ -64,7 +64,7 @@ jobs:
         shell: bash
 
       - name: Build Tauri app (Windows MSI)
-        run: pnpm exec tauri build --target x86_64-pc-windows-msvc --verbose 2>&1
+        run: pnpm exec tauri build --verbose 2>&1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
