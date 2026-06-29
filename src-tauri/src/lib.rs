@@ -2,12 +2,14 @@ pub mod commands;
 pub mod db;
 pub mod models;
 
-use commands::{action, contact, event, interaction, reminder, search, setting, tag};
+use commands::{action, contact, diagnostic, event, interaction, reminder, search, setting, tag};
 use tauri::{Emitter, Manager};
 use db::Database;
 use std::fs;
 use std::process::Child;
 use std::sync::Mutex;
+
+pub struct ServerProcess(pub Mutex<Option<Child>>);
 
 pub mod spawner;
 
