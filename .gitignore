@@ -23,6 +23,7 @@ release/
 dist-electron/
 *.exe
 standalone-bundle/
+node_bin/
 
 # Tauri
 src-tauri/target/

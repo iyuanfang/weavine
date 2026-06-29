@@ -118,6 +118,33 @@ fn ensure_database(app: &tauri::AppHandle, server_dir: &PathBuf) -> Result<PathB
     Ok(db_path)
 }
 
+fn resolve_node_path(app: &tauri::AppHandle, server_dir: &PathBuf) -> PathBuf {
+    let node_name = if cfg!(target_os = "windows") {
+        "node.exe"
+    } else {
+        "node"
+    };
+
+    if cfg!(not(dev)) {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let bundled = resource_dir.join("node_bin").join(node_name);
+            if bundled.exists() {
+                println!("[weavine] Using bundled Node.js at {}", bundled.display());
+                return bundled;
+            }
+        }
+    }
+
+    let local_node = server_dir.join("../../node_bin").join(node_name);
+    if local_node.exists() {
+        println!("[weavine] Using local Node.js at {}", local_node.display());
+        return local_node;
+    }
+
+    println!("[weavine] Using system Node.js from PATH");
+    PathBuf::from("node")
+}
+
 fn spawn_standalone_server(
     app: &tauri::AppHandle,
     state: &tauri::State<ServerProcess>,
@@ -142,7 +169,8 @@ fn spawn_standalone_server(
     let db_path = ensure_database(app, &server_dir)?;
     let db_url = format!("file:{}", db_path.display());
 
-    let mut cmd = Command::new("node");
+    let node_path = resolve_node_path(app, &server_dir);
+    let mut cmd = Command::new(&node_path);
     cmd.current_dir(&server_dir)
         .arg("server.js")
         .env("PORT", SERVER_PORT.to_string())
