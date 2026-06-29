@@ -207,10 +207,10 @@ jobs:
 
       - name: Upload Linux artifacts to Release
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --clobber \
-            artifacts/weavine-linux/*.deb \
-            artifacts/weavine-linux/*.AppImage
+          # actions/upload-artifact@v4 preserves relative paths
+          find artifacts/weavine-linux -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
         env:
           GH_TOKEN: ${{ github.token }}
