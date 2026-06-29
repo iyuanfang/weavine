@@ -1,3 +1,4 @@
+pub mod boot_log;
 pub mod commands;
 pub mod db;
 pub mod models;
@@ -29,7 +30,25 @@ struct ServerStatusPayload {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let database = Database::new().expect("Failed to initialize database");
+    let initial_data_dir = dirs_data_dir_fallback();
+    boot_log::init(&initial_data_dir);
+    boot_log::log("Tauri run() invoked");
+
+    let database = match Database::new() {
+        Ok(db) => {
+            boot_log::log("Database::new succeeded");
+            db
+        }
+        Err(e) => {
+            let msg = format!("Failed to initialize database: {e}");
+            boot_log::log(&msg);
+            eprintln!("[weavine] {msg}");
+            STARTUP_ERROR.set(msg.clone()).ok();
+            let _ = fs::create_dir_all(&initial_data_dir);
+            let _ = fs::write(initial_data_dir.join("startup-error.log"), &msg);
+            return;
+        }
+    };
 
     tauri::Builder::default()
         .manage(database)
@@ -85,6 +104,9 @@ pub fn run() {
                     .app_data_dir()
                     .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
 
+                boot_log::log(&format!("resource_dir={}", resource_dir.display()));
+                boot_log::log(&format!("data_dir={}", data_dir.display()));
+
                 let _ = handle.emit("server-status", ServerStatusPayload {
                     status: "starting".into(),
                     message: "正在启动后端服务...".into(),
@@ -92,6 +114,7 @@ pub fn run() {
 
                 match spawn_standalone_server(&resource_dir, &data_dir, &server_state) {
                     Ok(child) => {
+                        boot_log::log("spawn_standalone_server returned Ok");
                         SERVER_READY.store(true, Ordering::SeqCst);
                         *server_state.0.lock().unwrap() = Some(child);
                         let _ = handle.emit("server-status", ServerStatusPayload {
@@ -101,6 +124,7 @@ pub fn run() {
                     }
                     Err(e) => {
                         let err_str = e.to_string();
+                        boot_log::log(&format!("spawn_standalone_server failed: {err_str}"));
                         STARTUP_ERROR.set(err_str.clone()).ok();
                         eprintln!("[weavine] Failed to spawn Next.js server: {err_str}");
                         let _ = handle.emit("server-status", ServerStatusPayload {
@@ -139,4 +163,10 @@ fn spawn_standalone_server(
         spawner::SERVER_HOST,
         spawner::SERVER_STARTUP_TIMEOUT_SECS,
     )
+}
+
+fn dirs_data_dir_fallback() -> std::path::PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("com.weavine.prm")
 }

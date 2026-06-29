@@ -108,6 +108,102 @@ pub fn is_server_up(host: &str, port: u16) -> bool {
     .is_ok()
 }
 
+fn stage_runtime_tree(runtime_dir: &Path, bundled_server_dir: &Path) -> Result<PathBuf, String> {
+    let dest = runtime_dir.join("server");
+    let marker = dest.join(".staged");
+    if marker.exists() {
+        let server_js = dest.join("server.js");
+        if server_js.exists() {
+            println!("[spawner] Reusing staged server dir at {}", dest.display());
+            return Ok(dest);
+        }
+    }
+    println!(
+        "[spawner] Staging runtime server dir: {} -> {}",
+        bundled_server_dir.display(),
+        dest.display()
+    );
+    if dest.exists() {
+        fs::remove_dir_all(&dest).map_err(|e| format!("clean staged dir: {e}"))?;
+    }
+    fs::create_dir_all(&dest).map_err(|e| format!("create staged dir: {e}"))?;
+    copy_dir_recursive(bundled_server_dir, &dest)
+        .map_err(|e| format!("copy bundle to staged dir: {e}"))?;
+    fs::write(&marker, b"ok")
+        .map_err(|e| format!("write staged marker: {e}"))?;
+    Ok(dest)
+}
+
+fn stage_runtime_node(runtime_dir: &Path, bundled_node: &Path) -> Result<PathBuf, String> {
+    if !bundled_node.exists() {
+        println!(
+            "[spawner] Bundled node does not exist at {} — using system node from PATH",
+            bundled_node.display()
+        );
+        return Ok(bundled_node.to_path_buf());
+    }
+
+    let dest_dir = runtime_dir.join("node_bin");
+    let node_name = bundled_node
+        .file_name()
+        .ok_or_else(|| "bundled node path has no file name".to_string())?;
+    let dest = dest_dir.join(node_name);
+
+    let already_matches = dest.exists()
+        && fs::metadata(&dest).ok().map(|m| m.len()).unwrap_or(0)
+            == fs::metadata(bundled_node).ok().map(|m| m.len()).unwrap_or(0);
+    if already_matches {
+        println!("[spawner] Reusing staged node at {}", dest.display());
+        return Ok(dest);
+    }
+
+    println!(
+        "[spawner] Staging runtime node: {} -> {}",
+        bundled_node.display(),
+        dest.display()
+    );
+    fs::create_dir_all(&dest_dir).map_err(|e| format!("create node_bin dir: {e}"))?;
+    fs::copy(bundled_node, &dest).map_err(|e| format!("copy node binary: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perm = fs::metadata(&dest).map_err(|e| format!("stat staged node: {e}"))?.permissions();
+        perm.set_mode(0o755);
+        fs::set_permissions(&dest, perm).map_err(|e| format!("chmod staged node: {e}"))?;
+    }
+
+    Ok(dest)
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else if file_type.is_symlink() {
+            let target = fs::read_link(&from)?;
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink(&target, &to)
+                    .or_else(|_| fs::copy(&from, &to).map(|_| ()))?;
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = target;
+                fs::copy(&from, &to).map(|_| ())?;
+            }
+        } else {
+            fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn spawn(
     resource_dir: &Path,
     data_dir: &Path,
@@ -115,11 +211,16 @@ pub fn spawn(
     host: &str,
     timeout_secs: u64,
 ) -> Result<Child, String> {
-    let server_dir = find_server_dir(resource_dir)?;
-    let db_path = ensure_database(data_dir, &server_dir)?;
+    let bundled_server_dir = find_server_dir(resource_dir)?;
+    let db_path = ensure_database(data_dir, &bundled_server_dir)?;
     let db_url = format!("file:{}", db_path.display());
 
-    let node_path = resolve_node_path(resource_dir, &server_dir);
+    let runtime_dir = data_dir.join("runtime");
+    let writable_server_dir = stage_runtime_tree(&runtime_dir, &bundled_server_dir)?;
+
+    let bundled_node = resolve_node_path(resource_dir, &bundled_server_dir);
+    let node_path = stage_runtime_node(&runtime_dir, &bundled_node)?;
+
     let mut cmd = Command::new(&node_path);
 
     #[cfg(target_os = "windows")]
@@ -129,8 +230,8 @@ pub fn spawn(
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
-    cmd.current_dir(&server_dir)
-        .arg("server.js")
+    cmd.current_dir(&writable_server_dir)
+        .arg(writable_server_dir.join("server.js"))
         .env("PORT", port.to_string())
         .env("HOSTNAME", host)
         .env("DATABASE_URL", &db_url)
@@ -360,7 +461,7 @@ srv.listen(port, hostname, () => console.log(`listening ${hostname}:${port}`));
         write_minimal_server_js(&bundle);
         let data = tmp.join("data");
 
-        let port: u16 = 4000 + ((COUNTER.load(Ordering::SeqCst) as u16) % 1000);
+        let port: u16 = 4000 + ((COUNTER.load(Ordering::SeqCst) as u16) % 100);
         let mut child = spawn(&tmp, &data, port, "127.0.0.1", 10).expect("spawn should succeed");
 
         let url = format!("http://127.0.0.1:{port}/api/health");
@@ -452,6 +553,64 @@ srv.listen(port, hostname, () => console.log(`listening ${hostname}:${port}`));
         assert!(b2.contains("status"), "child2 body: {b2}");
 
         let _ = c1.kill(); let _ = c1.wait();
+        let _ = c2.kill(); let _ = c2.wait();
+    }
+
+    #[test]
+    fn spawn_stages_runtime_tree_under_data_dir() {
+        let tmp = make_temp_dir("stage");
+        let bundle = tmp.join("standalone-bundle");
+        fs::create_dir_all(&bundle).unwrap();
+        write_minimal_server_js(&bundle);
+        let data = tmp.join("data");
+
+        let port: u16 = 5000 + ((COUNTER.load(Ordering::SeqCst) as u16) % 500);
+        let mut child = spawn(&tmp, &data, port, "127.0.0.1", 8).expect("spawn should succeed");
+
+        let staged = data.join("runtime").join("server");
+        assert!(staged.exists(), "staged server dir must exist");
+        assert!(staged.join("server.js").exists(), "staged server.js must exist");
+        assert!(staged.join(".staged").exists(), "staged marker must exist");
+
+        let url = format!("http://127.0.0.1:{port}/api/health");
+        let body = ureq_get(&url);
+        assert!(body.contains("status"), "staged server did not respond: {body}");
+
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[test]
+    fn spawn_reuses_staged_tree_on_second_call() {
+        let tmp = make_temp_dir("reuse");
+        let bundle = tmp.join("standalone-bundle");
+        fs::create_dir_all(&bundle).unwrap();
+        write_minimal_server_js(&bundle);
+        let data = tmp.join("data");
+
+        let port1: u16 = 5500 + ((COUNTER.load(Ordering::SeqCst) as u16) % 100);
+        let mut c1 = spawn(&tmp, &data, port1, "127.0.0.1", 8).expect("first spawn should succeed");
+        let _ = c1.kill(); let _ = c1.wait();
+
+        let marker_after_first = fs::metadata(data.join("runtime").join("server").join(".staged"))
+            .unwrap()
+            .modified()
+            .unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        let port2 = port1 + 2000;
+        let mut c2 = spawn(&tmp, &data, port2, "127.0.0.1", 8).expect("second spawn should succeed");
+        let marker_after_second = fs::metadata(data.join("runtime").join("server").join(".staged"))
+            .unwrap()
+            .modified()
+            .unwrap();
+
+        assert_eq!(
+            marker_after_first, marker_after_second,
+            "staged marker mtime must be unchanged on second spawn"
+        );
+
         let _ = c2.kill(); let _ = c2.wait();
     }
 }
