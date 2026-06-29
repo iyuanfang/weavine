@@ -128,7 +128,12 @@ jobs:
           DATABASE_URL: 'file:./dev.db'
 
       - name: Download portable Node.js for Linux
-        run: node scripts/download-node.mjs linux x64
+        run: |
+          mkdir -p node_bin
+          curl -fsSL "https://nodejs.org/dist/v20.17.0/node-v20.17.0-linux-x64.tar.gz" \
+            | tar -xz --strip-components=2 -C node_bin */bin/node
+          chmod +x node_bin/node
+          ./node_bin/node --version
 
       - name: Build Next.js standalone
         run: pnpm build
