@@ -164,13 +164,21 @@ jobs:
           name: tauri-build-log-linux
           path: tauri-build.log
 
+      - name: Stage Linux bundle artifacts
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          echo "Bundle directory tree:"
+          find src-tauri/target/release/bundle -maxdepth 4 -type f || true
+          mkdir -p linux-out
+          find src-tauri/target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -exec cp -v {} linux-out/ \;
+          echo "Staged artifacts:"
+          ls -la linux-out/
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: weavine-linux
-          path: |
-            src-tauri/target/release/bundle/deb/**/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+          path: linux-out/*
           if-no-files-found: error
 
   release:
