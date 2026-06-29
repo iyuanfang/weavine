@@ -27,3 +27,6 @@ node_bin/
 
 # Tauri
 src-tauri/target/
+
+# Local integration test artifacts
+test-data-integration/
