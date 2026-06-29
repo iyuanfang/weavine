@@ -3,7 +3,7 @@ pub mod db;
 pub mod models;
 
 use commands::{action, contact, event, interaction, reminder, search, setting, tag};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use db::Database;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -17,7 +17,19 @@ const SERVER_PORT: u16 = 3199;
 const SERVER_HOST: &str = "127.0.0.1";
 const SERVER_STARTUP_TIMEOUT_SECS: u64 = 30;
 
-struct ServerProcess(Mutex<Option<Child>>);
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
+
+use serde::Serialize;
+
+static STARTUP_ERROR: OnceLock<String> = OnceLock::new();
+static SERVER_READY: AtomicBool = AtomicBool::new(false);
+
+#[derive(Serialize, Clone)]
+struct ServerStatusPayload {
+    status: String,
+    message: String,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -61,17 +73,38 @@ pub fn run() {
             setting::upsert_setting,
             setting::delete_setting,
             search::search,
+            diagnostic::get_startup_info,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             let server_state = handle.state::<ServerProcess>();
 
             if std::env::var("TAURI_DEV").is_err() {
-                if let Err(e) = spawn_standalone_server(&handle, &server_state) {
-                    eprintln!("[weavine] Failed to spawn Next.js server: {e}");
-                    if let Ok(data_dir) = handle.path().app_data_dir() {
-                        let _ = fs::create_dir_all(&data_dir);
-                        let _ = fs::write(data_dir.join("startup-error.log"), &e);
+                let _ = handle.emit("server-status", ServerStatusPayload {
+                    status: "starting".into(),
+                    message: "正在启动后端服务...".into(),
+                });
+
+                match spawn_standalone_server(&handle, &server_state) {
+                    Ok(_) => {
+                        SERVER_READY.store(true, Ordering::SeqCst);
+                        let _ = handle.emit("server-status", ServerStatusPayload {
+                            status: "ready".into(),
+                            message: String::new(),
+                        });
+                    }
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        STARTUP_ERROR.set(err_str.clone()).ok();
+                        eprintln!("[weavine] Failed to spawn Next.js server: {err_str}");
+                        let _ = handle.emit("server-status", ServerStatusPayload {
+                            status: "error".into(),
+                            message: err_str,
+                        });
+                        if let Ok(data_dir) = handle.path().app_data_dir() {
+                            let _ = fs::create_dir_all(&data_dir);
+                            let _ = fs::write(data_dir.join("startup-error.log"), &e);
+                        }
                     }
                 }
             }
@@ -125,52 +158,96 @@ fn resolve_node_path(app: &tauri::AppHandle, server_dir: &PathBuf) -> PathBuf {
         "node"
     };
 
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
     if cfg!(not(dev)) {
+        // 1. Bundled alongside exe (Tauri resource_dir = exe dir on Windows)
         if let Ok(resource_dir) = app.path().resource_dir() {
-            let bundled = resource_dir.join("node_bin").join(node_name);
-            if bundled.exists() {
-                println!("[weavine] Using bundled Node.js at {}", bundled.display());
-                return bundled;
+            candidates.push(resource_dir.join("node_bin").join(node_name));
+            // Also try common variations
+            candidates.push(resource_dir.join("resources").join("node_bin").join(node_name));
+        }
+        // 2. Relative to exe path
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                candidates.push(exe_dir.join("node_bin").join(node_name));
+                candidates.push(exe_dir.join("resources").join("node_bin").join(node_name));
             }
         }
     }
 
-    let local_node = server_dir.join("../../node_bin").join(node_name);
-    if local_node.exists() {
-        println!("[weavine] Using local Node.js at {}", local_node.display());
-        return local_node;
+    // 3. Dev/test fallback
+    candidates.push(server_dir.join("../../node_bin").join(node_name));
+    candidates.push(server_dir.join("../node_bin").join(node_name));
+
+    for p in &candidates {
+        if p.exists() {
+            println!("[weavine] Using Node.js at {}", p.display());
+            return p.clone();
+        }
     }
 
-    println!("[weavine] Using system Node.js from PATH");
+    println!("[weavine] Using system Node.js from PATH (searched {:?})", candidates);
     PathBuf::from("node")
+}
+
+fn find_server_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let candidates: Vec<PathBuf> = {
+        let mut v = Vec::new();
+        if cfg!(not(dev)) {
+            // 1. resource_dir() based
+            if let Ok(rd) = app.path().resource_dir() {
+                v.push(rd.join("standalone-bundle"));
+                v.push(rd.join("resources").join("standalone-bundle"));
+            }
+            // 2. exe-relative
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(d) = exe.parent() {
+                    v.push(d.join("standalone-bundle"));
+                    v.push(d.join("resources").join("standalone-bundle"));
+                }
+            }
+        }
+        // 3. Dev fallback
+        v.push(std::env::current_dir().unwrap_or_default().join(".next/standalone"));
+        v.push(PathBuf::from(".next/standalone"));
+        v
+    };
+
+    for d in &candidates {
+        let server_js = d.join("server.js");
+        if server_js.exists() {
+            println!("[weavine] Found server dir at {}", d.display());
+            return Ok(d.clone());
+        }
+    }
+
+    Err(format!(
+        "server.js not found. Searched:\n  {}",
+        candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n  ")
+    ))
 }
 
 fn spawn_standalone_server(
     app: &tauri::AppHandle,
     state: &tauri::State<ServerProcess>,
 ) -> Result<(), String> {
-    let server_dir = if cfg!(dev) {
-        std::env::current_dir().unwrap().join(".next/standalone")
-    } else {
-        app.path()
-            .resource_dir()
-            .map_err(|e| format!("resource_dir: {e}"))?
-            .join("standalone-bundle")
-    };
-
-    let server_js = server_dir.join("server.js");
-    if !server_js.exists() {
-        return Err(format!(
-            "server.js not found at {} — did the postbuild script run?",
-            server_js.display()
-        ));
-    }
+    let server_dir = find_server_dir(app)?;
 
     let db_path = ensure_database(app, &server_dir)?;
     let db_url = format!("file:{}", db_path.display());
 
     let node_path = resolve_node_path(app, &server_dir);
     let mut cmd = Command::new(&node_path);
+
+    // Prevent a console window from appearing on Windows
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
     cmd.current_dir(&server_dir)
         .arg("server.js")
         .env("PORT", SERVER_PORT.to_string())
@@ -182,36 +259,59 @@ fn spawn_standalone_server(
 
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to spawn node: {e}"))?;
+        .map_err(|e| format!("Failed to spawn node at {}: {e}", node_path.display()))?;
 
-    if let Some(stdout) = child.stdout.take() {
+    let child_stderr = child.stderr.take();
+    let child_stdout = child.stdout.take();
+
+    if let Some(stderr) = child_stderr {
         thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines().flatten() {
-                println!("[next] {line}");
+            let mut buf = String::new();
+            let mut reader = BufReader::new(stderr);
+            while reader.read_line(&mut buf).unwrap_or(0) > 0 {
+                eprintln!("[next:stderr] {}", buf.trim_end());
+                buf.clear();
             }
         });
     }
-    if let Some(stderr) = child.stderr.take() {
+    if let Some(stdout) = child_stdout {
         thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines().flatten() {
-                eprintln!("[next] {line}");
+            let mut buf = String::new();
+            let mut reader = BufReader::new(stdout);
+            while reader.read_line(&mut buf).unwrap_or(0) > 0 {
+                println!("[next:stdout] {}", buf.trim_end());
+                buf.clear();
             }
         });
     }
-
-    *state.0.lock().unwrap() = Some(child);
 
     let url = format!("http://{SERVER_HOST}:{SERVER_PORT}/api/health");
     let deadline = Instant::now() + Duration::from_secs(SERVER_STARTUP_TIMEOUT_SECS);
     while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "Next.js server exited prematurely (code: {:?}, signal: {:?})",
+                    status.code(),
+                    status.signal(),
+                ));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                return Err(format!("Error checking child process: {e}"));
+            }
+        }
+
         if is_server_up(&url) {
             println!("[weavine] Next.js server ready at {url}");
+            *state.0.lock().unwrap() = Some(child);
             return Ok(());
         }
         thread::sleep(Duration::from_millis(200));
     }
+
+    let _ = child.kill();
+    let _ = child.wait();
     Err("Next.js server failed to start within timeout".to_string())
 }
 

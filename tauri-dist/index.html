@@ -41,7 +41,50 @@ p{font-size:.9rem;color:#888;line-height:1.5}
 var TARGET='http://127.0.0.1:3199';
 var MAX=60;
 var n=0;
-(function p(){fetch(TARGET+'/api/health',{mode:'no-cors'}).then(function(){window.location.href=TARGET;}).catch(function(){n++;if(n<MAX){setTimeout(p,500)}else{document.getElementById('loading').classList.add('hidden');document.getElementById('error').classList.remove('hidden');document.getElementById('detail').textContent='已等待 '+(MAX*0.5)+' 秒，服务未响应'}});})()
+
+(function init(){
+  // Try Tauri event-based approach first
+  if(window.__TAURI__){
+    window.__TAURI__.event.listen('server-status', function(ev){
+      var p=ev.payload;
+      if(p.status==='ready'){
+        window.location.href=TARGET;
+      }else if(p.status==='error'){
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('error').classList.remove('hidden');
+        document.getElementById('errorMsg').textContent='后端服务启动失败';
+        document.getElementById('detail').textContent=p.message||'未知错误';
+      }
+    });
+    // Also check periodically for startup info
+    setTimeout(function checkInfo(){
+      window.__TAURI__.core.invoke('get_startup_info').then(function(info){
+        if(info.server_ready){
+          window.location.href=TARGET;
+        }else if(info.error){
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('error').classList.remove('hidden');
+          document.getElementById('errorMsg').textContent='后端服务启动失败';
+          document.getElementById('detail').textContent=info.error;
+        }else{
+          setTimeout(checkInfo,500);
+        }
+      }).catch(function(){setTimeout(checkInfo,1000)});
+    },2000);
+  }
+  pollServer();
+})();
+
+function pollServer(){
+  fetch(TARGET+'/api/health',{mode:'no-cors'})
+    .then(function(){window.location.href=TARGET;})
+    .catch(function(){n++;if(n<MAX){setTimeout(pollServer,500)}else{
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('errorMsg').textContent='无法连接到后端服务';
+      document.getElementById('detail').textContent='已等待 '+(MAX*0.5)+' 秒，服务未响应';
+    }});
+}
 </script>
 </body>
 </html>

@@ -6,3 +6,4 @@ pub mod reminder;
 pub mod tag;
 pub mod setting;
 pub mod search;
+pub mod diagnostic;
