@@ -130,10 +130,11 @@ jobs:
       - name: Download portable Node.js for Linux
         run: |
           mkdir -p node_bin
-          curl -fsSL "https://nodejs.org/dist/v20.17.0/node-v20.17.0-linux-x64.tar.gz" \
-            | tar -xz --strip-components=2 -C node_bin */bin/node
+          # Copy the Node.js binary already installed by setup-node
+          cp "$(which node)" node_bin/node
           chmod +x node_bin/node
           ./node_bin/node --version
+          ldd node_bin/node | head -5 || true
 
       - name: Build Next.js standalone
         run: pnpm build
