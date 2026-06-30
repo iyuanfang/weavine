@@ -2,6 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { diag } from "@/lib/diag";
 
 const DEFAULT_TAGS = [
   { name: "朋友", color: "#10b981" },
@@ -17,7 +18,7 @@ async function ensureLocalUser(): Promise<{
   email: string | null;
   image: string | null;
 }> {
-  console.error("[PRM-DIAG] ensureLocalUser start, DATABASE_URL:", process.env.DATABASE_URL);
+  diag("ensureLocalUser start, DATABASE_URL:", process.env.DATABASE_URL);
   const user = await prisma.user.upsert({
     where: { email: "local@prm.local" },
     create: {
@@ -28,27 +29,26 @@ async function ensureLocalUser(): Promise<{
     update: {},
     select: { id: true, name: true, email: true },
   });
-  console.error("[PRM-DIAG] user upserted, id:", user.id, "name:", user.name);
+  diag("user upserted, id:", user.id, "name:", user.name);
   const existingCount = await prisma.tag.count({
     where: { ownerId: user.id },
   });
-  console.error("[PRM-DIAG] existing tag count:", existingCount);
+  diag("existing tag count:", existingCount);
   if (existingCount === 0) {
     try {
       await prisma.tag.createMany({
         data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
       });
-      console.error("[PRM-DIAG] tags created successfully");
+      diag("tags created successfully");
     } catch (e) {
-      console.error("[PRM-DIAG] tag createMany failed:", e instanceof Error ? e.message : String(e));
-      console.error("[PRM-DIAG] tag createMany stack:", e instanceof Error ? e.stack : "no stack");
+      diag("tag createMany failed:", e instanceof Error ? e.message : String(e));
       // Concurrent request already seeded tags — harmless
     }
   }
   const afterCount = await prisma.tag.count({
     where: { ownerId: user.id },
   });
-  console.error("[PRM-DIAG] tag count after ensure:", afterCount);
+  diag("tag count after ensure:", afterCount);
   return { id: user.id, name: user.name, email: user.email, image: null };
 }
 
