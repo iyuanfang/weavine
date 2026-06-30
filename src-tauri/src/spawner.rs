@@ -33,16 +33,22 @@ pub fn ensure_database(data_dir: &Path, server_dir: &Path) -> Result<PathBuf, St
     Ok(db_path)
 }
 
-pub fn resolve_node_path(resource_dir: &Path, server_dir: &Path) -> PathBuf {
+pub fn resolve_node_path(resource_dir: &Path, data_dir: &Path, server_dir: &Path) -> PathBuf {
     let node_name = if cfg!(target_os = "windows") { "node.exe" } else { "node" };
 
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     if cfg!(not(dev)) {
+        candidates.push(data_dir.join("node_bin").join(node_name));
+        candidates.push(data_dir.join("runtime").join("node_bin").join(node_name));
+        candidates.push(resource_dir.join("_up_").join("node_bin").join(node_name));
+        candidates.push(resource_dir.join("resources").join("_up_").join("node_bin").join(node_name));
         candidates.push(resource_dir.join("node_bin").join(node_name));
         candidates.push(resource_dir.join("resources").join("node_bin").join(node_name));
         if let Ok(exe) = std::env::current_exe() {
             if let Some(exe_dir) = exe.parent() {
+                candidates.push(exe_dir.join("_up_").join("node_bin").join(node_name));
+                candidates.push(exe_dir.join("resources").join("_up_").join("node_bin").join(node_name));
                 candidates.push(exe_dir.join("node_bin").join(node_name));
                 candidates.push(exe_dir.join("resources").join("node_bin").join(node_name));
                 if let Some(project) = exe_dir.parent() {
@@ -66,14 +72,20 @@ pub fn resolve_node_path(resource_dir: &Path, server_dir: &Path) -> PathBuf {
     PathBuf::from("node")
 }
 
-pub fn find_server_dir(resource_dir: &Path) -> Result<PathBuf, String> {
+pub fn find_server_dir(resource_dir: &Path, data_dir: &Path) -> Result<PathBuf, String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     if cfg!(not(dev)) {
+        candidates.push(data_dir.join("standalone-bundle"));
+        candidates.push(data_dir.join("runtime").join("server"));
+        candidates.push(resource_dir.join("_up_").join("standalone-bundle"));
+        candidates.push(resource_dir.join("resources").join("_up_").join("standalone-bundle"));
         candidates.push(resource_dir.join("standalone-bundle"));
         candidates.push(resource_dir.join("resources").join("standalone-bundle"));
         if let Ok(exe) = std::env::current_exe() {
             if let Some(d) = exe.parent() {
+                candidates.push(d.join("_up_").join("standalone-bundle"));
+                candidates.push(d.join("resources").join("_up_").join("standalone-bundle"));
                 candidates.push(d.join("standalone-bundle"));
                 candidates.push(d.join("resources").join("standalone-bundle"));
                 if let Some(project) = d.parent() {
@@ -211,14 +223,14 @@ pub fn spawn(
     host: &str,
     timeout_secs: u64,
 ) -> Result<Child, String> {
-    let bundled_server_dir = find_server_dir(resource_dir)?;
+    let bundled_server_dir = find_server_dir(resource_dir, data_dir)?;
     let db_path = ensure_database(data_dir, &bundled_server_dir)?;
     let db_url = format!("file:{}", db_path.display());
 
     let runtime_dir = data_dir.join("runtime");
     let writable_server_dir = stage_runtime_tree(&runtime_dir, &bundled_server_dir)?;
 
-    let bundled_node = resolve_node_path(resource_dir, &bundled_server_dir);
+    let bundled_node = resolve_node_path(resource_dir, data_dir, &bundled_server_dir);
     let node_path = stage_runtime_node(&runtime_dir, &bundled_node)?;
 
     let mut cmd = Command::new(&node_path);
@@ -360,7 +372,8 @@ srv.listen(port, hostname, () => console.log(`listening ${hostname}:${port}`));
         fs::create_dir_all(&bundle).unwrap();
         write_minimal_server_js(&bundle);
 
-        let found = find_server_dir(&tmp).unwrap();
+        let data = tmp.join("data");
+        let found = find_server_dir(&tmp, &data).unwrap();
         assert_eq!(
             fs::canonicalize(&found).unwrap(),
             fs::canonicalize(&bundle).unwrap()
@@ -374,7 +387,38 @@ srv.listen(port, hostname, () => console.log(`listening ${hostname}:${port}`));
         fs::create_dir_all(&bundle).unwrap();
         write_minimal_server_js(&bundle);
 
-        let found = find_server_dir(&tmp).unwrap();
+        let data = tmp.join("data");
+        let found = find_server_dir(&tmp, &data).unwrap();
+        assert_eq!(
+            fs::canonicalize(&found).unwrap(),
+            fs::canonicalize(&bundle).unwrap()
+        );
+    }
+
+    #[test]
+    fn find_server_dir_tauri_v2_up_layout() {
+        let tmp = make_temp_dir("v2up");
+        let bundle = tmp.join("_up_").join("standalone-bundle");
+        fs::create_dir_all(&bundle).unwrap();
+        write_minimal_server_js(&bundle);
+
+        let data = tmp.join("data");
+        let found = find_server_dir(&tmp, &data).unwrap();
+        assert_eq!(
+            fs::canonicalize(&found).unwrap(),
+            fs::canonicalize(&bundle).unwrap()
+        );
+    }
+
+    #[test]
+    fn find_server_dir_data_dir_copied_layout() {
+        let tmp = make_temp_dir("datacopy");
+        let bundle = tmp.join("data").join("standalone-bundle");
+        fs::create_dir_all(&bundle).unwrap();
+        write_minimal_server_js(&bundle);
+
+        let data = tmp.join("data");
+        let found = find_server_dir(&tmp, &data).unwrap();
         assert_eq!(
             fs::canonicalize(&found).unwrap(),
             fs::canonicalize(&bundle).unwrap()
@@ -386,7 +430,8 @@ srv.listen(port, hostname, () => console.log(`listening ${hostname}:${port}`));
         let tmp = make_temp_dir("missing");
         let prev = std::env::current_dir().unwrap();
         std::env::set_current_dir(&tmp).unwrap();
-        let result = find_server_dir(&tmp);
+        let data = tmp.join("data");
+        let result = find_server_dir(&tmp, &data);
         std::env::set_current_dir(&prev).unwrap();
         let err = result.unwrap_err();
         assert!(err.contains("server.js not found"));
@@ -409,7 +454,32 @@ srv.listen(port, hostname, () => console.log(`listening ${hostname}:${port}`));
             fs::set_permissions(&node_path, perm).unwrap();
         }
 
-        let found = resolve_node_path(&tmp, &tmp);
+        let data = tmp.join("data");
+        let found = resolve_node_path(&tmp, &data, &tmp);
+        assert_eq!(
+            fs::canonicalize(&found).unwrap(),
+            fs::canonicalize(&node_path).unwrap()
+        );
+    }
+
+    #[test]
+    fn resolve_node_path_finds_in_up_layout() {
+        let tmp = make_temp_dir("nodeup");
+        let node_dir = tmp.join("_up_").join("node_bin");
+        fs::create_dir_all(&node_dir).unwrap();
+        let node_name = if cfg!(target_os = "windows") { "node.exe" } else { "node" };
+        let node_path = node_dir.join(node_name);
+        fs::write(&node_path, b"#!/bin/sh\necho hi\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perm = fs::metadata(&node_path).unwrap().permissions();
+            perm.set_mode(0o755);
+            fs::set_permissions(&node_path, perm).unwrap();
+        }
+
+        let data = tmp.join("data");
+        let found = resolve_node_path(&tmp, &data, &tmp);
         assert_eq!(
             fs::canonicalize(&found).unwrap(),
             fs::canonicalize(&node_path).unwrap()
@@ -419,7 +489,8 @@ srv.listen(port, hostname, () => console.log(`listening ${hostname}:${port}`));
     #[test]
     fn resolve_node_path_fallback_when_missing() {
         let tmp = make_temp_dir("nofallback");
-        let found = resolve_node_path(&tmp, &tmp);
+        let data = tmp.join("data");
+        let found = resolve_node_path(&tmp, &data, &tmp);
         assert_eq!(found, PathBuf::from("node"));
     }
 
