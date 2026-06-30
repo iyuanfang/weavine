@@ -24,6 +24,7 @@ dist-electron/
 *.exe
 standalone-bundle/
 node_bin/
+src-tauri/vc-runtime/
 
 # Tauri
 src-tauri/target/

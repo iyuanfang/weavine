@@ -56,6 +56,9 @@ jobs:
         env:
           IS_DESKTOP: 'true'
 
+      - name: Bundle Visual C++ runtime DLLs
+        run: node scripts/copy-vc-runtime.mjs
+
       - name: Build Tauri app (Windows MSI)
         id: build
         run: |
