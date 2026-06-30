@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { TopNav } from '@/components/top-nav';
 import { auth } from '@/auth';
+import { getCurrentUser } from '@/lib/auth/session';
 
 export const metadata: Metadata = {
   title: 'PRM · 人脉管理',
@@ -13,6 +14,24 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  if (process.env.IS_DESKTOP === 'true') {
+    const user = await getCurrentUser();
+    return (
+      <html lang="zh-CN">
+        <body>
+          <TopNav
+            currentUser={{
+              name: user.name,
+              email: user.email,
+              image: user.image,
+            }}
+          />
+          {children}
+        </body>
+      </html>
+    );
+  }
+
   const session = await auth();
 
   if (!session?.user?.id) {
