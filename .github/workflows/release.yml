@@ -56,9 +56,6 @@ jobs:
         env:
           IS_DESKTOP: 'true'
 
-      - name: Bundle Visual C++ runtime DLLs
-        run: node scripts/copy-vc-runtime.mjs
-
       - name: Build Tauri app (Windows MSI)
         id: build
         run: |
@@ -173,9 +170,11 @@ jobs:
           echo "Bundle directory tree:"
           find src-tauri/target/release/bundle -maxdepth 4 -type f || true
           mkdir -p linux-out
-          find src-tauri/target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -exec cp -v {} linux-out/ \;
+          # Use xargs so empty result is not an error
+          find src-tauri/target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 2>/dev/null \
+            | xargs -0 -r -I {} cp -v {} linux-out/ 2>&1 || echo "No .deb or .AppImage files found to stage"
           echo "Staged artifacts:"
-          ls -la linux-out/
+          ls -la linux-out/ || true
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
