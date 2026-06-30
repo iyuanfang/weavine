@@ -27,10 +27,18 @@ async function ensureLocalUser(): Promise<{
     update: {},
     select: { id: true, name: true, email: true },
   });
-  await prisma.tag.deleteMany({ where: { ownerId: user.id } });
-  await prisma.tag.createMany({
-    data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
+  const existingCount = await prisma.tag.count({
+    where: { ownerId: user.id },
   });
+  if (existingCount === 0) {
+    try {
+      await prisma.tag.createMany({
+        data: DEFAULT_TAGS.map((t) => ({ ...t, ownerId: user.id })),
+      });
+    } catch {
+      // Concurrent request already seeded tags — harmless
+    }
+  }
   return { id: user.id, name: user.name, email: user.email, image: null };
 }
 

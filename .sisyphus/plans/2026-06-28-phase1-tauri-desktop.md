@@ -76,12 +76,12 @@
 
 ```toml
 [package]
-name = "prm"
+name = "weavine"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "prm_lib"
+name = "weavine_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
@@ -102,9 +102,9 @@ dirs = "5"
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
-  "productName": "PRM",
+  "productName": "Weavine",
   "version": "0.1.0",
-  "identifier": "com.prm.app",
+  "identifier": "com.weavine.app",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3100",
@@ -422,7 +422,7 @@ impl Database {
 fn get_db_path() -> PathBuf {
     let data_dir = dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("prm");
+        .join("weavine");
     std::fs::create_dir_all(&data_dir).ok();
     data_dir.join("dev.db")
 }

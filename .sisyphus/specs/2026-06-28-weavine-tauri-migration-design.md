@@ -1,4 +1,4 @@
-# PRM Tauri 迁移设计文档
+# Weavine Tauri 迁移设计文档
 
 > 日期: 2026-06-28
 > 状态: 待审核
@@ -7,7 +7,7 @@
 
 ## 1. 概述
 
-PRM (Personal Relationship Manager) 当前是 Next.js + Electron + Prisma/SQLite 三件套。迁移到 Tauri v2 的目标：
+Weavine (Personal Relationship Manager) 当前是 Next.js + Electron + Prisma/SQLite 三件套。迁移到 Tauri v2 的目标：
 
 - **包体缩小 95%**: Electron ~100-200MB → Tauri ~5-10MB
 - **手机端支持**: iOS + Android
