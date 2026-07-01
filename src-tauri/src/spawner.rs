@@ -19,18 +19,57 @@ pub fn resolve_db_path(data_dir: &Path) -> Result<PathBuf, String> {
 
 pub fn ensure_database(data_dir: &Path, server_dir: &Path) -> Result<PathBuf, String> {
     let db_path = resolve_db_path(data_dir)?;
-    if db_path.exists() {
-        return Ok(db_path);
-    }
     let bundled_db = server_dir.join("dev.db");
-    if bundled_db.exists() {
-        fs::copy(&bundled_db, &db_path)
-            .map_err(|e| format!("copy dev.db from bundle: {e}"))?;
-        println!("[spawner] Copied pre-initialized dev.db to {:?}", db_path);
+
+    let must_copy_bundled = if !db_path.exists() {
+        true
+    } else if !bundled_db.exists() {
+        false
     } else {
-        println!("[spawner] No bundled dev.db found — Prisma will create it");
+        let schema_ok = is_db_fully_initialized(&db_path);
+        if schema_ok {
+            return Ok(db_path);
+        }
+        println!(
+            "[spawner] Existing dev.db missing required Prisma schema — replacing with bundled copy"
+        );
+        true
+    };
+
+    if must_copy_bundled {
+        if bundled_db.exists() {
+            fs::copy(&bundled_db, &db_path)
+                .map_err(|e| format!("copy dev.db from bundle: {e}"))?;
+            println!("[spawner] Copied pre-initialized dev.db to {:?}", db_path);
+        } else {
+            println!("[spawner] No bundled dev.db found — Prisma will create it");
+        }
     }
     Ok(db_path)
+}
+
+fn is_db_fully_initialized(db_path: &Path) -> bool {
+    let conn = match rusqlite::Connection::open_with_flags(
+        db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let required = ["User", "Account", "Session", "VerificationToken"];
+    for table in required {
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1 LIMIT 1",
+                [table],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if !exists {
+            return false;
+        }
+    }
+    true
 }
 
 pub fn resolve_node_path(resource_dir: &Path, data_dir: &Path, server_dir: &Path) -> PathBuf {
