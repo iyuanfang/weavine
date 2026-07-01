@@ -21,31 +21,53 @@ pub fn ensure_database(data_dir: &Path, server_dir: &Path) -> Result<PathBuf, St
     let db_path = resolve_db_path(data_dir)?;
     let bundled_db = server_dir.join("dev.db");
 
-    let must_copy_bundled = if !db_path.exists() {
-        true
-    } else if !bundled_db.exists() {
-        false
-    } else {
-        let schema_ok = is_db_fully_initialized(&db_path);
-        if schema_ok {
-            return Ok(db_path);
-        }
-        println!(
-            "[spawner] Existing dev.db missing required Prisma schema — replacing with bundled copy"
-        );
-        true
-    };
-
-    if must_copy_bundled {
+    // First install: no existing DB → copy bundled
+    if !db_path.exists() {
         if bundled_db.exists() {
             fs::copy(&bundled_db, &db_path)
                 .map_err(|e| format!("copy dev.db from bundle: {e}"))?;
-            println!("[spawner] Copied pre-initialized dev.db to {:?}", db_path);
+            println!("[spawner] First install — copied bundled dev.db");
         } else {
-            println!("[spawner] No bundled dev.db found — Prisma will create it");
+            println!("[spawner] First install — no bundled DB, Prisma will create it");
         }
+        return Ok(db_path);
     }
+
+    // Existing DB present — DO NOT overwrite. User data is sacred.
+    // Schema changes must be handled by Prisma migrations, not DB replacement.
+    if is_db_fully_initialized(&db_path) {
+        return Ok(db_path);
+    }
+
+    // Existing DB exists but is incomplete (e.g., partial migration from a
+    // beta or interrupted setup). Back it up before any fallback so the
+    // user can recover manually.
+    let backup = create_db_backup(&db_path)?;
+    println!(
+        "[spawner] Existing dev.db incomplete — backed up to {} — leaving as-is for Prisma to handle",
+        backup.display()
+    );
     Ok(db_path)
+}
+
+/// Create a timestamped copy of the database at `<path>.backup.<unix_ts>`.
+/// Returns the backup path. Best-effort — does not fail the caller.
+pub fn create_db_backup(db_path: &Path) -> Result<PathBuf, String> {
+    if !db_path.exists() {
+        return Err(format!("cannot backup: {} does not exist", db_path.display()));
+    }
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let parent = db_path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = db_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("dev.db");
+    let backup = parent.join(format!("{file_name}.backup.{ts}"));
+    fs::copy(db_path, &backup).map_err(|e| format!("backup failed: {e}"))?;
+    Ok(backup)
 }
 
 fn is_db_fully_initialized(db_path: &Path) -> bool {
