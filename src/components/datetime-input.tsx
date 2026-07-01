@@ -8,6 +8,14 @@ function formatForDisplay(d: Date | null): string {
   return toLocalDatetimeString(d).replace('T', ' ');
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function dateOnlyString(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 export interface DateTimeInputProps {
   name: string;
   value: Date | null;
@@ -22,25 +30,12 @@ export interface DateTimeInputProps {
   size?: 'sm' | 'md';
 }
 
-/**
- * 合并"自然语言输入"与"原生 datetime-local 选择器"的日期时间输入控件。
- *
- * 用法：
- *   const [startAt, setStartAt] = useState<Date | null>(null);
- *   <DateTimeInput name="startAt" value={startAt} onChange={setStartAt} required />
- *
- * - 文本框支持中文/英文自然语言（"明天下午3点"、"next monday 10am" 等），
- *   回车或失焦时解析，解析成功触发 onChange。
- * - 点击右侧日历图标弹出原生 picker；若当前为空，预填"现在（分钟对齐 step）"。
- * - picker 选择后 onChange 触发，且文本框同步显示格式化值。
- * - 隐藏的 datetime-local 携带 name 属性，表单提交时 FormData 自动带上。
- */
 export function DateTimeInput({
   name,
   value,
   onChange,
   label,
-  placeholder = '明天下午3点 / 2026-06-20 14:00',
+  placeholder = '明天下午3点',
   required = false,
   step = 900,
   showHelperText = true,
@@ -50,9 +45,7 @@ export function DateTimeInput({
 }: DateTimeInputProps) {
   const [text, setText] = useState<string>(formatForDisplay(value));
   const [isFocused, setIsFocused] = useState(false);
-  const pickerRef = useRef<HTMLInputElement>(null);
 
-  // 仅当用户不在输入状态时，同步外部 value 到文本框
   useEffect(() => {
     if (!isFocused) {
       setText(formatForDisplay(value));
@@ -81,26 +74,49 @@ export function DateTimeInput({
     return out;
   }
 
-  function openPicker() {
-    const el = pickerRef.current;
-    if (!el) return;
-    if (!value && defaultToNowOnOpen) {
-      onChange(snapToStep(new Date(), step));
+  function setDatePart(dateStr: string) {
+    if (!dateStr) {
+      onChange(null);
+      return;
     }
-    if (typeof el.showPicker === 'function') {
-      el.showPicker();
-    } else {
-      el.focus();
-      el.click();
-    }
+    const base = value ? new Date(value) : new Date();
+    const [y, m, d] = dateStr.split('-').map(Number);
+    base.setFullYear(y, m - 1, d);
+    onChange(snapToStep(base, step));
   }
 
-  const inputClass = size === 'sm' ? 'input-sm w-full pr-10' : 'input-base w-full pr-12';
-  const buttonClass =
+  function setHour(h: number) {
+    const base = value ? new Date(value) : new Date();
+    base.setHours(Math.max(0, Math.min(23, h)), base.getMinutes(), 0, 0);
+    onChange(snapToStep(base, step));
+  }
+
+  function setMinute(m: number) {
+    const base = value ? new Date(value) : new Date();
+    base.setMinutes(Math.max(0, Math.min(59, m)), 0, 0);
+    onChange(snapToStep(base, step));
+  }
+
+  function clear() {
+    onChange(null);
+  }
+
+  function now() {
+    onChange(snapToStep(new Date(), step));
+  }
+
+  const dateStr = value ? dateOnlyString(value) : '';
+  const hour = value ? value.getHours() : '';
+  const minute = value ? value.getMinutes() : '';
+
+  const textInputClass =
+    size === 'sm' ? 'input-sm flex-1 min-w-0' : 'input-base flex-1 min-w-0';
+  const smallClass = size === 'sm' ? 'input-sm w-16' : 'input-base w-20';
+  const dateClass = size === 'sm' ? 'input-sm w-36' : 'input-base w-40';
+  const btnClass =
     size === 'sm'
-      ? 'absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-      : 'absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700';
-  const iconClass = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5';
+      ? 'rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50'
+      : 'rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50';
 
   return (
     <div>
@@ -110,13 +126,13 @@ export function DateTimeInput({
           {required ? ' *' : ''}
         </label>
       )}
-      <div className={label !== undefined ? 'relative mt-1' : 'relative'}>
+      <div className={label !== undefined ? 'mt-1 flex flex-wrap items-center gap-2' : 'flex flex-wrap items-center gap-2'}>
         <input
           type="text"
           required={required}
           value={text}
           placeholder={placeholder}
-          className={inputClass}
+          className={textInputClass}
           onChange={(e) => setText(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => {
@@ -130,49 +146,54 @@ export function DateTimeInput({
               (e.target as HTMLInputElement).blur();
             }
           }}
+          aria-label="自然语言日期时间"
         />
-        <button
-          type="button"
-          onClick={openPicker}
-          className={buttonClass}
-          title="打开日期时间选择器"
-          aria-label="打开日期时间选择器"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={iconClass}
-            aria-hidden="true"
-          >
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-        </button>
         <input
-          ref={pickerRef}
-          type="datetime-local"
-          name={name}
-          step={step}
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-          value={value ? toLocalDatetimeString(value) : ''}
-          onChange={(e) => {
-            const v = e.currentTarget.value;
-            onChange(v ? new Date(v) : null);
-          }}
+          type="date"
+          required={required}
+          value={dateStr}
+          onChange={(e) => setDatePart(e.currentTarget.value)}
+          className={dateClass}
+          aria-label="选择日期"
         />
+        <input
+          type="number"
+          min={0}
+          max={23}
+          value={hour}
+          placeholder="HH"
+          onChange={(e) => setHour(Number(e.currentTarget.value || 0))}
+          className={smallClass}
+          aria-label="小时"
+        />
+        <span className="text-gray-400">:</span>
+        <input
+          type="number"
+          min={0}
+          max={59}
+          step={step / 60}
+          value={minute}
+          placeholder="MM"
+          onChange={(e) => setMinute(Number(e.currentTarget.value || 0))}
+          className={smallClass}
+          aria-label="分钟"
+        />
+        {value ? (
+          <button type="button" onClick={clear} className={btnClass} aria-label="清除">
+            清空
+          </button>
+        ) : (
+          !value && defaultToNowOnOpen && (
+            <button type="button" onClick={now} className={btnClass} aria-label="使用当前时间">
+              现在
+            </button>
+          )
+        )}
+        <input ref={undefined} type="hidden" name={name} value={value ? toLocalDatetimeString(value) : ''} />
       </div>
       {showHelperText && (
         <p className="mt-1 text-xs text-gray-500">
-          {helperText ?? '支持自然语言（明天/后天/周X/上午X点），也可点右侧日历图标直接选时间。'}
+          {helperText ?? '支持自然语言（明天/后天/周X/上午X点），也可分别选日期、小时、分钟。'}
         </p>
       )}
     </div>

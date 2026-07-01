@@ -27,10 +27,12 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          shared-key: windows-cargo
+          cache-on-failure: true
 
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
@@ -101,6 +103,12 @@ jobs:
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install sccache
+        run: |
+          sudo apt-get install -y -qq sccache
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          mkdir -p ~/.cache/sccache
+
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update -qq
@@ -112,10 +120,12 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          shared-key: linux-cargo
+          cache-on-failure: true
 
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile

@@ -22,8 +22,10 @@ type CurrentUser = { name: string | null; image: string | null; email: string | 
 
 export function TopNav({
   currentUser,
+  isDesktop = false,
 }: {
   currentUser: CurrentUser;
+  isDesktop?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -51,14 +53,16 @@ export function TopNav({
             <div className="h-7 w-7 rounded-full bg-gray-200 text-center text-xs leading-7">
               {display.slice(0, 1).toUpperCase()}
             </div>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className="text-xs text-gray-500 hover:text-gray-700"
-              >
-                退出
-              </button>
-            </form>
+            {!isDesktop && (
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  退出
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>
