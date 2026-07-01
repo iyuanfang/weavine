@@ -38,9 +38,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Initialize SQLite database
-        run: |
-          pnpm exec prisma db push
-          cp prisma/dev.db dev.db
+        run: pnpm exec prisma db push
         env:
           DATABASE_URL: 'file:./dev.db'
 
@@ -131,9 +129,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Initialize SQLite database
-        run: |
-          pnpm exec prisma db push
-          cp prisma/dev.db dev.db
+        run: pnpm exec prisma db push
         env:
           DATABASE_URL: 'file:./dev.db'
 
