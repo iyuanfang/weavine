@@ -44,6 +44,15 @@ pub fn ensure_database(data_dir: &Path, resource_dir: &Path) -> Result<PathBuf, 
         }
     }
     let bundled_db = bundled_db_candidates.iter().find(|p| p.exists());
+    println!("[spawner] resource_dir={}", resource_dir.display());
+    println!(
+        "[spawner] Searched bundled dev.db candidates ({}):",
+        bundled_db_candidates.len()
+    );
+    for c in &bundled_db_candidates {
+        println!("[spawner]   {} {}", if c.exists() { "✓" } else { "✗" }, c.display());
+    }
+    println!("[spawner] Selected bundled db: {:?}", bundled_db.map(|p| p.display().to_string()));
 
     // First install: no existing DB → copy bundled
     if !db_path.exists() {

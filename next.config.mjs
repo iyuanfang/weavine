@@ -11,6 +11,7 @@ const nextConfig = {
   output: isDesktop ? 'standalone' : undefined,
   experimental: {
     serverActions: isDesktop ? undefined : { allowedOrigins },
+    instrumentationHook: true,
     staleTimes: {
       dynamic: 0,
       static: 180,
