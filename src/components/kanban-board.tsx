@@ -88,11 +88,23 @@ export function KanbanBoard({ groups, contacts }: KanbanBoardProps) {
                       e.dataTransfer!.setData('text/plain', JSON.stringify({ id: a.id, status: a.status }));
                       e.dataTransfer!.effectAllowed = 'move';
                     }}
-                    className={`card cursor-grab active:cursor-grabbing${isUrgent ? ' border-l-[3px] border-l-red-500 ring-1 ring-inset ring-red-200/70' : ''}`}
+                    onMouseDown={(e) => {
+                      // Tauri/WebView2: prevent default on link to keep drag intent intact
+                      if ((e.target as HTMLElement).closest('a')) {
+                        e.stopPropagation();
+                      }
+                    }}
+                    className={`card select-none touch-none cursor-grab active:cursor-grabbing${isUrgent ? ' border-l-[3px] border-l-red-500 ring-1 ring-inset ring-red-200/70' : ''}`}
                   >
                     <a
                       href={`/actions/${a.id}`}
-                      className="block truncate font-semibold text-gray-900 hover:underline"
+                      draggable={false}
+                      onDragStart={(e) => e.preventDefault()}
+                      onClick={(e) => {
+                        // Only navigate on actual click, not after a drag
+                        if (draggedId) e.preventDefault();
+                      }}
+                      className="block truncate font-semibold text-gray-900 hover:underline select-none"
                     >
                       {a.title}
                     </a>
