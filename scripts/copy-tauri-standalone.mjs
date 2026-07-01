@@ -68,11 +68,14 @@ async function main() {
   await cp(standalone, bundleDir, { recursive: true });
   console.log("  ✓ standalone-bundle/ (for Tauri resource bundling)");
 
-  // Also bundle the pre-initialized dev.db if it exists (from prisma db push)
-  const devDb = resolve(ROOT, "dev.db");
+  // Bundle the pre-initialized dev.db. `prisma db push` writes to
+  // prisma/dev.db (relative to schema location), not the project root,
+  // so we read from there directly.
+  const prismaDir = resolve(ROOT, "prisma");
+  const devDbSrc = resolve(prismaDir, "dev.db");
   const devDbDst = resolve(bundleDir, "dev.db");
-  if (existsSync(devDb)) {
-    await cp(devDb, devDbDst);
+  if (existsSync(devDbSrc)) {
+    await cp(devDbSrc, devDbDst);
     console.log("  ✓ dev.db (pre-initialized database)");
   }
 

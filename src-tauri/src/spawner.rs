@@ -17,16 +17,40 @@ pub fn resolve_db_path(data_dir: &Path) -> Result<PathBuf, String> {
     Ok(data_dir.join("dev.db"))
 }
 
-pub fn ensure_database(data_dir: &Path, server_dir: &Path) -> Result<PathBuf, String> {
+pub fn ensure_database(data_dir: &Path, resource_dir: &Path) -> Result<PathBuf, String> {
     let db_path = resolve_db_path(data_dir)?;
-    let bundled_db = server_dir.join("dev.db");
+    // The bundled dev.db lives next to the standalone server in the Tauri
+    // resource directory. We try a few standard layouts (Tauri v1/v2,
+    // _up_ prefix used by updater bundles, project root for dev).
+    let mut bundled_db_candidates: Vec<PathBuf> = vec![
+        resource_dir.join("_up_").join("dev.db"),
+        resource_dir.join("resources").join("_up_").join("dev.db"),
+        resource_dir.join("dev.db"),
+        resource_dir.join("resources").join("dev.db"),
+        resource_dir.join("standalone-bundle").join("dev.db"),
+        resource_dir.join("resources").join("standalone-bundle").join("dev.db"),
+    ];
+    // For unbundled test runs: project root may be a few levels up from
+    // the binary. Try the parent dirs.
+    if let Some(mut p) = resource_dir.parent() {
+        for _ in 0..4 {
+            bundled_db_candidates.push(p.join("standalone-bundle").join("dev.db"));
+            bundled_db_candidates.push(p.join("dev.db"));
+            if let Some(parent) = p.parent() {
+                p = parent;
+            } else {
+                break;
+            }
+        }
+    }
+    let bundled_db = bundled_db_candidates.iter().find(|p| p.exists());
 
     // First install: no existing DB → copy bundled
     if !db_path.exists() {
-        if bundled_db.exists() {
-            fs::copy(&bundled_db, &db_path)
+        if let Some(src) = bundled_db {
+            fs::copy(src, &db_path)
                 .map_err(|e| format!("copy dev.db from bundle: {e}"))?;
-            println!("[spawner] First install — copied bundled dev.db");
+            println!("[spawner] First install — copied bundled dev.db from {}", src.display());
         } else {
             println!("[spawner] First install — no bundled DB, Prisma will create it");
         }
@@ -37,6 +61,24 @@ pub fn ensure_database(data_dir: &Path, server_dir: &Path) -> Result<PathBuf, St
     // Schema changes must be handled by Prisma migrations, not DB replacement.
     if is_db_fully_initialized(&db_path) {
         return Ok(db_path);
+    }
+
+    // A 0-byte file is just SQLite's header — not real data, just a
+    // file another process created. Treat it the same as missing.
+    let is_empty = fs::metadata(&db_path)
+        .map(|m| m.len() < 1024)
+        .unwrap_or(true);
+    if is_empty {
+        if let Some(src) = bundled_db {
+            let _ = fs::remove_file(&db_path);
+            fs::copy(src, &db_path)
+                .map_err(|e| format!("copy dev.db from bundle: {e}"))?;
+            println!(
+                "[spawner] Replaced empty dev.db with bundled copy from {}",
+                src.display()
+            );
+            return Ok(db_path);
+        }
     }
 
     // Existing DB exists but is incomplete (e.g., partial migration from a
@@ -353,14 +395,39 @@ pub fn spawn(
     timeout_secs: u64,
 ) -> Result<Child, String> {
     let bundled_server_dir = find_server_dir(resource_dir, data_dir)?;
-    let db_path = ensure_database(data_dir, &bundled_server_dir)?;
+    let db_path = ensure_database(data_dir, resource_dir)?;
     let db_url = format!("file:{}", db_path.display());
 
+    // Skip the heavy runtime staging on first launch — Next.js standalone
+    // in production mode is read-only at runtime, so we can run it directly
+    // from the resource dir. Saves 3-5s on Windows first run.
     let runtime_dir = data_dir.join("runtime");
-    let writable_server_dir = stage_runtime_tree(&runtime_dir, &bundled_server_dir)?;
+    let writable_server_dir = if bundled_server_dir.starts_with(resource_dir)
+        && !runtime_dir.join("server").join(".force-stage").exists()
+    {
+        println!(
+            "[spawner] Using bundled server dir in-place (no copy): {}",
+            bundled_server_dir.display()
+        );
+        bundled_server_dir.clone()
+    } else {
+        stage_runtime_tree(&runtime_dir, &bundled_server_dir)?
+    };
 
+    // Same logic for the Node binary: read-only use is fine.
     let bundled_node = resolve_node_path(resource_dir, data_dir, &bundled_server_dir);
-    let node_path = stage_runtime_node(&runtime_dir, &bundled_node)?;
+    let node_path = if bundled_node.exists()
+        && bundled_node.starts_with(resource_dir)
+        && !runtime_dir.join("node_bin").join(".force-stage").exists()
+    {
+        println!(
+            "[spawner] Using bundled node in-place (no copy): {}",
+            bundled_node.display()
+        );
+        bundled_node.clone()
+    } else {
+        stage_runtime_node(&runtime_dir, &bundled_node)?
+    };
 
     let mut cmd = Command::new(&node_path);
 

@@ -112,12 +112,33 @@ pub fn run() {
                     message: "正在启动后端服务...".into(),
                 });
 
-                match spawn_standalone_server(&resource_dir, &data_dir, &server_state) {
+                // Show window only after the server is ready. The window
+                // is configured with visible:false in tauri.conf.json so
+                // the user never sees a blank page or connection error.
+                let window = handle
+                    .get_webview_window("main")
+                    .ok_or_else(|| tauri::Error::WebviewNotFound)?;
+                let w = window.clone();
+                std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                    while std::time::Instant::now() < deadline {
+                        if SERVER_READY.load(Ordering::SeqCst) {
+                            let _ = w.show();
+                            return;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                    let _ = w.show(); // timeout fallback
+                });
+
+                let handle_for_spawn = handle.clone();
+                let data_dir_owned = data_dir.clone();
+                match spawn_standalone_server(&resource_dir, &data_dir_owned, &server_state) {
                     Ok(child) => {
                         boot_log::log("spawn_standalone_server returned Ok");
                         SERVER_READY.store(true, Ordering::SeqCst);
                         *server_state.0.lock().unwrap() = Some(child);
-                        let _ = handle.emit("server-status", ServerStatusPayload {
+                        let _ = handle_for_spawn.emit("server-status", ServerStatusPayload {
                             status: "ready".into(),
                             message: String::new(),
                         });
@@ -127,12 +148,12 @@ pub fn run() {
                         boot_log::log(&format!("spawn_standalone_server failed: {err_str}"));
                         STARTUP_ERROR.set(err_str.clone()).ok();
                         eprintln!("[weavine] Failed to spawn Next.js server: {err_str}");
-                        let _ = handle.emit("server-status", ServerStatusPayload {
+                        let _ = handle_for_spawn.emit("server-status", ServerStatusPayload {
                             status: "error".into(),
                             message: err_str,
                         });
-                        let _ = fs::create_dir_all(&data_dir);
-                        let _ = fs::write(data_dir.join("startup-error.log"), &e);
+                        let _ = fs::create_dir_all(&data_dir_owned);
+                        let _ = fs::write(data_dir_owned.join("startup-error.log"), &e);
                     }
                 }
             }

@@ -13,13 +13,14 @@
         "title": "Weavine",
         "url": "/",
         "width": 1280,
-        "height": 820
+        "height": 820,
+        "visible": false
       }
     ],
     "security": {
       "csp": null
     },
-    "withGlobalTauri": true
+    "withGlobalTauri": false
   },
   "bundle": {
     "active": true,

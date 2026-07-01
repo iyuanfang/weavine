@@ -52,9 +52,27 @@ async function ensureLocalUser(): Promise<{
   return { id: user.id, name: user.name, email: user.email, image: null };
 }
 
+type LocalUser = Awaited<ReturnType<typeof ensureLocalUser>>;
+let localUserCache: LocalUser | null = null;
+let localUserPromise: Promise<LocalUser> | null = null;
+
+export async function initializeDesktopUser(): Promise<LocalUser> {
+  if (process.env.IS_DESKTOP !== "true") {
+    throw new Error("initializeDesktopUser called outside IS_DESKTOP");
+  }
+  if (localUserCache) return localUserCache;
+  if (!localUserPromise) {
+    localUserPromise = ensureLocalUser().then((u) => {
+      localUserCache = u;
+      return u;
+    });
+  }
+  return localUserPromise;
+}
+
 export const getCurrentUser = cache(async () => {
   if (process.env.IS_DESKTOP === "true") {
-    return ensureLocalUser();
+    return initializeDesktopUser();
   }
   const session = await auth();
   if (!session?.user?.id) {

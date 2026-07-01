@@ -5,6 +5,8 @@ import { auth } from '@/auth';
 import { getCurrentUser } from '@/lib/auth/session';
 import { ErrorBoundaryFallback } from '@/components/error-boundary-fallback';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'PRM · 人脉管理',
   description: '联系人、日程、需求一站式管理',
@@ -15,21 +17,14 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Wrap everything so a Server Component error doesn't nuke the entire page
   try {
     if (process.env.IS_DESKTOP === 'true') {
-      const user = await getCurrentUser();
+      // Don't block render on Prisma — TopNav renders with placeholder
+      // and the user info arrives once the server-side warmup completes.
       return (
         <html lang="zh-CN">
           <body>
-            <TopNav
-              currentUser={{
-                name: user.name,
-                email: user.email,
-                image: user.image,
-              }}
-              isDesktop
-            />
+            <TopNav isDesktop />
             {children}
           </body>
         </html>

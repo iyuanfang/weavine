@@ -24,7 +24,7 @@ export function TopNav({
   currentUser,
   isDesktop = false,
 }: {
-  currentUser: CurrentUser;
+  currentUser?: CurrentUser | null;
   isDesktop?: boolean;
 }) {
   const pathname = usePathname();
@@ -33,7 +33,7 @@ export function TopNav({
     return pathname === href || pathname.startsWith(href + '/');
   }
 
-  const display = currentUser.name || currentUser.email || '?';
+  const display = currentUser?.name || currentUser?.email || '?';
   return (
     <header className="border-b border-gray-200 bg-white">
       <div className="mx-auto max-w-6xl flex items-center gap-3 p-3">
