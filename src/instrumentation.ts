@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 export async function register() {
   if (process.env.IS_DESKTOP !== "true") return;
   // Pre-warm Prisma engine + local user at server start so the first
