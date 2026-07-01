@@ -30,6 +30,16 @@ pub fn ensure_database(data_dir: &Path, resource_dir: &Path) -> Result<PathBuf, 
         resource_dir.join("standalone-bundle").join("dev.db"),
         resource_dir.join("resources").join("standalone-bundle").join("dev.db"),
     ];
+    // For unbundled test runs and MSI installs where files end up at
+    // the resource_dir root, walk up from the executable.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(d) = exe.parent() {
+            bundled_db_candidates.push(d.join("dev.db"));
+            bundled_db_candidates.push(d.join("resources").join("dev.db"));
+            bundled_db_candidates.push(d.join("standalone-bundle").join("dev.db"));
+            bundled_db_candidates.push(d.join("resources").join("standalone-bundle").join("dev.db"));
+        }
+    }
     // For unbundled test runs: project root may be a few levels up from
     // the binary. Try the parent dirs.
     if let Some(mut p) = resource_dir.parent() {
@@ -44,15 +54,26 @@ pub fn ensure_database(data_dir: &Path, resource_dir: &Path) -> Result<PathBuf, 
         }
     }
     let bundled_db = bundled_db_candidates.iter().find(|p| p.exists());
-    println!("[spawner] resource_dir={}", resource_dir.display());
-    println!(
+    let dbg = format!("[spawner] resource_dir={}", resource_dir.display());
+    println!("{}", dbg);
+    crate::boot_log::log(&dbg);
+    let dbg = format!(
         "[spawner] Searched bundled dev.db candidates ({}):",
         bundled_db_candidates.len()
     );
+    println!("{}", dbg);
+    crate::boot_log::log(&dbg);
     for c in &bundled_db_candidates {
-        println!("[spawner]   {} {}", if c.exists() { "✓" } else { "✗" }, c.display());
+        let dbg = format!("[spawner]   {} {}", if c.exists() { "✓" } else { "✗" }, c.display());
+        println!("{}", dbg);
+        crate::boot_log::log(&dbg);
     }
-    println!("[spawner] Selected bundled db: {:?}", bundled_db.map(|p| p.display().to_string()));
+    let dbg = format!(
+        "[spawner] Selected bundled db: {:?}",
+        bundled_db.map(|p| p.display().to_string())
+    );
+    println!("{}", dbg);
+    crate::boot_log::log(&dbg);
 
     // First install: no existing DB → copy bundled
     if !db_path.exists() {
@@ -194,12 +215,16 @@ pub fn find_server_dir(resource_dir: &Path, data_dir: &Path) -> Result<PathBuf, 
         candidates.push(resource_dir.join("resources").join("_up_").join("standalone-bundle"));
         candidates.push(resource_dir.join("standalone-bundle"));
         candidates.push(resource_dir.join("resources").join("standalone-bundle"));
+        // Tauri 2 may place bundled files at the resource_dir root
+        // (no standalone-bundle subdir) depending on bundle type.
+        candidates.push(resource_dir.to_path_buf());
         if let Ok(exe) = std::env::current_exe() {
             if let Some(d) = exe.parent() {
                 candidates.push(d.join("_up_").join("standalone-bundle"));
                 candidates.push(d.join("resources").join("_up_").join("standalone-bundle"));
                 candidates.push(d.join("standalone-bundle"));
                 candidates.push(d.join("resources").join("standalone-bundle"));
+                candidates.push(d.to_path_buf());
                 if let Some(project) = d.parent() {
                     candidates.push(project.join("standalone-bundle"));
                 }
@@ -212,15 +237,21 @@ pub fn find_server_dir(resource_dir: &Path, data_dir: &Path) -> Result<PathBuf, 
 
     for d in &candidates {
         if d.join("server.js").exists() {
-            println!("[spawner] Found server dir at {}", d.display());
+            let msg = format!("[spawner] Found server dir at {}", d.display());
+            println!("{}", msg);
+            crate::boot_log::log(&msg);
             return Ok(d.clone());
         }
     }
 
-    Err(format!(
-        "server.js not found. Searched:\n  {}",
-        candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n  ")
-    ))
+    let searched = candidates
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n  ");
+    let msg = format!("server.js not found. Searched:\n  {searched}");
+    crate::boot_log::log(&msg);
+    Err(msg)
 }
 
 pub fn is_server_up(host: &str, port: u16) -> bool {
