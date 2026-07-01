@@ -31,3 +31,14 @@ src-tauri/target/
 
 # Local integration test artifacts
 test-data-integration/
+fresh-test.db
+tsconfig.tsbuildinfo
+
+# Sisyphus session continuation artifacts
+.sisyphus/
+
+# Tauri generated bindings (regenerated on build)
+src-tauri/gen/
+
+# Nested prisma dev.db artifact (from `npx prisma db push` with relative path)
+prisma/prisma/

@@ -159,6 +159,74 @@ pub fn is_server_up(host: &str, port: u16) -> bool {
     .is_ok()
 }
 
+/// Kill any process listening on the given port (best-effort).
+/// Uses whatever OS tools are available.
+pub fn kill_process_on_port(port: u16) {
+    let host = "127.0.0.1";
+    if !is_server_up(host, port) {
+        return; // Nothing to kill
+    }
+    println!("[spawner] Port {port} is in use — attempting to clear it");
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: use netstat + taskkill
+        let _ = std::process::Command::new("cmd")
+            .args(&[
+                "/C",
+                &format!(
+                    "for /f \"tokens=5\" %p in ('netstat -ano ^| findstr :{port}') do taskkill /F /PID %p 2>nul"
+                ),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix: use lsof + kill, or fuser
+        let _ = std::process::Command::new("sh")
+            .args(&[
+                "-c",
+                &format!("lsof -ti:{port} 2>/dev/null | xargs -r kill -9 2>/dev/null"),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+
+    // Wait for port to be free
+    for _ in 0..10 {
+        if !is_server_up(host, port) {
+            println!("[spawner] Port {port} freed successfully");
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    println!("[spawner] Port {port} still in use after kill attempt — will retry on spawn");
+}
+
+/// Kill a child process and wait for it to exit, with a timeout.
+/// Returns true if the process exited cleanly, false if it had to be force-killed.
+pub fn kill_child_with_timeout(child: &mut Child, timeout: Duration) -> bool {
+    let _ = child.kill();
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,  // Exited
+            Ok(None) => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => return false,
+        }
+    }
+    println!("[spawner] Child did not exit after {timeout:?} — force killing");
+    let _ = child.kill();
+    let _ = child.wait();
+    false
+}
+
 fn stage_runtime_tree(runtime_dir: &Path, bundled_server_dir: &Path) -> Result<PathBuf, String> {
     let dest = runtime_dir.join("server");
     let marker = dest.join(".staged");

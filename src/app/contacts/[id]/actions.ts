@@ -12,9 +12,10 @@ export async function logInteractionAction(
 ): Promise<ActionResult> {
   try {
     const { id: ownerId } = await getCurrentUser();
+    const occurredAt = parseDateField(fd.get('occurredAt'), '互动时间');
     await InteractionService.log({
       contactId,
-      occurredAt: new Date(String(fd.get('occurredAt'))),
+      occurredAt,
       channel: (fd.get('channel') as string) || null,
       summary: String(fd.get('summary') ?? ''),
     }, ownerId);
@@ -48,8 +49,9 @@ export async function updateInteractionAction(
 ): Promise<ActionResult> {
   try {
     const { id: ownerId } = await getCurrentUser();
+    const occurredAt = parseDateField(fd.get('occurredAt'), '互动时间');
     await InteractionService.update(id, {
-      occurredAt: new Date(String(fd.get('occurredAt'))),
+      occurredAt,
       channel: (fd.get('channel') as string) || null,
       summary: String(fd.get('summary') ?? ''),
     }, ownerId);
@@ -68,4 +70,12 @@ export async function updateInteractionAction(
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     return { ok: false, error: '保存失败' };
   }
+}
+
+function parseDateField(raw: FormDataEntryValue | null, label: string): Date {
+  const str = String(raw ?? '');
+  if (!str) throw new ValidationError(`请填写${label}`);
+  const d = new Date(str);
+  if (isNaN(d.getTime())) throw new ValidationError(`${label}格式无效`);
+  return d;
 }

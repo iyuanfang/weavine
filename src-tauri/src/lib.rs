@@ -143,7 +143,9 @@ pub fn run() {
                 let state = window.state::<ServerProcess>();
                 let child = state.0.lock().unwrap().take();
                 if let Some(mut child) = child {
-                    let _ = child.kill();
+                    println!("[lib] Closing window — killing server process (pid={})", child.id());
+                    spawner::kill_child_with_timeout(&mut child, std::time::Duration::from_secs(3));
+                    println!("[lib] Server process terminated");
                 }
             }
         })
@@ -156,6 +158,10 @@ fn spawn_standalone_server(
     data_dir: &std::path::Path,
     _state: &tauri::State<ServerProcess>,
 ) -> Result<Child, String> {
+    // Before spawning, make sure port is free — kill any stale process
+    boot_log::log("Checking for stale server process on port 3199...");
+    spawner::kill_process_on_port(spawner::SERVER_PORT);
+
     spawner::spawn(
         resource_dir,
         data_dir,

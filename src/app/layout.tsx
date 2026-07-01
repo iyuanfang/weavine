@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { TopNav } from '@/components/top-nav';
 import { auth } from '@/auth';
 import { getCurrentUser } from '@/lib/auth/session';
+import { ErrorBoundaryFallback } from '@/components/error-boundary-fallback';
 
 export const metadata: Metadata = {
   title: 'PRM · 人脉管理',
@@ -14,47 +15,59 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (process.env.IS_DESKTOP === 'true') {
-    const user = await getCurrentUser();
+  // Wrap everything so a Server Component error doesn't nuke the entire page
+  try {
+    if (process.env.IS_DESKTOP === 'true') {
+      const user = await getCurrentUser();
+      return (
+        <html lang="zh-CN">
+          <body>
+            <TopNav
+              currentUser={{
+                name: user.name,
+                email: user.email,
+                image: user.image,
+              }}
+              isDesktop
+            />
+            {children}
+          </body>
+        </html>
+      );
+    }
+
+    const session = await auth();
+
+    if (!session?.user?.id) {
+      return (
+        <html lang="zh-CN">
+          <body>{children}</body>
+        </html>
+      );
+    }
+
     return (
       <html lang="zh-CN">
         <body>
           <TopNav
             currentUser={{
-              name: user.name,
-              email: user.email,
-              image: user.image,
+              name: session.user.name ?? null,
+              email: session.user.email ?? null,
+              image: session.user.image ?? null,
             }}
-            isDesktop
           />
           {children}
         </body>
       </html>
     );
-  }
-
-  const session = await auth();
-
-  if (!session?.user?.id) {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '应用初始化失败';
     return (
       <html lang="zh-CN">
-        <body>{children}</body>
+        <body>
+          <ErrorBoundaryFallback message={msg} />
+        </body>
       </html>
     );
   }
-
-  return (
-    <html lang="zh-CN">
-      <body>
-        <TopNav
-          currentUser={{
-            name: session.user.name ?? null,
-            email: session.user.email ?? null,
-            image: session.user.image ?? null,
-          }}
-        />
-        {children}
-      </body>
-    </html>
-  );
 }

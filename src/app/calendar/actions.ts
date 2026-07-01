@@ -72,11 +72,29 @@ export async function deleteEventAction(id: string) {
 }
 
 function parseEventInput(fd: FormData): EventInput {
+  const startAtRaw = String(fd.get('startAt') ?? '');
+  if (!startAtRaw) {
+    throw new ValidationError('请填写开始时间');
+  }
+  const startAt = new Date(startAtRaw);
+  if (isNaN(startAt.getTime())) {
+    throw new ValidationError('开始时间格式无效');
+  }
+
+  const endAtRaw = fd.get('endAt') ? String(fd.get('endAt')) : null;
+  let endAt: Date | null = null;
+  if (endAtRaw) {
+    endAt = new Date(endAtRaw);
+    if (isNaN(endAt.getTime())) {
+      endAt = null; // Silently ignore invalid end time
+    }
+  }
+
   return {
     title: String(fd.get('title') ?? ''),
     type: ((fd.get('type') as string) || DEFAULT_EVENT_TYPE) as EventInput['type'],
-    startAt: new Date(String(fd.get('startAt'))),
-    endAt: fd.get('endAt') ? new Date(String(fd.get('endAt'))) : null,
+    startAt,
+    endAt,
     location: (fd.get('location') as string) || null,
     notes: (fd.get('notes') as string) || null,
     contactId: (fd.get('contactId') as string) || null,
