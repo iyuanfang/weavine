@@ -1,9 +1,10 @@
-pub mod contact;
-pub mod interaction;
-pub mod event;
 pub mod action;
-pub mod reminder;
-pub mod tag;
-pub mod setting;
-pub mod search;
+pub mod contact;
 pub mod diagnostic;
+pub mod event;
+pub mod interaction;
+pub mod params;
+pub mod reminder;
+pub mod search;
+pub mod setting;
+pub mod tag;

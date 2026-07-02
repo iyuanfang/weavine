@@ -4,17 +4,19 @@
   "version": "0.1.0",
   "identifier": "com.weavine.prm",
   "build": {
-    "frontendDist": "../tauri-dist"
+    "frontendDist": "../tauri-dist",
+    "devUrl": "http://localhost:5181"
   },
   "app": {
     "windows": [
       {
         "label": "main",
         "title": "Weavine",
-        "url": "http://127.0.0.1:3199",
+        "url": "http://localhost:5181",
         "width": 1280,
         "height": 820,
-        "visible": false
+        "visible": true,
+        "devtools": true
       }
     ],
     "security": {

@@ -64,9 +64,11 @@ CREATE TABLE "ContactTag" (
 CREATE TABLE "Event" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ownerId" TEXT NOT NULL, "contactId" TEXT,
-    "title" TEXT NOT NULL, "description" TEXT,
+    "title" TEXT NOT NULL,
     "type" TEXT NOT NULL DEFAULT 'event',
     "startAt" DATETIME NOT NULL, "endAt" DATETIME,
+    "location" TEXT,
+    "notes" TEXT,
     "reminderEnabled" INTEGER NOT NULL DEFAULT 1,
     "reminderAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -77,21 +79,27 @@ CREATE TABLE "Event" (
 
 CREATE TABLE "Action" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "ownerId" TEXT NOT NULL, "contactId" TEXT, "parentActionId" TEXT,
-    "title" TEXT NOT NULL, "notes" TEXT,
+    "ownerId" TEXT NOT NULL, "contactId" TEXT,
+    "parentActionId" TEXT,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
     "status" TEXT NOT NULL DEFAULT 'open',
+    "priority" TEXT,
+    "category" TEXT,
     "dueAt" DATETIME,
     "completedAt" DATETIME,
+    "eventId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     FOREIGN KEY ("ownerId") REFERENCES "User" ("id") ON DELETE CASCADE,
     FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL,
-    FOREIGN KEY ("parentActionId") REFERENCES "Action" ("id") ON DELETE SET NULL
+    FOREIGN KEY ("eventId") REFERENCES "Event" ("id") ON DELETE SET NULL
 );
 
 CREATE TABLE "Interaction" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ownerId" TEXT NOT NULL, "contactId" TEXT NOT NULL,
+    "actionId" TEXT, "eventId" TEXT,
     "occurredAt" DATETIME NOT NULL,
     "channel" TEXT NOT NULL,
     "summary" TEXT NOT NULL,
