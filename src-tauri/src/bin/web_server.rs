@@ -18,6 +18,7 @@ async fn main() {
     let db_path = std::env::var("WEB_DB_PATH").unwrap_or_else(|_| "weavine-web.db".into());
     let conn = rusqlite::Connection::open(&db_path).expect("open db");
     let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
+    weavine_lib::migration::run(&conn).expect("run migrations");
     let state = AppState {
         db: Arc::new(Mutex::new(conn)),
     };

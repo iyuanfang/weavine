@@ -2,6 +2,7 @@ pub mod boot_log;
 pub mod business;
 pub mod commands;
 pub mod db;
+pub mod migration;
 pub mod models;
 
 use commands::{action, contact, diagnostic, event, interaction, reminder, search, setting, tag};

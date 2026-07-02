@@ -13,6 +13,7 @@ dist/
 /dev.db-journal
 /dev.db-shm
 /dev.db-wal
+weavine-web.db*
 *.log
 coverage/
 test-results/

@@ -24,6 +24,8 @@ impl Database {
             }
         };
         let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
+        // Run embedded schema migration (idempotent — safe on every startup).
+        crate::migration::run(&conn)?;
         Ok(Database {
             conn: Mutex::new(conn),
         })
