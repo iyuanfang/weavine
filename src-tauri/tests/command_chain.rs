@@ -1,6 +1,7 @@
 use serde_json::json;
 use weavine_lib::commands;
 use weavine_lib::db::Database;
+use weavine_lib::models::LocalUser;
 
 const SCHEMA_SQL: &str = include_str!("../examples/schema_smoke.sql");
 
@@ -209,4 +210,15 @@ fn search_invocation_shape() {
         None,
     );
     assert!(r.is_ok(), "search call shape compiles + runs against empty db");
+}
+
+#[test]
+fn get_local_user_returns_seeded_local_user() {
+    let db = build_test_db();
+    let user: LocalUser =
+        commands::diagnostic::get_local_user(db_state(&db)).expect("get_local_user");
+    assert_eq!(user.id, "user-local-1");
+    assert_eq!(user.name, Some("Local User".to_string()));
+    assert_eq!(user.email, Some("local@prm.local".to_string()));
+    println!("✅ get_local_user_returns_seeded_local_user passed");
 }

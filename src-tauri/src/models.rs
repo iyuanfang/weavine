@@ -18,6 +18,13 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalUser {
+    pub id: String,
+    pub name: Option<String>,
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contact {
     pub id: String,
     pub owner_id: String,

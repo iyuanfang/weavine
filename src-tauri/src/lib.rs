@@ -89,6 +89,7 @@ pub fn run() {
             setting::delete_setting,
             search::search,
             diagnostic::get_startup_info,
+            diagnostic::get_local_user,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
