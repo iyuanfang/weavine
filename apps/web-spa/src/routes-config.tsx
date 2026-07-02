@@ -20,6 +20,10 @@ import { ActionsList } from './routes/ActionsList';
 import { ActionNew } from './routes/ActionNew';
 import { ActionEdit } from './routes/ActionEdit';
 import { ActionDetail } from './routes/ActionDetail';
+import { Reminders } from './routes/Reminders';
+import { Tags } from './routes/Tags';
+import { TagDetail } from './routes/TagDetail';
+import { InteractionDetail } from './routes/InteractionDetail';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -56,10 +60,10 @@ export const routes: AppRoute[] = [
   { path: '/actions/:id', Component: ActionDetail, label: 'ActionDetail' },
   { path: '/actions/:id/edit', Component: ActionEdit, label: 'ActionEdit' },
   { path: '/actions/new', Component: ActionNew, label: 'ActionNew' },
-  { path: '/interactions/:id', Component: () => <div className="loading">互动详情（Phase 4 进行中）</div>, label: 'InteractionDetail (placeholder)' },
-  { path: '/reminders', Component: () => <div className="loading">提醒（Phase 4 进行中）</div>, label: 'Reminders (placeholder)' },
-  { path: '/tags', Component: () => <div className="loading">标签（Phase 4 进行中）</div>, label: 'Tags (placeholder)' },
-  { path: '/tags/:tagId', Component: () => <div className="loading">标签详情（Phase 4 进行中）</div>, label: 'TagDetail (placeholder)' },
+  { path: '/interactions/:id', Component: InteractionDetail, label: 'InteractionDetail' },
+  { path: '/reminders', Component: Reminders, label: 'Reminders' },
+  { path: '/tags', Component: Tags, label: 'Tags' },
+  { path: '/tags/:tagId', Component: TagDetail, label: 'TagDetail' },
   { path: '/search', Component: () => <div className="loading">搜索（Phase 4 进行中）</div>, label: 'Search (placeholder)' },
   { path: '/settings', Component: () => <div className="loading">设置（Phase 4 进行中）</div>, label: 'Settings (placeholder)' },
 ];
