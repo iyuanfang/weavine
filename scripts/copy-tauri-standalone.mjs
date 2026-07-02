@@ -68,15 +68,27 @@ async function main() {
   await cp(standalone, bundleDir, { recursive: true });
   console.log("  ✓ standalone-bundle/ (for Tauri resource bundling)");
 
-  // Bundle the pre-initialized dev.db. `prisma db push` writes to
-  // prisma/dev.db (relative to schema location), not the project root,
-  // so we read from there directly.
-  const prismaDir = resolve(ROOT, "prisma");
-  const devDbSrc = resolve(prismaDir, "dev.db");
-  const devDbDst = resolve(bundleDir, "dev.db");
-  if (existsSync(devDbSrc)) {
+  // Bundle the pre-initialized dev.db.
+  // Prisma creates dev.db at prisma/dev.db (relative to schema), but in CI
+  // the working directory or env may cause it at the project root instead.
+  // Check both locations.
+  const devDbCandidates = [
+    resolve(ROOT, "prisma", "dev.db"),
+    resolve(ROOT, "dev.db"),
+  ];
+  const devDbSrc = devDbCandidates.find(existsSync);
+  if (devDbSrc) {
+    // Copy into standalone-bundle so the spawner finds it bundled
+    const devDbDst = resolve(bundleDir, "dev.db");
     await cp(devDbSrc, devDbDst);
+    // Also copy to project root for Tauri's resource bundling (../dev.db)
+    const rootDevDb = resolve(ROOT, "dev.db");
+    if (devDbSrc !== rootDevDb) {
+      await cp(devDbSrc, rootDevDb);
+    }
     console.log("  ✓ dev.db (pre-initialized database)");
+  } else {
+    console.warn("  ⚠ dev.db not found — Tauri will spawn with an empty database");
   }
 
   // Create tauri-dist/ for Tauri's frontendDist compile-time check.
