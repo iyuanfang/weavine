@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Setting } from '../lib/adapter/types';
@@ -44,8 +45,8 @@ export function SettingsPage() {
 
   if (settingsQuery.isError) {
     return (
-      <div className="today-page">
-        <div className="error">加载失败: {String(settingsQuery.error)}</div>
+      <div className="page">
+        <div className="error-banner">加载失败: {String(settingsQuery.error)}</div>
       </div>
     );
   }
@@ -73,58 +74,74 @@ export function SettingsPage() {
     setEditValue('');
   }
 
-  function handleDelete(key: string) {
-    deleteMutation.mutate(key);
-  }
-
   return (
-    <div className="today-page">
-      <div className="section__header">
-        <h1 className="section__title">设置</h1>
-      </div>
-
-      <button
-        className="btn-primary"
-        onClick={() => setShowAdd(!showAdd)}
-        style={{ marginBottom: 16 }}
-      >
-        {showAdd ? '取消' : '+ 新建设置'}
-      </button>
+    <div className="page">
+      <PageHeader
+        title="设置"
+        subtitle={`${settings.length} 项 · 键值对存储`}
+        actions={
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setShowAdd(!showAdd)}
+          >
+            {showAdd ? '取消' : '+ 新建设置'}
+          </button>
+        }
+      />
 
       {showAdd && (
-        <div className="rounded border p-4 space-y-3">
-          <div>
-            <label className="block text-sm">键名</label>
-            <input
-              type="text"
-              value={newKey}
-              onChange={(e) => setNewKey(e.target.value)}
-              placeholder="例如: reminder_offsets"
-              className="input-base w-full mt-1"
-            />
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div>
+              <label className="input-label">键名 *</label>
+              <input
+                className="input-base"
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                placeholder="例如 reminder_offsets"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="input-label">值</label>
+              <input
+                className="input-base"
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                placeholder="例如 30,1440"
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleAdd}
+                disabled={upsertMutation.isPending || !newKey.trim()}
+              >
+                {upsertMutation.isPending ? '保存中…' : '保存'}
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm">值</label>
-            <input
-              type="text"
-              value={newValue}
-              onChange={(e) => setNewValue(e.target.value)}
-              placeholder="例如: 30,1440"
-              className="input-base w-full mt-1"
-            />
-          </div>
-          <button className="btn-primary" onClick={handleAdd} disabled={upsertMutation.isPending}>
-            {upsertMutation.isPending ? '保存中…' : '保存'}
-          </button>
         </div>
       )}
 
-      {settings.length === 0 ? (
+      {settingsQuery.isLoading ? (
+        <div className="loading">加载中</div>
+      ) : settings.length === 0 ? (
         <div className="empty-state">
-          <p>还没有设置项</p>
+          <h3 className="empty-state__title">还没有设置项</h3>
+          <p className="empty-state__hint">键值对配置，应用启动时读取</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setShowAdd(true)}
+          >
+            + 新建设置
+          </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'grid', gap: 6 }}>
           {settings.map((s) => (
             <SettingRow
               key={s.id}
@@ -135,7 +152,11 @@ export function SettingsPage() {
               onStartEdit={() => startEdit(s.key, s.value)}
               onSaveEdit={saveEdit}
               onCancelEdit={() => setEditingKey(null)}
-              onDelete={() => handleDelete(s.key)}
+              onDelete={() => {
+                if (confirm(`确定要删除「${s.key}」吗？`)) {
+                  deleteMutation.mutate(s.key);
+                }
+              }}
               isDeleting={deleteMutation.isPending}
             />
           ))}
@@ -169,42 +190,48 @@ function SettingRow({
   const isEditing = editingKey === setting.key;
 
   return (
-    <div className="row-card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="row-card" style={{ padding: '12px 16px' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <span className="row-card__title">{setting.key}</span>
+        <div className="row-card__title" style={{ fontFamily: 'monospace', fontSize: 13 }}>
+          {setting.key}
+        </div>
         {isEditing ? (
           <input
             type="text"
+            className="input-base"
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            className="input-base w-full mt-1"
+            style={{ marginTop: 6 }}
             autoFocus
           />
         ) : (
-          <span className="row-card__meta">{setting.value}</span>
+          <div className="row-card__meta" style={{ marginTop: 2 }}>
+            {setting.value}
+          </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 4, whiteSpace: 'nowrap' }}>
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
         {isEditing ? (
           <>
-            <button className="btn-secondary" onClick={onSaveEdit}>
+            <button type="button" onClick={onSaveEdit} className="btn btn-sm btn-primary">
               保存
             </button>
-            <button className="btn-secondary" onClick={onCancelEdit}>
+            <button type="button" onClick={onCancelEdit} className="btn btn-sm btn-secondary">
               取消
             </button>
           </>
         ) : (
-          <button className="btn-secondary" onClick={onStartEdit}>
+          <button type="button" onClick={onStartEdit} className="btn btn-sm btn-secondary">
             编辑
           </button>
         )}
         <button
-          className="btn-secondary"
+          type="button"
           onClick={onDelete}
           disabled={isDeleting}
-          style={{ color: '#ef4444' }}
+          className="btn btn-sm btn-danger"
+          style={{ opacity: isDeleting ? 0.6 : 1 }}
         >
           删除
         </button>

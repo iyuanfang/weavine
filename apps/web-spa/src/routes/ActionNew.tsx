@@ -2,27 +2,24 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
+import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Contact, CreateActionInput } from '../lib/adapter/types';
 
-// ── Constants ───────────────────────────────────────
-
 const STATUS_OPTIONS = [
-  { value: 'inbox', label: '收件箱' },
-  { value: 'open', label: '进行中' },
-  { value: 'done', label: '已完成' },
-  { value: 'cancelled', label: '已取消' },
+  { value: 'inbox', label: '📥 收件箱' },
+  { value: 'open', label: '🔨 进行中' },
+  { value: 'waiting', label: '⏳ 等待中' },
+  { value: 'done', label: '✅ 已完成' },
 ] as const;
 
 const PRIORITY_OPTIONS = [
-  { value: '0', label: '无' },
-  { value: '1', label: '低' },
-  { value: '2', label: '中' },
-  { value: '3', label: '高' },
+  { value: 0, label: '无' },
+  { value: 1, label: '低' },
+  { value: 2, label: '中' },
+  { value: 3, label: '高' },
 ] as const;
-
-// ── Page ────────────────────────────────────────────
 
 export function ActionNew() {
   const adapter = useAdapter();
@@ -30,28 +27,21 @@ export function ActionNew() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // ── Form state ────────────────────────────────────
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('inbox');
   const [priority, setPriority] = useState(0);
   const [category, setCategory] = useState('');
-  const [due_at, setDueAt] = useState('');
-  const [contact_id, setContactId] = useState<string | null>(null);
-  const [event_id, setEventId] = useState<string | null>(null);
-
-  // ── Fetch contacts ────────────────────────────────
+  const [dueAt, setDueAt] = useState('');
+  const [contactId, setContactId] = useState<string>('');
+  const [eventId, setEventId] = useState<string>('');
 
   const contactsQuery = useQuery({
     queryKey: ['contacts', ownerId],
     queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
     enabled: !!ownerId,
   });
-
   const contacts = contactsQuery.data ?? [];
-
-  // ── Fetch events ──────────────────────────────────
 
   const eventsQuery = useQuery({
     queryKey: ['events', ownerId, 'all'],
@@ -62,10 +52,7 @@ export function ActionNew() {
       }),
     enabled: !!ownerId,
   });
-
   const events = eventsQuery.data ?? [];
-
-  // ── Create mutation ───────────────────────────────
 
   const createMutation = useMutation({
     mutationFn: (input: CreateActionInput) => adapter.actions.create(input),
@@ -75,12 +62,9 @@ export function ActionNew() {
     },
   });
 
-  // ── Submit ────────────────────────────────────────
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !ownerId) return;
-
     createMutation.mutate({
       owner_id: ownerId,
       title: title.trim(),
@@ -88,187 +72,175 @@ export function ActionNew() {
       status,
       priority,
       category: category.trim() || null,
-      due_at: due_at ? new Date(due_at).toISOString() : null,
-      contact_id: contact_id || null,
-      event_id: event_id || null,
+      due_at: dueAt ? new Date(dueAt).toISOString() : null,
+      contact_id: contactId || null,
+      event_id: eventId || null,
     });
   };
-
-  const handleCancel = () => {
-    navigate(-1);
-  };
-
-  // ── Guard ─────────────────────────────────────────
 
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
   }
 
-  // ── Render ────────────────────────────────────────
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '8px 12px',
-    border: '1px solid var(--border)',
-    borderRadius: 8,
-    fontSize: 14,
-    background: '#fff',
-    outline: 'none',
-    boxSizing: 'border-box',
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 13,
-    color: 'var(--muted)',
-    marginBottom: 4,
-    display: 'block',
-  };
-
   return (
-    <div className="today-page">
-      <div className="section__header">
-        <h1 className="section__title">新建待办</h1>
-      </div>
+    <div className="page page--narrow">
+      <PageHeader
+        title="新建待办"
+        subtitle="一件具体的小事，最容易做完"
+        back={
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => navigate(-1)}
+          >
+            ← 返回
+          </button>
+        }
+      />
+
+      {createMutation.isError && (
+        <div className="error-banner">
+          <div>
+            <strong>保存失败</strong>
+            <div style={{ marginTop: 2, fontSize: 12 }}>
+              {String(createMutation.error?.message ?? '未知错误')}
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <section className="section">
-          <div style={{ display: 'grid', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>标题 *</label>
-              <input
-                style={inputStyle}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                placeholder="待办标题"
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>状态</label>
-              <select
-                style={{ ...inputStyle, cursor: 'pointer' }}
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>优先级</label>
-              <select
-                style={{ ...inputStyle, cursor: 'pointer' }}
-                value={String(priority)}
-                onChange={(e) => setPriority(Number(e.target.value))}
-              >
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>分类</label>
-              <input
-                style={inputStyle}
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="分类标签"
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>截止时间</label>
-              <input
-                style={inputStyle}
-                type="datetime-local"
-                value={due_at}
-                onChange={(e) => setDueAt(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>关联联系人</label>
-              <select
-                style={{ ...inputStyle, cursor: 'pointer' }}
-                value={contact_id ?? ''}
-                onChange={(e) => setContactId(e.target.value || null)}
-              >
-                <option value="">无</option>
-                {contacts.map((c: Contact) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nickname ?? c.name ?? '?'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>关联日程</label>
-              <select
-                style={{ ...inputStyle, cursor: 'pointer' }}
-                value={event_id ?? ''}
-                onChange={(e) => setEventId(e.target.value || null)}
-              >
-                <option value="">无</option>
-                {events.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.title}
-                  </option>
-                ))}
-              </select>
+          <h2 className="section__title">基本信息</h2>
+          <div className="card" style={{ marginTop: 10 }}>
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label className="input-label">标题 *</label>
+                <input
+                  className="input-base"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  placeholder="例：给张三发邮件确认下周三晚饭"
+                  autoFocus
+                />
+              </div>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">状态</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">优先级</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={String(priority)}
+                    onChange={(e) => setPriority(Number(e.target.value))}
+                  >
+                    {PRIORITY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">分类</label>
+                  <input
+                    className="input-base"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="可选"
+                  />
+                </div>
+                <div>
+                  <label className="input-label">截止时间</label>
+                  <input
+                    className="input-base"
+                    type="datetime-local"
+                    value={dueAt}
+                    onChange={(e) => setDueAt(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Description */}
         <section className="section">
-          <label style={labelStyle}>描述</label>
-          <textarea
-            style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="详细描述…"
-          />
+          <h2 className="section__title">关联</h2>
+          <div className="card" style={{ marginTop: 10 }}>
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label className="input-label">联系人</label>
+                <select
+                  className="input-base"
+                  style={{ cursor: 'pointer' }}
+                  value={contactId}
+                  onChange={(e) => setContactId(e.target.value)}
+                >
+                  <option value="">无</option>
+                  {contacts.map((c: Contact) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nickname ?? c.name ?? '?'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="input-label">日程</label>
+                <select
+                  className="input-base"
+                  style={{ cursor: 'pointer' }}
+                  value={eventId}
+                  onChange={(e) => setEventId(e.target.value)}
+                >
+                  <option value="">无</option>
+                  {events.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
         </section>
 
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-          <button
-            type="button"
-            onClick={handleCancel}
-            style={{
-              padding: '8px 16px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: '#fff',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
+        <section className="section">
+          <h2 className="section__title">描述</h2>
+          <div className="card" style={{ marginTop: 10 }}>
+            <textarea
+              className="input-base"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="详细描述…"
+            />
+          </div>
+        </section>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
             取消
           </button>
           <button
             type="submit"
-            disabled={createMutation.isPending}
-            style={{
-              padding: '8px 24px',
-              border: 'none',
-              borderRadius: 8,
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
-              opacity: createMutation.isPending ? 0.6 : 1,
-            }}
+            className="btn btn-primary"
+            disabled={createMutation.isPending || !title.trim()}
           >
             {createMutation.isPending ? '保存中…' : '保存'}
           </button>

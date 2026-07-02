@@ -6,18 +6,16 @@ import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Tag, CreateInteractionInput } from '../lib/adapter/types';
 
-// ── Constants ───────────────────────────────────────
-
 const IMPORTANCE_LABELS: Record<string, string> = {
   high: '高',
   medium: '中',
   low: '低',
 };
 
-const IMPORTANCE_BADGE_COLORS: Record<string, string> = {
-  high: '#ef4444',
-  medium: '#f59e0b',
-  low: '#6b7280',
+const IMPORTANCE_BADGE: Record<string, { bg: string; fg: string }> = {
+  high: { bg: '#fef2f2', fg: '#dc2626' },
+  medium: { bg: '#fffbeb', fg: '#d97706' },
+  low: { bg: '#f3f4f6', fg: '#6b7280' },
 };
 
 const FALLBACK_TAG_COLORS = [
@@ -29,7 +27,22 @@ function tagColor(tag: Tag): string {
   return tag.color ?? FALLBACK_TAG_COLORS[tag.name.length % FALLBACK_TAG_COLORS.length];
 }
 
-// ── Page ────────────────────────────────────────────
+function avatarBg(name: string): string {
+  const palettes = [
+    'linear-gradient(135deg, #6366f1, #3b82f6)',
+    'linear-gradient(135deg, #ec4899, #f43f5e)',
+    'linear-gradient(135deg, #10b981, #14b8a6)',
+    'linear-gradient(135deg, #f59e0b, #ef4444)',
+    'linear-gradient(135deg, #8b5cf6, #6366f1)',
+    'linear-gradient(135deg, #06b6d4, #3b82f6)',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i);
+    hash |= 0;
+  }
+  return palettes[Math.abs(hash) % palettes.length];
+}
 
 export function ContactDetail() {
   const { id } = useParams() as { id: string };
@@ -37,8 +50,6 @@ export function ContactDetail() {
   const ownerId = useOwnerId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  // ── Fetch data ────────────────────────────────────
 
   const contactQuery = useQuery({
     queryKey: ['contact', id],
@@ -78,8 +89,6 @@ export function ContactDetail() {
     enabled: !!ownerId,
   });
 
-  // ── Inline interaction form ───────────────────────
-
   const [interactionSummary, setInteractionSummary] = useState('');
   const [interactionChannel, setInteractionChannel] = useState('');
 
@@ -94,10 +103,16 @@ export function ContactDetail() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (contactId: string) => adapter.contacts.delete(contactId),
+    onSuccess: () => {
+      navigate('/contacts');
+    },
+  });
+
   const handleCreateInteraction = (e: React.FormEvent) => {
     e.preventDefault();
     if (!interactionSummary.trim() || !ownerId) return;
-
     createInteractionMutation.mutate({
       owner_id: ownerId,
       contact_id: id,
@@ -107,31 +122,20 @@ export function ContactDetail() {
     });
   };
 
-  // ── Delete contact ────────────────────────────────
-
-  const deleteMutation = useMutation({
-    mutationFn: (contactId: string) => adapter.contacts.delete(contactId),
-    onSuccess: () => {
-      navigate('/contacts');
-    },
-  });
-
   const handleDelete = () => {
     if (confirm('确定要删除这个联系人吗？此操作不可恢复。')) {
       deleteMutation.mutate(id);
     }
   };
 
-  // ── Guards ────────────────────────────────────────
-
   if (contactQuery.isLoading) {
-    return <div className="loading">…</div>;
+    return <div className="loading">加载中</div>;
   }
 
   if (contactQuery.isError) {
     return (
-      <div className="today-page">
-        <div className="error">加载联系人失败: {String(contactQuery.error)}</div>
+      <div className="page">
+        <div className="error-banner">加载联系人失败: {String(contactQuery.error)}</div>
       </div>
     );
   }
@@ -141,14 +145,11 @@ export function ContactDetail() {
   const actions = actionsQuery.data ?? [];
   const interactions = interactionsQuery.data ?? [];
 
-  // ── Derived ───────────────────────────────────────
-
   const displayName = contact.nickname || contact.name || '?';
-  const impLabel = IMPORTANCE_LABELS[contact.importance] ?? '';
-  const impColor = IMPORTANCE_BADGE_COLORS[contact.importance] ?? '#6b7280';
+  const imp = IMPORTANCE_BADGE[contact.importance] ?? IMPORTANCE_BADGE.low;
+  const impLabel = IMPORTANCE_LABELS[contact.importance];
 
   const infoFields: [string, string | null][] = [
-    ['昵称', contact.nickname],
     ['姓名', contact.name],
     ['公司', contact.company],
     ['职位', contact.title],
@@ -163,109 +164,122 @@ export function ContactDetail() {
     actionsQuery.isLoading ||
     interactionsQuery.isLoading;
 
-  // ── Render ────────────────────────────────────────
-
   return (
-    <div className="today-page">
-      {/* Header */}
-      <div className="section__header">
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h1 className="section__title">{displayName}</h1>
+    <div className="page">
+      <div
+        className="card"
+        style={{
+          padding: 24,
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 20,
+        }}
+      >
+        <div
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: '50%',
+            background: avatarBg(displayName),
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700,
+            fontSize: 28,
+            flexShrink: 0,
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          {displayName.slice(0, 1).toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h1 className="page-title" style={{ margin: 0 }}>
+              {displayName}
+            </h1>
             {impLabel && (
-              <span
-                style={{
-                  fontSize: 12,
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  background: `${impColor}18`,
-                  color: impColor,
-                  fontWeight: 500,
-                }}
-              >
+              <span className="badge" style={{ background: imp.bg, color: imp.fg }}>
                 {impLabel}
               </span>
             )}
           </div>
-          {/* Tags */}
           {contact.tags.length > 0 && (
-            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
               {contact.tags.map((tag) => (
-                <span
+                <Link
                   key={tag.id}
+                  to={`/tags/${tag.id}`}
+                  className="tag-chip"
                   style={{
-                    fontSize: 11,
-                    padding: '1px 6px',
-                    borderRadius: 4,
-                    background: `${tagColor(tag)}18`,
+                    background: `${tagColor(tag)}14`,
+                    borderColor: `${tagColor(tag)}40`,
                     color: tagColor(tag),
+                    textDecoration: 'none',
                   }}
                 >
+                  <span
+                    className="tag-chip__dot"
+                    style={{ background: tagColor(tag) }}
+                  />
                   {tag.name}
-                </span>
+                </Link>
               ))}
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <Link
-            to={`/contacts/${id}/edit`}
-            style={{
-              padding: '6px 12px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: '#fff',
-              fontSize: 13,
-              textDecoration: 'none',
-              color: 'var(--fg)',
-            }}
-          >
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <Link to={`/contacts/${id}/edit`} className="btn btn-secondary">
             编辑
           </Link>
           <button
+            type="button"
             onClick={handleDelete}
             disabled={deleteMutation.isPending}
-            style={{
-              padding: '6px 12px',
-              border: 'none',
-              borderRadius: 8,
-              background: '#ef4444',
-              color: '#fff',
-              fontSize: 13,
-              cursor: deleteMutation.isPending ? 'not-allowed' : 'pointer',
-              opacity: deleteMutation.isPending ? 0.6 : 1,
-            }}
+            className="btn btn-danger"
+            style={{ opacity: deleteMutation.isPending ? 0.6 : 1 }}
           >
             {deleteMutation.isPending ? '删除中…' : '删除'}
           </button>
         </div>
       </div>
 
-      {/* Info section */}
       {infoFields.length > 0 && (
         <section className="section">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 16px' }}>
-            {infoFields.map(([k, v]) => (
-              <div key={k}>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{k}</div>
-                <div style={{ fontSize: 14 }}>{v}</div>
-              </div>
-            ))}
+          <h2 className="section__title">基本信息</h2>
+          <div className="card" style={{ marginTop: 10, padding: 16 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '12px 24px',
+              }}
+            >
+              {infoFields.map(([k, v]) => (
+                <div key={k}>
+                  <div className="text-xs text-muted" style={{ marginBottom: 2 }}>
+                    {k}
+                  </div>
+                  <div style={{ fontSize: 14 }}>{v}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}
 
-      {/* Notes */}
       {contact.notes && (
         <section className="section">
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>备注</div>
-          <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', color: 'var(--fg)' }}>
-            {contact.notes}
-          </p>
+          <h2 className="section__title">备注</h2>
+          <div className="card" style={{ marginTop: 10 }}>
+            <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+              {contact.notes}
+            </p>
+          </div>
         </section>
       )}
 
-      {/* 相关日程 */}
       <section className="section">
         <div className="section__header">
           <h2 className="section__title">相关日程</h2>
@@ -274,18 +288,19 @@ export function ContactDetail() {
           </Link>
         </div>
         {isLoading ? (
-          <div className="loading">…</div>
+          <div className="loading">加载中</div>
         ) : events.length === 0 ? (
           <div className="empty-state">没有相关日程</div>
         ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
             {events.map((e) => (
               <Link
                 key={e.id}
                 to={`/events/${e.id}`}
                 className="row-card"
-                style={{ textDecoration: 'none' }}
+                style={{ textDecoration: 'none', color: 'inherit' }}
               >
+                <span style={{ fontSize: 18 }}>📅</span>
                 <span className="row-card__title">{e.title}</span>
                 <span className="row-card__meta">
                   {new Date(e.start_at).toLocaleDateString('zh-CN', {
@@ -299,7 +314,6 @@ export function ContactDetail() {
         )}
       </section>
 
-      {/* 待办 */}
       <section className="section">
         <div className="section__header">
           <h2 className="section__title">待办</h2>
@@ -308,19 +322,28 @@ export function ContactDetail() {
           </Link>
         </div>
         {isLoading ? (
-          <div className="loading">…</div>
+          <div className="loading">加载中</div>
         ) : actions.length === 0 ? (
           <div className="empty-state">没有相关待办</div>
         ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
             {actions.map((a) => (
               <Link
                 key={a.id}
                 to={`/actions/${a.id}`}
                 className="row-card"
-                style={{ textDecoration: 'none' }}
+                style={{ textDecoration: 'none', color: 'inherit' }}
               >
-                <span className="row-card__title">{a.title}</span>
+                <span style={{ fontSize: 18 }}>{a.status === 'done' ? '✅' : '📌'}</span>
+                <span
+                  className="row-card__title"
+                  style={{
+                    textDecoration: a.status === 'done' ? 'line-through' : 'none',
+                    color: a.status === 'done' ? 'var(--muted)' : 'var(--fg)',
+                  }}
+                >
+                  {a.title}
+                </span>
                 <span className="row-card__meta">{a.status}</span>
               </Link>
             ))}
@@ -328,84 +351,49 @@ export function ContactDetail() {
         )}
       </section>
 
-      {/* 互动 + 记一笔 */}
       <section className="section">
         <div className="section__header">
           <h2 className="section__title">互动</h2>
         </div>
 
-        {/* Inline interaction form */}
-        <form
-          onSubmit={handleCreateInteraction}
-          style={{
-            display: 'flex',
-            gap: 8,
-            marginBottom: 12,
-            flexWrap: 'wrap',
-          }}
-        >
-          <input
-            type="text"
-            placeholder="互动渠道（可选，如：微信、邮件）"
-            value={interactionChannel}
-            onChange={(e) => setInteractionChannel(e.target.value)}
-            style={{
-              flex: '0 0 auto',
-              minWidth: 120,
-              padding: '6px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              fontSize: 13,
-              background: '#fff',
-              outline: 'none',
-            }}
-          />
-          <textarea
-            placeholder="+ 记一笔…"
-            value={interactionSummary}
-            onChange={(e) => setInteractionSummary(e.target.value)}
-            required
-            style={{
-              flex: 1,
-              minWidth: 180,
-              padding: '6px 10px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              fontSize: 13,
-              background: '#fff',
-              outline: 'none',
-              resize: 'none',
-              minHeight: 36,
-            }}
-          />
-          <button
-            type="submit"
-            disabled={createInteractionMutation.isPending}
-            style={{
-              flex: '0 0 auto',
-              padding: '6px 16px',
-              border: 'none',
-              borderRadius: 8,
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: createInteractionMutation.isPending ? 'not-allowed' : 'pointer',
-              alignSelf: 'flex-end',
-            }}
-          >
-            {createInteractionMutation.isPending ? '保存中…' : '记录'}
-          </button>
+        <form onSubmit={handleCreateInteraction} className="card" style={{ marginBottom: 12 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <input
+              type="text"
+              className="input-sm"
+              placeholder="互动渠道（可选，如：微信、邮件）"
+              value={interactionChannel}
+              onChange={(e) => setInteractionChannel(e.target.value)}
+            />
+            <textarea
+              className="input-base"
+              placeholder="+ 记一笔这次互动…"
+              value={interactionSummary}
+              onChange={(e) => setInteractionSummary(e.target.value)}
+              required
+              style={{ minHeight: 60, resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={createInteractionMutation.isPending || !interactionSummary.trim()}
+              >
+                {createInteractionMutation.isPending ? '保存中…' : '记录'}
+              </button>
+            </div>
+          </div>
         </form>
 
         {interactionsQuery.isLoading ? (
-          <div className="loading">…</div>
+          <div className="loading">加载中</div>
         ) : interactions.length === 0 ? (
           <div className="empty-state">还没有互动记录</div>
         ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
             {interactions.map((i) => (
               <div key={i.id} className="row-card">
+                <span style={{ fontSize: 18 }}>💬</span>
                 <span className="row-card__meta">
                   {new Date(i.occurred_at).toLocaleDateString('zh-CN', {
                     month: 'numeric',
@@ -413,9 +401,7 @@ export function ContactDetail() {
                   })}
                 </span>
                 <span className="row-card__title">{i.summary}</span>
-                {i.channel && (
-                  <span className="row-card__meta">{i.channel}</span>
-                )}
+                {i.channel && <span className="badge badge--muted">{i.channel}</span>}
               </div>
             ))}
           </div>

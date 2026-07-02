@@ -1,21 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Contact, UpdateEventInput } from '../lib/adapter/types';
 
-// ── Constants ───────────────────────────────────────
-
 const EVENT_TYPE_OPTIONS = [
-  { value: '会议', label: '会议' },
-  { value: '聚餐', label: '聚餐' },
-  { value: '提醒', label: '提醒' },
-  { value: '其他', label: '其他' },
+  { value: '会议', label: '🤝 会议' },
+  { value: '聚餐', label: '🍽 聚餐' },
+  { value: '提醒', label: '⏰ 提醒' },
+  { value: '生日', label: '🎂 生日' },
+  { value: '其他', label: '📌 其他' },
 ] as const;
 
-// ── Page ────────────────────────────────────────────
+function toLocalInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export function EventEdit() {
   const { id } = useParams() as { id: string };
@@ -24,14 +29,10 @@ export function EventEdit() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // ── Fetch event ───────────────────────────────────
-
   const eventQuery = useQuery({
     queryKey: ['event', id],
     queryFn: () => adapter.events.get(id),
   });
-
-  // ── Fetch contacts ────────────────────────────────
 
   const contactsQuery = useQuery({
     queryKey: ['contacts', ownerId],
@@ -39,24 +40,28 @@ export function EventEdit() {
     enabled: !!ownerId,
   });
 
-  // ── Form state (pre-filled from event) ────────────
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState('会议');
+  const [startAt, setStartAt] = useState('');
+  const [endAt, setEndAt] = useState('');
+  const [location, setLocation] = useState('');
+  const [notes, setNotes] = useState('');
+  const [contactId, setContactId] = useState<string>('');
+  const [hydrated, setHydrated] = useState(false);
 
-  const event = eventQuery.data ?? null;
-  const contacts = contactsQuery.data ?? [];
-
-  const [title, setTitle] = useState(event?.title ?? '');
-  const [type, setType] = useState(event?.type ?? '会议');
-  const [start_at, setStartAt] = useState(
-    event?.start_at ? new Date(event.start_at).toISOString().slice(0, 16) : '',
-  );
-  const [end_at, setEndAt] = useState(
-    event?.end_at ? new Date(event.end_at).toISOString().slice(0, 16) : '',
-  );
-  const [location, setLocation] = useState(event?.location ?? '');
-  const [notes, setNotes] = useState(event?.notes ?? '');
-  const [contact_id, setContactId] = useState<string | null>(event?.contact_id ?? null);
-
-  // ── Update mutation ───────────────────────────────
+  useEffect(() => {
+    if (eventQuery.data && !hydrated) {
+      const e = eventQuery.data;
+      setTitle(e.title);
+      setType(e.type ?? '会议');
+      setStartAt(toLocalInput(e.start_at));
+      setEndAt(toLocalInput(e.end_at));
+      setLocation(e.location ?? '');
+      setNotes(e.notes ?? '');
+      setContactId(e.contact_id ?? '');
+      setHydrated(true);
+    }
+  }, [eventQuery.data, hydrated]);
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateEventInput) => adapter.events.update(input),
@@ -67,182 +72,166 @@ export function EventEdit() {
     },
   });
 
-  // ── Submit ────────────────────────────────────────
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !start_at) return;
-
+    if (!title.trim() || !startAt) return;
     const patch: UpdateEventInput = {
       id,
       title: title.trim(),
       type,
-      start_at: new Date(start_at).toISOString(),
-      end_at: end_at ? new Date(end_at).toISOString() : null,
+      start_at: new Date(startAt).toISOString(),
+      end_at: endAt ? new Date(endAt).toISOString() : null,
       location: location.trim() || null,
       notes: notes.trim() || null,
-      contact_id: contact_id || null,
+      contact_id: contactId || null,
     };
-
     updateMutation.mutate(patch);
   };
 
-  // ── Guards ────────────────────────────────────────
-
-  if (eventQuery.isLoading || contactsQuery.isLoading) {
-    return <div className="loading">…</div>;
+  if (eventQuery.isLoading || contactsQuery.isLoading || !hydrated) {
+    return <div className="loading">加载中</div>;
   }
 
   if (eventQuery.isError) {
     return (
-      <div className="today-page">
-        <div className="error">加载日程失败: {String(eventQuery.error)}</div>
+      <div className="page">
+        <div className="error-banner">加载日程失败: {String(eventQuery.error)}</div>
       </div>
     );
   }
 
-  // ── Render ────────────────────────────────────────
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '8px 12px',
-    border: '1px solid var(--border)',
-    borderRadius: 8,
-    fontSize: 14,
-    background: '#fff',
-    outline: 'none',
-    boxSizing: 'border-box',
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 13,
-    color: 'var(--muted)',
-    marginBottom: 4,
-    display: 'block',
-  };
+  const contacts = contactsQuery.data ?? [];
 
   return (
-    <div className="today-page">
-      <div className="section__header">
-        <h1 className="section__title">编辑日程</h1>
-      </div>
+    <div className="page page--narrow">
+      <PageHeader
+        title="编辑日程"
+        back={
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => navigate(`/events/${id}`)}
+          >
+            ← 返回
+          </button>
+        }
+      />
+
+      {updateMutation.isError && (
+        <div className="error-banner">
+          <div>
+            <strong>保存失败</strong>
+            <div style={{ marginTop: 2, fontSize: 12 }}>
+              {String(updateMutation.error?.message ?? '未知错误')}
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <section className="section">
-          <div style={{ display: 'grid', gap: 16 }}>
-            <div>
-              <label style={labelStyle}>标题 *</label>
-              <input
-                style={inputStyle}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>类型</label>
-              <select
-                style={{ ...inputStyle, cursor: 'pointer' }}
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-              >
-                {EVENT_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>开始时间 *</label>
-              <input
-                style={inputStyle}
-                type="datetime-local"
-                value={start_at}
-                onChange={(e) => setStartAt(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>结束时间</label>
-              <input
-                style={inputStyle}
-                type="datetime-local"
-                value={end_at}
-                onChange={(e) => setEndAt(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>地点</label>
-              <input
-                style={inputStyle}
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>关联联系人</label>
-              <select
-                style={{ ...inputStyle, cursor: 'pointer' }}
-                value={contact_id ?? ''}
-                onChange={(e) => setContactId(e.target.value || null)}
-              >
-                <option value="">无</option>
-                {contacts.map((c: Contact) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nickname ?? c.name ?? '?'}
-                  </option>
-                ))}
-              </select>
+          <h2 className="section__title">基本信息</h2>
+          <div className="card" style={{ marginTop: 10 }}>
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label className="input-label">标题 *</label>
+                <input
+                  className="input-base"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">类型</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                  >
+                    {EVENT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">关联联系人</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={contactId}
+                    onChange={(e) => setContactId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {contacts.map((c: Contact) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nickname ?? c.name ?? '?'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">开始时间 *</label>
+                  <input
+                    className="input-base"
+                    type="datetime-local"
+                    value={startAt}
+                    onChange={(e) => setStartAt(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="input-label">结束时间</label>
+                  <input
+                    className="input-base"
+                    type="datetime-local"
+                    value={endAt}
+                    onChange={(e) => setEndAt(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="input-label">地点</label>
+                <input
+                  className="input-base"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                />
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Notes */}
         <section className="section">
-          <label style={labelStyle}>备注</label>
-          <textarea
-            style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
+          <h2 className="section__title">备注</h2>
+          <div className="card" style={{ marginTop: 10 }}>
+            <textarea
+              className="input-base"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
         </section>
 
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button
             type="button"
+            className="btn btn-secondary"
             onClick={() => navigate(`/events/${id}`)}
-            style={{
-              padding: '8px 16px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              background: '#fff',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
           >
             取消
           </button>
           <button
             type="submit"
-            disabled={updateMutation.isPending}
-            style={{
-              padding: '8px 24px',
-              border: 'none',
-              borderRadius: 8,
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: updateMutation.isPending ? 'not-allowed' : 'pointer',
-              opacity: updateMutation.isPending ? 0.6 : 1,
-            }}
+            className="btn btn-primary"
+            disabled={updateMutation.isPending || !title.trim() || !startAt}
           >
             {updateMutation.isPending ? '保存中…' : '保存'}
           </button>

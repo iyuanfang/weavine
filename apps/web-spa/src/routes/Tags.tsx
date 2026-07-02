@@ -2,22 +2,25 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
+import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Tag, CreateTagInput } from '../lib/adapter/types';
 
-// ── Constants ───────────────────────────────────────
-
-const FALLBACK_TAG_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-  '#8b5cf6', '#ec4899', '#14b8a6',
+const PRESET_COLORS = [
+  '#3b82f6',
+  '#ef4444',
+  '#10b981',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#6b7280',
 ];
 
 function tagColor(tag: Tag): string {
-  return tag.color ?? FALLBACK_TAG_COLORS[tag.name.length % FALLBACK_TAG_COLORS.length];
+  return tag.color ?? PRESET_COLORS[tag.name.length % PRESET_COLORS.length];
 }
-
-// ── Page ────────────────────────────────────────────
 
 export function Tags() {
   const adapter = useAdapter();
@@ -26,9 +29,7 @@ export function Tags() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#3b82f6');
-
-  // ── Fetch tags ────────────────────────────────────
+  const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
 
   const tagsQuery = useQuery({
     queryKey: ['tags', ownerId],
@@ -36,19 +37,15 @@ export function Tags() {
     enabled: !!ownerId,
   });
 
-  // ── Create mutation ───────────────────────────────
-
   const createMutation = useMutation({
     mutationFn: (input: CreateTagInput) => adapter.tags.create(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       setNewName('');
-      setNewColor('#3b82f6');
+      setNewColor(PRESET_COLORS[0]);
       setShowCreate(false);
     },
   });
-
-  // ── Delete mutation ───────────────────────────────
 
   const deleteMutation = useMutation({
     mutationFn: (tagId: string) => adapter.tags.delete(tagId),
@@ -57,20 +54,15 @@ export function Tags() {
     },
   });
 
-  // ── Submit new tag ────────────────────────────────
-
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !ownerId) return;
-
     createMutation.mutate({
       owner_id: ownerId,
       name: newName.trim(),
-      color: newColor || null,
+      color: newColor,
     });
   };
-
-  // ── Guards ────────────────────────────────────────
 
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
@@ -78,97 +70,114 @@ export function Tags() {
 
   if (tagsQuery.isError) {
     return (
-      <div className="today-page">
-        <div className="error">加载标签失败: {String(tagsQuery.error)}</div>
+      <div className="page">
+        <div className="error-banner">加载标签失败: {String(tagsQuery.error)}</div>
       </div>
     );
   }
 
   const tags = tagsQuery.data ?? [];
 
-  // ── Render ────────────────────────────────────────
-
   return (
-    <div className="today-page">
-      {/* Header */}
-      <div className="section__header">
-        <h1 className="section__title">标签</h1>
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          style={{
-            fontSize: 14,
-            fontWeight: 500,
-            color: 'var(--accent)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 0,
-          }}
-        >
-          {showCreate ? '取消' : '+ 新建标签'}
-        </button>
-      </div>
-
-      {/* Inline create form */}
-      {showCreate && (
-        <form onSubmit={handleCreate} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <input
-            type="text"
-            required
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="标签名"
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              fontSize: 14,
-              background: '#fff',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-          <input
-            type="color"
-            value={newColor}
-            onChange={(e) => setNewColor(e.target.value)}
-            style={{
-              width: 40,
-              height: 38,
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              cursor: 'pointer',
-              padding: 2,
-              background: '#fff',
-            }}
-          />
+    <div className="page">
+      <PageHeader
+        title="标签"
+        subtitle={`${tags.length} 个 · 给你的联系人分类`}
+        actions={
           <button
-            type="submit"
-            disabled={createMutation.isPending}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: 'none',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
-              opacity: createMutation.isPending ? 0.6 : 1,
-            }}
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setShowCreate(!showCreate)}
           >
-            {createMutation.isPending ? '创建中…' : '添加'}
+            {showCreate ? '取消' : '+ 新建标签'}
           </button>
-        </form>
+        }
+      />
+
+      {showCreate && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <form onSubmit={handleCreate}>
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label className="input-label">名称 *</label>
+                <input
+                  type="text"
+                  className="input-base"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="例如：朋友、同事、投资人…"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="input-label">颜色</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {PRESET_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNewColor(c)}
+                      aria-label={`选择颜色 ${c}`}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        background: c,
+                        border:
+                          newColor === c
+                            ? '2px solid var(--fg)'
+                            : '2px solid transparent',
+                        cursor: 'pointer',
+                        padding: 0,
+                        transition: 'transform 120ms',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowCreate(false)}
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={createMutation.isPending || !newName.trim()}
+                >
+                  {createMutation.isPending ? '创建中…' : '创建'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       )}
 
-      {/* Tags list */}
+      {createMutation.isError && (
+        <div className="error-banner" style={{ marginBottom: 16 }}>
+          创建失败: {String(createMutation.error?.message ?? '未知错误')}
+        </div>
+      )}
+
       {tagsQuery.isLoading ? (
-        <div className="loading">…</div>
+        <div className="loading">加载中</div>
       ) : tags.length === 0 ? (
         <div className="empty-state">
-          <p>还没有标签，创建一个开始分类。</p>
+          <h3 className="empty-state__title">还没有标签</h3>
+          <p className="empty-state__hint">创建第一个标签，给你的联系人分类。</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setShowCreate(true)}
+          >
+            + 新建标签
+          </button>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 6 }}>
@@ -176,9 +185,8 @@ export function Tags() {
             <div
               key={tag.id}
               className="row-card"
-              style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+              style={{ padding: '12px 16px' }}
             >
-              {/* Color dot */}
               <span
                 style={{
                   width: 14,
@@ -187,46 +195,28 @@ export function Tags() {
                   background: tagColor(tag),
                   flexShrink: 0,
                 }}
-                title={tag.color ?? ''}
               />
-
-              {/* Name */}
               <span className="row-card__title" style={{ flex: 1, minWidth: 0 }}>
                 {tag.name}
               </span>
-
-              {/* View link */}
               <Link
                 to={`/tags/${tag.id}`}
-                style={{
-                  fontSize: 12,
-                  color: 'var(--accent)',
-                  textDecoration: 'none',
-                  whiteSpace: 'nowrap',
-                }}
+                className="btn btn-sm btn-ghost"
               >
                 查看
               </Link>
-
-              {/* Delete button */}
               <button
-                onClick={() => deleteMutation.mutate(tag.id)}
+                type="button"
+                onClick={() => {
+                  if (confirm(`确定要删除标签「${tag.name}」吗？`)) {
+                    deleteMutation.mutate(tag.id);
+                  }
+                }}
                 disabled={deleteMutation.isPending && deleteMutation.variables === tag.id}
+                className="btn btn-sm btn-danger"
                 style={{
-                  padding: '4px 10px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: '#ef4444',
-                  color: '#fff',
-                  fontSize: 12,
-                  cursor:
-                    deleteMutation.isPending && deleteMutation.variables === tag.id
-                      ? 'not-allowed'
-                      : 'pointer',
                   opacity:
-                    deleteMutation.isPending && deleteMutation.variables === tag.id
-                      ? 0.6
-                      : 1,
+                    deleteMutation.isPending && deleteMutation.variables === tag.id ? 0.6 : 1,
                 }}
               >
                 删除
