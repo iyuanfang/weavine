@@ -141,42 +141,55 @@ export function TodayPage() {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 12,
-          marginBottom: 24,
+          gap: 16,
+          marginBottom: 32,
         }}
       >
-        <div className="card card--accent" style={{ padding: '14px 16px' }}>
-          <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-            待办
+        <div className="card card--accent" style={{ padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🎯</span>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
+              待办
+            </div>
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
             {todayDoActions.length}
           </div>
-          {overdueCount > 0 && (
-            <div className="text-xs" style={{ color: 'var(--danger)', marginTop: 2 }}>
+          {overdueCount > 0 ? (
+            <div className="text-xs" style={{ color: 'var(--danger)', marginTop: 4, fontWeight: 500 }}>
               {overdueCount} 已过期
+            </div>
+          ) : (
+            <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+              全部按时
             </div>
           )}
         </div>
-        <div className="card" style={{ padding: '14px 16px' }}>
-          <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-            日程
+        <div className="card" style={{ padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>📅</span>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
+              日程
+            </div>
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
             {upcomingEvents.length}
           </div>
-          <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+          <div className="text-xs text-muted" style={{ marginTop: 4 }}>
             接下来 3 天
           </div>
         </div>
-        <div className="card" style={{ padding: '14px 16px' }}>
-          <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-            互动
+        <div className="card" style={{ padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>💬</span>
+            <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
+              互动
+            </div>
           </div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
             {recentInteractions.length}
           </div>
-          <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+          <div className="text-xs text-muted" style={{ marginTop: 4 }}>
             最近 7 天
           </div>
         </div>
