@@ -1940,3 +1940,64 @@ No "TBD" or "TODO" placeholders. Every step has a code block, an expected output
 
 All consistent.
 
+---
+
+## Execution Log (Phases 0-5)
+
+Branch: `fix/linux-ci-download` · Date: 2026-07-02
+
+### Commits
+
+| # | Commit | Phase | Summary |
+|---|--------|-------|---------|
+| 1 | `0fcffca` | Plan | docs(plan): add three-platform migration plan |
+| 2 | `519d66f` | 0 | feat(tauri): add Phase 0 schema smoke test |
+| 3 | `815575d` | 0 | feat(tauri): headless command-chain integration test (Phase 0 PoC) |
+| 4 | `fb4a325` | 1 | feat(web-spa): rename apps/poc → apps/web-spa and add production deps |
+| 5 | `621d49d` | 2 | feat(tauri): add `get_local_user` command for frontend auth |
+| 6 | `38738ae` | 3 | feat(web-spa): adapter layer, auth hooks, app shell + Today page |
+| 7 | `2a35e9a` | 1 | feat(tauri): point desktop build at apps/web-spa |
+| 8 | `568629e` | 3 | feat(web-spa): add data adapter layer (Tauri + HTTP) |
+| 9 | `0a3f3cd` | 4 | refactor(web-spa): centralize route definitions in routes-config |
+| 10 | `862bef6` | 4 | feat(web-spa): migrate contacts list page |
+| 11 | `6b65010` | 4 | feat(web-spa): migrate calendar page |
+| 12 | `493f461` | 4 | feat(web-spa): migrate contacts new/edit/detail pages |
+| 13 | `f38a98f` | 4 | feat(web-spa): migrate events new/edit/detail pages |
+| 14 | `47f19a8` | 4 | feat(web-spa): migrate actions list/new/edit/detail pages |
+| 15 | `96520b9` | 4 | feat(web-spa): migrate reminders/tags/tag-detail/interaction-detail pages |
+| 16 | `efde6d4` | 4 | feat(web-spa): migrate search and settings pages |
+| 17 | `d3e6e47` | 5 | feat(web-spa): add PWA support (manifest, service worker, icons) |
+
+### Phase 4 — all 18 web-spa routes migrated
+
+Today (`/`) + 18 new routes. Each follows the same pattern: `useAdapter()` + `useOwnerId()` + `useQuery`/`useMutation` + existing CSS classes. snake_case throughout.
+
+Verification after Phase 4:
+- `tsc --noEmit`: exit 0, 0 errors
+- `vite build`: exit 0, 108 modules, 329 kB JS, 1.79 s
+
+### Phase 5 — PWA wired
+
+Ported the manifest + sw.js + icons from `feat/pwa-support` (commit `be055ab`), stripped the Next.js-only `/_next/data/` branch from the SW, registered SW in `App.tsx`. Verification via `vite preview`:
+
+| Endpoint | HTTP | Bytes |
+|----------|------|-------|
+| `/` | 200 | 569 |
+| `/manifest.json` | 200 | 606 |
+| `/sw.js` | 200 | 2 783 |
+| `/icon-192.png` | 200 | 8 186 |
+| `/icon-512.png` | 200 | 27 933 |
+| `/icon.png` | 200 | 3 918 |
+
+### Operational gotcha
+
+The host OpenCode environment silently no-ops parallel `task()` calls beyond the first one. **Strictly sequential subagent dispatch is required.** Workaround: send one `task()` per response turn, wait for the completion notification, then send the next. This added ~1 turn of latency per agent but was the only reliable path.
+
+### Known gap
+
+The HTTP adapter (in `apps/web-spa/src/lib/adapter/http.ts`) calls REST endpoints like `/contacts`, `/events`, etc. **No Axum HTTP gateway exists yet** — that is Phase 6 in this plan. The Next.js dev server on `:3100` exposes auth-style routes (`/api/auth/get-session`) that don't match the adapter's expected paths. Until Phase 6 lands, only the Tauri adapter (desktop) and the Vite dev server (with mocked data) can exercise the data layer.
+
+### Branch state
+
+`fix/linux-ci-download` is 17 commits ahead of `main`, fully pushed to `origin`. All Phase 1-5 work lives on this branch; Phase 6+ (Axum web, Tauri mobile, native notifications) remains to be done.
+
