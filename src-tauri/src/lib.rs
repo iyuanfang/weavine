@@ -1,4 +1,5 @@
 pub mod boot_log;
+pub mod business;
 pub mod commands;
 pub mod db;
 pub mod models;
