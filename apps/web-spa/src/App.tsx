@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode, useMemo } from 'react';
 
 import { AppShell } from './components/AppShell';
+import { RegisterSW } from './lib/register-sw';
 import {
   AdapterProvider,
   createDefaultAdapter,
@@ -22,6 +23,7 @@ export function App({ children }: { children?: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AdapterProvider value={adapter}>
         <AppShell>{children}</AppShell>
+        <RegisterSW />
       </AdapterProvider>
     </QueryClientProvider>
   );
