@@ -24,6 +24,8 @@ import { Reminders } from './routes/Reminders';
 import { Tags } from './routes/Tags';
 import { TagDetail } from './routes/TagDetail';
 import { InteractionDetail } from './routes/InteractionDetail';
+import { SearchPage } from './routes/Search';
+import { SettingsPage } from './routes/Settings';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -64,8 +66,8 @@ export const routes: AppRoute[] = [
   { path: '/reminders', Component: Reminders, label: 'Reminders' },
   { path: '/tags', Component: Tags, label: 'Tags' },
   { path: '/tags/:tagId', Component: TagDetail, label: 'TagDetail' },
-  { path: '/search', Component: () => <div className="loading">搜索（Phase 4 进行中）</div>, label: 'Search (placeholder)' },
-  { path: '/settings', Component: () => <div className="loading">设置（Phase 4 进行中）</div>, label: 'Settings (placeholder)' },
+  { path: '/search', Component: SearchPage, label: 'Search' },
+  { path: '/settings', Component: SettingsPage, label: 'Settings' },
 ];
 
 /**
