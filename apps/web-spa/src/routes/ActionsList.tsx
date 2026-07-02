@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { StatusPicker, statusMeta } from '../components/StatusPicker';
+import { PriorityPicker } from '../components/PriorityPicker';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Action, UpdateActionInput } from '../lib/adapter/types';
@@ -15,8 +16,6 @@ const PRIORITY_OPTIONS = [
   { value: '1', label: '低' },
   { value: '0', label: '无' },
 ] as const;
-
-const PRIORITY_LABELS: Record<number, string> = { 0: '无', 1: '低', 2: '中', 3: '高' };
 
 const PRIORITY_COLORS: Record<number, string> = {
   0: '#d1d5db',
@@ -48,8 +47,15 @@ export function ActionsList() {
   const ownerId = useOwnerId();
   const queryClient = useQueryClient();
 
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [collapsed, setCollapsed] = useLocalStorageSet('prm:actions:collapsed');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 200);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const actionsQuery = useQuery({
     queryKey: ['actions', ownerId],
@@ -101,9 +107,21 @@ export function ActionsList() {
   }
 
   const allActions = actionsQuery.data ?? [];
-  const visible = priorityFilter === 'all'
-    ? allActions
-    : allActions.filter((a) => a.priority === Number(priorityFilter));
+  const visible = allActions
+    .filter((a) => priorityFilter === 'all' || a.priority === Number(priorityFilter))
+    .filter((a) => {
+      if (!debouncedSearch) return true;
+      const haystack = [
+        a.title,
+        a.description ?? '',
+        a.category ?? '',
+        a.contact_id ? contactMap[a.contact_id]?.nickname ?? '' : '',
+        a.contact_id ? contactMap[a.contact_id]?.name ?? '' : '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(debouncedSearch);
+    });
 
   const byStatus: Record<StatusKey, Action[]> = {
     inbox: [],
@@ -141,12 +159,170 @@ export function ActionsList() {
     return acc;
   }, {});
 
-  const totalActive = byStatus.inbox.length + byStatus.open.length + byStatus.waiting.length;
+  const countsByStatus: Record<string, number> = {
+    all: allActions.length,
+    inbox: byStatus.inbox.length,
+    open: byStatus.open.length,
+    waiting: byStatus.waiting.length,
+    done: byStatus.done.length,
+  };
+
+  const totalActive =
+    byStatus.inbox.length + byStatus.open.length + byStatus.waiting.length;
   const totalDone = byStatus.done.length;
   const overdueCount = [...byStatus.inbox, ...byStatus.open].filter((a) => {
     if (!a.due_at) return false;
     return new Date(a.due_at) < new Date();
   }).length;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const doneTodayCount = byStatus.done.filter((a) => {
+    if (!a.completed_at) return false;
+    return new Date(a.completed_at) >= todayStart;
+  }).length;
+  const todayProgress = totalActive + doneTodayCount > 0
+    ? Math.round((doneTodayCount / (totalActive + doneTodayCount)) * 100)
+    : 0;
+
+  const panel = (
+    <>
+      <div className="filter-panel__section">
+        <input
+          type="text"
+          className="input-base"
+          placeholder="🔍 搜索待办、联系人…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      <div className="filter-panel__divider" />
+
+      <div className="filter-panel__section">
+        <div className="filter-panel__title">状态</div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(new Set())}
+          className="filter-panel__item"
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14 }}>●</span>
+            <span>展开全部</span>
+          </span>
+        </button>
+        {STATUS_ORDER.map((s) => {
+          const meta = statusMeta(s);
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => {
+                setCollapsed((prev) => {
+                  const next = new Set(prev);
+                  STATUS_ORDER.forEach((k) => {
+                    if (k !== s) next.add(k);
+                  });
+                  next.delete(s);
+                  return next;
+                });
+              }}
+              className="filter-panel__item"
+              style={{ opacity: collapsed.has(s) ? 0.55 : 1 }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  className="filter-panel__item-dot"
+                  style={{ background: meta.color }}
+                />
+                <span>{meta.label}</span>
+              </span>
+              <span className="filter-panel__count">{countsByStatus[s]}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="filter-panel__divider" />
+
+      <div className="filter-panel__section">
+        <div className="filter-panel__title">优先级</div>
+        {PRIORITY_OPTIONS.map((p) => {
+          const active = priorityFilter === p.value;
+          const dotColor = p.value === 'all' ? '#9ca3af' : PRIORITY_COLORS[Number(p.value)];
+          return (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => setPriorityFilter(p.value)}
+              className={`filter-panel__item ${active ? 'filter-panel__item--active' : ''}`}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  className="filter-panel__item-dot"
+                  style={{ background: dotColor }}
+                />
+                <span>{p.label}</span>
+              </span>
+              <span className="filter-panel__count">{countsByPriority[p.value] ?? 0}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="filter-panel__divider" />
+
+      <div className="filter-panel__section">
+        <div className="filter-panel__title">今天进度</div>
+        <div
+          style={{
+            padding: '4px 10px',
+            fontSize: 13,
+            color: 'var(--fg-soft)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span>已完成 {doneTodayCount}</span>
+            <span style={{ color: 'var(--muted)' }}>{todayProgress}%</span>
+          </div>
+          <div
+            style={{
+              height: 6,
+              background: 'var(--bg-subtle)',
+              borderRadius: 999,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${todayProgress}%`,
+                height: '100%',
+                background:
+                  todayProgress >= 80
+                    ? 'var(--success)'
+                    : todayProgress >= 40
+                      ? 'var(--warn)'
+                      : 'var(--accent)',
+                transition: `width 320ms cubic-bezier(0.16, 1, 0.3, 1)`,
+              }}
+            />
+          </div>
+          {overdueCount > 0 && (
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 12,
+                color: 'var(--danger)',
+                fontWeight: 500,
+              }}
+            >
+              ⚠ {overdueCount} 个已过期
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <div className="page">
@@ -169,166 +345,151 @@ export function ActionsList() {
         }
       />
 
-      <div className="card" style={{ marginBottom: 20, padding: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-            优先级
-          </span>
-          {PRIORITY_OPTIONS.map((p) => {
-            const active = priorityFilter === p.value;
-            const dotColor = p.value === 'all' ? '#9ca3af' : PRIORITY_COLORS[Number(p.value)];
-            return (
-              <button
-                key={p.value}
-                type="button"
-                onClick={() => setPriorityFilter(p.value)}
-                className={`tag-chip ${active ? 'tag-chip--active' : ''}`}
-                style={
-                  active
-                    ? { borderColor: dotColor, background: `${dotColor}18`, color: dotColor }
-                    : undefined
-                }
-              >
-                {p.label}
-                <span className="filter-panel__count" style={{ marginLeft: 4 }}>
-                  {countsByPriority[p.value] ?? 0}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <div className="layout-split">
+        <aside className="filter-panel">{panel}</aside>
 
-      {actionsQuery.isLoading ? (
-        <div className="loading">加载中</div>
-      ) : visible.length === 0 ? (
-        <div className="empty-state">
-          <h3 className="empty-state__title">
-            {priorityFilter !== 'all' ? '没有匹配的待办' : '还没有待办'}
-          </h3>
-          <p className="empty-state__hint">
-            {priorityFilter !== 'all'
-              ? '试试切到「全部」优先级。'
-              : '从一件具体的小事开始。'}
-          </p>
-          <Link to="/actions/new" className="btn btn-primary">
-            + 新建待办
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 16 }}>
-          {STATUS_ORDER.map((status) => {
-            const items = byStatus[status];
-            if (items.length === 0) return null;
-            const meta = statusMeta(status);
-            const isCollapsed = collapsed.has(status);
-            const toggle = () => {
-              setCollapsed((prev) => {
-                const next = new Set(prev);
-                if (next.has(status)) next.delete(status);
-                else next.add(status);
-                return next;
-              });
-            };
-            const overdueInSection = items.filter((a) => {
-              if (!a.due_at) return false;
-              return new Date(a.due_at) < new Date();
-            }).length;
+        <div className="layout-split__main">
+          {actionsQuery.isLoading ? (
+            <div className="loading">加载中</div>
+          ) : visible.length === 0 ? (
+            <div className="empty-state">
+              <h3 className="empty-state__title">
+                {search || priorityFilter !== 'all' ? '没有匹配的待办' : '还没有待办'}
+              </h3>
+              <p className="empty-state__hint">
+                {search
+                  ? '换个关键词试试。'
+                  : priorityFilter !== 'all'
+                    ? '试试切到「全部」优先级。'
+                    : '从一件具体的小事开始。'}
+              </p>
+              <Link to="/actions/new" className="btn btn-primary">
+                + 新建待办
+              </Link>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 16 }}>
+              {STATUS_ORDER.map((status) => {
+                const items = byStatus[status];
+                if (items.length === 0) return null;
+                const meta = statusMeta(status);
+                const isCollapsed = collapsed.has(status);
+                const toggle = () => {
+                  setCollapsed((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(status)) next.delete(status);
+                    else next.add(status);
+                    return next;
+                  });
+                };
+                const overdueInSection = items.filter((a) => {
+                  if (!a.due_at) return false;
+                  return new Date(a.due_at) < new Date();
+                }).length;
 
-            return (
-              <section key={status} className="section" style={{ marginBottom: 0 }}>
-                <button
-                  type="button"
-                  onClick={toggle}
-                  className="section__header"
-                  style={{
-                    background: 'transparent',
-                    border: 0,
-                    padding: 0,
-                    width: '100%',
-                    cursor: 'pointer',
-                    marginBottom: isCollapsed ? 0 : 10,
-                  }}
-                >
-                  <h2
-                    className="section__title"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      color: status === 'done' ? 'var(--muted)' : 'var(--fg)',
-                    }}
-                  >
-                    <span
+                return (
+                  <section key={status} className="section" style={{ marginBottom: 0 }}>
+                    <button
+                      type="button"
+                      onClick={toggle}
+                      className="section__header"
                       style={{
-                        display: 'inline-block',
-                        transition: 'transform 160ms',
-                        transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0)',
-                        fontSize: 11,
-                        opacity: 0.6,
+                        background: 'transparent',
+                        border: 0,
+                        padding: 0,
+                        width: '100%',
+                        cursor: 'pointer',
+                        marginBottom: isCollapsed ? 0 : 10,
                       }}
                     >
-                      ▼
-                    </span>
-                    <span>{meta.icon}</span>
-                    <span>{meta.label}</span>
-                    <span
-                      className="badge badge--muted"
-                      style={{ fontWeight: 500, marginLeft: 4 }}
-                    >
-                      {items.length}
-                    </span>
-                    {overdueInSection > 0 && (
-                      <span
-                        className="badge badge--danger"
-                        style={{ fontSize: 10, padding: '1px 6px' }}
+                      <h2
+                        className="section__title"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          color: status === 'done' ? 'var(--muted)' : 'var(--fg)',
+                        }}
                       >
-                        {overdueInSection} 过期
-                      </span>
-                    )}
-                  </h2>
-                </button>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            transition: 'transform 160ms',
+                            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0)',
+                            fontSize: 11,
+                            opacity: 0.6,
+                          }}
+                        >
+                          ▼
+                        </span>
+                        <span>{meta.icon}</span>
+                        <span>{meta.label}</span>
+                        <span
+                          className="badge badge--muted"
+                          style={{ fontWeight: 500, marginLeft: 4 }}
+                        >
+                          {items.length}
+                        </span>
+                        {overdueInSection > 0 && (
+                          <span
+                            className="badge badge--danger"
+                            style={{ fontSize: 10, padding: '1px 6px' }}
+                          >
+                            {overdueInSection} 过期
+                          </span>
+                        )}
+                      </h2>
+                    </button>
 
-                {!isCollapsed && (
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    {items.map((a) => (
-                      <ActionRow
-                        key={a.id}
-                        action={a}
-                        contact={a.contact_id ? contactMap[a.contact_id] : null}
-                        onToggleDone={() =>
-                          updateMutation.mutate({
-                            id: a.id,
-                            status: a.status === 'done' ? 'open' : 'done',
-                            completed_at:
-                              a.status === 'done' ? null : new Date().toISOString(),
-                          })
-                        }
-                        onChangeStatus={(newStatus) => {
-                          updateMutation.mutate({
-                            id: a.id,
-                            status: newStatus,
-                            completed_at:
-                              newStatus === 'done' ? new Date().toISOString() : null,
-                          });
-                        }}
-                        onDelete={() => {
-                          if (confirm(`确定要删除「${a.title}」吗？`)) {
-                            deleteMutation.mutate(a.id);
-                          }
-                        }}
-                        isUpdating={
-                          updateMutation.isPending && updateMutation.variables?.id === a.id
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            );
-          })}
+                    {!isCollapsed && (
+                      <div style={{ display: 'grid', gap: 6 }}>
+                        {items.map((a) => (
+                          <ActionRow
+                            key={a.id}
+                            action={a}
+                            contact={a.contact_id ? contactMap[a.contact_id] : null}
+                            onToggleDone={() =>
+                              updateMutation.mutate({
+                                id: a.id,
+                                status: a.status === 'done' ? 'open' : 'done',
+                                completed_at:
+                                  a.status === 'done' ? null : new Date().toISOString(),
+                              })
+                            }
+                            onChangeStatus={(newStatus) => {
+                              updateMutation.mutate({
+                                id: a.id,
+                                status: newStatus,
+                                completed_at:
+                                  newStatus === 'done' ? new Date().toISOString() : null,
+                              });
+                            }}
+                            onChangePriority={(newPriority) => {
+                              updateMutation.mutate({
+                                id: a.id,
+                                priority: newPriority,
+                              });
+                            }}
+                            onDelete={() => {
+                              if (confirm(`确定要删除「${a.title}」吗？`)) {
+                                deleteMutation.mutate(a.id);
+                              }
+                            }}
+                            isUpdating={
+                              updateMutation.isPending &&
+                              updateMutation.variables?.id === a.id
+                            }
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -338,6 +499,7 @@ function ActionRow({
   contact,
   onToggleDone,
   onChangeStatus,
+  onChangePriority,
   onDelete,
   isUpdating,
 }: {
@@ -345,24 +507,23 @@ function ActionRow({
   contact: { id: string; nickname: string; name: string | null } | null;
   onToggleDone: () => void;
   onChangeStatus: (status: string) => void;
+  onChangePriority: (priority: number) => void;
   onDelete: () => void;
   isUpdating: boolean;
 }) {
   const isDone = action.status === 'done';
   const displayName = contact ? (contact.nickname ?? contact.name ?? '?') : '';
   const [hovered, setHovered] = useState(false);
-  const rowRef = useRef<HTMLDivElement>(null);
-  const [pressTimer, setPressTimer] = useState<number | null>(null);
+  const pressTimer = useRef<number | null>(null);
 
   const onPressStart = () => {
     if (typeof window === 'undefined') return;
-    const t = window.setTimeout(() => setHovered(true), 400);
-    setPressTimer(t);
+    pressTimer.current = window.setTimeout(() => setHovered(true), 400);
   };
   const onPressEnd = () => {
-    if (pressTimer) {
-      clearTimeout(pressTimer);
-      setPressTimer(null);
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
     }
   };
 
@@ -384,16 +545,12 @@ function ActionRow({
     }
   }
 
-  const prioColor = PRIORITY_COLORS[action.priority] ?? '#d1d5db';
-
   return (
     <div
-      ref={rowRef}
       className={`row-card ${dueTone ? `row-card--${dueTone}` : ''}`}
       style={{
         padding: '10px 14px',
         opacity: isDone ? 0.65 : 1,
-        position: 'relative',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
@@ -465,88 +622,63 @@ function ActionRow({
             flexWrap: 'wrap',
           }}
         >
-          {action.priority > 0 && (
+          {dueLabel && (
             <span
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 3,
+                color:
+                  dueTone === 'overdue'
+                    ? 'var(--danger)'
+                    : dueTone === 'today'
+                      ? 'var(--warn)'
+                      : 'var(--muted)',
+                fontWeight: dueTone ? 500 : 400,
               }}
             >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: prioColor,
-                }}
-              />
-              {PRIORITY_LABELS[action.priority]}
+              {dueLabel}
             </span>
-          )}
-          {dueLabel && (
-            <>
-              {action.priority > 0 && <span style={{ opacity: 0.4 }}>·</span>}
-              <span
-                style={{
-                  color:
-                    dueTone === 'overdue'
-                      ? 'var(--danger)'
-                      : dueTone === 'today'
-                        ? 'var(--warn)'
-                        : 'var(--muted)',
-                  fontWeight: dueTone ? 500 : 400,
-                }}
-              >
-                {dueLabel}
-              </span>
-            </>
           )}
           {displayName && (
             <>
-              {(action.priority > 0 || dueLabel) && (
-                <span style={{ opacity: 0.4 }}>·</span>
-              )}
+              {dueLabel && <span style={{ opacity: 0.4 }}>·</span>}
               <span style={{ color: 'var(--accent)' }}>{displayName}</span>
             </>
           )}
         </div>
       </Link>
 
+      <PriorityPicker value={action.priority} onChange={onChangePriority} />
       <StatusPicker value={action.status} onChange={onChangeStatus} compact />
 
-      {(hovered || isDone === false) && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 4,
-            opacity: hovered ? 1 : 0,
-            transition: `opacity var(--transition)`,
-          }}
+      <div
+        style={{
+          display: 'flex',
+          gap: 4,
+          opacity: hovered ? 1 : 0,
+          transition: `opacity var(--transition)`,
+        }}
+      >
+        <Link
+          to={`/actions/${action.id}/edit`}
+          className="btn btn-sm btn-ghost"
+          style={{ padding: '4px 8px' }}
+          title="编辑"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Link
-            to={`/actions/${action.id}/edit`}
-            className="btn btn-sm btn-ghost"
-            style={{ padding: '4px 8px' }}
-            title="编辑"
-            onClick={(e) => e.stopPropagation()}
-          >
-            ✎
-          </Link>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="btn btn-sm btn-ghost"
-            style={{ padding: '4px 8px', color: 'var(--danger)' }}
-            title="删除"
-          >
-            🗑
-          </button>
-        </div>
-      )}
+          ✎
+        </Link>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="btn btn-sm btn-ghost"
+          style={{ padding: '4px 8px', color: 'var(--danger)' }}
+          title="删除"
+        >
+          🗑
+        </button>
+      </div>
     </div>
   );
 }
