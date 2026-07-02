@@ -7,6 +7,10 @@ edition = "2021"
 name = "weavine_lib"
 crate-type = ["lib"]
 
+[[bin]]
+name = "weavine-web"
+path = "src/bin/web_server.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
