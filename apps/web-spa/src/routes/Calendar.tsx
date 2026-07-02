@@ -7,6 +7,22 @@ import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Event } from '../lib/adapter/types';
 
+const TYPE_OPTIONS: { value: string; label: string; icon: string; color: string }[] = [
+  { value: 'all', label: '全部', icon: '●', color: '#6b7280' },
+  { value: '会议', label: '会议', icon: '🤝', color: '#3b82f6' },
+  { value: '聚餐', label: '聚餐', icon: '🍽', color: '#f59e0b' },
+  { value: '提醒', label: '提醒', icon: '⏰', color: '#8b5cf6' },
+  { value: '生日', label: '生日', icon: '🎂', color: '#ec4899' },
+  { value: '其他', label: '其他', icon: '📌', color: '#9ca3af' },
+];
+
+const TYPE_COLOR: Record<string, string> = Object.fromEntries(
+  TYPE_OPTIONS.filter((t) => t.value !== 'all').map((t) => [t.value, t.color]),
+);
+const TYPE_ICON: Record<string, string> = Object.fromEntries(
+  TYPE_OPTIONS.filter((t) => t.value !== 'all').map((t) => [t.value, t.icon]),
+);
+
 function getMonthStart(base: Date, monthOffset: number): Date {
   const d = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
   d.setHours(0, 0, 0, 0);
@@ -33,6 +49,10 @@ function formatDayLabel(d: Date): string {
     day: 'numeric',
     weekday: 'short',
   });
+}
+
+function formatShortDayLabel(d: Date): string {
+  return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric' });
 }
 
 function formatTime(d: Date): string {
@@ -67,6 +87,7 @@ export function Calendar() {
   const ownerId = useOwnerId();
 
   const [monthOffset, setMonthOffset] = useState(0);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
 
   const { monthStart, monthEnd } = useMemo(() => {
     const now = new Date();
@@ -87,6 +108,12 @@ export function Calendar() {
     enabled: Boolean(ownerId),
   });
 
+  const upcomingQuery = useQuery({
+    queryKey: ['events', ownerId, 'upcoming'],
+    queryFn: () => adapter.events.upcoming(ownerId!, 5),
+    enabled: Boolean(ownerId),
+  });
+
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
   }
@@ -99,45 +126,40 @@ export function Calendar() {
     );
   }
 
-  const events = eventsQuery.data ?? [];
-  const groups = groupByDay(events);
-  const isLoading = eventsQuery.isLoading;
+  const allEvents = eventsQuery.data ?? [];
+  const visible =
+    typeFilter === 'all' ? allEvents : allEvents.filter((e) => e.type === typeFilter);
 
+  const groups = groupByDay(visible);
   const days = Object.keys(groups)
     .filter((dayKey) => isDateInMonth(new Date(dayKey), monthStart, monthEnd))
     .sort();
 
+  const countsByType = TYPE_OPTIONS.reduce<Record<string, number>>((acc, t) => {
+    acc[t.value] =
+      t.value === 'all'
+        ? allEvents.length
+        : allEvents.filter((e) => e.type === t.value).length;
+    return acc;
+  }, {});
+
+  const isLoading = eventsQuery.isLoading;
   const isCurrentMonth = monthOffset === 0;
+  const upcoming = upcomingQuery.data ?? [];
 
   return (
     <div className="page">
       <PageHeader
         title={
-          <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button
-              type="button"
-              className="btn btn-sm btn-secondary"
-              onClick={() => setMonthOffset(monthOffset - 1)}
-              aria-label="上个月"
-            >
-              ‹
-            </button>
-            <span>
-              {isCurrentMonth ? `${formatMonthLabel(monthStart)}（本月）` : formatMonthLabel(monthStart)}
-            </span>
-            <button
-              type="button"
-              className="btn btn-sm btn-secondary"
-              onClick={() => setMonthOffset(monthOffset + 1)}
-              aria-label="下个月"
-            >
-              ›
-            </button>
+          <span>
+            {isCurrentMonth
+              ? `${formatMonthLabel(monthStart)}（本月）`
+              : formatMonthLabel(monthStart)}
           </span>
         }
         subtitle={
           <>
-            {events.length} 个日程
+            {visible.length} 个日程 · {days} 天
             {!isCurrentMonth && (
               <button
                 type="button"
@@ -151,60 +173,230 @@ export function Calendar() {
           </>
         }
         actions={
-          <Link to="/events/new" className="btn btn-primary">
-            + 新建日程
-          </Link>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => setMonthOffset(monthOffset - 1)}
+              aria-label="上个月"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={() => setMonthOffset(monthOffset + 1)}
+              aria-label="下个月"
+            >
+              ›
+            </button>
+            <Link to="/events/new" className="btn btn-primary">
+              + 新建日程
+            </Link>
+          </div>
         }
       />
 
-      {isLoading ? (
-        <div className="loading">加载中</div>
-      ) : days.length === 0 ? (
-        <div className="empty-state">
-          <h3 className="empty-state__title">这个月没有日程</h3>
-          <p className="empty-state__hint">加一个会面、纪念日或 deadline。</p>
-          <Link to="/events/new" className="btn btn-primary">
-            + 创建第一个日程
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 24 }}>
-          {days.map((dayKey) => {
-            const dayDate = new Date(dayKey);
-            const dayEvents = groups[dayKey];
-            return (
-              <section key={dayKey} className="section" style={{ marginBottom: 0 }}>
-                <div className="section__header">
-                  <h2 className="section__title">{formatDayLabel(dayDate)}</h2>
-                  <span className="text-sm text-muted">{dayEvents.length} 个日程</span>
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  {dayEvents.map((event) => {
-                    const startAt = new Date(event.start_at);
-                    const endAt = event.end_at ? new Date(event.end_at) : null;
-                    const timeLabel = endAt
-                      ? `${formatTime(startAt)} – ${formatTime(endAt)}`
-                      : formatTime(startAt);
-                    const subtitle = timeLabel + (event.location ? ` · ${event.location}` : '');
-                    return (
-                      <Link
-                        key={event.id}
-                        to={`/events/${event.id}`}
-                        className="row-card"
-                        style={{ textDecoration: 'none', color: 'inherit' }}
+      <div className="layout-split">
+        <aside className="filter-panel">
+          <div className="filter-panel__section">
+            <div className="filter-panel__title">月份</div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '4px 10px',
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => setMonthOffset(monthOffset - 1)}
+                aria-label="上个月"
+              >
+                ‹
+              </button>
+              <span style={{ fontSize: 13, fontWeight: 500 }}>
+                {formatMonthLabel(monthStart)}
+              </span>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => setMonthOffset(monthOffset + 1)}
+                aria-label="下个月"
+              >
+                ›
+              </button>
+            </div>
+            {!isCurrentMonth && (
+              <button
+                type="button"
+                onClick={() => setMonthOffset(0)}
+                className="filter-panel__item"
+                style={{ color: 'var(--accent)', fontWeight: 500 }}
+              >
+                <span>← 回到本月</span>
+              </button>
+            )}
+          </div>
+
+          <div className="filter-panel__divider" />
+
+          <div className="filter-panel__section">
+            <div className="filter-panel__title">类型</div>
+            {TYPE_OPTIONS.map((t) => {
+              const active = typeFilter === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setTypeFilter(t.value)}
+                  className={`filter-panel__item ${active ? 'filter-panel__item--active' : ''}`}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {t.value === 'all' ? (
+                      <span style={{ fontSize: 14 }}>●</span>
+                    ) : (
+                      <span
+                        className="filter-panel__item-dot"
+                        style={{ background: t.color }}
+                      />
+                    )}
+                    <span>{t.label}</span>
+                  </span>
+                  <span className="filter-panel__count">{countsByType[t.value] ?? 0}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {upcoming.length > 0 && (
+            <>
+              <div className="filter-panel__divider" />
+              <div className="filter-panel__section">
+                <div className="filter-panel__title">即将到来</div>
+                {upcoming.map((e) => {
+                  const start = new Date(e.start_at);
+                  const isToday = start.toDateString() === new Date().toDateString();
+                  return (
+                    <Link
+                      key={e.id}
+                      to={`/events/${e.id}`}
+                      className="filter-panel__item"
+                      style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '8px 10px' }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                        <span
+                          className="filter-panel__item-dot"
+                          style={{
+                            background: TYPE_COLOR[e.type ?? ''] ?? '#9ca3af',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                        >
+                          {e.title}
+                        </span>
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: isToday ? 'var(--warn)' : 'var(--muted)',
+                          fontWeight: isToday ? 500 : 400,
+                        }}
                       >
-                        <span style={{ fontSize: 18 }}>📅</span>
-                        <span className="row-card__title">{event.title}</span>
-                        <span className="row-card__meta">{subtitle}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+                        {isToday ? `今天 ${formatTime(start)}` : formatShortDayLabel(start)}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </aside>
+
+        <div className="layout-split__main">
+          {isLoading ? (
+            <div className="loading">加载中</div>
+          ) : days.length === 0 ? (
+            <div className="empty-state">
+              <h3 className="empty-state__title">这个月没有日程</h3>
+              <p className="empty-state__hint">
+                {typeFilter !== 'all'
+                  ? `切换到「全部」或选其他类型。`
+                  : '加一个会面、纪念日或 deadline。'}
+              </p>
+              <Link to="/events/new" className="btn btn-primary">
+                + 创建第一个日程
+              </Link>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 24 }}>
+              {days.map((dayKey) => {
+                const dayDate = new Date(dayKey);
+                const dayEvents = groups[dayKey];
+                return (
+                  <section key={dayKey} className="section" style={{ marginBottom: 0 }}>
+                    <div className="section__header">
+                      <h2 className="section__title">{formatDayLabel(dayDate)}</h2>
+                      <span className="text-sm text-muted">{dayEvents.length} 个日程</span>
+                    </div>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {dayEvents.map((event) => {
+                        const startAt = new Date(event.start_at);
+                        const endAt = event.end_at ? new Date(event.end_at) : null;
+                        const timeLabel = endAt
+                          ? `${formatTime(startAt)} – ${formatTime(endAt)}`
+                          : formatTime(startAt);
+                        const subtitle = timeLabel + (event.location ? ` · ${event.location}` : '');
+                        const icon = TYPE_ICON[event.type ?? ''] ?? '📅';
+                        const color = TYPE_COLOR[event.type ?? ''] ?? '#9ca3af';
+                        return (
+                          <Link
+                            key={event.id}
+                            to={`/events/${event.id}`}
+                            className="row-card"
+                            style={{ textDecoration: 'none', color: 'inherit' }}
+                          >
+                            <span
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 6,
+                                background: `${color}18`,
+                                color,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 14,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {icon}
+                            </span>
+                            <span className="row-card__title">{event.title}</span>
+                            <span className="row-card__meta">{subtitle}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

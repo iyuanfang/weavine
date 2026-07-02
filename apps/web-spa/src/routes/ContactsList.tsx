@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
+import { ImportancePicker } from '../components/ImportancePicker';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Tag, Contact } from '../lib/adapter/types';
+import type { Tag, Contact, UpdateContactInput } from '../lib/adapter/types';
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -38,12 +39,6 @@ const IMPORTANCE_DOT: Record<string, string> = {
   low: '#9ca3af',
 };
 
-const IMPORTANCE_BADGE: Record<string, { bg: string; fg: string }> = {
-  high: { bg: '#fef2f2', fg: '#dc2626' },
-  medium: { bg: '#fffbeb', fg: '#d97706' },
-  low: { bg: '#f3f4f6', fg: '#6b7280' },
-};
-
 function avatarBg(name: string): string {
   const palettes = [
     'linear-gradient(135deg, #6366f1, #3b82f6)',
@@ -64,11 +59,19 @@ function avatarBg(name: string): string {
 export function ContactsList() {
   const adapter = useAdapter();
   const ownerId = useOwnerId();
+  const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [selectedImportance, setSelectedImportance] = useState<string | null>(null);
+
+  const updateMutation = useMutation({
+    mutationFn: (input: UpdateContactInput) => adapter.contacts.update(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', ownerId] });
+    },
+  });
 
   const tagsQuery = useQuery({
     queryKey: ['tags', ownerId],
@@ -285,7 +288,13 @@ export function ContactsList() {
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
               {contacts.map((c) => (
-                <ContactRow key={c.id} contact={c} />
+                <ContactRow
+                  key={c.id}
+                  contact={c}
+                  onChangeImportance={(newImp) =>
+                    updateMutation.mutate({ id: c.id, importance: newImp })
+                  }
+                />
               ))}
             </div>
           )}
@@ -295,79 +304,94 @@ export function ContactsList() {
   );
 }
 
-function ContactRow({ contact: c }: { contact: Contact }) {
-  const { bg, fg } = IMPORTANCE_BADGE[c.importance] ?? IMPORTANCE_BADGE.low;
+function ContactRow({
+  contact: c,
+  onChangeImportance,
+}: {
+  contact: Contact;
+  onChangeImportance: (value: string) => void;
+}) {
   const displayName = c.nickname || c.name || '?';
   const initials = displayName.slice(0, 1).toUpperCase();
 
   return (
-    <Link
-      to={`/contacts/${c.id}`}
+    <div
       className="row-card"
-      style={{ textDecoration: 'none', color: 'inherit', padding: '14px 18px' }}
+      style={{ padding: '14px 18px' }}
     >
-      <div
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: '50%',
-          background: avatarBg(displayName),
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 600,
-          fontSize: 15,
-          flexShrink: 0,
-        }}
+      <Link
+        to={`/contacts/${c.id}`}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}
       >
-        {initials}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span className="row-card__title" style={{ fontSize: 14 }}>
-            {displayName}
-          </span>
-          {c.name && c.name !== c.nickname && (
-            <span className="row-card__meta">{c.name}</span>
-          )}
-          {c.company && (
-            <>
-              <span className="row-card__meta">·</span>
-              <span className="row-card__meta">{c.company}</span>
-            </>
-          )}
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: avatarBg(displayName),
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 600,
+            fontSize: 15,
+            flexShrink: 0,
+          }}
+        >
+          {initials}
         </div>
-        {c.tags.length > 0 && (
-          <div style={{ display: 'flex', gap: 4, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-            {c.tags.slice(0, 4).map((tag) => (
-              <span
-                key={tag.id}
-                className="tag-chip"
-                style={{
-                  background: `${tagColor(tag)}14`,
-                  borderColor: `${tagColor(tag)}40`,
-                  color: tagColor(tag),
-                  padding: '1px 8px',
-                  fontSize: 11,
-                }}
-              >
-                {tag.name}
-              </span>
-            ))}
-            {c.tags.length > 4 && (
-              <span className="text-xs text-muted">+{c.tags.length - 4}</span>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span className="row-card__title" style={{ fontSize: 14 }}>
+              {displayName}
+            </span>
+            {c.name && c.name !== c.nickname && (
+              <span className="row-card__meta">{c.name}</span>
+            )}
+            {c.company && (
+              <>
+                <span className="row-card__meta">·</span>
+                <span className="row-card__meta">{c.company}</span>
+              </>
             )}
           </div>
-        )}
-      </div>
+          {c.tags.length > 0 && (
+            <div style={{ display: 'flex', gap: 4, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+              {c.tags.slice(0, 4).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="tag-chip"
+                  style={{
+                    background: `${tagColor(tag)}14`,
+                    borderColor: `${tagColor(tag)}40`,
+                    color: tagColor(tag),
+                    padding: '1px 8px',
+                    fontSize: 11,
+                  }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {c.tags.length > 4 && (
+                <span className="text-xs text-muted">+{c.tags.length - 4}</span>
+              )}
+            </div>
+          )}
+        </div>
+      </Link>
 
-      <span className="badge" style={{ background: bg, color: fg }}>
-        {IMPORTANCE_LABELS[c.importance] ?? c.importance}
-      </span>
+      <ImportancePicker
+        value={c.importance}
+        onChange={onChangeImportance}
+      />
 
-      <span style={{ fontSize: 13, color: 'var(--muted)' }}>→</span>
-    </Link>
+      <Link
+        to={`/contacts/${c.id}`}
+        style={{ fontSize: 13, color: 'var(--muted)', textDecoration: 'none' }}
+      >
+        →
+      </Link>
+    </div>
   );
 }
