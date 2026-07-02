@@ -28,6 +28,14 @@ impl Database {
             conn: Mutex::new(conn),
         })
     }
+
+    pub fn open_memory() -> Result<Self> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch("PRAGMA foreign_keys=ON;")?;
+        Ok(Database {
+            conn: Mutex::new(conn),
+        })
+    }
 }
 
 fn get_db_path() -> PathBuf {
