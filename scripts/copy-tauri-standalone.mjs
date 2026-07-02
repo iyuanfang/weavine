@@ -79,6 +79,23 @@ async function main() {
     console.log("  ✓ dev.db (pre-initialized database)");
   }
 
+  // Create tauri-dist/ for Tauri's frontendDist compile-time check.
+  // The webview URL points directly to the spawned Next.js server,
+  // so frontendDist is never actually loaded. But Tauri v2's
+  // generate_context!() macro validates the path exists at compile time.
+  const tauriDistDir = resolve(ROOT, "tauri-dist");
+  if (!existsSync(tauriDistDir)) {
+    await rm(tauriDistDir, { recursive: true, force: true });
+  }
+  await cp(standalone, tauriDistDir, { recursive: true });
+  // Remove node_modules/ from tauri-dist — Tauri v2 rejects it, and
+  // it's never used at runtime (the webview loads from the spawned server).
+  const tauriDistNodeModules = resolve(tauriDistDir, "node_modules");
+  if (existsSync(tauriDistNodeModules)) {
+    await rm(tauriDistNodeModules, { recursive: true, force: true });
+  }
+  console.log("  ✓ tauri-dist/ (frontendDist placeholder, node_modules removed)");
+
   console.log("✅ Standalone output ready for Tauri bundling");
 }
 

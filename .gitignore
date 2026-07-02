@@ -42,3 +42,5 @@ src-tauri/gen/
 
 # Nested prisma dev.db artifact (from `npx prisma db push` with relative path)
 prisma/prisma/
+tauri-dist/
+.playwright-mcp/
