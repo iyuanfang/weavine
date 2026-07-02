@@ -11,8 +11,6 @@ const STATUS_LABEL: Record<string, string> = {
   open: '🔨 进行中',
   waiting: '⏳ 等待中',
   done: '✅ 已完成',
-  cancelled: '🗑 已取消',
-  dropped: '🗑 已放弃',
 };
 
 const PRIORITY_LABELS: Record<number, string> = {
@@ -69,14 +67,6 @@ export function ActionDetail() {
     },
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
-      queryClient.invalidateQueries({ queryKey: ['action', id] });
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (actionId: string) => adapter.actions.delete(actionId),
     onSuccess: () => navigate('/actions'),
@@ -96,8 +86,12 @@ export function ActionDetail() {
     });
   };
 
-  const handleCancel = () => {
-    cancelMutation.mutate({ id, status: 'cancelled' });
+  const handleReopen = () => {
+    completeMutation.mutate({
+      id,
+      status: 'open',
+      completed_at: null,
+    });
   };
 
   if (actionQuery.isLoading) {
@@ -119,7 +113,6 @@ export function ActionDetail() {
   const prio = PRIORITY_BADGE[action.priority] ?? PRIORITY_BADGE[0];
   const prioLabel = PRIORITY_LABELS[action.priority] ?? '';
   const isDone = action.status === 'done';
-  const isCancelled = action.status === 'cancelled';
 
   return (
     <div className="page page--narrow">
@@ -254,17 +247,20 @@ export function ActionDetail() {
           >
             {completeMutation.isPending ? '完成中…' : '✓ 标记完成'}
           </button>
-          {!isCancelled && (
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={cancelMutation.isPending}
-              className="btn btn-secondary"
-              style={{ opacity: cancelMutation.isPending ? 0.6 : 1 }}
-            >
-              {cancelMutation.isPending ? '取消中…' : '取消待办'}
-            </button>
-          )}
+        </div>
+      )}
+
+      {isDone && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={handleReopen}
+            disabled={completeMutation.isPending}
+            className="btn btn-secondary"
+            style={{ opacity: completeMutation.isPending ? 0.6 : 1 }}
+          >
+            {completeMutation.isPending ? '处理中…' : '↺ 重新打开'}
+          </button>
         </div>
       )}
     </div>
