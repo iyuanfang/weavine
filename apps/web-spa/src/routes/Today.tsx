@@ -118,9 +118,69 @@ export function TodayPage() {
     eventsQuery.isLoading ||
     interactionsQuery.isLoading;
 
+  const overdueCount = todayDoActions.filter((a) => new Date(a.due_at!) < now).length;
+
   return (
-    <div className="today-page">
-      <h1>今天</h1>
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">今天</h1>
+          <p className="page-subtitle">
+            {now.toLocaleDateString('zh-CN', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              weekday: 'long',
+            })}
+          </p>
+        </div>
+      </div>
+
+      <div
+        className="kpi-row"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <div className="card card--accent" style={{ padding: '14px 16px' }}>
+          <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
+            待办
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+            {todayDoActions.length}
+          </div>
+          {overdueCount > 0 && (
+            <div className="text-xs" style={{ color: 'var(--danger)', marginTop: 2 }}>
+              {overdueCount} 已过期
+            </div>
+          )}
+        </div>
+        <div className="card" style={{ padding: '14px 16px' }}>
+          <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
+            日程
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+            {upcomingEvents.length}
+          </div>
+          <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+            接下来 3 天
+          </div>
+        </div>
+        <div className="card" style={{ padding: '14px 16px' }}>
+          <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
+            互动
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+            {recentInteractions.length}
+          </div>
+          <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+            最近 7 天
+          </div>
+        </div>
+      </div>
 
       <section className="section">
         <SectionHeader title="🎯 今日要做" viewAllHref="/actions" />
@@ -129,7 +189,10 @@ export function TodayPage() {
         ) : todayDoActions.length > 0 ? (
           todayDoActions.map((a) => <ActionCard key={a.id} action={a} now={now} />)
         ) : (
-          <div className="empty-state">🎉 今天没有到期的事</div>
+          <div className="empty-state">
+            <h3 className="empty-state__title">🎉 今天没有到期的事</h3>
+            <p className="empty-state__hint">享受一段没有 deadline 的时光</p>
+          </div>
         )}
       </section>
 
@@ -142,7 +205,10 @@ export function TodayPage() {
             <EventCard key={e.id} event={e} baseDay={baseDay} />
           ))
         ) : (
-          <div className="empty-state">最近没有日程</div>
+          <div className="empty-state">
+            <h3 className="empty-state__title">最近没有日程</h3>
+            <p className="empty-state__hint">去日程页加一个吧</p>
+          </div>
         )}
       </section>
 
@@ -155,7 +221,10 @@ export function TodayPage() {
             <InteractionRow key={i.id} interaction={i} />
           ))
         ) : (
-          <div className="empty-state">最近 7 天没有互动</div>
+          <div className="empty-state">
+            <h3 className="empty-state__title">最近 7 天没有互动</h3>
+            <p className="empty-state__hint">找个人打个招呼，记录一条互动</p>
+          </div>
         )}
       </section>
     </div>
@@ -180,7 +249,7 @@ function SectionHeader({
 }
 
 function Skeleton() {
-  return <div className="loading">…</div>;
+  return <div className="loading">加载中</div>;
 }
 
 function ActionCard({ action, now }: { action: Action; now: Date }) {
@@ -190,6 +259,7 @@ function ActionCard({ action, now }: { action: Action; now: Date }) {
   const subtitle = `${isOverdue ? '已过期 · ' : '今天 '}${formatDate(dueAt)} ${formatTime(dueAt)}`;
   return (
     <div className={`row-card row-card--${tone}`}>
+      <span style={{ fontSize: 18 }}>{isOverdue ? '⏰' : '📌'}</span>
       <span className="row-card__title">{action.title}</span>
       <span className="row-card__meta">{subtitle}</span>
     </div>
@@ -208,6 +278,7 @@ function EventCard({
   const subtitle = `${dayLabel} ${formatTime(startAt)}${event.location ? ` · ${event.location}` : ''}`;
   return (
     <div className="row-card">
+      <span style={{ fontSize: 18 }}>📅</span>
       <span className="row-card__title">{event.title}</span>
       <span className="row-card__meta">{subtitle}</span>
     </div>
@@ -218,12 +289,13 @@ function InteractionRow({ interaction }: { interaction: Interaction }) {
   const d = new Date(interaction.occurred_at);
   return (
     <div className="row-card">
+      <span style={{ fontSize: 18 }}>💬</span>
       <span className="row-card__meta">
         {d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
       </span>
       <span className="row-card__title">{interaction.summary}</span>
       {interaction.channel && (
-        <span className="row-card__meta">{interaction.channel}</span>
+        <span className="badge badge--muted">{interaction.channel}</span>
       )}
     </div>
   );

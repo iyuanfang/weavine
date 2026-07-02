@@ -6,8 +6,6 @@ import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Tag } from '../lib/adapter/types';
 
-// ── Helpers ──────────────────────────────────────────
-
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -34,32 +32,27 @@ function tagColor(tag: Tag): string {
   return tag.color ?? FALLBACK_TAG_COLORS[tag.name.length % FALLBACK_TAG_COLORS.length];
 }
 
-const IMPORTANCE_BADGE_COLORS: Record<string, string> = {
-  high: '#ef4444',
-  medium: '#f59e0b',
-  low: '#6b7280',
+const IMPORTANCE_BADGE: Record<string, { bg: string; fg: string }> = {
+  high: { bg: '#fee2e2', fg: '#dc2626' },
+  medium: { bg: '#fef3c7', fg: '#d97706' },
+  low: { bg: '#f3f4f6', fg: '#6b7280' },
 };
-
-// ── Page component ───────────────────────────────────
 
 export function ContactsList() {
   const adapter = useAdapter();
   const ownerId = useOwnerId();
 
-  // Filters
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [selectedImportance, setSelectedImportance] = useState<string | null>(null);
 
-  // Fetch tags (for filter chips)
   const tagsQuery = useQuery({
     queryKey: ['tags', ownerId],
     queryFn: () => adapter.tags.list(ownerId!),
     enabled: !!ownerId,
   });
 
-  // Fetch contacts
   const contactsQuery = useQuery({
     queryKey: [
       'contacts',
@@ -76,225 +69,168 @@ export function ContactsList() {
     enabled: !!ownerId,
   });
 
-  // ── Guards ───────────────────────────────────────
-
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
   }
 
   if (contactsQuery.isError) {
     return (
-      <div className="today-page">
-        <div className="error">加载失败: {String(contactsQuery.error)}</div>
+      <div className="page">
+        <div className="error-banner">加载失败: {String(contactsQuery.error)}</div>
       </div>
     );
   }
 
-  // ── Derived state ────────────────────────────────
-
   const contacts = contactsQuery.data ?? [];
   const tags = tagsQuery.data ?? [];
   const isLoading = contactsQuery.isLoading;
-
   const hasActiveFilter = Boolean(debouncedSearch || selectedTagId || selectedImportance);
 
-  // ── Render ───────────────────────────────────────
-
   return (
-    <div className="today-page">
-      {/* Header */}
-      <div className="section__header">
-        <h1 className="section__title">联系人</h1>
-        <Link
-          to="/contacts/new"
-          style={{ fontSize: 14, fontWeight: 500, color: 'var(--accent)' }}
-        >
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">联系人</h1>
+          <p className="page-subtitle">{contacts.length} 个人</p>
+        </div>
+        <Link to="/contacts/new" className="btn btn-primary">
           + 新建联系人
         </Link>
       </div>
 
-      {/* Search input */}
-      <input
-        type="text"
-        placeholder="搜索联系人…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{
-          width: '100%',
-          padding: '8px 12px',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          fontSize: 14,
-          marginBottom: 12,
-          background: '#fff',
-          outline: 'none',
-          boxSizing: 'border-box',
-        }}
-      />
+      <div className="card" style={{ marginBottom: 16 }}>
+        <input
+          type="text"
+          className="input-base"
+          placeholder="搜索姓名、昵称、公司…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
-      {/* Tag filter chips */}
-      {tags.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-          {tags.map((tag) => {
-            const active = selectedTagId === tag.id;
-            const color = tagColor(tag);
+        {tags.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+            {tags.map((tag) => {
+              const active = selectedTagId === tag.id;
+              const color = tagColor(tag);
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => setSelectedTagId(active ? null : tag.id)}
+                  className={`tag-chip ${active ? 'tag-chip--active' : ''}`}
+                  style={active ? { borderColor: color, background: `${color}18`, color } : undefined}
+                >
+                  <span className="tag-chip__dot" style={{ background: color }} />
+                  {tag.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          {IMPORTANCE_VALUES.map((value) => {
+            const active = selectedImportance === value;
+            const { bg, fg } = IMPORTANCE_BADGE[value];
             return (
               <button
-                key={tag.id}
-                onClick={() => setSelectedTagId(active ? null : tag.id)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 999,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  border: `1px solid ${active ? color : 'var(--border)'}`,
-                  background: active ? `${color}18` : '#fff',
-                  color: active ? color : 'var(--fg)',
-                  transition: 'all 0.1s',
-                }}
+                key={value}
+                type="button"
+                onClick={() => setSelectedImportance(active ? null : value)}
+                className={`tag-chip ${active ? 'tag-chip--active' : ''}`}
+                style={
+                  active
+                    ? { borderColor: fg, background: bg, color: fg }
+                    : undefined
+                }
               >
-                {tag.name}
+                {IMPORTANCE_LABELS[value]}
               </button>
             );
           })}
         </div>
-      )}
-
-      {/* Importance filter chips */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        {IMPORTANCE_VALUES.map((value) => {
-          const active = selectedImportance === value;
-          const color = IMPORTANCE_BADGE_COLORS[value];
-          return (
-            <button
-              key={value}
-              onClick={() => setSelectedImportance(active ? null : value)}
-              style={{
-                padding: '4px 10px',
-                borderRadius: 999,
-                fontSize: 12,
-                cursor: 'pointer',
-                border: `1px solid ${active ? color : 'var(--border)'}`,
-                background: active ? `${color}18` : '#fff',
-                color: active ? color : 'var(--fg)',
-                transition: 'all 0.1s',
-              }}
-            >
-              {IMPORTANCE_LABELS[value]}
-            </button>
-          );
-        })}
       </div>
 
-      {/* Result count */}
-      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 12 }}>
-        共 {contacts.length} 个联系人
-      </div>
-
-      {/* Content area */}
       {isLoading ? (
-        <div className="loading">…</div>
+        <div className="loading">加载联系人…</div>
       ) : contacts.length === 0 ? (
         <div className="empty-state">
-          {hasActiveFilter ? (
-            <p>没有匹配的联系人</p>
-          ) : (
-            <>
-              <p>还没有联系人。从一个你最近见过的人开始：</p>
-              <ol
-                style={{
-                  textAlign: 'left',
-                  margin: '12px auto',
-                  maxWidth: 320,
-                  lineHeight: 2,
-                  fontSize: 13,
-                }}
-              >
-                <li>
-                  <span style={{ fontWeight: 600, color: 'var(--accent)' }}>1.</span>{' '}
-                  点右上角「新建」，写下他的昵称
-                </li>
-                <li>
-                  <span style={{ fontWeight: 600, color: 'var(--accent)' }}>2.</span>{' '}
-                  给他打个标签（朋友/同事/投资人…）
-                </li>
-                <li>
-                  <span style={{ fontWeight: 600, color: 'var(--accent)' }}>3.</span>{' '}
-                  在联系人详情里加一条互动
-                </li>
-              </ol>
-              <Link
-                to="/contacts/new"
-                style={{
-                  display: 'inline-block',
-                  marginTop: 12,
-                  fontSize: 13,
-                  color: 'var(--accent)',
-                  fontWeight: 500,
-                }}
-              >
-                + 添加第一个联系人
-              </Link>
-            </>
-          )}
+          <h3 className="empty-state__title">
+            {hasActiveFilter ? '没有匹配的联系人' : '还没有联系人'}
+          </h3>
+          <p className="empty-state__hint">
+            {hasActiveFilter
+              ? '试着清空筛选条件，或者新建一个联系人。'
+              : '从一个你最近见过的人开始建立你的人脉网络。'}
+          </p>
+          <Link to="/contacts/new" className="btn btn-primary">
+            {hasActiveFilter ? '+ 新建联系人' : '+ 添加第一个联系人'}
+          </Link>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 8 }}>
-          {contacts.map((c) => (
-            <Link
-              key={c.id}
-              to={`/contacts/${c.id}`}
-              className="row-card"
-              style={{ textDecoration: 'none' }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="row-card__title">{c.nickname}</span>
-                  {c.company && (
-                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                      {c.company}
-                    </span>
+          {contacts.map((c) => {
+            const { bg, fg } = IMPORTANCE_BADGE[c.importance] ?? IMPORTANCE_BADGE.low;
+            return (
+              <Link
+                key={c.id}
+                to={`/contacts/${c.id}`}
+                className="row-card"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #6366f1, #3b82f6)',
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    flexShrink: 0,
+                  }}
+                >
+                  {(c.nickname || c.name || '?').slice(0, 1).toUpperCase()}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="row-card__title">{c.nickname}</span>
+                    {c.company && (
+                      <span className="row-card__meta">· {c.company}</span>
+                    )}
+                  </div>
+                  {c.tags.length > 0 && (
+                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      {c.tags.slice(0, 5).map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="tag-chip__dot"
+                          style={{ background: tagColor(tag) }}
+                          title={tag.name}
+                        />
+                      ))}
+                      {c.tags.length > 5 && (
+                        <span className="text-xs text-muted">+{c.tags.length - 5}</span>
+                      )}
+                    </div>
                   )}
                 </div>
-                {c.tags.length > 0 && (
-                  <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                    {c.tags.map((tag) => (
-                      <span
-                        key={tag.id}
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          background: tagColor(tag),
-                          flexShrink: 0,
-                        }}
-                        title={tag.name}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
 
-              {/* Importance badge */}
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  background: `${IMPORTANCE_BADGE_COLORS[c.importance] || '#6b7280'}18`,
-                  color: IMPORTANCE_BADGE_COLORS[c.importance] || '#6b7280',
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {IMPORTANCE_LABELS[c.importance] ?? c.importance}
-              </span>
+                <span
+                  className="badge"
+                  style={{ background: bg, color: fg }}
+                >
+                  {IMPORTANCE_LABELS[c.importance] ?? c.importance}
+                </span>
 
-              <span style={{ fontSize: 12, color: 'var(--accent)', whiteSpace: 'nowrap' }}>
-                查看
-              </span>
-            </Link>
-          ))}
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>查看 →</span>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

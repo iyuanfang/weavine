@@ -206,6 +206,34 @@ CREATE INDEX IF NOT EXISTS "PushSubscription_ownerId_idx" ON "PushSubscription"(
 pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(SCHEMA_SQL)?;
     conn.execute_batch(INDEX_SQL)?;
+    seed_default_user(conn)?;
+    Ok(())
+}
+
+/// Seed a default local user if none exists.
+///
+/// Single-user MVP: we always need exactly one `User` row with `isLocal=1`
+/// so that FK constraints from Contact / Event / etc. resolve. The id is
+/// a stable constant so the web-spa and Tauri both agree on the owner.
+fn seed_default_user(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT id FROM \"User\" WHERE isLocal = 1 LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+    if existing.is_some() {
+        return Ok(());
+    }
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    conn.execute(
+        "INSERT INTO \"User\" (id, name, email, isLocal, createdAt, updatedAt) \
+         VALUES (?1, ?2, ?3, 1, ?4, ?4)",
+        rusqlite::params!["local-default", "本地用户", "local@weavine.app", &now],
+    )?;
     Ok(())
 }
 
