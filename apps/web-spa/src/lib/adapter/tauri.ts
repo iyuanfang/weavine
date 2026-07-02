@@ -22,6 +22,7 @@ import type {
   Reminder,
   SearchResults,
   Setting,
+  StartupInfo,
   Tag,
   UpdateActionInput,
   UpdateContactInput,
@@ -34,6 +35,10 @@ import type {
 export class TauriAdapter implements PRMAdapter {
   async getLocalUser(): Promise<LocalUser> {
     return invoke<LocalUser>('get_local_user');
+  }
+
+  async getStartupInfo(): Promise<StartupInfo> {
+    return invoke<StartupInfo>('get_startup_info');
   }
 
   contacts = {

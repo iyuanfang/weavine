@@ -119,6 +119,11 @@ export interface Setting {
   updated_at: string;
 }
 
+export interface StartupInfo {
+  server_ready: boolean;
+  error: string | null;
+}
+
 // ──────────────────────────────────────────────
 // Query DTOs — match Create*/Update* input structs
 // in src-tauri/src/commands/*
@@ -277,6 +282,9 @@ export interface SearchResults {
 export interface PRMAdapter {
   /** Returns the current local user (single-user desktop model). */
   getLocalUser(): Promise<LocalUser>;
+
+  /** Returns server startup status. */
+  getStartupInfo(): Promise<StartupInfo>;
 
   contacts: {
     list(params: ListContactsParams): Promise<Contact[]>;

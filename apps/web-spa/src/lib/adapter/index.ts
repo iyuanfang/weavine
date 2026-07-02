@@ -1,44 +1,47 @@
 // Public entry for the adapter layer.
 //
-// The Tauri app uses `new TauriAdapter()`. The web/browser
-// build (which doesn't exist yet) would use `new HttpAdapter(...)`
-// instead. Both implement the same `PRMAdapter` contract.
+// `createAdapter()` returns a lazy singleton PRMAdapter:
+//   - TauriAdapter  when running inside the Tauri shell (desktop/mobile)
+//   - HttpAdapter   when running in a plain browser
 //
-// We expose a React context + `useAdapter` hook so components
-// can do `const adapter = useAdapter()` and never have to know
-// which transport is wired up.
+// Both implement the same PRMAdapter contract so downstream
+// code is environment-agnostic.
 
 import { createContext, useContext } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 
-import { TauriAdapter } from './tauri';
+import { TauriAdapter, isTauri } from './tauri';
+import { HttpAdapter } from './http';
 import type { PRMAdapter } from './types';
 
 export type { PRMAdapter } from './types';
 export {
   TauriAdapter,
+  HttpAdapter,
   isTauri,
-} from './tauri';
-export { HttpAdapter } from './http';
+};
 
-export function createWebQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        // SQLite-backed local commands are basically free to re-run.
-        // 30s feels like a sensible "refetch on tab focus" cadence
-        // without being chatty. Tweak in Phase 2 if needed.
-        staleTime: 30_000,
-        refetchOnWindowFocus: true,
-        retry: 1,
-      },
-    },
-  });
+// ── Lazy singleton ─────────────────────────────────────
+
+let _adapter: PRMAdapter | null = null;
+
+export function createAdapter(): PRMAdapter {
+  if (_adapter) return _adapter;
+
+  _adapter = isTauri
+    ? new TauriAdapter()
+    : new HttpAdapter();
+
+  return _adapter;
 }
 
-export function createDefaultAdapter(): PRMAdapter {
-  return new TauriAdapter();
-}
+/** Ready-to-use singleton instance. Auto-detects Tauri vs browser. */
+export const adapter = createAdapter();
+
+/** @deprecated use `createAdapter()` or the exported `adapter` singleton instead. */
+export const createDefaultAdapter = createAdapter;
+
+// ── React context (for component-level injection) ──────
 
 const AdapterContext = createContext<PRMAdapter | null>(null);
 export const AdapterProvider = AdapterContext.Provider;
@@ -52,4 +55,18 @@ export function useAdapter(): PRMAdapter {
     );
   }
   return adapter;
+}
+
+// ── Query client factory ───────────────────────────────
+
+export function createWebQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        refetchOnWindowFocus: true,
+        retry: 1,
+      },
+    },
+  });
 }
