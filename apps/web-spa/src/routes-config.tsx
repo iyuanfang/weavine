@@ -8,6 +8,7 @@ import type { RouteObject } from 'react-router-dom';
 
 import { App } from './App';
 import { TodayPage } from './routes/Today';
+import { ContactsList } from './routes/ContactsList';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -32,7 +33,7 @@ export const routes: AppRoute[] = [
   // Placeholder entries below — replaced as Phase 4 lands.
   // Each migration subagent removes its placeholder and
   // imports the real component instead.
-  { path: '/contacts', Component: () => <div className="loading">联系人（Phase 4 进行中）</div>, label: 'Contacts (placeholder)' },
+  { path: '/contacts', Component: ContactsList, label: 'Contacts' },
   { path: '/contacts/:id', Component: () => <div className="loading">联系人详情（Phase 4 进行中）</div>, label: 'ContactDetail (placeholder)' },
   { path: '/contacts/:id/edit', Component: () => <div className="loading">编辑联系人（Phase 4 进行中）</div>, label: 'ContactEdit (placeholder)' },
   { path: '/contacts/new', Component: () => <div className="loading">新建联系人（Phase 4 进行中）</div>, label: 'ContactNew (placeholder)' },
