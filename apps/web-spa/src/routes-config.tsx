@@ -9,6 +9,7 @@ import type { RouteObject } from 'react-router-dom';
 import { App } from './App';
 import { TodayPage } from './routes/Today';
 import { ContactsList } from './routes/ContactsList';
+import { Calendar } from './routes/Calendar';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -37,7 +38,7 @@ export const routes: AppRoute[] = [
   { path: '/contacts/:id', Component: () => <div className="loading">联系人详情（Phase 4 进行中）</div>, label: 'ContactDetail (placeholder)' },
   { path: '/contacts/:id/edit', Component: () => <div className="loading">编辑联系人（Phase 4 进行中）</div>, label: 'ContactEdit (placeholder)' },
   { path: '/contacts/new', Component: () => <div className="loading">新建联系人（Phase 4 进行中）</div>, label: 'ContactNew (placeholder)' },
-  { path: '/calendar', Component: () => <div className="loading">日程（Phase 4 进行中）</div>, label: 'Calendar (placeholder)' },
+  { path: '/calendar', Component: Calendar, label: 'Calendar' },
   { path: '/events/:id', Component: () => <div className="loading">日程详情（Phase 4 进行中）</div>, label: 'EventDetail (placeholder)' },
   { path: '/events/:id/edit', Component: () => <div className="loading">编辑日程（Phase 4 进行中）</div>, label: 'EventEdit (placeholder)' },
   { path: '/events/new', Component: () => <div className="loading">新建日程（Phase 4 进行中）</div>, label: 'EventNew (placeholder)' },
