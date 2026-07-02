@@ -9,6 +9,9 @@ import type { RouteObject } from 'react-router-dom';
 import { App } from './App';
 import { TodayPage } from './routes/Today';
 import { ContactsList } from './routes/ContactsList';
+import { ContactNew } from './routes/ContactNew';
+import { ContactEdit } from './routes/ContactEdit';
+import { ContactDetail } from './routes/ContactDetail';
 import { Calendar } from './routes/Calendar';
 
 export interface AppRoute {
@@ -35,9 +38,9 @@ export const routes: AppRoute[] = [
   // Each migration subagent removes its placeholder and
   // imports the real component instead.
   { path: '/contacts', Component: ContactsList, label: 'Contacts' },
-  { path: '/contacts/:id', Component: () => <div className="loading">联系人详情（Phase 4 进行中）</div>, label: 'ContactDetail (placeholder)' },
-  { path: '/contacts/:id/edit', Component: () => <div className="loading">编辑联系人（Phase 4 进行中）</div>, label: 'ContactEdit (placeholder)' },
-  { path: '/contacts/new', Component: () => <div className="loading">新建联系人（Phase 4 进行中）</div>, label: 'ContactNew (placeholder)' },
+  { path: '/contacts/:id', Component: ContactDetail, label: 'ContactDetail' },
+  { path: '/contacts/:id/edit', Component: ContactEdit, label: 'ContactEdit' },
+  { path: '/contacts/new', Component: ContactNew, label: 'ContactNew' },
   { path: '/calendar', Component: Calendar, label: 'Calendar' },
   { path: '/events/:id', Component: () => <div className="loading">日程详情（Phase 4 进行中）</div>, label: 'EventDetail (placeholder)' },
   { path: '/events/:id/edit', Component: () => <div className="loading">编辑日程（Phase 4 进行中）</div>, label: 'EventEdit (placeholder)' },
