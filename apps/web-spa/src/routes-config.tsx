@@ -13,6 +13,9 @@ import { ContactNew } from './routes/ContactNew';
 import { ContactEdit } from './routes/ContactEdit';
 import { ContactDetail } from './routes/ContactDetail';
 import { Calendar } from './routes/Calendar';
+import { EventNew } from './routes/EventNew';
+import { EventEdit } from './routes/EventEdit';
+import { EventDetail } from './routes/EventDetail';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -42,9 +45,9 @@ export const routes: AppRoute[] = [
   { path: '/contacts/:id/edit', Component: ContactEdit, label: 'ContactEdit' },
   { path: '/contacts/new', Component: ContactNew, label: 'ContactNew' },
   { path: '/calendar', Component: Calendar, label: 'Calendar' },
-  { path: '/events/:id', Component: () => <div className="loading">日程详情（Phase 4 进行中）</div>, label: 'EventDetail (placeholder)' },
-  { path: '/events/:id/edit', Component: () => <div className="loading">编辑日程（Phase 4 进行中）</div>, label: 'EventEdit (placeholder)' },
-  { path: '/events/new', Component: () => <div className="loading">新建日程（Phase 4 进行中）</div>, label: 'EventNew (placeholder)' },
+  { path: '/events/:id', Component: EventDetail, label: 'EventDetail' },
+  { path: '/events/:id/edit', Component: EventEdit, label: 'EventEdit' },
+  { path: '/events/new', Component: EventNew, label: 'EventNew' },
   { path: '/actions', Component: () => <div className="loading">待办（Phase 4 进行中）</div>, label: 'Actions (placeholder)' },
   { path: '/actions/:id', Component: () => <div className="loading">待办详情（Phase 4 进行中）</div>, label: 'ActionDetail (placeholder)' },
   { path: '/actions/:id/edit', Component: () => <div className="loading">编辑待办（Phase 4 进行中）</div>, label: 'ActionEdit (placeholder)' },
