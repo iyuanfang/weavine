@@ -17,7 +17,19 @@ pub fn resolve_db_path(data_dir: &Path) -> Result<PathBuf, String> {
     Ok(data_dir.join("dev.db"))
 }
 
+/// Strip Windows `\\?\` extended-length path prefix, which interferes with
+/// Path::parent() traversal and file-existence checks on MSI installs.
+fn strip_verbatim_prefix(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if s.starts_with("\\\\?\\") {
+        PathBuf::from(&s[4..])
+    } else {
+        p.to_path_buf()
+    }
+}
+
 pub fn ensure_database(data_dir: &Path, resource_dir: &Path) -> Result<PathBuf, String> {
+    let resource_dir = strip_verbatim_prefix(resource_dir);
     let db_path = resolve_db_path(data_dir)?;
     // The bundled dev.db lives next to the standalone server in the Tauri
     // resource directory. We try a few standard layouts (Tauri v1/v2,
@@ -206,6 +218,7 @@ pub fn resolve_node_path(resource_dir: &Path, data_dir: &Path, server_dir: &Path
 }
 
 pub fn find_server_dir(resource_dir: &Path, data_dir: &Path) -> Result<PathBuf, String> {
+    let resource_dir = strip_verbatim_prefix(resource_dir);
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     if cfg!(not(dev)) {
@@ -436,7 +449,9 @@ pub fn spawn(
 ) -> Result<Child, String> {
     let bundled_server_dir = find_server_dir(resource_dir, data_dir)?;
     let db_path = ensure_database(data_dir, resource_dir)?;
-    let db_url = format!("file:{}", db_path.display());
+    // Windows paths use backslashes (`C:\...`), but Prisma's SQLite URL
+    // parser requires forward slashes in the file: scheme.
+    let db_url = format!("file:{}", db_path.to_string_lossy().replace('\\', "/"));
 
     // Skip the heavy runtime staging on first launch — Next.js standalone
     // in production mode is read-only at runtime, so we can run it directly
