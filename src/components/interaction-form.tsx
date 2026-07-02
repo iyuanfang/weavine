@@ -25,7 +25,7 @@ export function InteractionForm({ contactId }: { contactId: string }) {
       action={handleSubmit}
       className="card mt-3 space-y-2"
     >
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex items-center gap-2">
         <DateTimeInput
           name="occurredAt"
           required
@@ -38,7 +38,7 @@ export function InteractionForm({ contactId }: { contactId: string }) {
         <select
           name="channel"
           defaultValue="微信"
-          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+          className="rounded border border-gray-300 px-2 py-1 text-sm"
         >
           <option>微信</option>
           <option>电话</option>

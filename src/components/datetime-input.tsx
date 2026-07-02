@@ -111,8 +111,8 @@ export function DateTimeInput({
 
   const textInputClass =
     size === 'sm' ? 'input-sm flex-1 min-w-0' : 'input-base flex-1 min-w-0';
-  const smallClass = size === 'sm' ? 'input-sm w-16' : 'input-base w-20';
-  const dateClass = size === 'sm' ? 'input-sm w-36' : 'input-base w-40';
+  const smallClass = size === 'sm' ? 'input-sm w-14' : 'input-base w-20';
+  const dateClass = size === 'sm' ? 'input-sm w-28' : 'input-base w-40';
   const btnClass =
     size === 'sm'
       ? 'rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50'
