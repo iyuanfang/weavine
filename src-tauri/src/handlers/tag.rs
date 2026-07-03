@@ -21,9 +21,9 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Tag>>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::tag::list(&conn, &p.owner_id)
-        .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    let result = business::tag::list(&conn, &p.owner_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(result))
 }
 
 pub async fn create(
@@ -31,9 +31,9 @@ pub async fn create(
     Json(input): Json<CreateTagInput>,
 ) -> Result<Json<Tag>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::tag::create(&conn, &input)
-        .map(Json)
-        .map_err(|e| crate::handlers::http_err::for_create_or_update(&e))
+    let result = business::tag::create(&conn, &input)
+        .map_err(|e| crate::handlers::http_err::for_create_or_update(&e))?;
+    Ok(Json(result))
 }
 
 pub async fn update(
