@@ -40,8 +40,6 @@ jobs:
           node-version: 20
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || '' }}
       - name: Cache Cargo (sccache)
         uses: Swatinem/rust-cache@v2
         with:
@@ -60,7 +58,9 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
       - run: pnpm install --frozen-lockfile
-      - working-directory: src-tauri
-      - run: cargo test
-      - working-directory: src-tauri
-      - run: cargo check --release
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test
+      - name: cargo check --release
+        working-directory: src-tauri
+        run: cargo check --release
