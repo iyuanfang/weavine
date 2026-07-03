@@ -4,7 +4,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open_in_memory()?;
     conn.execute_batch("PRAGMA foreign_keys=ON;")?;
 
-    println!("--- Step 1: Apply Prisma-derived schema ---");
+    println!("--- Step 1: Apply embedded schema ---");
     apply_schema(&conn)?;
     println!("  applied");
 

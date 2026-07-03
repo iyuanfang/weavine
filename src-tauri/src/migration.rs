@@ -1,11 +1,11 @@
 /// Embedded schema migration for weavine.
 ///
-/// Runs the Prisma-generated DDL against a rusqlite Connection using
+/// Runs the DDL embedded in `SCHEMA_SQL` against a rusqlite Connection using
 /// `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` so the
 /// function is idempotent (safe to call on every startup).
 ///
-/// The SQL is sourced from `prisma/migrations/20260701061802_init/migration.sql`
-/// (the SQLite Prisma migration).
+/// Edit the `SCHEMA_SQL` constant below to change the schema. The application
+/// bootstraps a fresh database automatically on first launch.
 use rusqlite::Connection;
 
 const SCHEMA_SQL: &str = r#"
