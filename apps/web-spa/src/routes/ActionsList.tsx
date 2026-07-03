@@ -179,6 +179,12 @@ export function ActionsList() {
     },
   });
 
+  const allActions = actionsQuery.data ?? [];
+  const activeDragAction = useMemo(
+    () => (activeDragId ? allActions.find((a) => a.id === activeDragId) ?? null : null),
+    [activeDragId, allActions],
+  );
+
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
   }
@@ -191,11 +197,6 @@ export function ActionsList() {
     );
   }
 
-  const allActions = actionsQuery.data ?? [];
-  const activeDragAction = useMemo(
-    () => (activeDragId ? allActions.find((a) => a.id === activeDragId) ?? null : null),
-    [activeDragId, allActions],
-  );
   const visible = allActions
     .filter((a) => priorityFilter === 'all' || a.priority === Number(priorityFilter))
     .filter((a) => {
