@@ -5,7 +5,7 @@ use axum::{
 };
 use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 #[path = "../handlers/mod.rs"]
@@ -28,83 +28,88 @@ async fn main() {
 
     let app = Router::new()
         // Diagnostic
-        .route("/diagnostic/user", get(handlers::diagnostic::user))
-        .route("/diagnostic/startup", get(handlers::diagnostic::startup))
+        .route("/api/diagnostic/user", get(handlers::diagnostic::user))
+        .route("/api/diagnostic/startup", get(handlers::diagnostic::startup))
         // Contacts
         .route(
-            "/contacts",
+            "/api/contacts",
             get(handlers::contact::list).post(handlers::contact::create),
         )
         .route(
-            "/contacts/:id",
+            "/api/contacts/:id",
             get(handlers::contact::get)
                 .put(handlers::contact::update)
                 .delete(handlers::contact::delete),
         )
         // Events — static route /upcoming before /:id
-        .route("/events/upcoming", get(handlers::event::upcoming))
+        .route("/api/events/upcoming", get(handlers::event::upcoming))
         .route(
-            "/events",
+            "/api/events",
             get(handlers::event::list).post(handlers::event::create),
         )
         .route(
-            "/events/:id",
+            "/api/events/:id",
             get(handlers::event::get)
                 .put(handlers::event::update)
                 .delete(handlers::event::delete),
         )
         // Actions
         .route(
-            "/actions",
+            "/api/actions",
             get(handlers::action::list).post(handlers::action::create),
         )
         .route(
-            "/actions/:id",
+            "/api/actions/:id",
             get(handlers::action::get)
                 .put(handlers::action::update)
                 .delete(handlers::action::delete),
         )
         // Interactions
         .route(
-            "/interactions",
+            "/api/interactions",
             get(handlers::interaction::list).post(handlers::interaction::create),
         )
         .route(
-            "/interactions/:id",
+            "/api/interactions/:id",
             get(handlers::interaction::get)
                 .put(handlers::interaction::update)
                 .delete(handlers::interaction::delete),
         )
         // Reminders
         .route(
-            "/reminders",
+            "/api/reminders",
             get(handlers::reminder::list).post(handlers::reminder::create),
         )
         .route(
-            "/reminders/:id",
+            "/api/reminders/:id",
             put(handlers::reminder::update).delete(handlers::reminder::delete),
         )
-        .route("/reminders/:id/dismiss", post(handlers::reminder::dismiss))
+        .route(
+            "/api/reminders/:id/dismiss",
+            post(handlers::reminder::dismiss),
+        )
         // Tags
         .route(
-            "/tags",
+            "/api/tags",
             get(handlers::tag::list).post(handlers::tag::create),
         )
         .route(
-            "/tags/:id",
+            "/api/tags/:id",
             put(handlers::tag::update).delete(handlers::tag::delete),
         )
         // Settings — static route /upsert before parameterized
-        .route("/settings/upsert", post(handlers::setting::upsert))
+        .route("/api/settings/upsert", post(handlers::setting::upsert))
         .route(
-            "/settings",
+            "/api/settings",
             get(handlers::setting::list).delete(handlers::setting::delete),
         )
         // Search
-        .route("/search", get(handlers::search::query))
-        // SPA static fallback
+        .route("/api/search", get(handlers::search::query))
+        // SPA static fallback — serves index.html for any non-/api path so
+        // browser hard-refreshes of client-side routes (e.g. /contacts) work.
         .fallback_service(
-            ServeDir::new("../apps/web-spa/dist").append_index_html_on_directories(true),
+            ServeDir::new("../apps/web-spa/dist")
+                .fallback(ServeFile::new("../apps/web-spa/dist/index.html")),
         )
         .layer(SetResponseHeaderLayer::overriding(
             CACHE_CONTROL,
