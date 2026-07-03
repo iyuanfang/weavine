@@ -213,14 +213,20 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
 
 /// Seed a default local user if none exists.
 ///
-/// Single-user MVP: we always need exactly one `User` row with `isLocal=1`
-/// so that FK constraints from Contact / Event / etc. resolve. The id is
-/// a stable constant so the web-spa and Tauri both agree on the owner.
+/// Single-user MVP: we always need a `User` row with id `"local-default"`
+/// so that FK constraints from Contact / Event / Tag / etc. resolve. The id
+/// is a stable constant so the web-spa and Tauri both agree on the owner.
+///
+/// We check for the SPECIFIC id (not just `isLocal=1`) so that an older
+/// install whose `User` table has a different local-user id does not
+/// short-circuit seeding of the canonical id — otherwise the subsequent
+/// `seed_default_tags` would fail with a FOREIGN KEY constraint error
+/// when referencing `"local-default"`.
 fn seed_default_user(conn: &Connection) -> Result<(), rusqlite::Error> {
     let existing: Option<String> = conn
         .query_row(
-            "SELECT id FROM \"User\" WHERE isLocal = 1 LIMIT 1",
-            [],
+            "SELECT id FROM \"User\" WHERE id = ?1 LIMIT 1",
+            rusqlite::params!["local-default"],
             |row| row.get(0),
         )
         .ok();
@@ -401,5 +407,43 @@ mod tests {
             )
             .unwrap();
         assert_eq!(total, 5, "user-created tag must coexist with seeds");
+    }
+
+    #[test]
+    fn seed_default_user_inserts_canonical_id_when_legacy_row_exists() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+
+        // Legacy install: local user exists under a different id, no
+        // default tags yet. The old `WHERE isLocal=1` check would have
+        // found this row and skipped — so the canonical id was never
+        // inserted, and the default-tag seed FK-fails.
+        conn.execute(
+            "INSERT INTO \"User\" (id, name, isLocal, createdAt, updatedAt) \
+             VALUES (?1, ?2, 1, ?3, ?3)",
+            rusqlite::params!["legacy-local", "Legacy", "2026-01-01T00:00:00.000Z"],
+        )
+        .unwrap();
+
+        run(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM \"User\" WHERE id = ?1",
+                rusqlite::params!["local-default"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "canonical id must be present after upgrade");
+
+        let tag_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM \"Tag\" WHERE \"ownerId\" = ?1",
+                rusqlite::params!["local-default"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tag_count, 4, "default tags must seed against canonical id");
     }
 }
