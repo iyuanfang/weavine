@@ -1,6 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  closestCenter,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 
 import { PageHeader } from '../components/PageHeader';
 import { statusMeta } from '../components/StatusPicker';
@@ -52,8 +66,37 @@ export function ActionsList() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [collapsed, setCollapsed] = useLocalStorageSet('prm:actions:collapsed');
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverStatus, setDragOverStatus] = useState<StatusKey | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over) return;
+    const actionId = String(active.id);
+    const targetStatus = String(over.id) as StatusKey;
+    if (!STATUS_ORDER.includes(targetStatus)) return;
+    const action = allActions.find((a) => a.id === actionId);
+    if (!action || action.status === targetStatus) return;
+    updateMutation.mutate({
+      id: actionId,
+      status: targetStatus,
+      completed_at: targetStatus === 'done' ? new Date().toISOString() : null,
+    });
+  };
+
+  const handleDragCancel = () => {
+    setActiveDragId(null);
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 200);
@@ -136,44 +179,6 @@ export function ActionsList() {
     },
   });
 
-  const handleDragStart = (e: React.DragEvent, actionId: string) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', actionId);
-    setDraggingId(actionId);
-  };
-
-  const handleDragEnd = () => {
-    setDraggingId(null);
-    setDragOverStatus(null);
-  };
-
-  const handleDragOver = (e: React.DragEvent, status: StatusKey) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverStatus !== status) setDragOverStatus(status);
-  };
-
-  const handleDragLeave = (e: React.DragEvent, status: StatusKey) => {
-    const next = e.relatedTarget as Node | null;
-    if (next && (e.currentTarget as Node).contains(next)) return;
-    if (dragOverStatus === status) setDragOverStatus(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetStatus: StatusKey) => {
-    e.preventDefault();
-    const actionId = e.dataTransfer.getData('text/plain');
-    setDraggingId(null);
-    setDragOverStatus(null);
-    if (!actionId) return;
-    const action = allActions.find((a) => a.id === actionId);
-    if (!action || action.status === targetStatus) return;
-    updateMutation.mutate({
-      id: actionId,
-      status: targetStatus,
-      completed_at: targetStatus === 'done' ? new Date().toISOString() : null,
-    });
-  };
-
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
   }
@@ -187,6 +192,10 @@ export function ActionsList() {
   }
 
   const allActions = actionsQuery.data ?? [];
+  const activeDragAction = useMemo(
+    () => (activeDragId ? allActions.find((a) => a.id === activeDragId) ?? null : null),
+    [activeDragId, allActions],
+  );
   const visible = allActions
     .filter((a) => priorityFilter === 'all' || a.priority === Number(priorityFilter))
     .filter((a) => {
@@ -448,158 +457,77 @@ export function ActionsList() {
               </Link>
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: 16 }}>
-              {STATUS_ORDER.map((status) => {
-                const items = byStatus[status];
-                const meta = statusMeta(status);
-                const isCollapsed = collapsed.has(status);
-                const toggle = () => {
-                  setCollapsed((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(status)) next.delete(status);
-                    else next.add(status);
-                    return next;
-                  });
-                };
-                const overdueInSection = items.filter((a) => {
-                  if (!a.due_at) return false;
-                  return new Date(a.due_at) < new Date();
-                }).length;
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <div style={{ display: 'grid', gap: 16 }}>
+                {STATUS_ORDER.map((status) => {
+                  const items = byStatus[status];
+                  const meta = statusMeta(status);
+                  const isCollapsed = collapsed.has(status);
+                  const toggle = () => {
+                    setCollapsed((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(status)) next.delete(status);
+                      else next.add(status);
+                      return next;
+                    });
+                  };
+                  const overdueInSection = items.filter((a) => {
+                    if (!a.due_at) return false;
+                    return new Date(a.due_at) < new Date();
+                  }).length;
 
-                return (
-                  <section
-                    key={status}
-                    className={`section section--drop ${dragOverStatus === status ? 'section--drop-active' : ''}`}
-                    style={{ marginBottom: 0 }}
-                    onDragOver={(e) => handleDragOver(e, status)}
-                    onDragLeave={(e) => handleDragLeave(e, status)}
-                    onDrop={(e) => handleDrop(e, status)}
+                  return (
+                    <StatusSection
+                      key={status}
+                      status={status}
+                      meta={meta}
+                      items={items}
+                      isCollapsed={isCollapsed}
+                      onToggle={toggle}
+                      overdueInSection={overdueInSection}
+                      contactMap={contactMap}
+                      updateMutation={updateMutation}
+                      deleteMutation={deleteMutation}
+                      activeDragId={activeDragId}
+                    />
+                  );
+                })}
+              </div>
+              <DragOverlay dropAnimation={null}>
+                {activeDragAction ? (
+                  <div
+                    style={{
+                      pointerEvents: 'none',
+                      transform: 'rotate(-2deg)',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+                      borderRadius: 8,
+                      background: 'var(--surface)',
+                      maxWidth: 480,
+                    }}
                   >
-                    <button
-                      type="button"
-                      onClick={toggle}
-                      className="section__header"
-                      style={{
-                        background: 'transparent',
-                        border: 0,
-                        padding: 0,
-                        width: '100%',
-                        cursor: 'pointer',
-                        marginBottom: isCollapsed ? 0 : 10,
-                      }}
-                    >
-                      <h2
-                        className="section__title"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          color: status === 'done' ? 'var(--muted)' : 'var(--fg)',
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            transition: 'transform 160ms',
-                            transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0)',
-                            fontSize: 11,
-                            opacity: 0.6,
-                          }}
-                        >
-                          ▼
-                        </span>
-                        <span>{meta.icon}</span>
-                        <span>{meta.label}</span>
-                        <span
-                          className="badge badge--muted"
-                          style={{ fontWeight: 500, marginLeft: 4 }}
-                        >
-                          {items.length}
-                        </span>
-                        {items.length === 0 && (
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: 'var(--muted)',
-                              fontWeight: 400,
-                              fontStyle: 'italic',
-                            }}
-                          >
-                            (空 · 可拖入)
-                          </span>
-                        )}
-                        {overdueInSection > 0 && (
-                          <span
-                            className="badge badge--danger"
-                            style={{ fontSize: 10, padding: '1px 6px' }}
-                          >
-                            {overdueInSection} 过期
-                          </span>
-                        )}
-                        {dragOverStatus === status && (
-                          <span
-                            style={{
-                              marginLeft: 'auto',
-                              fontSize: 11,
-                              color: meta.color,
-                              fontWeight: 600,
-                            }}
-                          >
-                            松开改状态
-                          </span>
-                        )}
-                      </h2>
-                    </button>
-
-                    {!isCollapsed && (
-                      <div style={{ display: 'grid', gap: 6, minHeight: 8 }}>
-                        {items.map((a) => (
-                          <ActionRow
-                            key={a.id}
-                            action={a}
-                            contact={a.contact_id ? contactMap[a.contact_id] : null}
-                            onToggleDone={() =>
-                              updateMutation.mutate({
-                                id: a.id,
-                                status: a.status === 'done' ? 'open' : 'done',
-                                completed_at:
-                                  a.status === 'done' ? null : new Date().toISOString(),
-                              })
-                            }
-                            onDelete={() => {
-                              if (confirm(`确定要删除「${a.title}」吗？`)) {
-                                deleteMutation.mutate(a.id);
-                              }
-                            }}
-                            isUpdating={
-                              updateMutation.isPending &&
-                              updateMutation.variables?.id === a.id
-                            }
-                            isDragging={draggingId === a.id}
-                            onDragStart={(e) => handleDragStart(e, a.id)}
-                            onDragEnd={handleDragEnd}
-                          />
-                        ))}
-                        {items.length === 0 && (
-                          <div
-                            style={{
-                              padding: '12px 8px',
-                              fontSize: 12,
-                              color: 'var(--muted)',
-                              textAlign: 'center',
-                              border: '1px dashed var(--border)',
-                              borderRadius: 'var(--radius-sm)',
-                            }}
-                          >
-                            拖到这里改状态
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </section>
-                );
-              })}
-            </div>
+                    <ActionRowBody
+                      action={activeDragAction}
+                      contact={
+                        activeDragAction.contact_id
+                          ? contactMap[activeDragAction.contact_id] ?? null
+                          : null
+                      }
+                      onToggleDone={() => {}}
+                      onDelete={() => {}}
+                      isUpdating={false}
+                      isDragging={false}
+                      dragHandleProps={undefined}
+                    />
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           )}
         </div>
       </div>
@@ -607,25 +535,25 @@ export function ActionsList() {
   );
 }
 
-function ActionRow({
-  action,
-  contact,
-  onToggleDone,
-  onDelete,
-  isUpdating,
-  isDragging,
-  onDragStart,
-  onDragEnd,
-}: {
+type ActionRowBodyProps = {
   action: Action;
   contact: { id: string; nickname: string; name: string | null } | null;
   onToggleDone: () => void;
   onDelete: () => void;
   isUpdating: boolean;
   isDragging: boolean;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragEnd: (e: React.DragEvent) => void;
-}) {
+  dragHandleProps?: Record<string, unknown>;
+};
+
+function ActionRowBody({
+  action,
+  contact,
+  onToggleDone,
+  onDelete,
+  isUpdating,
+  isDragging,
+  dragHandleProps,
+}: ActionRowBodyProps) {
   const isDone = action.status === 'done';
   const displayName = contact ? (contact.nickname ?? contact.name ?? '?') : '';
   const [hovered, setHovered] = useState(false);
@@ -660,11 +588,10 @@ function ActionRow({
       style={{
         padding: '10px 12px',
         opacity: isDone ? 0.65 : isDragging ? 0.4 : 1,
-        cursor: 'grab',
+        cursor: dragHandleProps ? 'grab' : 'default',
+        touchAction: dragHandleProps ? 'none' : 'auto',
       }}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      {...(dragHandleProps ?? {})}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -836,5 +763,191 @@ function ActionRow({
         </button>
       </div>
     </div>
+  );
+}
+
+function DraggableActionRow({
+  action,
+  contact,
+  onToggleDone,
+  onDelete,
+  isUpdating,
+}: {
+  action: Action;
+  contact: { id: string; nickname: string; name: string | null } | null;
+  onToggleDone: () => void;
+  onDelete: () => void;
+  isUpdating: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: action.id,
+    data: { type: 'action', status: action.status },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1 }}
+      aria-roledescription="draggable"
+    >
+      <ActionRowBody
+        action={action}
+        contact={contact}
+        onToggleDone={onToggleDone}
+        onDelete={onDelete}
+        isUpdating={isUpdating}
+        isDragging={isDragging}
+        dragHandleProps={{ ...listeners, ...attributes }}
+      />
+    </div>
+  );
+}
+
+type StatusSectionProps = {
+  status: StatusKey;
+  meta: ReturnType<typeof statusMeta>;
+  items: Action[];
+  isCollapsed: boolean;
+  onToggle: () => void;
+  overdueInSection: number;
+  contactMap: Record<string, { id: string; nickname: string; name: string | null }>;
+  updateMutation: ReturnType<typeof useMutation<unknown, Error, UpdateActionInput, { prev: Action[] | undefined }>>;
+  deleteMutation: ReturnType<typeof useMutation<unknown, Error, string, { prev: Action[] | undefined }>>;
+  activeDragId: string | null;
+};
+
+function StatusSection({
+  status,
+  meta,
+  items,
+  isCollapsed,
+  onToggle,
+  overdueInSection,
+  contactMap,
+  updateMutation,
+  deleteMutation,
+  activeDragId,
+}: StatusSectionProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const dropActive = isOver || activeDragId !== null;
+
+  return (
+    <section
+      ref={setNodeRef}
+      className={`section section--drop ${dropActive ? 'section--drop-active' : ''}`}
+      style={{ marginBottom: 0 }}
+      data-status={status}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="section__header"
+        style={{
+          background: 'transparent',
+          border: 0,
+          padding: 0,
+          width: '100%',
+          cursor: 'pointer',
+          marginBottom: isCollapsed ? 0 : 10,
+        }}
+      >
+        <h2
+          className="section__title"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            color: status === 'done' ? 'var(--muted)' : 'var(--fg)',
+          }}
+        >
+          <span
+            style={{
+              display: 'inline-block',
+              transition: 'transform 160ms',
+              transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0)',
+              fontSize: 11,
+              opacity: 0.6,
+            }}
+          >
+            ▼
+          </span>
+          <span>{meta.icon}</span>
+          <span>{meta.label}</span>
+          <span className="badge badge--muted" style={{ fontWeight: 500, marginLeft: 4 }}>
+            {items.length}
+          </span>
+          {items.length === 0 && (
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--muted)',
+                fontWeight: 400,
+                fontStyle: 'italic',
+              }}
+            >
+              (空 · 可拖入)
+            </span>
+          )}
+          {overdueInSection > 0 && (
+            <span className="badge badge--danger" style={{ fontSize: 10, padding: '1px 6px' }}>
+              {overdueInSection} 过期
+            </span>
+          )}
+          {dropActive && (
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: 11,
+                color: meta.color,
+                fontWeight: 600,
+              }}
+            >
+              松开改状态
+            </span>
+          )}
+        </h2>
+      </button>
+
+      {!isCollapsed && (
+        <div style={{ display: 'grid', gap: 6, minHeight: 8 }}>
+          {items.map((a) => (
+            <DraggableActionRow
+              key={a.id}
+              action={a}
+              contact={a.contact_id ? contactMap[a.contact_id] : null}
+              onToggleDone={() =>
+                updateMutation.mutate({
+                  id: a.id,
+                  status: a.status === 'done' ? 'open' : 'done',
+                  completed_at: a.status === 'done' ? null : new Date().toISOString(),
+                })
+              }
+              onDelete={() => {
+                if (confirm(`确定要删除「${a.title}」吗？`)) {
+                  deleteMutation.mutate(a.id);
+                }
+              }}
+              isUpdating={
+                updateMutation.isPending && updateMutation.variables?.id === a.id
+              }
+            />
+          ))}
+          {items.length === 0 && (
+            <div
+              style={{
+                padding: '12px 8px',
+                fontSize: 12,
+                color: 'var(--muted)',
+                textAlign: 'center',
+                border: '1px dashed var(--border)',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              拖到这里改状态
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
