@@ -26,7 +26,7 @@ impl Template {
     pub fn stages(self) -> &'static [&'static str] {
         match self {
             Template::General => &["计划", "进行中", "已完成"],
-            Template::Sales => &["线索", "沟通", "报价", "中标", "丢单"],
+            Template::Sales => &["线索", "商机", "沟通", "报价", "丢单", "中标"],
             Template::EventPrep => &["筹备中", "进行中", "已收尾"],
         }
     }
