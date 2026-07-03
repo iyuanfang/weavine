@@ -312,7 +312,6 @@ export interface PRMAdapter {
       owner_id: string;
       status?: string | null;
       contact_id?: string | null;
-      event_id?: string | null;
       limit?: number | null;
     }): Promise<Action[]>;
     get(id: string): Promise<Action>;
