@@ -65,8 +65,13 @@ function authHeaders(): Record<string, string> {
 
 // ── Fetch helper ───────────────────────────────────────
 
-function buildUrl(baseUrl: string, path: string): string {
-  return baseUrl.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+function buildUrl(baseUrl: string, path: string, method: string): string {
+  const url = baseUrl.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+  if (method === 'GET' || method === 'HEAD') {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}_t=${Date.now()}`;
+  }
+  return url;
 }
 
 async function request<R>(
@@ -75,7 +80,7 @@ async function request<R>(
   path: string,
   body?: unknown,
 ): Promise<R> {
-  const url = buildUrl(baseUrl, path);
+  const url = buildUrl(baseUrl, path, method);
   const opts: RequestInit = {
     method,
     headers: authHeaders(),
