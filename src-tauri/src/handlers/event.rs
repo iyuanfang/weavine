@@ -15,6 +15,7 @@ use weavine_lib::{
 pub struct ListParams {
     pub owner_id: String,
     pub contact_id: Option<String>,
+    pub project_id: Option<String>,
     pub start_after: Option<String>,
     pub start_before: Option<String>,
     pub limit: Option<i64>,
@@ -35,6 +36,7 @@ pub async fn list(
         &conn,
         &p.owner_id,
         p.contact_id.as_deref(),
+        p.project_id.as_deref(),
         p.start_after.as_deref(),
         p.start_before.as_deref(),
         p.limit,

@@ -119,6 +119,22 @@ pub struct Action {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectContact {
+    pub owner_id: String,
+    pub project_id: String,
+    pub contact_id: String,
+    pub role: Option<String>,
+    pub added_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectContactWithContact {
+    pub contact: Contact,
+    pub role: Option<String>,
+    pub added_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Reminder {
     pub id: String,
     pub owner_id: String,

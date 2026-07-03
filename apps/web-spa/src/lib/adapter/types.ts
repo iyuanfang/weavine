@@ -204,13 +204,13 @@ export interface UpdateContactInput {
 export interface CreateEventInput {
   owner_id: string;
   title: string;
-  // Rust field is `event_type` but serialized as `type` in JSON
   type: string;
   start_at: string;
   end_at?: string | null;
   location?: string | null;
   notes?: string | null;
   contact_id?: string | null;
+  project_id?: string | null;
   reminder_lead_minutes?: number | null;
 }
 
@@ -223,6 +223,7 @@ export interface UpdateEventInput {
   location?: string | null;
   notes?: string | null;
   contact_id?: string | null;
+  project_id?: string | null;
   reminder_lead_minutes?: number | null;
 }
 
@@ -235,6 +236,7 @@ export interface CreateActionInput {
   category?: string | null;
   due_at?: string | null;
   contact_id?: string | null;
+  project_id?: string | null;
 }
 
 export interface UpdateActionInput {
@@ -246,7 +248,22 @@ export interface UpdateActionInput {
   category?: string | null;
   due_at?: string | null;
   contact_id?: string | null;
+  project_id?: string | null;
   completed_at?: string | null;
+}
+
+export interface ProjectContact {
+  owner_id: string;
+  project_id: string;
+  contact_id: string;
+  role: string | null;
+  added_at: string;
+}
+
+export interface ProjectContactWithContact {
+  contact: Contact;
+  role: string | null;
+  added_at: string;
 }
 
 export interface CreateInteractionInput {
@@ -345,6 +362,7 @@ export interface PRMAdapter {
     list(params: {
       owner_id: string;
       contact_id?: string | null;
+      project_id?: string | null;
       start_after?: string | null;
       start_before?: string | null;
       limit?: number | null;
@@ -361,12 +379,19 @@ export interface PRMAdapter {
       owner_id: string;
       status?: string | null;
       contact_id?: string | null;
+      project_id?: string | null;
       limit?: number | null;
     }): Promise<Action[]>;
     get(id: string): Promise<Action>;
     create(input: CreateActionInput): Promise<Action>;
     update(input: UpdateActionInput): Promise<Action>;
     delete(id: string): Promise<void>;
+  };
+
+  projectContacts: {
+    list(projectId: string): Promise<ProjectContactWithContact[]>;
+    add(projectId: string, contact_id: string, role?: string | null): Promise<void>;
+    remove(projectId: string, contact_id: string): Promise<void>;
   };
 
   interactions: {

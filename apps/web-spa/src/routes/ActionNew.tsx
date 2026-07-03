@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Action, Contact, CreateActionInput } from '../lib/adapter/types';
+import type { Action, Contact, CreateActionInput, Project } from '../lib/adapter/types';
 
 const STATUS_OPTIONS = [
   { value: 'inbox', label: '📥 收件箱' },
@@ -28,6 +28,8 @@ export function ActionNew() {
   const ownerId = useOwnerId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const projectIdParam = searchParams.get('projectId');
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -36,6 +38,11 @@ export function ActionNew() {
   const [category, setCategory] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [contactId, setContactId] = useState<string>('');
+  const [projectId, setProjectId] = useState<string>(projectIdParam ?? '');
+
+  useEffect(() => {
+    if (projectIdParam) setProjectId(projectIdParam);
+  }, [projectIdParam]);
 
   const contactsQuery = useQuery({
     queryKey: ['contacts', ownerId],
@@ -43,6 +50,21 @@ export function ActionNew() {
     enabled: !!ownerId,
   });
   const contacts = contactsQuery.data ?? [];
+
+  const projectsQuery = useQuery({
+    queryKey: ['projects', ownerId],
+    queryFn: () => adapter.projects.list({ owner_id: ownerId! }),
+    enabled: !!ownerId,
+  });
+  const projects = projectsQuery.data ?? [];
+
+  const linkedProjectQuery = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => adapter.projects.get(projectId!),
+    enabled: !!projectId,
+  });
+  const linkedProject =
+    linkedProjectQuery.data ?? (projectId ? projects.find((p: Project) => p.id === projectId) : null);
 
   const createMutation = useMutation({
     mutationFn: (input: CreateActionInput) => adapter.actions.create(input),
@@ -53,7 +75,12 @@ export function ActionNew() {
         return [created, ...list];
       });
       queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
-      navigate('/actions');
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ['project-actions', projectId] });
+        navigate(`/projects/${projectId}`);
+      } else {
+        navigate('/actions');
+      }
     },
   });
 
@@ -69,6 +96,7 @@ export function ActionNew() {
       category: category.trim() || null,
       due_at: dueAt ? new Date(dueAt).toISOString() : null,
       contact_id: contactId || null,
+      project_id: projectId || null,
     });
   };
 
@@ -79,9 +107,21 @@ export function ActionNew() {
   return (
     <div className="page page--narrow">
       <PageHeader
-        title="新建待办"
-        subtitle="一件具体的小事，最容易做完"
+        title={linkedProject ? `为「${linkedProject.title}」新建待办` : '新建待办'}
+        subtitle={linkedProject ? '关联到当前项目，便于在项目页追溯' : '一件具体的小事，最容易做完'}
       />
+
+      {linkedProject && (
+        <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13 }}>
+          <span className="badge" style={{ background: '#eef2ff', color: '#4338ca', marginRight: 8 }}>
+            📁 项目
+          </span>
+          <Link to={`/projects/${linkedProject.id}`} style={{ fontWeight: 600 }}>
+            {linkedProject.title}
+          </Link>
+          <span style={{ color: 'var(--muted)', marginLeft: 8 }}>· {linkedProject.stage}</span>
+        </div>
+      )}
 
       {createMutation.isError && (
         <div className="error-banner">
@@ -171,6 +211,22 @@ export function ActionNew() {
           <h2 className="section__title">关联</h2>
           <div className="card" style={{ marginTop: 10 }}>
             <div style={{ display: 'grid', gap: 14 }}>
+              <div>
+                <label className="input-label">项目</label>
+                <select
+                  className="input-base"
+                  style={{ cursor: 'pointer' }}
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                >
+                  <option value="">无</option>
+                  {projects.map((p: Project) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="input-label">联系人</label>
                 <select

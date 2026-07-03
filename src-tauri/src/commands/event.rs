@@ -15,6 +15,7 @@ pub struct CreateEventInput {
     pub location: Option<String>,
     pub notes: Option<String>,
     pub contact_id: Option<String>,
+    pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
 }
 
@@ -30,6 +31,7 @@ pub struct UpdateEventInput {
     pub location: Option<String>,
     pub notes: Option<String>,
     pub contact_id: Option<String>,
+    pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
 }
 
@@ -38,6 +40,7 @@ pub fn list_events(
     db: State<Database>,
     owner_id: String,
     contact_id: Option<String>,
+    project_id: Option<String>,
     start_after: Option<String>,
     start_before: Option<String>,
     limit: Option<i64>,
@@ -47,6 +50,7 @@ pub fn list_events(
         &conn,
         &owner_id,
         contact_id.as_deref(),
+        project_id.as_deref(),
         start_after.as_deref(),
         start_before.as_deref(),
         limit,

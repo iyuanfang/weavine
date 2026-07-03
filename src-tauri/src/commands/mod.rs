@@ -5,6 +5,7 @@ pub mod event;
 pub mod interaction;
 pub mod params;
 pub mod project;
+pub mod project_contact;
 pub mod reminder;
 pub mod search;
 pub mod setting;

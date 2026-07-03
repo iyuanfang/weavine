@@ -50,7 +50,7 @@ pub(crate) fn load_tags_for_contact(
     Ok(rows)
 }
 
-fn hydrate_tags(
+pub(crate) fn hydrate_tags(
     conn: &Connection,
     mut contacts: Vec<Contact>,
 ) -> rusqlite::Result<Vec<Contact>> {

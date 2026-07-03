@@ -1,6 +1,6 @@
 use axum::{
     http::{header::CACHE_CONTROL, HeaderValue},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 use std::sync::{Arc, Mutex};
@@ -76,6 +76,14 @@ async fn main() {
                 .delete(handlers::project::delete),
         )
         .route("/api/projects/stages", get(handlers::project::stages))
+        .route(
+            "/api/projects/:id/contacts",
+            get(handlers::project_contact::list).post(handlers::project_contact::add),
+        )
+        .route(
+            "/api/projects/:id/contacts/:contact_id",
+            delete(handlers::project_contact::remove),
+        )
         // Interactions
         .route(
             "/api/interactions",

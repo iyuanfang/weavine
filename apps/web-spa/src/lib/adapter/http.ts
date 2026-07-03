@@ -25,6 +25,7 @@ import type {
   LocalUser,
   PRMAdapter,
   Project,
+  ProjectContactWithContact,
   Reminder,
   SearchResults,
   Setting,
@@ -184,6 +185,7 @@ export class HttpAdapter implements PRMAdapter {
     list: (p: {
       owner_id: string;
       contact_id?: string | null;
+      project_id?: string | null;
       start_after?: string | null;
       start_before?: string | null;
       limit?: number | null;
@@ -215,6 +217,7 @@ export class HttpAdapter implements PRMAdapter {
       owner_id: string;
       status?: string | null;
       contact_id?: string | null;
+      project_id?: string | null;
       limit?: number | null;
     }): Promise<Action[]> =>
       request<Action[]>(this.baseUrl, 'GET', '/api/actions' + qs({ ...p })),
@@ -230,6 +233,24 @@ export class HttpAdapter implements PRMAdapter {
 
     delete: (id: string): Promise<void> =>
       request<void>(this.baseUrl, 'DELETE', `/api/actions/${id}`),
+  };
+
+  projectContacts = {
+    list: (project_id: string): Promise<ProjectContactWithContact[]> =>
+      request<ProjectContactWithContact[]>(
+        this.baseUrl,
+        'GET',
+        `/api/projects/${project_id}/contacts`,
+      ),
+
+    add: (project_id: string, contact_id: string, role?: string | null): Promise<void> =>
+      request<void>(this.baseUrl, 'POST', `/api/projects/${project_id}/contacts`, {
+        contact_id,
+        role: role ?? null,
+      }),
+
+    remove: (project_id: string, contact_id: string): Promise<void> =>
+      request<void>(this.baseUrl, 'DELETE', `/api/projects/${project_id}/contacts/${contact_id}`),
   };
 
   interactions = {

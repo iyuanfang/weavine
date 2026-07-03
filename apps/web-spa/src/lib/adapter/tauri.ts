@@ -27,6 +27,7 @@ import type {
   LocalUser,
   PRMAdapter,
   Project,
+  ProjectContactWithContact,
   Reminder,
   SearchResults,
   Setting,
@@ -90,6 +91,7 @@ export class TauriAdapter implements PRMAdapter {
     list: (p: {
       owner_id: string;
       contact_id?: string | null;
+      project_id?: string | null;
       start_after?: string | null;
       start_before?: string | null;
       limit?: number | null;
@@ -114,6 +116,7 @@ export class TauriAdapter implements PRMAdapter {
       owner_id: string;
       status?: string | null;
       contact_id?: string | null;
+      project_id?: string | null;
       limit?: number | null;
     }): Promise<Action[]> => invoke<Action[]>('list_actions', p),
     get: (id: string): Promise<Action> =>
@@ -124,6 +127,17 @@ export class TauriAdapter implements PRMAdapter {
       invoke<Action>('update_action', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_action', { id }),
+  };
+
+  projectContacts = {
+    list: (project_id: string): Promise<ProjectContactWithContact[]> =>
+      invoke<ProjectContactWithContact[]>('list_project_contacts', { project_id }),
+    add: (project_id: string, contact_id: string, role?: string | null): Promise<void> =>
+      invoke<void>('add_project_contact', {
+        input: { project_id, contact_id, role: role ?? null },
+      }),
+    remove: (project_id: string, contact_id: string): Promise<void> =>
+      invoke<void>('remove_project_contact', { project_id, contact_id }),
   };
 
   interactions = {

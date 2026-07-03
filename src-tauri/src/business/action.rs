@@ -26,6 +26,7 @@ pub fn list(
     owner_id: &str,
     status: Option<&str>,
     contact_id: Option<&str>,
+    project_id: Option<&str>,
     limit: Option<i64>,
 ) -> rusqlite::Result<Vec<Action>> {
     let limit = limit.unwrap_or(100);
@@ -45,6 +46,11 @@ pub fn list(
     if let Some(cid) = contact_id {
         sql.push_str(&format!(" AND contactId = ?{}", idx));
         param_values.push(Box::new(cid.to_string()));
+        idx += 1;
+    }
+    if let Some(pid) = project_id {
+        sql.push_str(&format!(" AND projectId = ?{}", idx));
+        param_values.push(Box::new(pid.to_string()));
         idx += 1;
     }
 
@@ -85,7 +91,7 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
             &input.category,
             &input.due_at,
             &input.contact_id,
-            None::<String>,
+            input.project_id.as_deref(),
             None::<String>,
             &now,
             &now,
@@ -143,6 +149,11 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
     if let Some(ref cid) = input.contact_id {
         set_clauses.push(format!("contactId = ?{}", param_idx));
         params.push(Box::new(cid.clone()));
+        param_idx += 1;
+    }
+    if let Some(ref pid) = input.project_id {
+        set_clauses.push(format!("projectId = ?{}", param_idx));
+        params.push(Box::new(pid.clone()));
         param_idx += 1;
     }
     if let Some(ref ca) = input.completed_at {
