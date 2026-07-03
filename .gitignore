@@ -39,3 +39,6 @@ src-tauri/gen/
 
 tauri-dist/
 .playwright-mcp/
+
+# Local logo preview renders (scratch files for design review)
+.weavine-logo-*.png
