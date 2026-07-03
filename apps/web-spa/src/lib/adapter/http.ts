@@ -118,11 +118,11 @@ export class HttpAdapter implements PRMAdapter {
   constructor(public baseUrl: string = VITE_API_BASE) {}
 
   getLocalUser(): Promise<LocalUser> {
-    return request<LocalUser>(this.baseUrl, 'GET', '/diagnostic/user');
+    return request<LocalUser>(this.baseUrl, 'GET', '/api/diagnostic/user');
   }
 
   getStartupInfo(): Promise<StartupInfo> {
-    return request<StartupInfo>(this.baseUrl, 'GET', '/diagnostic/startup');
+    return request<StartupInfo>(this.baseUrl, 'GET', '/api/diagnostic/startup');
   }
 
   contacts = {
@@ -132,19 +132,19 @@ export class HttpAdapter implements PRMAdapter {
       search?: string | null;
       importance?: string | null;
     }): Promise<Contact[]> =>
-      request<Contact[]>(this.baseUrl, 'GET', '/contacts' + qs({ ...p })),
+      request<Contact[]>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })),
 
     get: (id: string): Promise<Contact> =>
-      request<Contact>(this.baseUrl, 'GET', `/contacts/${id}`),
+      request<Contact>(this.baseUrl, 'GET', `/api/contacts/${id}`),
 
     create: (input: CreateContactInput): Promise<Contact> =>
-      request<Contact>(this.baseUrl, 'POST', '/contacts', input),
+      request<Contact>(this.baseUrl, 'POST', '/api/contacts', input),
 
     update: (input: UpdateContactInput): Promise<Contact> =>
-      request<Contact>(this.baseUrl, 'PUT', `/contacts/${input.id}`, input),
+      request<Contact>(this.baseUrl, 'PUT', `/api/contacts/${input.id}`, input),
 
     delete: (id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', `/contacts/${id}`),
+      request<void>(this.baseUrl, 'DELETE', `/api/contacts/${id}`),
   };
 
   events = {
@@ -155,25 +155,25 @@ export class HttpAdapter implements PRMAdapter {
       start_before?: string | null;
       limit?: number | null;
     }): Promise<Event[]> =>
-      request<Event[]>(this.baseUrl, 'GET', '/events' + qs({ ...p })),
+      request<Event[]>(this.baseUrl, 'GET', '/api/events' + qs({ ...p })),
 
     get: (id: string): Promise<Event> =>
-      request<Event>(this.baseUrl, 'GET', `/events/${id}`),
+      request<Event>(this.baseUrl, 'GET', `/api/events/${id}`),
 
     create: (input: CreateEventInput): Promise<Event> =>
-      request<Event>(this.baseUrl, 'POST', '/events', input),
+      request<Event>(this.baseUrl, 'POST', '/api/events', input),
 
     update: (input: UpdateEventInput): Promise<Event> =>
-      request<Event>(this.baseUrl, 'PUT', `/events/${input.id}`, input),
+      request<Event>(this.baseUrl, 'PUT', `/api/events/${input.id}`, input),
 
     delete: (id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', `/events/${id}`),
+      request<void>(this.baseUrl, 'DELETE', `/api/events/${id}`),
 
     upcoming: (owner_id: string, limit?: number | null): Promise<Event[]> =>
       request<Event[]>(
         this.baseUrl,
         'GET',
-        '/events/upcoming' + qs({ owner_id, limit }),
+        '/api/events/upcoming' + qs({ owner_id, limit }),
       ),
   };
 
@@ -185,19 +185,19 @@ export class HttpAdapter implements PRMAdapter {
       event_id?: string | null;
       limit?: number | null;
     }): Promise<Action[]> =>
-      request<Action[]>(this.baseUrl, 'GET', '/actions' + qs({ ...p })),
+      request<Action[]>(this.baseUrl, 'GET', '/api/actions' + qs({ ...p })),
 
     get: (id: string): Promise<Action> =>
-      request<Action>(this.baseUrl, 'GET', `/actions/${id}`),
+      request<Action>(this.baseUrl, 'GET', `/api/actions/${id}`),
 
     create: (input: CreateActionInput): Promise<Action> =>
-      request<Action>(this.baseUrl, 'POST', '/actions', input),
+      request<Action>(this.baseUrl, 'POST', '/api/actions', input),
 
     update: (input: UpdateActionInput): Promise<Action> =>
-      request<Action>(this.baseUrl, 'PUT', `/actions/${input.id}`, input),
+      request<Action>(this.baseUrl, 'PUT', `/api/actions/${input.id}`, input),
 
     delete: (id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', `/actions/${id}`),
+      request<void>(this.baseUrl, 'DELETE', `/api/actions/${id}`),
   };
 
   interactions = {
@@ -208,19 +208,19 @@ export class HttpAdapter implements PRMAdapter {
       event_id?: string | null;
       limit?: number | null;
     }): Promise<Interaction[]> =>
-      request<Interaction[]>(this.baseUrl, 'GET', '/interactions' + qs({ ...p })),
+      request<Interaction[]>(this.baseUrl, 'GET', '/api/interactions' + qs({ ...p })),
 
     get: (id: string): Promise<Interaction> =>
-      request<Interaction>(this.baseUrl, 'GET', `/interactions/${id}`),
+      request<Interaction>(this.baseUrl, 'GET', `/api/interactions/${id}`),
 
     create: (input: CreateInteractionInput): Promise<Interaction> =>
-      request<Interaction>(this.baseUrl, 'POST', '/interactions', input),
+      request<Interaction>(this.baseUrl, 'POST', '/api/interactions', input),
 
     update: (input: UpdateInteractionInput): Promise<Interaction> =>
-      request<Interaction>(this.baseUrl, 'PUT', `/interactions/${input.id}`, input),
+      request<Interaction>(this.baseUrl, 'PUT', `/api/interactions/${input.id}`, input),
 
     delete: (id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', `/interactions/${id}`),
+      request<void>(this.baseUrl, 'DELETE', `/api/interactions/${id}`),
   };
 
   reminders = {
@@ -231,44 +231,44 @@ export class HttpAdapter implements PRMAdapter {
       include_dismissed?: boolean | null;
       limit?: number | null;
     }): Promise<Reminder[]> =>
-      request<Reminder[]>(this.baseUrl, 'GET', '/reminders' + qs({ ...p })),
+      request<Reminder[]>(this.baseUrl, 'GET', '/api/reminders' + qs({ ...p })),
 
     create: (input: CreateReminderInput): Promise<Reminder> =>
-      request<Reminder>(this.baseUrl, 'POST', '/reminders', input),
+      request<Reminder>(this.baseUrl, 'POST', '/api/reminders', input),
 
     update: (input: UpdateReminderInput): Promise<Reminder> =>
-      request<Reminder>(this.baseUrl, 'PUT', `/reminders/${input.id}`, input),
+      request<Reminder>(this.baseUrl, 'PUT', `/api/reminders/${input.id}`, input),
 
     delete: (id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', `/reminders/${id}`),
+      request<void>(this.baseUrl, 'DELETE', `/api/reminders/${id}`),
 
     dismiss: (id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'POST', `/reminders/${id}/dismiss`),
+      request<void>(this.baseUrl, 'POST', `/api/reminders/${id}/dismiss`),
   };
 
   tags = {
     list: (owner_id: string): Promise<Tag[]> =>
-      request<Tag[]>(this.baseUrl, 'GET', '/tags' + qs({ owner_id })),
+      request<Tag[]>(this.baseUrl, 'GET', '/api/tags' + qs({ owner_id })),
 
     create: (input: CreateTagInput): Promise<Tag> =>
-      request<Tag>(this.baseUrl, 'POST', '/tags', input),
+      request<Tag>(this.baseUrl, 'POST', '/api/tags', input),
 
     update: (input: UpdateTagInput): Promise<Tag> =>
-      request<Tag>(this.baseUrl, 'PUT', `/tags/${input.id}`, input),
+      request<Tag>(this.baseUrl, 'PUT', `/api/tags/${input.id}`, input),
 
     delete: (id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', `/tags/${id}`),
+      request<void>(this.baseUrl, 'DELETE', `/api/tags/${id}`),
   };
 
   settings = {
     list: (owner_id: string): Promise<Setting[]> =>
-      request<Setting[]>(this.baseUrl, 'GET', '/settings' + qs({ owner_id })),
+      request<Setting[]>(this.baseUrl, 'GET', '/api/settings' + qs({ owner_id })),
 
     upsert: (owner_id: string, key: string, value: string): Promise<Setting> =>
-      request<Setting>(this.baseUrl, 'POST', '/settings/upsert', { owner_id, key, value }),
+      request<Setting>(this.baseUrl, 'POST', '/api/settings/upsert', { owner_id, key, value }),
 
     delete: (owner_id: string, key: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', '/settings' + qs({ owner_id, key })),
+      request<void>(this.baseUrl, 'DELETE', '/api/settings' + qs({ owner_id, key })),
   };
 
   search = {
@@ -277,6 +277,6 @@ export class HttpAdapter implements PRMAdapter {
       query: string,
       limit?: number | null,
     ): Promise<SearchResults> =>
-      request<SearchResults>(this.baseUrl, 'GET', '/search' + qs({ owner_id, query, limit })),
+      request<SearchResults>(this.baseUrl, 'GET', '/api/search' + qs({ owner_id, query, limit })),
   };
 }
