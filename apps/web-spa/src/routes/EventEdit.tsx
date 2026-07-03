@@ -3,17 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { CategoryPicker } from '../components/CategoryPicker';
+import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Contact, UpdateEventInput } from '../lib/adapter/types';
-
-const EVENT_TYPE_OPTIONS = [
-  { value: '会议', label: '🤝 会议' },
-  { value: '聚餐', label: '🍽 聚餐' },
-  { value: '提醒', label: '⏰ 提醒' },
-  { value: '生日', label: '🎂 生日' },
-  { value: '其他', label: '📌 其他' },
-] as const;
+import type { Contact, Event, UpdateEventInput } from '../lib/adapter/types';
 
 function toLocalInput(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -41,7 +35,7 @@ export function EventEdit() {
   });
 
   const [title, setTitle] = useState('');
-  const [type, setType] = useState('会议');
+  const [type, setType] = useState(EVENT_PRESETS[0].value);
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [location, setLocation] = useState('');
@@ -65,10 +59,10 @@ export function EventEdit() {
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateEventInput) => adapter.events.update(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['event', id] });
+    onSuccess: (data) => {
+      queryClient.setQueryData<Event>(['event', id], data);
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      navigate(`/events/${id}`);
+      navigate('/calendar');
     },
   });
 
@@ -106,15 +100,6 @@ export function EventEdit() {
     <div className="page page--narrow">
       <PageHeader
         title="编辑日程"
-        back={
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => navigate(`/events/${id}`)}
-          >
-            ← 返回
-          </button>
-        }
       />
 
       {updateMutation.isError && (
@@ -146,18 +131,13 @@ export function EventEdit() {
               <div className="grid-2">
                 <div>
                   <label className="input-label">类型</label>
-                  <select
-                    className="input-base"
-                    style={{ cursor: 'pointer' }}
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                  >
-                    {EVENT_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ paddingTop: 4 }}>
+                    <CategoryPicker
+                      value={type}
+                      presets={EVENT_PRESETS}
+                      onChange={setType}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="input-label">关联联系人</label>
@@ -224,7 +204,7 @@ export function EventEdit() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => navigate(`/events/${id}`)}
+            onClick={() => navigate('/calendar')}
           >
             取消
           </button>

@@ -3,24 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { TagPicker } from '../components/TagPicker';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Tag, UpdateContactInput } from '../lib/adapter/types';
+import type { UpdateContactInput } from '../lib/adapter/types';
 
 const IMPORTANCE_OPTIONS = [
   { value: 'high', label: '🔴 高' },
   { value: 'medium', label: '🟡 中' },
   { value: 'low', label: '⚪ 低' },
 ] as const;
-
-const FALLBACK_TAG_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-  '#8b5cf6', '#ec4899', '#14b8a6',
-];
-
-function tagColor(tag: Tag): string {
-  return tag.color ?? FALLBACK_TAG_COLORS[tag.name.length % FALLBACK_TAG_COLORS.length];
-}
 
 export function ContactEdit() {
   const { id } = useParams() as { id: string };
@@ -32,12 +24,6 @@ export function ContactEdit() {
   const contactQuery = useQuery({
     queryKey: ['contact', id],
     queryFn: () => adapter.contacts.get(id),
-  });
-
-  const tagsQuery = useQuery({
-    queryKey: ['tags', ownerId],
-    queryFn: () => adapter.tags.list(ownerId!),
-    enabled: !!ownerId,
   });
 
   const [nickname, setNickname] = useState('');
@@ -76,15 +62,10 @@ export function ContactEdit() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contact', id] });
       queryClient.invalidateQueries({ queryKey: ['contacts', ownerId] });
-      navigate(`/contacts/${id}`);
+      navigate('/contacts');
     },
   });
 
-  const toggleTag = (tagId: string) => {
-    setSelectedTagIds((prev) =>
-      prev.includes(tagId) ? prev.filter((tid) => tid !== tagId) : [...prev, tagId],
-    );
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +87,7 @@ export function ContactEdit() {
     updateMutation.mutate(patch);
   };
 
-  if (contactQuery.isLoading || tagsQuery.isLoading || !hydrated) {
+  if (contactQuery.isLoading || !hydrated) {
     return <div className="loading">加载中</div>;
   }
 
@@ -118,21 +99,10 @@ export function ContactEdit() {
     );
   }
 
-  const tags = tagsQuery.data ?? [];
-
   return (
     <div className="page page--narrow">
       <PageHeader
         title="编辑联系人"
-        back={
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => navigate(`/contacts/${id}`)}
-          >
-            ← 返回
-          </button>
-        }
       />
 
       {updateMutation.isError && (
@@ -249,28 +219,10 @@ export function ContactEdit() {
         <section className="section">
           <h2 className="section__title">标签</h2>
           <div className="card" style={{ marginTop: 10 }}>
-            {tags.length === 0 ? (
-              <div className="text-muted text-sm">还没有标签</div>
-            ) : (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {tags.map((tag) => {
-                  const active = selectedTagIds.includes(tag.id);
-                  const color = tagColor(tag);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => toggleTag(tag.id)}
-                      className={`tag-chip ${active ? 'tag-chip--active' : ''}`}
-                      style={active ? { borderColor: color, background: `${color}18`, color } : undefined}
-                    >
-                      <span className="tag-chip__dot" style={{ background: color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <TagPicker
+              selectedIds={selectedTagIds}
+              onChange={setSelectedTagIds}
+            />
           </div>
         </section>
 
@@ -289,7 +241,7 @@ export function ContactEdit() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => navigate(`/contacts/${id}`)}
+            onClick={() => navigate('/contacts')}
           >
             取消
           </button>

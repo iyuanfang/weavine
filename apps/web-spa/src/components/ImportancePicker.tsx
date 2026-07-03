@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useState } from 'react';
+import { Popover } from './Popover';
 
 const OPTIONS: { value: string; label: string; color: string; icon: string }[] = [
   { value: 'low', label: '低', color: '#6b7280', icon: '⚪' },
@@ -20,35 +21,18 @@ export function ImportancePicker({
   onChange: (newValue: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const meta = importanceMeta(value);
 
-  useEffect(() => {
-    if (!open) return;
-    const onClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onClickOutside);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClickOutside);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
-          setOpen(!open);
+          setOpen((o) => !o);
         }}
         title="切换重要度"
         className="badge"
@@ -62,64 +46,38 @@ export function ImportancePicker({
         {meta.icon} {meta.label}
       </button>
 
-      {open && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            right: 0,
-            zIndex: 50,
-            minWidth: 140,
-            background: 'var(--bg-elev)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            boxShadow: 'var(--shadow-md)',
-            padding: 4,
-            animation: 'popover-in 140ms cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {OPTIONS.map((opt) => {
-            const active = opt.value === value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
-                }}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '7px 10px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: active ? `${opt.color}14` : 'transparent',
-                  color: active ? opt.color : 'var(--fg)',
-                  fontWeight: active ? 600 : 400,
-                  fontSize: 13,
-                  border: 0,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'background 100ms',
-                }}
-                onMouseEnter={(e) => {
-                  if (!active) e.currentTarget.style.background = 'var(--bg-subtle)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                <span style={{ fontSize: 14 }}>{opt.icon}</span>
-                <span style={{ flex: 1 }}>{opt.label}</span>
-                {active && <span style={{ fontSize: 12 }}>✓</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+      <Popover
+        anchorRef={triggerRef}
+        open={open}
+        align="bottom-end"
+        onClose={() => setOpen(false)}
+        className="picker-menu"
+        style={{ minWidth: 140, padding: 4 }}
+      >
+        {OPTIONS.map((opt) => {
+          const active = opt.value === value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`picker-menu__item ${active ? 'picker-menu__item--active' : ''}`}
+              style={{
+                color: active ? opt.color : 'var(--fg)',
+                background: active ? `${opt.color}14` : 'transparent',
+                fontWeight: active ? 600 : 400,
+              }}
+            >
+              <span style={{ fontSize: 14 }}>{opt.icon}</span>
+              <span style={{ flex: 1 }}>{opt.label}</span>
+              {active && <span style={{ fontSize: 12 }}>✓</span>}
+            </button>
+          );
+        })}
+      </Popover>
+    </>
   );
 }

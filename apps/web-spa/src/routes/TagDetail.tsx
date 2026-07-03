@@ -4,16 +4,8 @@ import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Tag, Contact } from '../lib/adapter/types';
-
-const FALLBACK_TAG_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-  '#8b5cf6', '#ec4899', '#14b8a6',
-];
-
-function tagColor(tag: Tag): string {
-  return tag.color ?? FALLBACK_TAG_COLORS[tag.name.length % FALLBACK_TAG_COLORS.length];
-}
+import { tagColor } from '../lib/tagColor';
+import type { Contact } from '../lib/adapter/types';
 
 const IMPORTANCE_LABELS: Record<string, string> = {
   high: '高',

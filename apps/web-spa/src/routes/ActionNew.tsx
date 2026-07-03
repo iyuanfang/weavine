@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { CategoryPicker } from '../components/CategoryPicker';
+import { ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Contact, CreateActionInput } from '../lib/adapter/types';
+import type { Action, Contact, CreateActionInput } from '../lib/adapter/types';
 
 const STATUS_OPTIONS = [
   { value: 'inbox', label: '📥 收件箱' },
@@ -56,7 +58,12 @@ export function ActionNew() {
 
   const createMutation = useMutation({
     mutationFn: (input: CreateActionInput) => adapter.actions.create(input),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      queryClient.setQueryData<Action[]>(['actions', ownerId], (old) => {
+        const list = old ?? [];
+        if (list.some((a) => a.id === created.id)) return list;
+        return [created, ...list];
+      });
       queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
       navigate('/actions');
     },
@@ -87,15 +94,6 @@ export function ActionNew() {
       <PageHeader
         title="新建待办"
         subtitle="一件具体的小事，最容易做完"
-        back={
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => navigate(-1)}
-          >
-            ← 返回
-          </button>
-        }
       />
 
       {createMutation.isError && (
@@ -160,12 +158,13 @@ export function ActionNew() {
               <div className="grid-2">
                 <div>
                   <label className="input-label">分类</label>
-                  <input
-                    className="input-base"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder="可选"
-                  />
+                  <div style={{ paddingTop: 4 }}>
+                    <CategoryPicker
+                      value={category || null}
+                      presets={ACTION_PRESETS}
+                      onChange={setCategory}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="input-label">截止时间</label>
@@ -234,7 +233,7 @@ export function ActionNew() {
         </section>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/actions')}>
             取消
           </button>
           <button

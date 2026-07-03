@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
-import { StatusPicker, statusMeta } from '../components/StatusPicker';
-import { PriorityPicker } from '../components/PriorityPicker';
+import { statusMeta } from '../components/StatusPicker';
+import { priorityMeta } from '../components/PriorityPicker';
+import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Action, UpdateActionInput } from '../lib/adapter/types';
@@ -51,6 +52,8 @@ export function ActionsList() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [collapsed, setCollapsed] = useLocalStorageSet('prm:actions:collapsed');
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<StatusKey | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 200);
@@ -65,6 +68,7 @@ export function ActionsList() {
         limit: 500,
       }),
     enabled: !!ownerId,
+    refetchOnMount: 'always',
   });
 
   const contactsQuery = useQuery({
@@ -82,17 +86,93 @@ export function ActionsList() {
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: ['actions', ownerId] });
+      const prev = queryClient.getQueryData<Action[]>(['actions', ownerId]);
+      if (prev) {
+        queryClient.setQueryData<Action[]>(['actions', ownerId], (old) =>
+          (old ?? []).map((a) =>
+            a.id === input.id
+              ? {
+                  ...a,
+                  status: input.status ?? a.status,
+                  priority: input.priority ?? a.priority,
+                  completed_at:
+                    input.completed_at !== undefined ? input.completed_at : a.completed_at,
+                }
+              : a,
+          ),
+        );
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['actions', ownerId], ctx.prev);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<Action[]>(['actions', ownerId], (old) =>
+        (old ?? []).map((a) => (a.id === data.id ? data : a)),
+      );
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => adapter.actions.delete(id),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['actions', ownerId] });
+      const prev = queryClient.getQueryData<Action[]>(['actions', ownerId]);
+      if (prev) {
+        queryClient.setQueryData<Action[]>(['actions', ownerId], (old) =>
+          (old ?? []).filter((a) => a.id !== id),
+        );
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['actions', ownerId], ctx.prev);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
     },
   });
+
+  const handleDragStart = (e: React.DragEvent, actionId: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', actionId);
+    setDraggingId(actionId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverStatus(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, status: StatusKey) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverStatus !== status) setDragOverStatus(status);
+  };
+
+  const handleDragLeave = (e: React.DragEvent, status: StatusKey) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && (e.currentTarget as Node).contains(next)) return;
+    if (dragOverStatus === status) setDragOverStatus(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetStatus: StatusKey) => {
+    e.preventDefault();
+    const actionId = e.dataTransfer.getData('text/plain');
+    setDraggingId(null);
+    setDragOverStatus(null);
+    if (!actionId) return;
+    const action = allActions.find((a) => a.id === actionId);
+    if (!action || action.status === targetStatus) return;
+    updateMutation.mutate({
+      id: actionId,
+      status: targetStatus,
+      completed_at: targetStatus === 'done' ? new Date().toISOString() : null,
+    });
+  };
 
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
@@ -371,7 +451,6 @@ export function ActionsList() {
             <div style={{ display: 'grid', gap: 16 }}>
               {STATUS_ORDER.map((status) => {
                 const items = byStatus[status];
-                if (items.length === 0) return null;
                 const meta = statusMeta(status);
                 const isCollapsed = collapsed.has(status);
                 const toggle = () => {
@@ -388,7 +467,14 @@ export function ActionsList() {
                 }).length;
 
                 return (
-                  <section key={status} className="section" style={{ marginBottom: 0 }}>
+                  <section
+                    key={status}
+                    className={`section section--drop ${dragOverStatus === status ? 'section--drop-active' : ''}`}
+                    style={{ marginBottom: 0 }}
+                    onDragOver={(e) => handleDragOver(e, status)}
+                    onDragLeave={(e) => handleDragLeave(e, status)}
+                    onDrop={(e) => handleDrop(e, status)}
+                  >
                     <button
                       type="button"
                       onClick={toggle}
@@ -430,6 +516,18 @@ export function ActionsList() {
                         >
                           {items.length}
                         </span>
+                        {items.length === 0 && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--muted)',
+                              fontWeight: 400,
+                              fontStyle: 'italic',
+                            }}
+                          >
+                            (空 · 可拖入)
+                          </span>
+                        )}
                         {overdueInSection > 0 && (
                           <span
                             className="badge badge--danger"
@@ -438,11 +536,23 @@ export function ActionsList() {
                             {overdueInSection} 过期
                           </span>
                         )}
+                        {dragOverStatus === status && (
+                          <span
+                            style={{
+                              marginLeft: 'auto',
+                              fontSize: 11,
+                              color: meta.color,
+                              fontWeight: 600,
+                            }}
+                          >
+                            松开改状态
+                          </span>
+                        )}
                       </h2>
                     </button>
 
                     {!isCollapsed && (
-                      <div style={{ display: 'grid', gap: 6 }}>
+                      <div style={{ display: 'grid', gap: 6, minHeight: 8 }}>
                         {items.map((a) => (
                           <ActionRow
                             key={a.id}
@@ -456,20 +566,6 @@ export function ActionsList() {
                                   a.status === 'done' ? null : new Date().toISOString(),
                               })
                             }
-                            onChangeStatus={(newStatus) => {
-                              updateMutation.mutate({
-                                id: a.id,
-                                status: newStatus,
-                                completed_at:
-                                  newStatus === 'done' ? new Date().toISOString() : null,
-                              });
-                            }}
-                            onChangePriority={(newPriority) => {
-                              updateMutation.mutate({
-                                id: a.id,
-                                priority: newPriority,
-                              });
-                            }}
                             onDelete={() => {
                               if (confirm(`确定要删除「${a.title}」吗？`)) {
                                 deleteMutation.mutate(a.id);
@@ -479,8 +575,25 @@ export function ActionsList() {
                               updateMutation.isPending &&
                               updateMutation.variables?.id === a.id
                             }
+                            isDragging={draggingId === a.id}
+                            onDragStart={(e) => handleDragStart(e, a.id)}
+                            onDragEnd={handleDragEnd}
                           />
                         ))}
+                        {items.length === 0 && (
+                          <div
+                            style={{
+                              padding: '12px 8px',
+                              fontSize: 12,
+                              color: 'var(--muted)',
+                              textAlign: 'center',
+                              border: '1px dashed var(--border)',
+                              borderRadius: 'var(--radius-sm)',
+                            }}
+                          >
+                            拖到这里改状态
+                          </div>
+                        )}
                       </div>
                     )}
                   </section>
@@ -498,34 +611,24 @@ function ActionRow({
   action,
   contact,
   onToggleDone,
-  onChangeStatus,
-  onChangePriority,
   onDelete,
   isUpdating,
+  isDragging,
+  onDragStart,
+  onDragEnd,
 }: {
   action: Action;
   contact: { id: string; nickname: string; name: string | null } | null;
   onToggleDone: () => void;
-  onChangeStatus: (status: string) => void;
-  onChangePriority: (priority: number) => void;
   onDelete: () => void;
   isUpdating: boolean;
+  isDragging: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: (e: React.DragEvent) => void;
 }) {
   const isDone = action.status === 'done';
   const displayName = contact ? (contact.nickname ?? contact.name ?? '?') : '';
   const [hovered, setHovered] = useState(false);
-  const pressTimer = useRef<number | null>(null);
-
-  const onPressStart = () => {
-    if (typeof window === 'undefined') return;
-    pressTimer.current = window.setTimeout(() => setHovered(true), 400);
-  };
-  const onPressEnd = () => {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-  };
 
   const dueDate = action.due_at ? new Date(action.due_at) : null;
   const now = new Date();
@@ -545,21 +648,25 @@ function ActionRow({
     }
   }
 
+  const category = action.category
+    ? categoryMeta(action.category, ACTION_PRESETS)
+    : null;
+
+  const pri = priorityMeta(action.priority);
+
   return (
     <div
-      className={`row-card ${dueTone ? `row-card--${dueTone}` : ''}`}
+      className={`kanban__card row-card ${dueTone ? `row-card--${dueTone}` : ''} ${isDragging ? 'kanban__card--dragging' : ''}`}
       style={{
-        padding: '10px 14px',
-        opacity: isDone ? 0.65 : 1,
+        padding: '10px 12px',
+        opacity: isDone ? 0.65 : isDragging ? 0.4 : 1,
+        cursor: 'grab',
       }}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => {
-        setHovered(false);
-        onPressEnd();
-      }}
-      onTouchStart={onPressStart}
-      onTouchEnd={onPressEnd}
-      onTouchCancel={onPressEnd}
+      onMouseLeave={() => setHovered(false)}
     >
       <button
         type="button"
@@ -567,11 +674,13 @@ function ActionRow({
         disabled={isUpdating}
         onClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           onToggleDone();
         }}
+        onMouseDown={(e) => e.stopPropagation()}
         style={{
-          width: 20,
-          height: 20,
+          width: 18,
+          height: 18,
           borderRadius: 5,
           border: `1.5px solid ${isDone ? 'var(--accent)' : 'var(--border-strong)'}`,
           background: isDone ? 'var(--accent)' : '#fff',
@@ -581,7 +690,7 @@ function ActionRow({
           alignItems: 'center',
           justifyContent: 'center',
           color: '#fff',
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 700,
           opacity: isUpdating ? 0.6 : 1,
           transition: `all var(--transition)`,
@@ -599,15 +708,19 @@ function ActionRow({
           color: 'inherit',
           display: 'flex',
           flexDirection: 'column',
-          gap: 3,
+          gap: 4,
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         <div
           style={{
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 500,
             textDecoration: isDone ? 'line-through' : 'none',
             color: isDone ? 'var(--muted)' : 'var(--fg)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
         >
           {action.title}
@@ -616,8 +729,8 @@ function ActionRow({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            fontSize: 12,
+            gap: 6,
+            fontSize: 11,
             color: 'var(--muted)',
             flexWrap: 'wrap',
           }}
@@ -637,32 +750,66 @@ function ActionRow({
               {dueLabel}
             </span>
           )}
+          {category && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 2,
+                color: category.color,
+                fontWeight: 500,
+              }}
+            >
+              <span style={{ fontSize: 10 }}>{category.icon}</span>
+              {category.label}
+            </span>
+          )}
           {displayName && (
-            <>
-              {dueLabel && <span style={{ opacity: 0.4 }}>·</span>}
-              <span style={{ color: 'var(--accent)' }}>{displayName}</span>
-            </>
+            <span style={{ color: 'var(--accent)' }}>{displayName}</span>
           )}
         </div>
       </Link>
 
-      <PriorityPicker value={action.priority} onChange={onChangePriority} />
-      <StatusPicker value={action.status} onChange={onChangeStatus} compact />
-
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          opacity: hovered ? 1 : 0,
-          transition: `opacity var(--transition)`,
-        }}
-      >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <span
+          title={`优先级: ${pri.label}`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            padding: '2px 8px',
+            borderRadius: 999,
+            border: `1px solid ${pri.color}40`,
+            background: `${pri.color}14`,
+            fontSize: 10,
+            fontWeight: 600,
+            color: pri.color,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: pri.color,
+            }}
+          />
+          {pri.label}
+        </span>
         <Link
           to={`/actions/${action.id}/edit`}
           className="btn btn-sm btn-ghost"
-          style={{ padding: '4px 8px' }}
+          style={{
+            padding: '2px 6px',
+            fontSize: 12,
+            opacity: hovered ? 1 : 0.55,
+            transition: `opacity var(--transition)`,
+          }}
           title="编辑"
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          draggable={false}
         >
           ✎
         </Link>
@@ -670,10 +817,19 @@ function ActionRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            e.preventDefault();
             onDelete();
           }}
+          onMouseDown={(e) => e.stopPropagation()}
+          draggable={false}
           className="btn btn-sm btn-ghost"
-          style={{ padding: '4px 8px', color: 'var(--danger)' }}
+          style={{
+            padding: '2px 6px',
+            fontSize: 12,
+            color: 'var(--danger)',
+            opacity: hovered ? 1 : 0,
+            transition: `opacity var(--transition)`,
+          }}
           title="删除"
         >
           🗑

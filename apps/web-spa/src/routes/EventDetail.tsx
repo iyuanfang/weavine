@@ -2,19 +2,13 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
-
-const EVENT_TYPE_LABEL: Record<string, string> = {
-  会议: '🤝 会议',
-  聚餐: '🍽 聚餐',
-  提醒: '⏰ 提醒',
-  生日: '🎂 生日',
-  其他: '📌 其他',
-};
 
 function formatEventType(type: string | null | undefined): string {
   if (!type) return '';
-  return EVENT_TYPE_LABEL[type] ?? type;
+  const meta = categoryMeta(type, EVENT_PRESETS);
+  return `${meta.icon} ${meta.label}`;
 }
 
 export function EventDetail() {
@@ -78,6 +72,9 @@ export function EventDetail() {
         }
         actions={
           <>
+            <Link to="/calendar" className="btn btn-ghost">
+              ← 日历
+            </Link>
             <Link to={`/events/${id}/edit`} className="btn btn-secondary">
               编辑
             </Link>

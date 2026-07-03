@@ -253,13 +253,11 @@ export interface UpdateReminderInput {
 export interface CreateTagInput {
   owner_id: string;
   name: string;
-  color?: string | null;
 }
 
 export interface UpdateTagInput {
   id: string;
   name?: string | null;
-  color?: string | null;
 }
 
 // ──────────────────────────────────────────────

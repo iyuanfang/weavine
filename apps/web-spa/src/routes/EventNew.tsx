@@ -3,17 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { CategoryPicker } from '../components/CategoryPicker';
+import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Contact, CreateEventInput } from '../lib/adapter/types';
-
-const EVENT_TYPE_OPTIONS = [
-  { value: '会议', label: '🤝 会议' },
-  { value: '聚餐', label: '🍽 聚餐' },
-  { value: '提醒', label: '⏰ 提醒' },
-  { value: '生日', label: '🎂 生日' },
-  { value: '其他', label: '📌 其他' },
-] as const;
+import type { Contact, CreateEventInput, Event } from '../lib/adapter/types';
 
 export function EventNew() {
   const adapter = useAdapter();
@@ -22,7 +16,7 @@ export function EventNew() {
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
-  const [type, setType] = useState('会议');
+  const [type, setType] = useState(EVENT_PRESETS[0].value);
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [location, setLocation] = useState('');
@@ -39,8 +33,9 @@ export function EventNew() {
   const createMutation = useMutation({
     mutationFn: (input: CreateEventInput) => adapter.events.create(input),
     onSuccess: (event) => {
+      queryClient.setQueryData<Event>(['event', event.id], event);
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      navigate(`/events/${event.id}`);
+      navigate('/calendar');
     },
   });
 
@@ -68,15 +63,6 @@ export function EventNew() {
       <PageHeader
         title="新建日程"
         subtitle="会面、纪念日、deadline"
-        back={
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => navigate(-1)}
-          >
-            ← 返回
-          </button>
-        }
       />
 
       {createMutation.isError && (
@@ -109,18 +95,13 @@ export function EventNew() {
               <div className="grid-2">
                 <div>
                   <label className="input-label">类型</label>
-                  <select
-                    className="input-base"
-                    style={{ cursor: 'pointer' }}
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                  >
-                    {EVENT_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ paddingTop: 4 }}>
+                    <CategoryPicker
+                      value={type}
+                      presets={EVENT_PRESETS}
+                      onChange={setType}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="input-label">关联联系人</label>
@@ -186,7 +167,7 @@ export function EventNew() {
         </section>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate('/calendar')}>
             取消
           </button>
           <button

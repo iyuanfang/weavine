@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { CategoryPicker } from '../components/CategoryPicker';
+import { ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Contact, UpdateActionInput } from '../lib/adapter/types';
@@ -88,7 +90,7 @@ export function ActionEdit() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
       queryClient.invalidateQueries({ queryKey: ['action', id] });
-      navigate(`/actions/${id}`);
+      navigate('/actions');
     },
   });
 
@@ -128,15 +130,6 @@ export function ActionEdit() {
     <div className="page page--narrow">
       <PageHeader
         title="编辑待办"
-        back={
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => navigate(`/actions/${id}`)}
-          >
-            ← 返回
-          </button>
-        }
       />
 
       {updateMutation.isError && (
@@ -200,11 +193,13 @@ export function ActionEdit() {
               <div className="grid-2">
                 <div>
                   <label className="input-label">分类</label>
-                  <input
-                    className="input-base"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                  />
+                  <div style={{ paddingTop: 4 }}>
+                    <CategoryPicker
+                      value={category || null}
+                      presets={ACTION_PRESETS}
+                      onChange={setCategory}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="input-label">截止时间</label>
@@ -275,7 +270,7 @@ export function ActionEdit() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => navigate(`/actions/${id}`)}
+            onClick={() => navigate('/actions')}
           >
             取消
           </button>

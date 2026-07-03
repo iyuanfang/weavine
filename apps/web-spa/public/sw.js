@@ -1,4 +1,4 @@
-const CACHE = 'prm-v1';
+const CACHE = 'prm-v2';
 
 const PRECACHE_URLS = [
   '/',
@@ -15,6 +15,24 @@ const PRECACHE_URLS = [
   '/icon.png',
   '/logo.svg',
 ];
+
+const API_PATHS = [
+  '/actions',
+  '/contacts',
+  '/events',
+  '/tags',
+  '/interactions',
+  '/reminders',
+  '/settings',
+  '/search',
+  '/diagnostic',
+];
+
+function isApiRequest(url) {
+  return API_PATHS.some(
+    (p) => url.pathname === p || url.pathname.startsWith(p + '/'),
+  );
+}
 
 // ── Install ──────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -38,21 +56,17 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// ── Fetch (stale-while-revalidate) ───────────────────
+// ── Fetch ───────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip non-http(s) requests (e.g., chrome-extension://)
   const url = new URL(event.request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // API calls → network only (no cache, so data is always fresh)
-  if (url.pathname.startsWith('/api/')) {
+  if (isApiRequest(url)) {
     return;
   }
 
-  // Static assets / pages → stale-while-revalidate
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
@@ -61,14 +75,14 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE).then((cache) => cache.put(event.request, clone));
           return res;
         })
-        .catch(() => cached); // fallback to cached even if fetch fails silently
+        .catch(() => cached);
 
       return cached || fetchPromise;
     }),
   );
 });
 
-// ── Push notification (existing) ─────────────────────
+// ── Push notification ────────────────────────────────
 self.addEventListener('push', (event) => {
   let data = { title: 'PRM 提醒', body: '', link: '/' };
   try {

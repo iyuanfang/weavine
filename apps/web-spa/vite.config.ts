@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5181,
     strictPort: true,
     host: '127.0.0.1',
-    hmr: { port: 5182 },
+    hmr: { port: 5181 },
   },
   clearScreen: false,
   build: {

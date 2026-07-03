@@ -1,27 +1,19 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Event } from '../lib/adapter/types';
 
-const TYPE_OPTIONS: { value: string; label: string; icon: string; color: string }[] = [
+const TYPE_OPTIONS = [
   { value: 'all', label: '全部', icon: '●', color: '#6b7280' },
-  { value: '会议', label: '会议', icon: '🤝', color: '#3b82f6' },
-  { value: '聚餐', label: '聚餐', icon: '🍽', color: '#f59e0b' },
-  { value: '提醒', label: '提醒', icon: '⏰', color: '#8b5cf6' },
-  { value: '生日', label: '生日', icon: '🎂', color: '#ec4899' },
-  { value: '其他', label: '其他', icon: '📌', color: '#9ca3af' },
+  ...EVENT_PRESETS,
 ];
 
-const TYPE_COLOR: Record<string, string> = Object.fromEntries(
-  TYPE_OPTIONS.filter((t) => t.value !== 'all').map((t) => [t.value, t.color]),
-);
-const TYPE_ICON: Record<string, string> = Object.fromEntries(
-  TYPE_OPTIONS.filter((t) => t.value !== 'all').map((t) => [t.value, t.icon]),
-);
+const TYPE_COLOR = Object.fromEntries(EVENT_PRESETS.map((p) => [p.value, p.color]));
 
 function getMonthStart(base: Date, monthOffset: number): Date {
   const d = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
@@ -85,6 +77,9 @@ function isDateInMonth(d: Date, monthStart: Date, monthEnd: Date): boolean {
 export function Calendar() {
   const adapter = useAdapter();
   const ownerId = useOwnerId();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -106,13 +101,28 @@ export function Calendar() {
         start_before: monthEnd.toISOString(),
       }),
     enabled: Boolean(ownerId),
+    refetchOnMount: 'always',
   });
 
   const upcomingQuery = useQuery({
     queryKey: ['events', ownerId, 'upcoming'],
     queryFn: () => adapter.events.upcoming(ownerId!, 5),
     enabled: Boolean(ownerId),
+    refetchOnMount: 'always',
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (eventId: string) => adapter.events.delete(eventId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+    },
+  });
+
+  const handleDelete = (event: Event) => {
+    if (confirm(`确定要删除「${event.title}」吗？`)) {
+      deleteMutation.mutate(event.id);
+    }
+  };
 
   if (!ownerId) {
     return <div className="loading">正在加载用户…</div>;
@@ -359,13 +369,16 @@ export function Calendar() {
                           ? `${formatTime(startAt)} – ${formatTime(endAt)}`
                           : formatTime(startAt);
                         const subtitle = timeLabel + (event.location ? ` · ${event.location}` : '');
-                        const icon = TYPE_ICON[event.type ?? ''] ?? '📅';
-                        const color = TYPE_COLOR[event.type ?? ''] ?? '#9ca3af';
+                        const meta = categoryMeta(event.type, EVENT_PRESETS);
+                        const icon = meta.icon;
+                        const color = meta.color;
                         return (
                           <Link
                             key={event.id}
                             to={`/events/${event.id}`}
                             className="row-card"
+                            onMouseEnter={() => setHoveredId(event.id)}
+                            onMouseLeave={() => setHoveredId(null)}
                             style={{ textDecoration: 'none', color: 'inherit' }}
                           >
                             <span
@@ -386,6 +399,43 @@ export function Calendar() {
                             </span>
                             <span className="row-card__title">{event.title}</span>
                             <span className="row-card__meta">{subtitle}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/events/${event.id}/edit`);
+                              }}
+                              className="btn btn-sm btn-ghost"
+                              style={{
+                                padding: '2px 6px',
+                                fontSize: 12,
+                                opacity: hoveredId === event.id ? 1 : 0.55,
+                                transition: `opacity var(--transition)`,
+                              }}
+                              title="编辑"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDelete(event);
+                              }}
+                              className="btn btn-sm btn-ghost"
+                              style={{
+                                padding: '2px 6px',
+                                fontSize: 12,
+                                color: 'var(--danger)',
+                                opacity: hoveredId === event.id ? 1 : 0,
+                                transition: `opacity var(--transition)`,
+                              }}
+                              title="删除"
+                            >
+                              🗑
+                            </button>
                           </Link>
                         );
                       })}

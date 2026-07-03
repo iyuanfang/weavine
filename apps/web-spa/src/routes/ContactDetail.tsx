@@ -4,7 +4,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Tag, CreateInteractionInput } from '../lib/adapter/types';
+import { tagColor } from '../lib/tagColor';
+import type { CreateInteractionInput } from '../lib/adapter/types';
 
 const IMPORTANCE_LABELS: Record<string, string> = {
   high: '高',
@@ -17,15 +18,6 @@ const IMPORTANCE_BADGE: Record<string, { bg: string; fg: string }> = {
   medium: { bg: '#fffbeb', fg: '#d97706' },
   low: { bg: '#f3f4f6', fg: '#6b7280' },
 };
-
-const FALLBACK_TAG_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-  '#8b5cf6', '#ec4899', '#14b8a6',
-];
-
-function tagColor(tag: Tag): string {
-  return tag.color ?? FALLBACK_TAG_COLORS[tag.name.length % FALLBACK_TAG_COLORS.length];
-}
 
 function avatarBg(name: string): string {
   const palettes = [
@@ -230,6 +222,9 @@ export function ContactDetail() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <Link to="/contacts" className="btn btn-ghost">
+            ← 联系人列表
+          </Link>
           <Link to={`/contacts/${id}/edit`} className="btn btn-secondary">
             编辑
           </Link>

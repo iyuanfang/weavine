@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 
-import { useAdapter } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
 
 const navItems = [
@@ -16,14 +14,7 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading: userLoading } = useLocalUser();
-  const adapter = useAdapter();
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const { data: tags } = useQuery({
-    queryKey: ['tags', user?.id],
-    queryFn: () => adapter.tags.list(user!.id),
-    enabled: Boolean(user?.id),
-  });
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -70,26 +61,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </NavLink>
         ))}
       </nav>
-
-      {tags && tags.length > 0 && (
-        <div className="app-shell__tags">
-          <div className="app-shell__tags-title">我的标签</div>
-          {tags.map((tag) => (
-            <NavLink
-              key={tag.id}
-              to={`/tags/${tag.id}`}
-              onClick={() => setDrawerOpen(false)}
-              className="app-shell__tag-row"
-            >
-              <span
-                className="app-shell__tag-dot"
-                style={{ backgroundColor: tag.color ?? '#9ca3af' }}
-              />
-              <span className="app-shell__tag-name">{tag.name}</span>
-            </NavLink>
-          ))}
-        </div>
-      )}
 
       <div className="app-shell__user">
         {userLoading ? '加载中…' : user?.name ?? user?.email ?? '未登录'}

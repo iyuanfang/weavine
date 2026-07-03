@@ -150,6 +150,9 @@ export function ActionDetail() {
         }
         actions={
           <>
+            <Link to="/actions" className="btn btn-ghost">
+              ← 待办列表
+            </Link>
             <Link to={`/actions/${id}/edit`} className="btn btn-secondary">
               编辑
             </Link>

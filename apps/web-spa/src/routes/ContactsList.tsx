@@ -5,7 +5,8 @@ import { Link } from 'react-router-dom';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Tag, Contact, UpdateContactInput } from '../lib/adapter/types';
+import { tagColor } from '../lib/tagColor';
+import type { Contact, UpdateContactInput } from '../lib/adapter/types';
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -23,15 +24,6 @@ const IMPORTANCE_LABELS: Record<string, string> = {
 };
 
 const IMPORTANCE_VALUES = ['high', 'medium', 'low'] as const;
-
-const FALLBACK_TAG_COLORS = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-  '#8b5cf6', '#ec4899', '#14b8a6',
-];
-
-function tagColor(tag: Tag): string {
-  return tag.color ?? FALLBACK_TAG_COLORS[tag.name.length % FALLBACK_TAG_COLORS.length];
-}
 
 const IMPORTANCE_DOT: Record<string, string> = {
   high: '#ef4444',

@@ -1,26 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Tag, CreateTagInput, Contact } from '../lib/adapter/types';
-
-const PRESET_COLORS = [
-  '#3b82f6',
-  '#ef4444',
-  '#10b981',
-  '#f59e0b',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
-  '#6b7280',
-];
-
-function tagColor(tag: Tag): string {
-  return tag.color ?? PRESET_COLORS[tag.name.length % PRESET_COLORS.length];
-}
+import type { CreateTagInput, Contact } from '../lib/adapter/types';
+import { tagColor } from '../lib/tagColor';
 
 export function Tags() {
   const adapter = useAdapter();
@@ -29,7 +15,6 @@ export function Tags() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
 
   const tagsQuery = useQuery({
     queryKey: ['tags', ownerId],
@@ -48,7 +33,6 @@ export function Tags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tags'] });
       setNewName('');
-      setNewColor(PRESET_COLORS[0]);
       setShowCreate(false);
     },
   });
@@ -66,7 +50,6 @@ export function Tags() {
     createMutation.mutate({
       owner_id: ownerId,
       name: newName.trim(),
-      color: newColor,
     });
   };
 
@@ -84,15 +67,6 @@ export function Tags() {
 
   const tags = tagsQuery.data ?? [];
   const contacts = contactsQuery.data ?? [];
-
-  const countsByColor = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const tag of tags) {
-      const c = tagColor(tag);
-      map.set(c, (map.get(c) ?? 0) + 1);
-    }
-    return map;
-  }, [tags]);
 
   const taggedContactIds = new Set<string>();
   for (const c of contacts) {
@@ -158,64 +132,6 @@ export function Tags() {
       <div className="filter-panel__divider" />
 
       <div className="filter-panel__section">
-        <div className="filter-panel__title">颜色</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '4px 10px' }}>
-          {PRESET_COLORS.map((c) => {
-            const count = countsByColor.get(c) ?? 0;
-            const active = newColor === c;
-            return (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setNewColor(c)}
-                title={`${c} · ${count} 个标签`}
-                aria-label={`选择颜色 ${c}`}
-                style={{
-                  position: 'relative',
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  background: c,
-                  border: active ? '2px solid var(--fg)' : '2px solid transparent',
-                  cursor: 'pointer',
-                  padding: 0,
-                  transition: `transform var(--transition)`,
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.15)')}
-                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-              >
-                {count > 0 && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -4,
-                      minWidth: 14,
-                      height: 14,
-                      padding: '0 4px',
-                      background: 'var(--bg-elev)',
-                      color: 'var(--fg)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 999,
-                      fontSize: 9,
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="filter-panel__divider" />
-
-      <div className="filter-panel__section">
         <div className="filter-panel__title">提示</div>
         <div
           style={{
@@ -225,7 +141,7 @@ export function Tags() {
             lineHeight: 1.6,
           }}
         >
-          标签可以一对一关联到联系人。在联系人详情页可以勾选已有标签或新建。
+          一个标签可以关联到任意多个联系人，一个联系人也可以勾选多个标签。在联系人详情页可以勾选已有标签或新建。
         </div>
       </div>
 
@@ -278,38 +194,6 @@ export function Tags() {
                       placeholder="例如：朋友、同事、投资人…"
                       autoFocus
                     />
-                  </div>
-                  <div>
-                    <label className="input-label">颜色</label>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {PRESET_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setNewColor(c)}
-                          aria-label={`选择颜色 ${c}`}
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: '50%',
-                            background: c,
-                            border:
-                              newColor === c
-                                ? '2px solid var(--fg)'
-                                : '2px solid transparent',
-                            cursor: 'pointer',
-                            padding: 0,
-                            transition: `transform var(--transition)`,
-                          }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.transform = 'scale(1.1)')
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.transform = 'scale(1)')
-                          }
-                        />
-                      ))}
-                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <button
