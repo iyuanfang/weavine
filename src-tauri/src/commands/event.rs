@@ -31,7 +31,7 @@ pub struct UpdateEventInput {
     pub contact_id: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_events(
     db: State<Database>,
     owner_id: String,
@@ -82,7 +82,7 @@ pub fn get_event(db: State<Database>, id: String) -> Result<Event, String> {
     business::event::get(&conn, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_upcoming_events(
     db: State<Database>,
     owner_id: String,

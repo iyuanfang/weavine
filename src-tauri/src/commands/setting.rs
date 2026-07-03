@@ -3,7 +3,7 @@ use crate::db::Database;
 use crate::models::*;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_settings(
     db: State<Database>,
     owner_id: String,
@@ -12,7 +12,7 @@ pub fn list_settings(
     business::setting::list(&conn, &owner_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn upsert_setting(
     db: State<Database>,
     owner_id: String,
@@ -23,7 +23,7 @@ pub fn upsert_setting(
     business::setting::upsert(&conn, &owner_id, &key, &value).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_setting(
     db: State<Database>,
     owner_id: String,

@@ -23,7 +23,7 @@ pub struct UpdateReminderInput {
     pub dismissed: Option<bool>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_reminders(
     db: State<Database>,
     owner_id: String,

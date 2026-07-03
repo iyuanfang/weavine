@@ -32,7 +32,7 @@ pub struct UpdateActionInput {
     pub completed_at: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_actions(
     db: State<Database>,
     owner_id: String,

@@ -17,7 +17,7 @@ pub struct UpdateTagInput {
     pub name: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_tags(db: State<Database>, owner_id: String) -> Result<Vec<Tag>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::tag::list(&conn, &owner_id).map_err(|e| e.to_string())

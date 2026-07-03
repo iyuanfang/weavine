@@ -3,7 +3,7 @@ use crate::db::Database;
 use crate::models::*;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn search(
     db: State<Database>,
     owner_id: String,
