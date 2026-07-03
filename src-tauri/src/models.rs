@@ -67,6 +67,7 @@ pub struct Event {
     pub location: Option<String>,
     pub notes: Option<String>,
     pub contact_id: Option<String>,
+    pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
@@ -86,6 +87,21 @@ pub struct Interaction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub id: String,
+    pub owner_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub template: String,
+    pub stage: String,
+    pub start_at: Option<String>,
+    pub due_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Action {
     pub id: String,
     pub owner_id: String,
@@ -96,6 +112,7 @@ pub struct Action {
     pub category: Option<String>,
     pub due_at: Option<String>,
     pub contact_id: Option<String>,
+    pub project_id: Option<String>,
     pub completed_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,

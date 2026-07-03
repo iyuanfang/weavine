@@ -4,9 +4,10 @@ pub mod commands;
 pub mod db;
 pub mod migration;
 pub mod models;
+pub mod project_template;
 pub mod tag_color;
 
-use commands::{action, contact, diagnostic, event, interaction, reminder, search, setting, tag};
+use commands::{action, contact, diagnostic, event, interaction, project, reminder, search, setting, tag};
 use db::Database;
 use std::fs;
 
@@ -75,6 +76,12 @@ pub fn run() {
             search::search,
             diagnostic::get_startup_info,
             diagnostic::get_local_user,
+            project::list_projects,
+            project::create_project,
+            project::update_project,
+            project::delete_project,
+            project::get_project,
+            project::list_project_stages,
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())

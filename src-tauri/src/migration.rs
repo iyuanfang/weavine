@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS "Event" (
     "reminderEnabled" INTEGER NOT NULL DEFAULT 1,
     "reminderAt" DATETIME,
     "contactId" TEXT REFERENCES "Contact"("id") ON DELETE SET NULL,
+    "projectId" TEXT REFERENCES "Project"("id") ON DELETE SET NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS "Action" (
     "dueAt" DATETIME,
     "contactId" TEXT REFERENCES "Contact"("id") ON DELETE SET NULL,
     "completedAt" DATETIME,
+    "projectId" TEXT REFERENCES "Project"("id") ON DELETE SET NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
@@ -158,6 +160,29 @@ CREATE TABLE IF NOT EXISTS "PushSubscription" (
     "auth" TEXT NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS "Project" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "ownerId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "template" TEXT NOT NULL,
+    "stage" TEXT NOT NULL,
+    "startAt" DATETIME,
+    "dueAt" DATETIME,
+    "completedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "ProjectContact" (
+    "ownerId" TEXT NOT NULL,
+    "projectId" TEXT NOT NULL REFERENCES "Project"("id") ON DELETE CASCADE,
+    "contactId" TEXT NOT NULL REFERENCES "Contact"("id") ON DELETE CASCADE,
+    "role" TEXT,
+    "addedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY ("projectId", "contactId")
+);
 "#;
 
 const INDEX_SQL: &str = r#"
@@ -195,6 +220,12 @@ CREATE INDEX IF NOT EXISTS "Reminder_ownerId_contactId_kind_triggerAt_idx" ON "R
 CREATE UNIQUE INDEX IF NOT EXISTS "Setting_ownerId_key_key" ON "Setting"("ownerId", "key");
 CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
 CREATE INDEX IF NOT EXISTS "PushSubscription_ownerId_idx" ON "PushSubscription"("ownerId");
+CREATE INDEX IF NOT EXISTS "Project_ownerId_template_idx" ON "Project"("ownerId", "template");
+CREATE INDEX IF NOT EXISTS "Project_ownerId_stage_idx" ON "Project"("ownerId", "stage");
+CREATE INDEX IF NOT EXISTS "Action_ownerId_projectId_idx" ON "Action"("ownerId", "projectId");
+CREATE INDEX IF NOT EXISTS "Event_ownerId_projectId_idx" ON "Event"("ownerId", "projectId");
+CREATE INDEX IF NOT EXISTS "ProjectContact_ownerId_idx" ON "ProjectContact"("ownerId");
+CREATE INDEX IF NOT EXISTS "ProjectContact_contactId_idx" ON "ProjectContact"("contactId");
 "#;
 
 /// Run all migrations (idempotent).
@@ -229,6 +260,55 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
             "ALTER TABLE \"Event\" ADD COLUMN \"reminderLeadMinutes\" INTEGER",
             [],
         )?;
+    }
+
+    // Idempotent migration: Project table + ProjectContact
+    // Fresh DBs get these from SCHEMA_SQL; this no-ops for them.
+    let has_project: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Project') WHERE name='id'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_project == 0 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS \"Project\" (\
+                \"id\" TEXT NOT NULL PRIMARY KEY,\
+                \"ownerId\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,\
+                \"title\" TEXT NOT NULL,\
+                \"description\" TEXT,\
+                \"template\" TEXT NOT NULL,\
+                \"stage\" TEXT NOT NULL,\
+                \"startAt\" DATETIME,\
+                \"dueAt\" DATETIME,\
+                \"completedAt\" DATETIME,\
+                \"createdAt\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                \"updatedAt\" DATETIME NOT NULL\
+            );\
+            CREATE TABLE IF NOT EXISTS \"ProjectContact\" (\
+                \"ownerId\" TEXT NOT NULL,\
+                \"projectId\" TEXT NOT NULL REFERENCES \"Project\"(\"id\") ON DELETE CASCADE,\
+                \"contactId\" TEXT NOT NULL REFERENCES \"Contact\"(\"id\") ON DELETE CASCADE,\
+                \"role\" TEXT,\
+                \"addedAt\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                PRIMARY KEY (\"projectId\", \"contactId\")\
+            );",
+        )?;
+    }
+
+    // Idempotent migration: add Action.projectId and Event.projectId if missing.
+    let cols_to_add = [
+        ("Action", "projectId", "TEXT REFERENCES \"Project\"(\"id\") ON DELETE SET NULL"),
+        ("Event", "projectId", "TEXT REFERENCES \"Project\"(\"id\") ON DELETE SET NULL"),
+    ];
+    for (table, col, decl) in cols_to_add {
+        let present: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
+            rusqlite::params![table, col],
+            |r| r.get(0),
+        )?;
+        if present == 0 {
+            conn.execute(&format!("ALTER TABLE \"{table}\" ADD COLUMN \"{col}\" {decl}"), [])?;
+        }
     }
 
     Ok(())

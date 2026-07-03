@@ -4,6 +4,7 @@ pub mod diagnostic;
 pub mod event;
 pub mod http_err;
 pub mod interaction;
+pub mod project;
 pub mod reminder;
 pub mod search;
 pub mod setting;

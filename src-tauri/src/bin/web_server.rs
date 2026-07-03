@@ -64,6 +64,18 @@ async fn main() {
                 .put(handlers::action::update)
                 .delete(handlers::action::delete),
         )
+        // Projects
+        .route(
+            "/api/projects",
+            get(handlers::project::list).post(handlers::project::create),
+        )
+        .route(
+            "/api/projects/:id",
+            get(handlers::project::get)
+                .put(handlers::project::update)
+                .delete(handlers::project::delete),
+        )
+        .route("/api/projects/stages", get(handlers::project::stages))
         // Interactions
         .route(
             "/api/interactions",

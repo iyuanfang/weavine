@@ -3,6 +3,7 @@ pub mod contact;
 pub mod diagnostic;
 pub mod event;
 pub mod interaction;
+pub mod project;
 pub mod reminder;
 pub mod search;
 pub mod setting;
