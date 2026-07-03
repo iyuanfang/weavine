@@ -60,7 +60,6 @@ Tauri's `app.windows` config applies only to desktop. Mobile platforms present a
 | Capability | Desktop (Tauri) | Mobile (Tauri) | Web |
 |------------|----------------|----------------|-----|
 | Local SQLite | ✅ Rust rusqlite | ✅ Rust rusqlite | ❌ N/A |
-| PostgreSQL | ❌ N/A | ❌ N/A | ✅ Prisma |
 | `dirs::data_dir()` | ✅ Linux: `~/.local/share/weavine` | ⚠️ Android: app-specific dir (different path) | ❌ N/A |
 | File system access | ✅ Full | ⚠️ Scoped (app sandbox) | ❌ Browser sandbox |
 | Background processing | ✅ Tauri process | ⚠️ Android Doze mode / iOS background limits | ❌ N/A |
