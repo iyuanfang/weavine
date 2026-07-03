@@ -41,6 +41,12 @@
         "type": "embedBootstrapper",
         "silent": true
       }
+    },
+    "android": {
+      "minSdkVersion": 24
+    },
+    "iOS": {
+      "minimumSystemVersion": "15.0"
     }
   }
 }

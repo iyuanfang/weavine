@@ -2,10 +2,15 @@
 name = "weavine"
 version = "0.1.0"
 edition = "2021"
+default-run = "weavine"
 
 [lib]
 name = "weavine_lib"
-crate-type = ["lib"]
+crate-type = ["lib", "staticlib"]
+
+[[bin]]
+name = "weavine"
+path = "src/main.rs"
 
 [[bin]]
 name = "weavine-web"

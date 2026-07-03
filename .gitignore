@@ -29,6 +29,8 @@ src-tauri/vc-runtime/
 
 # Tauri
 src-tauri/target/
+src-tauri/gen/android/
+src-tauri/gen/ios/
 
 # Local integration test artifacts
 test-data-integration/
