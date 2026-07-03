@@ -1,8 +1,14 @@
 // TauriAdapter — wraps `invoke()` calls with the exact
 // snake_case payload shape each Rust command expects.
-// Field names here match the Rust parameter names 1:1
-// (Tauri does NOT do camelCase conversion on the JS
-// payload side; the key you pass is the key Rust sees).
+// Field names here match the Rust parameter names 1:1.
+//
+// IMPORTANT: Tauri v2's `#[tauri::command]` macro defaults to
+// `rename_all = "camelCase"`, which would auto-convert our
+// snake_case keys on the JS-to-Rust boundary and break every
+// flat-arg command. Each affected Rust command therefore
+// declares `#[tauri::command(rename_all = "snake_case")]` to
+// preserve the 1:1 mapping this adapter relies on. See the
+// Rust `commands/*.rs` files and commit c61d64a for details.
 
 import { invoke } from '@tauri-apps/api/core';
 
