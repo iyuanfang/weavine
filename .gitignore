@@ -4,11 +4,6 @@ out/
 dist/
 .env
 .env.local
-/prisma/dev.db
-/prisma/dev.db-journal
-/prisma/migrations/dev/
-/prisma/dev.db-shm
-/prisma/dev.db-wal
 /dev.db
 /dev.db-journal
 /dev.db-shm
@@ -18,7 +13,6 @@ weavine-web.db*
 coverage/
 test-results/
 playwright-report/
-prisma/settings.json
 .worktrees/
 release/
 dist-electron/
@@ -43,7 +37,5 @@ tsconfig.tsbuildinfo
 # Tauri generated bindings (regenerated on build)
 src-tauri/gen/
 
-# Nested prisma dev.db artifact (from `npx prisma db push` with relative path)
-prisma/prisma/
 tauri-dist/
 .playwright-mcp/
