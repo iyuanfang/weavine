@@ -37,20 +37,6 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download portable Node.js for Windows
-        run: node scripts/download-node.mjs win32 x64
-
-      - name: Build Next.js standalone
-        run: pnpm build
-        env:
-          IS_DESKTOP: 'true'
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Patch standalone output for Tauri bundling
-        run: node scripts/copy-tauri-standalone.mjs
-        env:
-          IS_DESKTOP: 'true'
-
       - name: Build Tauri app (Windows MSI)
         id: build
         run: |
@@ -123,30 +109,10 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download portable Node.js for Linux
-        run: |
-          mkdir -p node_bin
-          # Copy the Node.js binary already installed by setup-node
-          cp "$(which node)" node_bin/node
-          chmod +x node_bin/node
-          ./node_bin/node --version
-          ldd node_bin/node | head -5 || true
-
-      - name: Build Next.js standalone
-        run: pnpm build
-        env:
-          IS_DESKTOP: 'true'
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Patch standalone output for Tauri bundling
-        run: node scripts/copy-tauri-standalone.mjs
-        env:
-          IS_DESKTOP: 'true'
-
       - name: Build Tauri app (Linux)
         id: build
         run: |
-          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles deb 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
