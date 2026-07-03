@@ -2,6 +2,7 @@ pub mod action;
 pub mod contact;
 pub mod diagnostic;
 pub mod event;
+pub mod http_err;
 pub mod interaction;
 pub mod reminder;
 pub mod search;

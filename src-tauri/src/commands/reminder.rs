@@ -15,6 +15,7 @@ pub struct CreateReminderInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateReminderInput {
+    #[serde(default)]
     pub id: String,
     pub trigger_at: Option<String>,
     pub kind: Option<String>,

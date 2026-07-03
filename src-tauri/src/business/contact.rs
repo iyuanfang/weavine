@@ -25,6 +25,41 @@ pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
     })
 }
 
+/// Load all Tag rows attached to a single contact (joined via ContactTag).
+pub(crate) fn load_tags_for_contact(
+    conn: &Connection,
+    contact_id: &str,
+) -> rusqlite::Result<Vec<Tag>> {
+    let mut stmt = conn.prepare(
+        "SELECT t.id, t.ownerId, t.name, t.color, t.createdAt \
+         FROM Tag t INNER JOIN ContactTag ct ON ct.tagId = t.id \
+         WHERE ct.contactId = ?1 \
+         ORDER BY t.name ASC",
+    )?;
+    let rows = stmt
+        .query_map([contact_id], |row| {
+            Ok(Tag {
+                id: row.get(0)?,
+                owner_id: row.get(1)?,
+                name: row.get(2)?,
+                color: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+fn hydrate_tags(
+    conn: &Connection,
+    mut contacts: Vec<Contact>,
+) -> rusqlite::Result<Vec<Contact>> {
+    for c in contacts.iter_mut() {
+        c.tags = load_tags_for_contact(conn, &c.id)?;
+    }
+    Ok(contacts)
+}
+
 pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<Vec<Contact>> {
     let mut sql = String::from("SELECT * FROM Contact WHERE ownerId = ?1");
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
@@ -67,7 +102,7 @@ pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<Vec<C
         .filter_map(|r| r.ok())
         .collect();
 
-    Ok(contacts)
+    hydrate_tags(conn, contacts)
 }
 
 pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result<Contact> {
@@ -115,11 +150,13 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
         }
     }
 
-    conn.query_row(
+    let contact = conn.query_row(
         "SELECT * FROM Contact WHERE id = ?1",
         rusqlite::params![&id],
         row_to_contact,
-    )
+    )?;
+    let tags = load_tags_for_contact(conn, &id)?;
+    Ok(Contact { tags, ..contact })
 }
 
 pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result<Contact> {
@@ -218,11 +255,13 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
         }
     }
 
-    conn.query_row(
+    let contact = conn.query_row(
         "SELECT * FROM Contact WHERE id = ?1",
         rusqlite::params![&input.id],
         row_to_contact,
-    )
+    )?;
+    let tags = load_tags_for_contact(conn, &input.id)?;
+    Ok(Contact { tags, ..contact })
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
@@ -231,9 +270,11 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Contact> {
-    conn.query_row(
+    let contact = conn.query_row(
         "SELECT * FROM Contact WHERE id = ?1",
         rusqlite::params![id],
         row_to_contact,
-    )
+    )?;
+    let tags = load_tags_for_contact(conn, id)?;
+    Ok(Contact { tags, ..contact })
 }

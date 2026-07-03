@@ -4,6 +4,7 @@ pub mod commands;
 pub mod db;
 pub mod migration;
 pub mod models;
+pub mod tag_color;
 
 use commands::{action, contact, diagnostic, event, interaction, reminder, search, setting, tag};
 use db::Database;

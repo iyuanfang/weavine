@@ -19,6 +19,7 @@ pub struct CreateActionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateActionInput {
+    #[serde(default)]
     pub id: String,
     pub title: Option<String>,
     pub description: Option<String>,

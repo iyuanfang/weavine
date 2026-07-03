@@ -19,6 +19,7 @@ pub struct CreateEventInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateEventInput {
+    #[serde(default)]
     pub id: String,
     pub title: Option<String>,
     #[serde(rename = "type")]

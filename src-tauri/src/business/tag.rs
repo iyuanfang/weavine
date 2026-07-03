@@ -1,5 +1,6 @@
 use crate::commands::tag::{CreateTagInput, UpdateTagInput};
 use crate::models::*;
+use crate::tag_color::color_for;
 use rusqlite::Connection;
 use uuid::Uuid;
 
@@ -28,10 +29,11 @@ pub fn list(conn: &Connection, owner_id: &str) -> rusqlite::Result<Vec<Tag>> {
 
 pub fn create(conn: &Connection, input: &CreateTagInput) -> rusqlite::Result<Tag> {
     let id = Uuid::new_v4().to_string();
+    let color = color_for(&input.name);
 
     conn.execute(
         "INSERT INTO Tag (id, ownerId, name, color) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![&id, &input.owner_id, &input.name, &input.color],
+        rusqlite::params![&id, &input.owner_id, &input.name, &color],
     )?;
 
     conn.query_row(
@@ -51,11 +53,18 @@ pub fn update(conn: &Connection, input: &UpdateTagInput) -> rusqlite::Result<Tag
         set_clauses.push(format!("name = ?{}", param_idx));
         params.push(Box::new(n.clone()));
         param_idx += 1;
-    }
-    if let Some(ref c) = input.color {
+        let new_color = color_for(n);
         set_clauses.push(format!("color = ?{}", param_idx));
-        params.push(Box::new(c.clone()));
+        params.push(Box::new(new_color));
         param_idx += 1;
+    }
+
+    if set_clauses.is_empty() {
+        return conn.query_row(
+            "SELECT id, ownerId, name, color, createdAt FROM Tag WHERE id = ?1",
+            rusqlite::params![&input.id],
+            row_to_tag,
+        );
     }
 
     sql.push_str(&set_clauses.join(", "));

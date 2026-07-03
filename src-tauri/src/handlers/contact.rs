@@ -41,7 +41,7 @@ pub async fn create(
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     business::contact::create(&conn, &input)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| crate::handlers::http_err::for_create_or_update(&e))
 }
 
 pub async fn get(
@@ -51,7 +51,7 @@ pub async fn get(
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     business::contact::get(&conn, &id)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| crate::handlers::http_err::for_get(&e))
 }
 
 pub async fn update(
@@ -63,7 +63,7 @@ pub async fn update(
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     business::contact::update(&conn, &input)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| crate::handlers::http_err::for_create_or_update(&e))
 }
 
 pub async fn delete(

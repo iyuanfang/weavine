@@ -17,6 +17,7 @@ pub struct CreateInteractionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateInteractionInput {
+    #[serde(default)]
     pub id: String,
     pub contact_id: Option<String>,
     pub action_id: Option<String>,

@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.weavine.prm",
   "build": {
-    "beforeBuildCommand": "pnpm --dir ../apps/web-spa run build",
-    "beforeDevCommand": "pnpm --dir ../apps/web-spa run dev",
+    "beforeBuildCommand": "pnpm --dir apps/web-spa run build",
+    "beforeDevCommand": "pnpm --dir apps/web-spa run dev",
     "devUrl": "http://localhost:5181",
     "frontendDist": "../apps/web-spa/dist"
   },

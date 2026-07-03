@@ -7,15 +7,15 @@ use serde::Deserialize;
 use crate::AppState;
 use weavine_lib::{
     business,
-    commands::action::{CreateActionInput, UpdateActionInput},
-    models::Action,
+    commands::interaction::{CreateInteractionInput, UpdateInteractionInput},
+    models::Interaction,
 };
 
 #[derive(Deserialize)]
 pub struct ListParams {
     pub owner_id: String,
-    pub status: Option<String>,
     pub contact_id: Option<String>,
+    pub action_id: Option<String>,
     pub event_id: Option<String>,
     pub limit: Option<i64>,
 }
@@ -23,13 +23,13 @@ pub struct ListParams {
 pub async fn list(
     State(s): State<AppState>,
     Query(p): Query<ListParams>,
-) -> Result<Json<Vec<Action>>, (StatusCode, String)> {
+) -> Result<Json<Vec<Interaction>>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::action::list(
+    business::interaction::list(
         &conn,
         &p.owner_id,
-        p.status.as_deref(),
         p.contact_id.as_deref(),
+        p.action_id.as_deref(),
         p.event_id.as_deref(),
         p.limit,
     )
@@ -39,34 +39,34 @@ pub async fn list(
 
 pub async fn create(
     State(s): State<AppState>,
-    Json(input): Json<CreateActionInput>,
-) -> Result<Json<Action>, (StatusCode, String)> {
+    Json(input): Json<CreateInteractionInput>,
+) -> Result<Json<Interaction>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::action::create(&conn, &input)
+    business::interaction::create(&conn, &input)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| crate::handlers::http_err::for_create_or_update(&e))
 }
 
 pub async fn get(
     State(s): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<Action>, (StatusCode, String)> {
+) -> Result<Json<Interaction>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::action::get(&conn, &id)
+    business::interaction::get(&conn, &id)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| crate::handlers::http_err::for_get(&e))
 }
 
 pub async fn update(
     State(s): State<AppState>,
     Path(id): Path<String>,
-    Json(mut input): Json<UpdateActionInput>,
-) -> Result<Json<Action>, (StatusCode, String)> {
+    Json(mut input): Json<UpdateInteractionInput>,
+) -> Result<Json<Interaction>, (StatusCode, String)> {
     input.id = id;
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::action::update(&conn, &input)
+    business::interaction::update(&conn, &input)
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| crate::handlers::http_err::for_create_or_update(&e))
 }
 
 pub async fn delete(
@@ -74,7 +74,7 @@ pub async fn delete(
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::action::delete(&conn, &id)
+    business::interaction::delete(&conn, &id)
         .map(|_| Json(()))
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }

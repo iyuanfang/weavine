@@ -153,6 +153,7 @@ pub struct CreateContactInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateContactInput {
+    #[serde(default)]
     pub id: String,
     pub nickname: Option<String>,
     pub name: Option<String>,

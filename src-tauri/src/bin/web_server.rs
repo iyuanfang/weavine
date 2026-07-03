@@ -1,11 +1,14 @@
 use axum::{
+    http::{header::CACHE_CONTROL, HeaderValue},
     routing::{get, post, put},
     Router,
 };
 use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
 
+#[path = "../handlers/mod.rs"]
 mod handlers;
 
 #[derive(Clone)]
@@ -103,6 +106,10 @@ async fn main() {
         .fallback_service(
             ServeDir::new("../apps/web-spa/dist").append_index_html_on_directories(true),
         )
+        .layer(SetResponseHeaderLayer::overriding(
+            CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        ))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

@@ -8,14 +8,13 @@ use tauri::State;
 pub struct CreateTagInput {
     pub owner_id: String,
     pub name: String,
-    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateTagInput {
+    #[serde(default)]
     pub id: String,
     pub name: Option<String>,
-    pub color: Option<String>,
 }
 
 #[tauri::command]
