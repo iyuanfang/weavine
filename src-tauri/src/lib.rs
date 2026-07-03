@@ -4,7 +4,6 @@ pub mod commands;
 pub mod db;
 pub mod migration;
 pub mod models;
-pub mod scheduler;
 pub mod tag_color;
 
 use commands::{action, contact, diagnostic, event, interaction, reminder, search, setting, tag};
@@ -38,7 +37,6 @@ pub fn run() {
     };
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_notification::init())
         .manage(database)
         .invoke_handler(tauri::generate_handler![
             contact::list_contacts,
@@ -78,10 +76,7 @@ pub fn run() {
             diagnostic::get_startup_info,
             diagnostic::get_local_user,
         ])
-        .setup(|app| {
-            crate::scheduler::start_reminder_scheduler(app.handle().clone());
-            Ok(())
-        })
+        .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
