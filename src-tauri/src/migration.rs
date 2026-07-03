@@ -207,6 +207,7 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(SCHEMA_SQL)?;
     conn.execute_batch(INDEX_SQL)?;
     seed_default_user(conn)?;
+    seed_default_tags(conn)?;
     Ok(())
 }
 
@@ -234,6 +235,43 @@ fn seed_default_user(conn: &Connection) -> Result<(), rusqlite::Error> {
          VALUES (?1, ?2, ?3, 1, ?4, ?4)",
         rusqlite::params!["local-default", "本地用户", "local@weavine.app", &now],
     )?;
+    Ok(())
+}
+
+/// Seed a starter set of universal relationship tags if no tags exist yet.
+fn seed_default_tags(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let existing: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM \"Tag\" WHERE \"ownerId\" = ?1",
+            rusqlite::params!["local-default"],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if existing > 0 {
+        return Ok(());
+    }
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    let seeds: &[(&str, &str, &str)] = &[
+        ("tag-seed-friend",    "朋友", "#10b981"),
+        ("tag-seed-colleague", "同事", "#3b82f6"),
+        ("tag-seed-classmate", "同学", "#f59e0b"),
+        ("tag-seed-family",    "家人", "#ec4899"),
+    ];
+    let mut stmt = conn.prepare(
+        "INSERT OR IGNORE INTO \"Tag\" (id, \"ownerId\", name, color, \"createdAt\") \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )?;
+    for (id, name, color) in seeds {
+        stmt.execute(rusqlite::params![
+            id,
+            "local-default",
+            name,
+            color,
+            &now,
+        ])?;
+    }
     Ok(())
 }
 
@@ -298,5 +336,70 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM Contact", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn seed_default_tags_populates_fresh_database() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        run(&conn).unwrap();
+
+        let names: Vec<String> = conn
+            .prepare("SELECT name FROM \"Tag\" WHERE \"ownerId\" = ?1 ORDER BY name")
+            .unwrap()
+            .query_map(rusqlite::params!["local-default"], |row| row.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert_eq!(names, vec!["同事", "同学", "家人", "朋友"]);
+    }
+
+    #[test]
+    fn seed_default_tags_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        run(&conn).unwrap();
+        let first: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM \"Tag\" WHERE \"ownerId\" = ?1",
+                rusqlite::params!["local-default"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        run(&conn).unwrap();
+        let second: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM \"Tag\" WHERE \"ownerId\" = ?1",
+                rusqlite::params!["local-default"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(first, 4);
+        assert_eq!(second, 4);
+    }
+
+    #[test]
+    fn seed_default_tags_preserves_user_created_tags() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        run(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO \"Tag\" (id, \"ownerId\", name, color, \"createdAt\") \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["user-tag-1", "local-default", "投资人", "#8b5cf6", "2026-07-01T00:00:00.000Z"],
+        )
+        .unwrap();
+
+        run(&conn).unwrap();
+
+        let total: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM \"Tag\" WHERE \"ownerId\" = ?1",
+                rusqlite::params!["local-default"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(total, 5, "user-created tag must coexist with seeds");
     }
 }
