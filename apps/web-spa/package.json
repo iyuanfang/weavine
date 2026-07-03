@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
+    "build": "pnpm exec tsc --noEmit && pnpm exec vite build",
+    "typecheck": "pnpm exec tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
