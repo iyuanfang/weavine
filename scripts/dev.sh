@@ -31,13 +31,6 @@ case "$CMD" in
     IS_DESKTOP=true node scripts/copy-tauri-standalone.mjs
     ;;
 
-  db)
-    log "prisma generate + db push + copy to repo root"
-    pnpm exec prisma generate
-    pnpm exec prisma db push
-    cp prisma/dev.db dev.db
-    ;;
-
   bundler)
     log "Tauri .deb bundle (~3min, AppImage skipped due to linuxdeploy timeout)"
     rm -rf src-tauri/target/release/bundle
@@ -98,7 +91,7 @@ PYEOF
     sleep 4
     HTTP=$(curl -s -m 8 -o "$WORK/contacts.html" -w "%{http_code}" -H "Cache-Control: no-cache" "http://127.0.0.1:$PORT/contacts?t=$(date +%s%N)")
     DIAG_LINES=$(wc -l < "$WORK/data/com.weavine.prm/diag.log" 2>/dev/null || echo 0)
-    ERRORS=$(grep -cE 'P2002|P2010|P2023|P2021|Error:' "$WORK/server.log" || echo 0)
+    ERRORS=$(grep -cE 'Error:' "$WORK/server.log" || echo 0)
     cd "$PROJECT_ROOT"
     pkill -9 -f "standalone-bundle/server.js" 2>/dev/null || true
 
@@ -106,7 +99,7 @@ PYEOF
     echo "==================================="
     echo "  /contacts HTTP: $HTTP"
     echo "  diag.log lines: $DIAG_LINES"
-    echo "  Prisma errors:  $ERRORS"
+    echo "  Server errors:  $ERRORS"
     echo "==================================="
     [ "$HTTP" = "200" ] && [ "$ERRORS" = "0" ] && [ "$DIAG_LINES" -gt "0" ] && log "✓ VERIFICATION PASSED" || { err "✗ VERIFICATION FAILED"; exit 1; }
     ;;
@@ -130,7 +123,6 @@ COMMANDS:
   check         cargo check (no binary, ~2s on warm cache)
   rust          cargo build --release binary only (~30s warm, ~3min cold)
   next          Next.js build + standalone bundle patch
-  db            prisma generate + db push + copy to repo root
   bundler       Tauri .deb bundle (~3min, skips AppImage)
   release       Full release .deb + .AppImage (3-6 min, AppImage flaky)
   fresh         Clean target/ + .next/ then rebuild
@@ -141,7 +133,6 @@ COMMANDS:
 DAILY WORKFLOW:
   Frontend UI only:     pnpm dev              (hot reload)
   Frontend + Tauri:     pnpm tauri dev        (sec restart, no spawner)
-  Schema change:        ./scripts/dev.sh db   (then ./scripts/dev.sh next)
   Rust change:          ./scripts/dev.sh rust
   Pre-release check:    ./scripts/dev.sh bundler && ./scripts/dev.sh verify-fix
   Tag & release:        ./scripts/dev.sh release

@@ -37,11 +37,6 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Initialize SQLite database
-        run: pnpm exec prisma db push
-        env:
-          DATABASE_URL: 'file:./dev.db'
-
       - name: Download portable Node.js for Windows
         run: node scripts/download-node.mjs win32 x64
 
@@ -127,11 +122,6 @@ jobs:
 
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Initialize SQLite database
-        run: pnpm exec prisma db push
-        env:
-          DATABASE_URL: 'file:./dev.db'
 
       - name: Download portable Node.js for Linux
         run: |

@@ -28,13 +28,11 @@ tar --exclude='node_modules' \
     --exclude='.next' \
     --exclude='.git' \
     --exclude='scripts' \
-    --exclude='prisma/seed.ts' \
     --exclude='*.test.ts' \
     --exclude='*.spec.ts' \
     --exclude='__tests__' \
     --exclude='__snapshots__' \
     -czf "$ARCHIVE" \
-    prisma \
     public \
     src \
     package.json \
@@ -85,10 +83,6 @@ fi
 
 # Install dependencies
 pnpm install --frozen-lockfile 2>&1 | tail -3
-
-# Prisma (must run BEFORE next build)
-npx prisma generate 2>&1 | tail -1
-npx prisma migrate deploy 2>&1 | tail -1
 
 # Build on server (local .next is incompatible with next start)
 echo "==> Building on server..."
