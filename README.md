@@ -1,82 +1,51 @@
-# PRM · Personal Relationship Manager
+# Weavine · Personal Relationship Manager
 
-Multi-tenant 人脉管理 Web App。Next.js 14 (App Router) + Prisma + PostgreSQL + Auth.js v5 (邮箱密码登录)。
+Offline-first 人脉管理桌面应用。Tauri v2 (Rust) + Vite/React SPA + rusqlite (本地 SQLite)。无外部数据库依赖，单一二进制即可运行。
 
-## Quick start
+## Quick start (dev)
 
 ```bash
 pnpm install
-# 编辑 .env，填入 DATABASE_URL（PostgreSQL）、AUTH_SECRET
-pnpm prisma migrate dev
-pnpm dev               # http://localhost:3100
+pnpm tauri dev          # 全栈开发：自动启动 Vite + Rust + 桌面窗口
 ```
 
-首次访问会自动跳转 `/login`。点击「注册新账号」用邮箱创建账号，之后可用邮箱+密码登录。
+首次启动会自动创建 `dev.db` 并执行 `src-tauri/src/migration.rs` 中的 `SCHEMA_SQL` 完成建表。Windows / macOS / Linux 行为一致。
 
 ## 配置
 
-1. `DATABASE_URL` — PostgreSQL 连接字符串（见 `.env.example`）
-2. `AUTH_SECRET` — `openssl rand -base64 32` 生成（生产环境必填）
-3. `AUTH_URL` — 部署 URL（生产环境必填）
-4. Web Push（可选）— `npx web-push generate-vapid-keys`，填入对应的环境变量
+无外部配置。数据库路径、端口、缓存目录均在本地：
 
-## 注册登录
+- 数据库：`%APPDATA%/com.weavine.prm/dev.db`（Windows）/ `~/Library/Application Support/com.weavine.prm/dev.db`（macOS）/ `~/.local/share/com.weavine.prm/dev.db`（Linux）
+- HTTP 端口：默认 3299，可在 `tauri.conf.json` 中调整
+- Web Push（可选）：`npx web-push generate-vapid-keys` 生成 VAPID 密钥，填入对应环境变量
 
-- **注册**：访问 `/sign-up`，输入邮箱+密码（至少 8 位）即可创建账号
-- **登录**：访问 `/login`，用邮箱+密码登录
-- **退出**：导航栏右上角头像下拉菜单中的「退出」
-
-## 数据库
-
-PostgreSQL 通过 `DATABASE_URL` 连接。`prisma/schema.prisma` 中 `provider = "postgresql"`。
+## 桌面打包
 
 ```bash
-pnpm prisma migrate dev --name <change>   # 开发环境
-pnpm prisma migrate deploy                # 生产环境
+./scripts/dev.sh bundler       # 本地 .deb 包（Linux）
+./scripts/dev.sh release       # 完整 .deb + .AppImage
+pnpm tauri build               # 跨平台正式包
 ```
 
-## 部署
+## Schema 变更
 
-传统 VPS 部署（Node 20+ PostgreSQL）：
+所有表结构在 `src-tauri/src/migration.rs` 中以 `SCHEMA_SQL` 常量维护（`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`，幂等）。修改后只需重新启动应用即可生效。
 
-```bash
-pnpm install --frozen-lockfile
-pnpm prisma migrate deploy
-pnpm build
-pnpm start
-```
+## 数据隔离
 
-推荐用 nginx/Caddy 反向代理到 443 端口，并提供 HTTPS（Web Push 在非 localhost 下必须 HTTPS）。
-
-## 多人数据隔离
-
-所有业务表都带 `ownerId`，外键级联到 `User`。`getCurrentUser()` 从 Auth.js session 取当前用户 ID，service 层所有查询都自动按 `ownerId` 过滤。
-
-## 微信登录（预留）
-
-数据库已保留 `wechatUnionId`、`openidWeb`、`openidMini` 字段，前端未启用。如需开启：
-
-1. 在 `auth.config.ts` 添加 WeChat provider（参考 `next-auth/providers/wechat`）
-2. 配置 `AUTH_WECHAT_APP_ID` 和 `AUTH_WECHAT_APP_SECRET`
-3. 登录页添加微信按钮
+所有业务表都带 `ownerId` 外键到本地用户记录。Service 层查询自动按 `ownerId` 过滤。本应用为单用户离线设计，无多租户场景。
 
 ## Tests
 
 ```bash
-pnpm test              # unit + service (Vitest)
-pnpm test:e2e          # Playwright (requires dev server)
+pnpm --dir apps/web-spa typecheck   # 前端类型检查
+cargo check --manifest-path src-tauri/Cargo.toml   # Rust 类型检查
+cargo run --example smoke --manifest-path src-tauri/Cargo.toml   # DB schema smoke test
 ```
-
-## Web Push setup (optional)
-
-```bash
-npx web-push generate-vapid-keys
-```
-
-把公钥/私钥分别填到 `NEXT_PUBLIC_VAPID_PUBLIC_KEY` 和 `VAPID_PRIVATE_KEY`。
 
 ## See also
 
 - `docs/superpowers/specs/2026-06-14-prm-design.md` — 初版单人设计 spec
-- `docs/superpowers/specs/2026-06-17-prm-multi-user-design.md` — 多人架构 spec
-- `docs/superpowers/plans/2026-06-17-prm-multi-user-implementation.md` — 实施计划
+- `docs/superpowers/specs/2026-06-17-prm-timeline-redesign.md` — 时间轴 redesign
+- `docs/mobile-limitations.md` — 移动端 (Android/iOS) 限制说明
+- `scripts/dev.sh help` — 日常开发命令
