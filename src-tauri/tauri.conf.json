@@ -25,6 +25,9 @@
     },
     "withGlobalTauri": false
   },
+  "plugins": {
+    "notification": {}
+  },
   "bundle": {
     "active": true,
     "targets": ["deb", "appimage", "msi"],

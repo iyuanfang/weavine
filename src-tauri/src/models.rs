@@ -67,6 +67,7 @@ pub struct Event {
     pub location: Option<String>,
     pub notes: Option<String>,
     pub contact_id: Option<String>,
+    pub reminder_lead_minutes: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -95,7 +96,6 @@ pub struct Action {
     pub category: Option<String>,
     pub due_at: Option<String>,
     pub contact_id: Option<String>,
-    pub event_id: Option<String>,
     pub completed_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,

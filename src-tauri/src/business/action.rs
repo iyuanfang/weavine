@@ -14,10 +14,9 @@ pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
         category: row.get(6)?,
         due_at: row.get(7)?,
         contact_id: row.get(8)?,
-        event_id: row.get(9)?,
-        completed_at: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        completed_at: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
 }
 
@@ -26,13 +25,12 @@ pub fn list(
     owner_id: &str,
     status: Option<&str>,
     contact_id: Option<&str>,
-    event_id: Option<&str>,
     limit: Option<i64>,
 ) -> rusqlite::Result<Vec<Action>> {
     let limit = limit.unwrap_or(100);
 
     let mut sql = String::from(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, eventId, completedAt, createdAt, updatedAt \
+        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, completedAt, createdAt, updatedAt \
          FROM Action WHERE ownerId = ?1",
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(owner_id.to_string())];
@@ -46,11 +44,6 @@ pub fn list(
     if let Some(cid) = contact_id {
         sql.push_str(&format!(" AND contactId = ?{}", idx));
         param_values.push(Box::new(cid.to_string()));
-        idx += 1;
-    }
-    if let Some(eid) = event_id {
-        sql.push_str(&format!(" AND eventId = ?{}", idx));
-        param_values.push(Box::new(eid.to_string()));
         idx += 1;
     }
 
@@ -79,8 +72,8 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
 
     conn.execute(
         "INSERT INTO Action \
-         (id, ownerId, title, description, status, priority, category, dueAt, contactId, eventId, completedAt, createdAt, updatedAt) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+         (id, ownerId, title, description, status, priority, category, dueAt, contactId, completedAt, createdAt, updatedAt) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             &id,
             &input.owner_id,
@@ -91,7 +84,6 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
             &input.category,
             &input.due_at,
             &input.contact_id,
-            &input.event_id,
             None::<String>,
             &now,
             &now,
@@ -99,7 +91,7 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
     )?;
 
     conn.query_row(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, eventId, completedAt, createdAt, updatedAt \
+        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, completedAt, createdAt, updatedAt \
          FROM Action WHERE id = ?1",
         rusqlite::params![&id],
         row_to_action,
@@ -151,11 +143,6 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         params.push(Box::new(cid.clone()));
         param_idx += 1;
     }
-    if let Some(ref eid) = input.event_id {
-        set_clauses.push(format!("eventId = ?{}", param_idx));
-        params.push(Box::new(eid.clone()));
-        param_idx += 1;
-    }
     if let Some(ref ca) = input.completed_at {
         set_clauses.push(format!("completedAt = ?{}", param_idx));
         params.push(Box::new(ca.clone()));
@@ -177,7 +164,7 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
     }
 
     conn.query_row(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, eventId, completedAt, createdAt, updatedAt \
+        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, completedAt, createdAt, updatedAt \
          FROM Action WHERE id = ?1",
         rusqlite::params![&input.id],
         row_to_action,
@@ -191,7 +178,7 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Action> {
     conn.query_row(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, eventId, completedAt, createdAt, updatedAt \
+        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, completedAt, createdAt, updatedAt \
          FROM Action WHERE id = ?1",
         rusqlite::params![id],
         row_to_action,

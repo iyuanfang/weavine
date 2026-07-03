@@ -151,3 +151,55 @@ pub fn dismiss(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     )?;
     Ok(())
 }
+
+pub fn claim_due_reminders(conn: &Connection) -> rusqlite::Result<Vec<Reminder>> {
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let mut stmt = conn.prepare(
+        "SELECT id, ownerId, contactId, eventId, triggerAt, kind, dispatched, dismissed, createdAt \
+         FROM Reminder WHERE dismissed = 0 AND dispatched = 0 AND triggerAt <= ?1",
+    )?;
+    let reminders: Vec<Reminder> = stmt
+        .query_map([&now], row_to_reminder)?
+        .filter_map(|r| r.ok())
+        .collect();
+    for r in &reminders {
+        conn.execute(
+            "UPDATE Reminder SET dispatched = 1 WHERE id = ?1",
+            rusqlite::params![r.id],
+        )?;
+    }
+    Ok(reminders)
+}
+
+impl Reminder {
+    pub fn summary(&self) -> String {
+        match self.kind.as_str() {
+            "event" => "日程提醒".to_string(),
+            "action" => "待办提醒".to_string(),
+            "contact" => "联系人提醒".to_string(),
+            _ => "提醒".to_string(),
+        }
+    }
+}
+
+pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM Reminder WHERE eventId = ?1 AND kind = 'event'",
+        rusqlite::params![event.id],
+    )?;
+    if let Some(lead) = event.reminder_lead_minutes {
+        if lead <= 0 { return Ok(()); }
+        let start = chrono::DateTime::parse_from_rfc3339(&event.start_at)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        let trigger = start - chrono::Duration::minutes(lead);
+        let trigger_str = trigger.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let id = format!("auto-rem-{}", event.id);
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        conn.execute(
+            "INSERT INTO Reminder (id, ownerId, eventId, triggerAt, kind, dispatched, dismissed, createdAt) \
+             VALUES (?1, ?2, ?3, ?4, 'event', 0, 0, ?5)",
+            rusqlite::params![id, event.owner_id, event.id, trigger_str, now],
+        )?;
+    }
+    Ok(())
+}

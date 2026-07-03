@@ -18,6 +18,14 @@ impl Database {
         })
     }
 
+    pub fn with_conn<F, T>(&self, f: F) -> Result<T, rusqlite::Error>
+    where
+        F: FnOnce(&Connection) -> Result<T, rusqlite::Error>,
+    {
+        let conn = self.conn.lock().expect("db lock poisoned");
+        f(&conn)
+    }
+
     pub fn open_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch("PRAGMA foreign_keys=ON;")?;

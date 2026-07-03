@@ -113,7 +113,6 @@ CREATE TABLE IF NOT EXISTS "Action" (
     "category" TEXT,
     "dueAt" DATETIME,
     "contactId" TEXT REFERENCES "Contact"("id") ON DELETE SET NULL,
-    "eventId" TEXT REFERENCES "Event"("id") ON DELETE SET NULL,
     "completedAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
@@ -190,7 +189,6 @@ CREATE INDEX IF NOT EXISTS "Interaction_ownerId_contactId_occurredAt_idx" ON "In
 CREATE INDEX IF NOT EXISTS "Interaction_ownerId_occurredAt_idx" ON "Interaction"("ownerId", "occurredAt");
 CREATE INDEX IF NOT EXISTS "Action_ownerId_status_dueAt_idx" ON "Action"("ownerId", "status", "dueAt");
 CREATE INDEX IF NOT EXISTS "Action_ownerId_contactId_idx" ON "Action"("ownerId", "contactId");
-CREATE INDEX IF NOT EXISTS "Action_ownerId_eventId_idx" ON "Action"("ownerId", "eventId");
 CREATE INDEX IF NOT EXISTS "Reminder_ownerId_triggerAt_dispatched_dismissed_idx" ON "Reminder"("ownerId", "triggerAt", "dispatched", "dismissed");
 CREATE INDEX IF NOT EXISTS "Reminder_ownerId_contactId_idx" ON "Reminder"("ownerId", "contactId");
 CREATE INDEX IF NOT EXISTS "Reminder_ownerId_contactId_kind_triggerAt_idx" ON "Reminder"("ownerId", "contactId", "kind", "triggerAt");
@@ -208,6 +206,31 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(INDEX_SQL)?;
     seed_default_user(conn)?;
     seed_default_tags(conn)?;
+
+    // Idempotent migration: drop legacy Action.eventId column if present.
+    let has_event_id: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Action') WHERE name='eventId'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_event_id > 0 {
+        conn.execute("DROP INDEX IF EXISTS \"Action_ownerId_eventId_idx\"", [])?;
+        conn.execute("ALTER TABLE \"Action\" DROP COLUMN \"eventId\"", [])?;
+    }
+
+    // Idempotent migration: add Event.reminderLeadMinutes if missing.
+    let has_reminder_lead: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Event') WHERE name='reminderLeadMinutes'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_reminder_lead == 0 {
+        conn.execute(
+            "ALTER TABLE \"Event\" ADD COLUMN \"reminderLeadMinutes\" INTEGER",
+            [],
+        )?;
+    }
+
     Ok(())
 }
 

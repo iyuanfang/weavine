@@ -14,7 +14,6 @@ pub struct CreateActionInput {
     pub category: Option<String>,
     pub due_at: Option<String>,
     pub contact_id: Option<String>,
-    pub event_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,7 +27,6 @@ pub struct UpdateActionInput {
     pub category: Option<String>,
     pub due_at: Option<String>,
     pub contact_id: Option<String>,
-    pub event_id: Option<String>,
     pub completed_at: Option<String>,
 }
 
@@ -38,7 +36,6 @@ pub fn list_actions(
     owner_id: String,
     status: Option<String>,
     contact_id: Option<String>,
-    event_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<Action>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -47,7 +44,6 @@ pub fn list_actions(
         &owner_id,
         status.as_deref(),
         contact_id.as_deref(),
-        event_id.as_deref(),
         limit,
     )
     .map_err(|e| e.to_string())

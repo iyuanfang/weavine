@@ -49,17 +49,6 @@ export function ActionEdit() {
   });
   const contacts = contactsQuery.data ?? [];
 
-  const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'all'],
-    queryFn: () =>
-      adapter.events.list({
-        owner_id: ownerId!,
-        limit: 200,
-      }),
-    enabled: !!ownerId,
-  });
-  const events = eventsQuery.data ?? [];
-
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('inbox');
@@ -67,7 +56,6 @@ export function ActionEdit() {
   const [category, setCategory] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [contactId, setContactId] = useState<string>('');
-  const [eventId, setEventId] = useState<string>('');
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -80,7 +68,6 @@ export function ActionEdit() {
       setCategory(a.category ?? '');
       setDueAt(toLocalInput(a.due_at));
       setContactId(a.contact_id ?? '');
-      setEventId(a.event_id ?? '');
       setHydrated(true);
     }
   }, [actionQuery.data, hydrated]);
@@ -106,7 +93,6 @@ export function ActionEdit() {
       category: category.trim() || null,
       due_at: dueAt ? new Date(dueAt).toISOString() : null,
       contact_id: contactId || null,
-      event_id: eventId || null,
     });
   };
 
@@ -231,22 +217,6 @@ export function ActionEdit() {
                   {contacts.map((c: Contact) => (
                     <option key={c.id} value={c.id}>
                       {c.nickname ?? c.name ?? '?'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="input-label">日程</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={eventId}
-                  onChange={(e) => setEventId(e.target.value)}
-                >
-                  <option value="">无</option>
-                  {events.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.title}
                     </option>
                   ))}
                 </select>

@@ -36,7 +36,6 @@ export function ActionNew() {
   const [category, setCategory] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [contactId, setContactId] = useState<string>('');
-  const [eventId, setEventId] = useState<string>('');
 
   const contactsQuery = useQuery({
     queryKey: ['contacts', ownerId],
@@ -44,17 +43,6 @@ export function ActionNew() {
     enabled: !!ownerId,
   });
   const contacts = contactsQuery.data ?? [];
-
-  const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'all'],
-    queryFn: () =>
-      adapter.events.list({
-        owner_id: ownerId!,
-        limit: 200,
-      }),
-    enabled: !!ownerId,
-  });
-  const events = eventsQuery.data ?? [];
 
   const createMutation = useMutation({
     mutationFn: (input: CreateActionInput) => adapter.actions.create(input),
@@ -81,7 +69,6 @@ export function ActionNew() {
       category: category.trim() || null,
       due_at: dueAt ? new Date(dueAt).toISOString() : null,
       contact_id: contactId || null,
-      event_id: eventId || null,
     });
   };
 
@@ -196,22 +183,6 @@ export function ActionNew() {
                   {contacts.map((c: Contact) => (
                     <option key={c.id} value={c.id}>
                       {c.nickname ?? c.name ?? '?'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="input-label">日程</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={eventId}
-                  onChange={(e) => setEventId(e.target.value)}
-                >
-                  <option value="">无</option>
-                  {events.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.title}
                     </option>
                   ))}
                 </select>

@@ -15,6 +15,7 @@ pub struct CreateEventInput {
     pub location: Option<String>,
     pub notes: Option<String>,
     pub contact_id: Option<String>,
+    pub reminder_lead_minutes: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +30,7 @@ pub struct UpdateEventInput {
     pub location: Option<String>,
     pub notes: Option<String>,
     pub contact_id: Option<String>,
+    pub reminder_lead_minutes: Option<i64>,
 }
 
 #[tauri::command(rename_all = "snake_case")]

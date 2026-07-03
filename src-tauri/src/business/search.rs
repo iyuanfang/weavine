@@ -43,7 +43,7 @@ pub fn search(
 
     let events: Vec<Event> = {
         let mut stmt = conn.prepare(
-            "SELECT id, ownerId, title, type, startAt, endAt, location, notes, contactId, createdAt, updatedAt \
+            "SELECT id, ownerId, title, type, startAt, endAt, location, notes, contactId, reminderLeadMinutes, createdAt, updatedAt \
              FROM Event WHERE ownerId = ?1 \
              AND (title LIKE ?2 OR location LIKE ?2 OR notes LIKE ?2) \
              ORDER BY startAt ASC LIMIT ?3",
@@ -57,7 +57,7 @@ pub fn search(
 
     let actions: Vec<Action> = {
         let mut stmt = conn.prepare(
-            "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, eventId, completedAt, createdAt, updatedAt \
+            "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, completedAt, createdAt, updatedAt \
              FROM Action WHERE ownerId = ?1 \
              AND (title LIKE ?2 OR description LIKE ?2 OR category LIKE ?2) \
              ORDER BY dueAt ASC LIMIT ?3",

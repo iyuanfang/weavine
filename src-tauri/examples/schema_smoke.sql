@@ -71,6 +71,7 @@ CREATE TABLE "Event" (
     "notes" TEXT,
     "reminderEnabled" INTEGER NOT NULL DEFAULT 1,
     "reminderAt" DATETIME,
+    "reminderLeadMinutes" INTEGER,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     FOREIGN KEY ("ownerId") REFERENCES "User" ("id") ON DELETE CASCADE,
@@ -88,12 +89,10 @@ CREATE TABLE "Action" (
     "category" TEXT,
     "dueAt" DATETIME,
     "completedAt" DATETIME,
-    "eventId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     FOREIGN KEY ("ownerId") REFERENCES "User" ("id") ON DELETE CASCADE,
-    FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL,
-    FOREIGN KEY ("eventId") REFERENCES "Event" ("id") ON DELETE SET NULL
+    FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL
 );
 
 CREATE TABLE "Interaction" (

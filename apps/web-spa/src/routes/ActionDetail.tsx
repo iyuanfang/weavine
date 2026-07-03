@@ -52,13 +52,6 @@ export function ActionDetail() {
     return acc;
   }, {});
 
-  const eventId = actionQuery.data?.event_id ?? null;
-  const eventQuery = useQuery({
-    queryKey: ['event', eventId],
-    queryFn: () => adapter.events.get(eventId!),
-    enabled: !!eventId,
-  });
-
   const completeMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
     onSuccess: () => {
@@ -108,7 +101,6 @@ export function ActionDetail() {
 
   const action = actionQuery.data!;
   const contact = action.contact_id ? contactMap[action.contact_id] : null;
-  const event = eventQuery.data ?? null;
   const statusLabel = STATUS_LABEL[action.status] ?? action.status;
   const prio = PRIORITY_BADGE[action.priority] ?? PRIORITY_BADGE[0];
   const prioLabel = PRIORITY_LABELS[action.priority] ?? '';
@@ -206,18 +198,6 @@ export function ActionDetail() {
                 <div style={{ fontSize: 14 }}>
                   <Link to={`/contacts/${contact.id}`} className="tag-chip tag-chip--active">
                     {contact.nickname ?? contact.name ?? '?'}
-                  </Link>
-                </div>
-              </div>
-            )}
-            {event && (
-              <div>
-                <div className="text-xs text-muted" style={{ marginBottom: 2 }}>
-                  关联日程
-                </div>
-                <div style={{ fontSize: 14 }}>
-                  <Link to={`/events/${event.id}`} className="tag-chip tag-chip--active">
-                    📅 {event.title}
                   </Link>
                 </div>
               </div>

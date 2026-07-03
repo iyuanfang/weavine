@@ -41,6 +41,7 @@ export function EventEdit() {
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [contactId, setContactId] = useState<string>('');
+  const [reminderLeadMinutes, setReminderLeadMinutes] = useState<number | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export function EventEdit() {
       setLocation(e.location ?? '');
       setNotes(e.notes ?? '');
       setContactId(e.contact_id ?? '');
+      setReminderLeadMinutes(e.reminder_lead_minutes ?? null);
       setHydrated(true);
     }
   }, [eventQuery.data, hydrated]);
@@ -78,6 +80,7 @@ export function EventEdit() {
       location: location.trim() || null,
       notes: notes.trim() || null,
       contact_id: contactId || null,
+      reminder_lead_minutes: reminderLeadMinutes,
     };
     updateMutation.mutate(patch);
   };
@@ -184,6 +187,26 @@ export function EventEdit() {
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                 />
+              </div>
+              <div>
+                <label className="input-label">提醒</label>
+                <select
+                  className="input-base"
+                  style={{ cursor: 'pointer' }}
+                  value={reminderLeadMinutes === null ? '' : String(reminderLeadMinutes)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setReminderLeadMinutes(v === '' ? null : Number(v));
+                  }}
+                >
+                  <option value="">不提醒</option>
+                  <option value="0">准时</option>
+                  <option value="5">提前 5 分钟</option>
+                  <option value="15">提前 15 分钟</option>
+                  <option value="30">提前 30 分钟</option>
+                  <option value="60">提前 1 小时</option>
+                  <option value="1440">提前 1 天</option>
+                </select>
               </div>
             </div>
           </div>

@@ -67,6 +67,7 @@ export interface Event {
   location: string | null;
   notes: string | null;
   contact_id: string | null;
+  reminder_lead_minutes: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -93,7 +94,6 @@ export interface Action {
   category: string | null;
   due_at: string | null;
   contact_id: string | null;
-  event_id: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -176,6 +176,7 @@ export interface CreateEventInput {
   location?: string | null;
   notes?: string | null;
   contact_id?: string | null;
+  reminder_lead_minutes?: number | null;
 }
 
 export interface UpdateEventInput {
@@ -187,6 +188,7 @@ export interface UpdateEventInput {
   location?: string | null;
   notes?: string | null;
   contact_id?: string | null;
+  reminder_lead_minutes?: number | null;
 }
 
 export interface CreateActionInput {
@@ -198,7 +200,6 @@ export interface CreateActionInput {
   category?: string | null;
   due_at?: string | null;
   contact_id?: string | null;
-  event_id?: string | null;
 }
 
 export interface UpdateActionInput {
@@ -210,7 +211,6 @@ export interface UpdateActionInput {
   category?: string | null;
   due_at?: string | null;
   contact_id?: string | null;
-  event_id?: string | null;
   completed_at?: string | null;
 }
 

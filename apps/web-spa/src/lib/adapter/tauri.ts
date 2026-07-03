@@ -92,7 +92,6 @@ export class TauriAdapter implements PRMAdapter {
       owner_id: string;
       status?: string | null;
       contact_id?: string | null;
-      event_id?: string | null;
       limit?: number | null;
     }): Promise<Action[]> => invoke<Action[]>('list_actions', p),
     get: (id: string): Promise<Action> =>
