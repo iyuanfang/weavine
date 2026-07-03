@@ -60,5 +60,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --dir src-tauri exec cargo test
-      - run: pnpm --dir src-tauri exec cargo check --release
+      - working-directory: src-tauri
+      - run: cargo test
+      - working-directory: src-tauri
+      - run: cargo check --release
