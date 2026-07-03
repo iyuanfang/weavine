@@ -19,12 +19,14 @@ import type {
   CreateContactInput,
   CreateEventInput,
   CreateInteractionInput,
+  CreateProjectInput,
   CreateReminderInput,
   CreateTagInput,
   Event,
   Interaction,
   LocalUser,
   PRMAdapter,
+  Project,
   Reminder,
   SearchResults,
   Setting,
@@ -34,6 +36,7 @@ import type {
   UpdateContactInput,
   UpdateEventInput,
   UpdateInteractionInput,
+  UpdateProjectInput,
   UpdateReminderInput,
   UpdateTagInput,
 } from './types';
@@ -62,6 +65,25 @@ export class TauriAdapter implements PRMAdapter {
       invoke<Contact>('update_contact', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_contact', { id }),
+  };
+
+  projects = {
+    list: (p: {
+      owner_id: string;
+      template?: string | null;
+      stage?: string | null;
+      limit?: number | null;
+    }): Promise<Project[]> => invoke<Project[]>('list_projects', { params: p }),
+    get: (id: string): Promise<Project> =>
+      invoke<Project>('get_project', { id }),
+    create: (input: CreateProjectInput): Promise<Project> =>
+      invoke<Project>('create_project', { input }),
+    update: (input: UpdateProjectInput): Promise<Project> =>
+      invoke<Project>('update_project', { input }),
+    delete: (id: string): Promise<void> =>
+      invoke<void>('delete_project', { id }),
+    stages: (template: string): Promise<string[]> =>
+      invoke<string[]>('list_project_stages', { template }),
   };
 
   events = {

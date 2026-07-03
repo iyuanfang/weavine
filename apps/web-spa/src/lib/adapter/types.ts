@@ -67,6 +67,7 @@ export interface Event {
   location: string | null;
   notes: string | null;
   contact_id: string | null;
+  project_id: string | null;
   reminder_lead_minutes: number | null;
   created_at: string;
   updated_at: string;
@@ -84,6 +85,20 @@ export interface Interaction {
   created_at: string;
 }
 
+export interface Project {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string | null;
+  template: string;
+  stage: string;
+  start_at: string | null;
+  due_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Action {
   id: string;
   owner_id: string;
@@ -94,6 +109,7 @@ export interface Action {
   category: string | null;
   due_at: string | null;
   contact_id: string | null;
+  project_id: string | null;
   completed_at: string | null;
   created_at: string;
   updated_at: string;
@@ -149,6 +165,25 @@ export interface CreateContactInput {
   notes?: string | null;
   importance?: string | null;
   tag_ids?: string[] | null;
+}
+
+export interface CreateProjectInput {
+  owner_id: string;
+  title: string;
+  description?: string | null;
+  template: string;
+  start_at?: string | null;
+  due_at?: string | null;
+}
+
+export interface UpdateProjectInput {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  stage?: string | null;
+  start_at?: string | null;
+  due_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface UpdateContactInput {
@@ -290,6 +325,20 @@ export interface PRMAdapter {
     create(input: CreateContactInput): Promise<Contact>;
     update(input: UpdateContactInput): Promise<Contact>;
     delete(id: string): Promise<void>;
+  };
+
+  projects: {
+    list(params: {
+      owner_id: string;
+      template?: string | null;
+      stage?: string | null;
+      limit?: number | null;
+    }): Promise<Project[]>;
+    get(id: string): Promise<Project>;
+    create(input: CreateProjectInput): Promise<Project>;
+    update(input: UpdateProjectInput): Promise<Project>;
+    delete(id: string): Promise<void>;
+    stages(template: string): Promise<string[]>;
   };
 
   events: {

@@ -17,12 +17,14 @@ import type {
   CreateContactInput,
   CreateEventInput,
   CreateInteractionInput,
+  CreateProjectInput,
   CreateReminderInput,
   CreateTagInput,
   Event,
   Interaction,
   LocalUser,
   PRMAdapter,
+  Project,
   Reminder,
   SearchResults,
   Setting,
@@ -32,6 +34,7 @@ import type {
   UpdateContactInput,
   UpdateEventInput,
   UpdateInteractionInput,
+  UpdateProjectInput,
   UpdateReminderInput,
   UpdateTagInput,
 } from './types';
@@ -150,6 +153,31 @@ export class HttpAdapter implements PRMAdapter {
 
     delete: (id: string): Promise<void> =>
       request<void>(this.baseUrl, 'DELETE', `/api/contacts/${id}`),
+  };
+
+  projects = {
+    list: (p: {
+      owner_id: string;
+      template?: string | null;
+      stage?: string | null;
+      limit?: number | null;
+    }): Promise<Project[]> =>
+      request<Project[]>(this.baseUrl, 'GET', '/api/projects' + qs({ ...p })),
+
+    get: (id: string): Promise<Project> =>
+      request<Project>(this.baseUrl, 'GET', `/api/projects/${id}`),
+
+    create: (input: CreateProjectInput): Promise<Project> =>
+      request<Project>(this.baseUrl, 'POST', '/api/projects', input),
+
+    update: (input: UpdateProjectInput): Promise<Project> =>
+      request<Project>(this.baseUrl, 'PUT', `/api/projects/${input.id}`, input),
+
+    delete: (id: string): Promise<void> =>
+      request<void>(this.baseUrl, 'DELETE', `/api/projects/${id}`),
+
+    stages: (template: string): Promise<string[]> =>
+      request<string[]>(this.baseUrl, 'GET', '/api/projects/stages' + qs({ template })),
   };
 
   events = {

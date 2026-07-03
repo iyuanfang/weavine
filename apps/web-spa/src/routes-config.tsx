@@ -16,6 +16,10 @@ import { Calendar } from './routes/Calendar';
 import { EventNew } from './routes/EventNew';
 import { EventEdit } from './routes/EventEdit';
 import { EventDetail } from './routes/EventDetail';
+import { ProjectsList } from './routes/ProjectsList';
+import { ProjectNew } from './routes/ProjectNew';
+import { ProjectDetail } from './routes/ProjectDetail';
+import { ProjectEdit } from './routes/ProjectEdit';
 import { ActionsList } from './routes/ActionsList';
 import { ActionNew } from './routes/ActionNew';
 import { ActionEdit } from './routes/ActionEdit';
@@ -62,6 +66,10 @@ export const routes: AppRoute[] = [
   { path: '/actions/:id', Component: ActionDetail, label: 'ActionDetail' },
   { path: '/actions/:id/edit', Component: ActionEdit, label: 'ActionEdit' },
   { path: '/actions/new', Component: ActionNew, label: 'ActionNew' },
+  { path: '/projects', Component: ProjectsList, label: 'ProjectsList' },
+  { path: '/projects/new', Component: ProjectNew, label: 'ProjectNew' },
+  { path: '/projects/:id', Component: ProjectDetail, label: 'ProjectDetail' },
+  { path: '/projects/:id/edit', Component: ProjectEdit, label: 'ProjectEdit' },
   { path: '/interactions/:id', Component: InteractionDetail, label: 'InteractionDetail' },
   { path: '/reminders', Component: Reminders, label: 'Reminders' },
   { path: '/tags', Component: Tags, label: 'Tags' },
