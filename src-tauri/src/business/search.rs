@@ -2,6 +2,7 @@ use crate::business::action::row_to_action;
 use crate::business::contact::row_to_contact;
 use crate::business::event::row_to_event;
 use crate::business::interaction::row_to_interaction;
+use crate::business::project::row_to_project;
 use crate::models::*;
 use rusqlite::Connection;
 
@@ -10,9 +11,11 @@ pub fn search(
     owner_id: &str,
     query: &str,
     limit: Option<i64>,
+    include_archived: bool,
 ) -> rusqlite::Result<SearchResults> {
     let limit = limit.unwrap_or(20);
     let pattern = format!("%{}%", query);
+    let archive_clause = if include_archived { "" } else { " AND archivedAt IS NULL" };
 
     let contacts: Vec<Contact> = {
         let mut stmt = conn.prepare(
@@ -42,12 +45,14 @@ pub fn search(
     };
 
     let events: Vec<Event> = {
-        let mut stmt = conn.prepare(
-            "SELECT id, ownerId, title, type, startAt, endAt, location, notes, contactId, reminderLeadMinutes, createdAt, updatedAt \
+        let sql = format!(
+            "SELECT id, ownerId, title, type, startAt, endAt, location, notes, contactId, projectId, reminderLeadMinutes, archivedAt, createdAt, updatedAt \
              FROM Event WHERE ownerId = ?1 \
-             AND (title LIKE ?2 OR location LIKE ?2 OR notes LIKE ?2) \
+             AND (title LIKE ?2 OR location LIKE ?2 OR notes LIKE ?2){} \
              ORDER BY startAt ASC LIMIT ?3",
-        )?;
+            archive_clause
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let results = stmt
             .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_event)?
             .filter_map(|r| r.ok())
@@ -56,16 +61,34 @@ pub fn search(
     };
 
     let actions: Vec<Action> = {
-        let mut stmt = conn.prepare(
-            "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, completedAt, createdAt, updatedAt \
+        let sql = format!(
+            "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, archivedAt, createdAt, updatedAt \
              FROM Action WHERE ownerId = ?1 \
-             AND (title LIKE ?2 OR description LIKE ?2 OR category LIKE ?2) \
+             AND (title LIKE ?2 OR description LIKE ?2 OR category LIKE ?2){} \
              ORDER BY dueAt ASC LIMIT ?3",
-        )?;
+            archive_clause
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let results = stmt
             .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_action)?
             .filter_map(|r| r.ok())
             .collect::<Vec<Action>>();
+        results
+    };
+
+    let projects: Vec<Project> = {
+        let sql = format!(
+            "SELECT id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, archivedAt, createdAt, updatedAt \
+             FROM \"Project\" WHERE ownerId = ?1 \
+             AND (title LIKE ?2 OR description LIKE ?2){} \
+             ORDER BY updatedAt DESC LIMIT ?3",
+            archive_clause
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let results = stmt
+            .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_project)?
+            .filter_map(|r| r.ok())
+            .collect::<Vec<Project>>();
         results
     };
 
@@ -74,5 +97,6 @@ pub fn search(
         interactions,
         events,
         actions,
+        projects,
     })
 }

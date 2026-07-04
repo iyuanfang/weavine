@@ -333,6 +333,27 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS \"Project_archivedAt_idx\" ON \"Project\"(\"archivedAt\");",
     )?;
 
+    let stale_indexes: &[(&str, &str)] = &[
+        ("Action_ownerId_projectId_idx", "Action"),
+        ("Event_ownerId_projectId_idx", "Event"),
+    ];
+    for (idx_name, table) in stale_indexes {
+        let present: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?",
+            rusqlite::params![idx_name],
+            |r| r.get(0),
+        )?;
+        if present > 0 {
+            conn.execute(&format!("DROP INDEX \"{idx_name}\""), [])?;
+            conn.execute(
+                &format!(
+                    "CREATE INDEX IF NOT EXISTS \"{idx_name}\" ON \"{table}\"(\"ownerId\", \"projectId\")"
+                ),
+                [],
+            )?;
+        }
+    }
+
     Ok(())
 }
 

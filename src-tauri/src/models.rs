@@ -214,4 +214,5 @@ pub struct SearchResults {
     pub interactions: Vec<Interaction>,
     pub events: Vec<Event>,
     pub actions: Vec<Action>,
+    pub projects: Vec<Project>,
 }

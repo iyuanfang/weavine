@@ -52,13 +52,13 @@ pub fn list(
         idx += 1;
     }
     match archived {
-        Some(v) if v == "false" || v == "0" => {
-            sql.push_str(" AND archivedAt IS NULL");
-        }
         Some(v) if v == "true" || v == "1" => {
             sql.push_str(" AND archivedAt IS NOT NULL");
         }
-        _ => {}
+        Some(v) if v == "all" => {}
+        _ => {
+            sql.push_str(" AND archivedAt IS NULL");
+        }
     }
 
     sql.push_str(&format!(" ORDER BY updatedAt DESC LIMIT ?{}", idx));

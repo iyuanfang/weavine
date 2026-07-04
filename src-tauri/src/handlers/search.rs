@@ -12,6 +12,8 @@ pub struct SearchParams {
     pub owner_id: String,
     pub query: String,
     pub limit: Option<i64>,
+    #[serde(default)]
+    pub include_archived: Option<bool>,
 }
 
 pub async fn query(
@@ -19,7 +21,13 @@ pub async fn query(
     Query(p): Query<SearchParams>,
 ) -> Result<Json<SearchResults>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    business::search::search(&conn, &p.owner_id, &p.query, p.limit)
-        .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    business::search::search(
+        &conn,
+        &p.owner_id,
+        &p.query,
+        p.limit,
+        p.include_archived.unwrap_or(true),
+    )
+    .map(Json)
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
