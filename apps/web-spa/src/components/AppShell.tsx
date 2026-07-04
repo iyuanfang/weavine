@@ -38,7 +38,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const nav = (
     <>
       <div className="app-shell__brand">
-        <span>PRM</span>
+        <img src="/logo.svg" alt="Weavine" className="app-shell__brand-logo" />
+        <span className="app-shell__brand-text">Weavine</span>
         <button
           type="button"
           className="app-shell__close"

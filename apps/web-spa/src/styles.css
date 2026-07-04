@@ -122,12 +122,14 @@ button:focus-visible {
   gap: 8px;
 }
 
-.app-shell__brand::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #60a5fa);
+.app-shell__brand-logo {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.app-shell__brand-text {
+  color: var(--accent);
 }
 
 .app-shell__menu {
