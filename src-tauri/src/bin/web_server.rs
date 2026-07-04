@@ -148,10 +148,12 @@ async fn main() {
         .route("/api/search", get(handlers::search::query))
         // SPA static fallback — serves index.html for any non-/api path so
         // browser hard-refreshes of client-side routes (e.g. /contacts) work.
-        .fallback_service(
-            ServeDir::new("../apps/web-spa/dist")
-                .fallback(ServeFile::new("../apps/web-spa/dist/index.html")),
-        )
+        .fallback_service({
+            let spa_dir = std::env::var("WEAVINE_SPA_DIR")
+                .unwrap_or_else(|_| "../apps/web-spa/dist".into());
+            ServeDir::new(&spa_dir)
+                .fallback(ServeFile::new(format!("{}/index.html", spa_dir.trim_end_matches('/'))))
+        })
         .layer(SetResponseHeaderLayer::overriding(
             CACHE_CONTROL,
             HeaderValue::from_static("no-store"),
