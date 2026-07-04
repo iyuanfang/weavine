@@ -203,58 +203,52 @@ export function ActionNew() {
                   />
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section">
-          <h2 className="section__title">关联</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <div style={{ display: 'grid', gap: 14 }}>
-              <div>
-                <label className="input-label">项目</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                >
-                  <option value="">无</option>
-                  {projects.map((p: Project) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="input-label">联系人</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                >
-                  <option value="">无</option>
-                  {contacts.map((c: Contact) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nickname ?? c.name ?? '?'}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">关联项目</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {projects.map((p: Project) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">关联联系人</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={contactId}
+                    onChange={(e) => setContactId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {contacts.map((c: Contact) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nickname ?? c.name ?? '?'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="section">
-          <h2 className="section__title">描述</h2>
+        <section className="section" style={{ marginTop: 14 }}>
+          <h2 className="section__title">备注</h2>
           <div className="card" style={{ marginTop: 10 }}>
             <textarea
               className="input-base"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="详细描述…"
+              placeholder="可选"
             />
           </div>
         </section>

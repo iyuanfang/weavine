@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Contact, UpdateActionInput } from '../lib/adapter/types';
+import type { Contact, Project, UpdateActionInput } from '../lib/adapter/types';
 
 const STATUS_OPTIONS = [
   { value: 'inbox', label: '📥 收件箱' },
@@ -49,6 +49,13 @@ export function ActionEdit() {
   });
   const contacts = contactsQuery.data ?? [];
 
+  const projectsQuery = useQuery({
+    queryKey: ['projects', ownerId],
+    queryFn: () => adapter.projects.list({ owner_id: ownerId! }),
+    enabled: !!ownerId,
+  });
+  const projects = projectsQuery.data ?? [];
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState('inbox');
@@ -56,6 +63,7 @@ export function ActionEdit() {
   const [category, setCategory] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [contactId, setContactId] = useState<string>('');
+  const [projectId, setProjectId] = useState<string>('');
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -68,6 +76,7 @@ export function ActionEdit() {
       setCategory(a.category ?? '');
       setDueAt(toLocalInput(a.due_at));
       setContactId(a.contact_id ?? '');
+      setProjectId(a.project_id ?? '');
       setHydrated(true);
     }
   }, [actionQuery.data, hydrated]);
@@ -77,7 +86,14 @@ export function ActionEdit() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
       queryClient.invalidateQueries({ queryKey: ['action', id] });
-      navigate('/actions');
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ['project-actions', projectId] });
+      }
+      if (projectId) {
+        navigate(`/projects/${projectId}`);
+      } else {
+        navigate('/actions');
+      }
     },
   });
 
@@ -93,6 +109,7 @@ export function ActionEdit() {
       category: category.trim() || null,
       due_at: dueAt ? new Date(dueAt).toISOString() : null,
       contact_id: contactId || null,
+      project_id: projectId || null,
     });
   };
 
@@ -112,11 +129,25 @@ export function ActionEdit() {
     );
   }
 
+  const linkedProject = projectId
+    ? projects.find((p: Project) => p.id === projectId)
+    : null;
+
   return (
     <div className="page page--narrow">
-      <PageHeader
-        title="编辑待办"
-      />
+      <PageHeader title="编辑待办" />
+
+      {linkedProject && (
+        <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13 }}>
+          <span className="badge" style={{ background: '#eef2ff', color: '#4338ca', marginRight: 8 }}>
+            📁 项目
+          </span>
+          <Link to={`/projects/${linkedProject.id}`} style={{ fontWeight: 600 }}>
+            {linkedProject.title}
+          </Link>
+          <span style={{ color: 'var(--muted)', marginLeft: 8 }}>· {linkedProject.stage}</span>
+        </div>
+      )}
 
       {updateMutation.isError && (
         <div className="error-banner">
@@ -197,41 +228,52 @@ export function ActionEdit() {
                   />
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section">
-          <h2 className="section__title">关联</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <div style={{ display: 'grid', gap: 14 }}>
-              <div>
-                <label className="input-label">联系人</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                >
-                  <option value="">无</option>
-                  {contacts.map((c: Contact) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nickname ?? c.name ?? '?'}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">关联项目</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {projects.map((p: Project) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">关联联系人</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={contactId}
+                    onChange={(e) => setContactId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {contacts.map((c: Contact) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nickname ?? c.name ?? '?'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="section">
-          <h2 className="section__title">描述</h2>
+        <section className="section" style={{ marginTop: 14 }}>
+          <h2 className="section__title">备注</h2>
           <div className="card" style={{ marginTop: 10 }}>
             <textarea
               className="input-base"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              placeholder="可选"
             />
           </div>
         </section>
@@ -240,7 +282,7 @@ export function ActionEdit() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => navigate('/actions')}
+            onClick={() => (projectId ? navigate(`/projects/${projectId}`) : navigate('/actions'))}
           >
             取消
           </button>

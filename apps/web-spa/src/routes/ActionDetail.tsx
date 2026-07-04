@@ -163,7 +163,7 @@ export function ActionDetail() {
 
       {action.description && (
         <section className="section">
-          <h2 className="section__title">描述</h2>
+          <h2 className="section__title">备注</h2>
           <div className="card" style={{ marginTop: 10 }}>
             <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
               {action.description}

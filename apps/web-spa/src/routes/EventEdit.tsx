@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Contact, Event, UpdateEventInput } from '../lib/adapter/types';
+import type { Contact, Event, Project, UpdateEventInput } from '../lib/adapter/types';
 
 function toLocalInput(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -34,6 +34,12 @@ export function EventEdit() {
     enabled: !!ownerId,
   });
 
+  const projectsQuery = useQuery({
+    queryKey: ['projects', ownerId],
+    queryFn: () => adapter.projects.list({ owner_id: ownerId! }),
+    enabled: !!ownerId,
+  });
+
   const [title, setTitle] = useState('');
   const [type, setType] = useState(EVENT_PRESETS[0].value);
   const [startAt, setStartAt] = useState('');
@@ -41,6 +47,7 @@ export function EventEdit() {
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [contactId, setContactId] = useState<string>('');
+  const [projectId, setProjectId] = useState<string>('');
   const [reminderLeadMinutes, setReminderLeadMinutes] = useState<number | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
@@ -54,6 +61,7 @@ export function EventEdit() {
       setLocation(e.location ?? '');
       setNotes(e.notes ?? '');
       setContactId(e.contact_id ?? '');
+      setProjectId(e.project_id ?? '');
       setReminderLeadMinutes(e.reminder_lead_minutes ?? null);
       setHydrated(true);
     }
@@ -64,7 +72,14 @@ export function EventEdit() {
     onSuccess: (data) => {
       queryClient.setQueryData<Event>(['event', id], data);
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      navigate('/calendar');
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ['project-events', projectId] });
+      }
+      if (projectId) {
+        navigate(`/projects/${projectId}`);
+      } else {
+        navigate('/calendar');
+      }
     },
   });
 
@@ -80,6 +95,7 @@ export function EventEdit() {
       location: location.trim() || null,
       notes: notes.trim() || null,
       contact_id: contactId || null,
+      project_id: projectId || null,
       reminder_lead_minutes: reminderLeadMinutes,
     };
     updateMutation.mutate(patch);
@@ -98,12 +114,26 @@ export function EventEdit() {
   }
 
   const contacts = contactsQuery.data ?? [];
+  const projects = projectsQuery.data ?? [];
+  const linkedProject = projectId
+    ? projects.find((p: Project) => p.id === projectId)
+    : null;
 
   return (
     <div className="page page--narrow">
-      <PageHeader
-        title="编辑日程"
-      />
+      <PageHeader title="编辑日程" />
+
+      {linkedProject && (
+        <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13 }}>
+          <span className="badge" style={{ background: '#eef2ff', color: '#4338ca', marginRight: 8 }}>
+            📁 项目
+          </span>
+          <Link to={`/projects/${linkedProject.id}`} style={{ fontWeight: 600 }}>
+            {linkedProject.title}
+          </Link>
+          <span style={{ color: 'var(--muted)', marginLeft: 8 }}>· {linkedProject.stage}</span>
+        </div>
+      )}
 
       {updateMutation.isError && (
         <div className="error-banner">
@@ -133,34 +163,6 @@ export function EventEdit() {
               </div>
               <div className="grid-2">
                 <div>
-                  <label className="input-label">类型</label>
-                  <div style={{ paddingTop: 4 }}>
-                    <CategoryPicker
-                      value={type}
-                      presets={EVENT_PRESETS}
-                      onChange={setType}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="input-label">关联联系人</label>
-                  <select
-                    className="input-base"
-                    style={{ cursor: 'pointer' }}
-                    value={contactId}
-                    onChange={(e) => setContactId(e.target.value)}
-                  >
-                    <option value="">无</option>
-                    {contacts.map((c: Contact) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nickname ?? c.name ?? '?'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid-2">
-                <div>
                   <label className="input-label">开始时间 *</label>
                   <input
                     className="input-base"
@@ -180,45 +182,93 @@ export function EventEdit() {
                   />
                 </div>
               </div>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">类型</label>
+                  <div style={{ paddingTop: 4 }}>
+                    <CategoryPicker
+                      value={type}
+                      presets={EVENT_PRESETS}
+                      onChange={setType}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="input-label">提醒</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={reminderLeadMinutes === null ? '' : String(reminderLeadMinutes)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setReminderLeadMinutes(v === '' ? null : Number(v));
+                    }}
+                  >
+                    <option value="">不提醒</option>
+                    <option value="0">准时</option>
+                    <option value="5">提前 5 分钟</option>
+                    <option value="15">提前 15 分钟</option>
+                    <option value="30">提前 30 分钟</option>
+                    <option value="60">提前 1 小时</option>
+                    <option value="1440">提前 1 天</option>
+                  </select>
+                </div>
+              </div>
               <div>
                 <label className="input-label">地点</label>
                 <input
                   className="input-base"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
+                  placeholder="可选"
                 />
               </div>
-              <div>
-                <label className="input-label">提醒</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={reminderLeadMinutes === null ? '' : String(reminderLeadMinutes)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setReminderLeadMinutes(v === '' ? null : Number(v));
-                  }}
-                >
-                  <option value="">不提醒</option>
-                  <option value="0">准时</option>
-                  <option value="5">提前 5 分钟</option>
-                  <option value="15">提前 15 分钟</option>
-                  <option value="30">提前 30 分钟</option>
-                  <option value="60">提前 1 小时</option>
-                  <option value="1440">提前 1 天</option>
-                </select>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">关联项目</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {projects.map((p: Project) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">关联联系人</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={contactId}
+                    onChange={(e) => setContactId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {contacts.map((c: Contact) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nickname ?? c.name ?? '?'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="section">
+        <section className="section" style={{ marginTop: 14 }}>
           <h2 className="section__title">备注</h2>
           <div className="card" style={{ marginTop: 10 }}>
             <textarea
               className="input-base"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              placeholder="可选"
             />
           </div>
         </section>
@@ -227,7 +277,7 @@ export function EventEdit() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => navigate('/calendar')}
+            onClick={() => (projectId ? navigate(`/projects/${projectId}`) : navigate('/calendar'))}
           >
             取消
           </button>

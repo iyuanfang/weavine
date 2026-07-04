@@ -94,12 +94,12 @@ export function ProjectNew() {
                 />
               </div>
               <div>
-                <label className="input-label">描述</label>
+                <label className="input-label">备注</label>
                 <textarea
                   className="input-base"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="项目描述…"
+                  placeholder="可选"
                   style={{ minHeight: 80, resize: 'vertical' }}
                 />
               </div>

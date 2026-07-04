@@ -136,34 +136,6 @@ export function EventNew() {
               </div>
               <div className="grid-2">
                 <div>
-                  <label className="input-label">类型</label>
-                  <div style={{ paddingTop: 4 }}>
-                    <CategoryPicker
-                      value={type}
-                      presets={EVENT_PRESETS}
-                      onChange={setType}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="input-label">关联联系人</label>
-                  <select
-                    className="input-base"
-                    style={{ cursor: 'pointer' }}
-                    value={contactId}
-                    onChange={(e) => setContactId(e.target.value)}
-                  >
-                    <option value="">无</option>
-                    {contacts.map((c: Contact) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nickname ?? c.name ?? '?'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid-2">
-                <div>
                   <label className="input-label">开始时间 *</label>
                   <input
                     className="input-base"
@@ -183,6 +155,38 @@ export function EventNew() {
                   />
                 </div>
               </div>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">类型</label>
+                  <div style={{ paddingTop: 4 }}>
+                    <CategoryPicker
+                      value={type}
+                      presets={EVENT_PRESETS}
+                      onChange={setType}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="input-label">提醒</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={reminderLeadMinutes === null ? '' : String(reminderLeadMinutes)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setReminderLeadMinutes(v === '' ? null : Number(v));
+                    }}
+                  >
+                    <option value="">不提醒</option>
+                    <option value="0">准时</option>
+                    <option value="5">提前 5 分钟</option>
+                    <option value="15">提前 15 分钟</option>
+                    <option value="30">提前 30 分钟</option>
+                    <option value="60">提前 1 小时</option>
+                    <option value="1440">提前 1 天</option>
+                  </select>
+                </div>
+              </div>
               <div>
                 <label className="input-label">地点</label>
                 <input
@@ -192,55 +196,45 @@ export function EventNew() {
                   placeholder="可选"
                 />
               </div>
-              <div>
-                <label className="input-label">提醒</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={reminderLeadMinutes === null ? '' : String(reminderLeadMinutes)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setReminderLeadMinutes(v === '' ? null : Number(v));
-                  }}
-                >
-                  <option value="">不提醒</option>
-                  <option value="0">准时</option>
-                  <option value="5">提前 5 分钟</option>
-                  <option value="15">提前 15 分钟</option>
-                  <option value="30">提前 30 分钟</option>
-                  <option value="60">提前 1 小时</option>
-                  <option value="1440">提前 1 天</option>
-                </select>
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">关联项目</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {projects.map((p: Project) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">关联联系人</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={contactId}
+                    onChange={(e) => setContactId(e.target.value)}
+                  >
+                    <option value="">无</option>
+                    {contacts.map((c: Contact) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nickname ?? c.name ?? '?'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="section">
-          <h2 className="section__title">关联</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <div style={{ display: 'grid', gap: 14 }}>
-              <div>
-                <label className="input-label">项目</label>
-                <select
-                  className="input-base"
-                  style={{ cursor: 'pointer' }}
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                >
-                  <option value="">无</option>
-                  {projects.map((p: Project) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section">
+        <section className="section" style={{ marginTop: 14 }}>
           <h2 className="section__title">备注</h2>
           <div className="card" style={{ marginTop: 10 }}>
             <textarea

@@ -107,7 +107,7 @@ export function ProjectEdit() {
                 />
               </div>
               <div>
-                <label className="input-label">描述</label>
+                <label className="input-label">备注</label>
                 <textarea
                   className="input-base"
                   value={description}
