@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
+import { isTauri } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
+import { clearSession } from '../lib/auth/storage';
 
 const navItems = [
   { to: '/', label: '今天', icon: '🎯', end: true },
@@ -70,7 +72,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       <div className="app-shell__user">
-        {userLoading ? '加载中…' : user?.name ?? user?.email ?? '未登录'}
+        <span className="app-shell__user-name">
+          {userLoading ? '加载中…' : user?.name ?? user?.email ?? '未登录'}
+        </span>
+        {!isTauri && (
+          <button
+            type="button"
+            className="app-shell__user-logout"
+            onClick={() => {
+              clearSession();
+              window.location.href = '/login';
+            }}
+            aria-label="退出登录"
+            title="退出登录"
+          >
+            登出
+          </button>
+        )}
       </div>
     </>
   );
