@@ -7,12 +7,12 @@ use serde::Deserialize;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
-use super::auth::extract_auth;
+use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Event;
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub owner_id: Option<String>,
+    pub user_id: Option<String>,
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
     pub start_after: Option<String>,
@@ -23,7 +23,7 @@ pub struct ListParams {
 
 #[derive(Deserialize)]
 pub struct UpcomingParams {
-    pub owner_id: Option<String>,
+    pub user_id: Option<String>,
     pub limit: Option<i64>,
 }
 
@@ -34,9 +34,9 @@ pub async fn list(
 ) -> Result<Json<Vec<Event>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let rows = sqlx::query_as::<_, Event>(
-        "SELECT id, owner_id, title, event_type, start_at, end_at, location, notes, \
+        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
                 contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
-         FROM event WHERE owner_id = $1 \
+         FROM event WHERE user_id = $1 \
          AND ($2::text IS NULL OR contact_id = $2) \
          AND ($3::text IS NULL OR project_id = $3) \
          AND ($4::text IS NULL OR start_at >= $4) \
@@ -62,11 +62,23 @@ pub async fn create(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query(
-        "INSERT INTO event (id, owner_id, title, event_type, start_at, end_at, location, notes, \
+        "INSERT INTO event (id, user_id, title, event_type, start_at, end_at, location, notes, \
          contact_id, project_id, reminder_lead_minutes, created_at, updated_at) \
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
     )
@@ -83,11 +95,16 @@ pub async fn create(
     .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()))
     .bind(&now)
     .bind(&now)
-    .execute(&*pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let event = sqlx::query_as::<_, Event>(
-        "SELECT id, owner_id, title, event_type, start_at, end_at, location, notes, \
+        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
                 contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
          FROM event WHERE id = $1",
     )
@@ -105,9 +122,9 @@ pub async fn get(
 ) -> Result<Json<Event>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let event = sqlx::query_as::<_, Event>(
-        "SELECT id, owner_id, title, event_type, start_at, end_at, location, notes, \
+        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
                 contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
-         FROM event WHERE id = $1 AND owner_id = $2",
+         FROM event WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)
     .bind(&auth)
@@ -124,8 +141,20 @@ pub async fn update(
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let now = super::now_str();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let mut sets = Vec::new();
     let mut params: Vec<String> = Vec::new();
     let mut idx = 1u32;
@@ -150,13 +179,18 @@ pub async fn update(
     params.push(now);
     idx += 1;
     let sql = format!(
-        "UPDATE event SET {} WHERE id = ${} AND owner_id = ${}",
+        "UPDATE event SET {} WHERE id = ${} AND user_id = ${}",
         sets.join(", "), idx, idx + 1
     );
     let mut q = sqlx::query(&sql);
     for p in &params { q = q.bind(p); }
     q = q.bind(&id).bind(&auth);
-    q.execute(&*pool).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     get(headers, State(pool), Path(id)).await
 }
 
@@ -165,11 +199,28 @@ pub async fn delete(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
-    sqlx::query("DELETE FROM event WHERE id = $1 AND owner_id = $2")
-        .bind(&id).bind(&auth)
-        .execute(&*pool).await
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
+
+    let mut tx = pool
+        .begin()
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("DELETE FROM event WHERE id = $1 AND user_id = $2")
+        .bind(&id).bind(&auth)
+        .execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     Ok(Json(()))
 }
 
@@ -181,9 +232,9 @@ pub async fn upcoming(
     let auth = extract_auth(&headers)?;
     let now = super::now_str();
     let rows = sqlx::query_as::<_, Event>(
-        "SELECT id, owner_id, title, event_type, start_at, end_at, location, notes, \
+        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
                 contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
-         FROM event WHERE owner_id = $1 AND start_at >= $2 AND archived_at IS NULL \
+         FROM event WHERE user_id = $1 AND start_at >= $2 AND archived_at IS NULL \
          ORDER BY start_at LIMIT $3",
     )
     .bind(&auth).bind(&now)

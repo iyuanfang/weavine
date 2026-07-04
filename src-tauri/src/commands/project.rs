@@ -6,7 +6,7 @@ use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListProjectsParams {
-    pub owner_id: String,
+    pub user_id: String,
     pub template: Option<String>,
     pub stage: Option<String>,
     pub archived: Option<String>,
@@ -21,7 +21,7 @@ pub fn list_projects(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::project::list(
         &conn,
-        &params.owner_id,
+        &params.user_id,
         params.template.as_deref(),
         params.stage.as_deref(),
         params.archived.as_deref(),

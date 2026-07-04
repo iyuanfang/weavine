@@ -7,7 +7,7 @@ use tauri::State;
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_reminders(
     db: State<Database>,
-    owner_id: String,
+    user_id: String,
     contact_id: Option<String>,
     event_id: Option<String>,
     include_dismissed: Option<bool>,
@@ -16,7 +16,7 @@ pub fn list_reminders(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::reminder::list(
         &conn,
-        &owner_id,
+        &user_id,
         contact_id.as_deref(),
         event_id.as_deref(),
         include_dismissed,

@@ -7,12 +7,12 @@ use serde::Deserialize;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
-use super::auth::extract_auth;
+use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Action;
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub owner_id: Option<String>,
+    pub user_id: Option<String>,
     pub status: Option<String>,
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
@@ -27,9 +27,9 @@ pub async fn list(
 ) -> Result<Json<Vec<Action>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let rows = sqlx::query_as::<_, Action>(
-        "SELECT id, owner_id, title, description, status, priority, category, due_at, \
+        "SELECT id, user_id, title, description, status, priority, category, due_at, \
                 contact_id, project_id, completed_at, archived_at, created_at, updated_at \
-         FROM action WHERE owner_id = $1 \
+         FROM action WHERE user_id = $1 \
          AND ($2::text IS NULL OR status = $2) \
          AND ($3::text IS NULL OR contact_id = $3) \
          AND ($4::text IS NULL OR project_id = $4) \
@@ -49,11 +49,23 @@ pub async fn create(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<Action>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query(
-        "INSERT INTO action (id, owner_id, title, description, status, priority, category, due_at, \
+        "INSERT INTO action (id, user_id, title, description, status, priority, category, due_at, \
          contact_id, project_id, created_at, updated_at) \
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
     )
@@ -67,10 +79,15 @@ pub async fn create(
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
     .bind(body.get("project_id").and_then(|v| v.as_str()))
     .bind(&now).bind(&now)
-    .execute(&*pool).await
+    .execute(&mut *tx).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let action = sqlx::query_as::<_, Action>(
-        "SELECT id, owner_id, title, description, status, priority, category, due_at, \
+        "SELECT id, user_id, title, description, status, priority, category, due_at, \
                 contact_id, project_id, completed_at, archived_at, created_at, updated_at \
          FROM action WHERE id = $1",
     )
@@ -87,9 +104,9 @@ pub async fn get(
 ) -> Result<Json<Action>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let action = sqlx::query_as::<_, Action>(
-        "SELECT id, owner_id, title, description, status, priority, category, due_at, \
+        "SELECT id, user_id, title, description, status, priority, category, due_at, \
                 contact_id, project_id, completed_at, archived_at, created_at, updated_at \
-         FROM action WHERE id = $1 AND owner_id = $2",
+         FROM action WHERE id = $1 AND user_id = $2",
     )
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
@@ -104,8 +121,20 @@ pub async fn update(
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Action>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let now = super::now_str();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let mut sets = Vec::new();
     let mut params: Vec<String> = Vec::new();
     let mut idx = 1u32;
@@ -123,11 +152,16 @@ pub async fn update(
     }
     sets.push(format!("updated_at = ${}", idx));
     params.push(now); idx += 1;
-    let sql = format!("UPDATE action SET {} WHERE id = ${} AND owner_id = ${}", sets.join(", "), idx, idx + 1);
+    let sql = format!("UPDATE action SET {} WHERE id = ${} AND user_id = ${}", sets.join(", "), idx, idx + 1);
     let mut q = sqlx::query(&sql);
     for p in &params { q = q.bind(p); }
     q = q.bind(&id).bind(&auth);
-    q.execute(&*pool).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     get(headers, State(pool), Path(id)).await
 }
 
@@ -136,10 +170,27 @@ pub async fn delete(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
-    sqlx::query("DELETE FROM action WHERE id = $1 AND owner_id = $2")
-        .bind(&id).bind(&auth)
-        .execute(&*pool).await
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
+
+    let mut tx = pool
+        .begin()
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("DELETE FROM action WHERE id = $1 AND user_id = $2")
+        .bind(&id).bind(&auth)
+        .execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     Ok(Json(()))
 }

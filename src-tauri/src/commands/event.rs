@@ -7,7 +7,7 @@ use tauri::State;
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_events(
     db: State<Database>,
-    owner_id: String,
+    user_id: String,
     contact_id: Option<String>,
     project_id: Option<String>,
     start_after: Option<String>,
@@ -18,7 +18,7 @@ pub fn list_events(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::event::list(
         &conn,
-        &owner_id,
+        &user_id,
         contact_id.as_deref(),
         project_id.as_deref(),
         start_after.as_deref(),
@@ -62,9 +62,9 @@ pub fn get_event(db: State<Database>, id: String) -> Result<Event, String> {
 #[tauri::command(rename_all = "snake_case")]
 pub fn get_upcoming_events(
     db: State<Database>,
-    owner_id: String,
+    user_id: String,
     limit: Option<i64>,
 ) -> Result<Vec<Event>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::event::get_upcoming(&conn, &owner_id, limit).map_err(|e| e.to_string())
+    business::event::get_upcoming(&conn, &user_id, limit).map_err(|e| e.to_string())
 }

@@ -8,7 +8,7 @@ const ACTION_COLS: &str =
 pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
     Ok(Action {
         id: row.get(0)?,
-        owner_id: row.get(1)?,
+        user_id: row.get(1)?,
         title: row.get(2)?,
         description: row.get(3)?,
         status: row.get(4)?,
@@ -26,7 +26,7 @@ pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
 
 pub fn list(
     conn: &Connection,
-    owner_id: &str,
+    user_id: &str,
     status: Option<&str>,
     contact_id: Option<&str>,
     project_id: Option<&str>,
@@ -38,7 +38,7 @@ pub fn list(
     let mut sql = format!(
         "SELECT {ACTION_COLS} FROM Action WHERE ownerId = ?1"
     );
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(owner_id.to_string())];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
     if let Some(s) = status {
@@ -95,7 +95,7 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         rusqlite::params![
             &id,
-            &input.owner_id,
+            &input.user_id,
             &input.title,
             &input.description,
             &status,

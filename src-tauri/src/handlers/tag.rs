@@ -12,7 +12,7 @@ use weavine_lib::{
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub owner_id: String,
+    pub user_id: String,
 }
 
 pub async fn list(
@@ -20,7 +20,7 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Tag>>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let result = business::tag::list(&conn, &p.owner_id)
+    let result = business::tag::list(&conn, &p.user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(result))
 }

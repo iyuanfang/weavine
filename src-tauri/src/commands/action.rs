@@ -7,7 +7,7 @@ use tauri::State;
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_actions(
     db: State<Database>,
-    owner_id: String,
+    user_id: String,
     status: Option<String>,
     contact_id: Option<String>,
     project_id: Option<String>,
@@ -17,7 +17,7 @@ pub fn list_actions(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::action::list(
         &conn,
-        &owner_id,
+        &user_id,
         status.as_deref(),
         contact_id.as_deref(),
         project_id.as_deref(),

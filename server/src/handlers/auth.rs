@@ -5,11 +5,12 @@ use axum::{
 };
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, Algorithm, Header, Validation};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
+use crate::handlers::JWT_KEYS;
 
 pub const ACCESS_TOKEN_TTL_SECS: u64 = 7 * 24 * 60 * 60;
 pub const REFRESH_TOKEN_TTL_SECS: u64 = 30 * 24 * 60 * 60;
@@ -19,35 +20,30 @@ const MIN_PASSWORD_LEN: usize = 8;
 pub struct Claims {
     pub sub: String,
     pub email: String,
+    pub device_id: String,
     pub exp: u64,
     pub iat: u64,
 }
 
-#[derive(Serialize)]
-pub struct AuthSession {
-    pub user_id: String,
-    pub email: String,
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_in: u64,
-}
-
-#[derive(Serialize)]
-pub struct MeResponse {
-    pub user_id: String,
-    pub email: String,
+#[derive(Deserialize)]
+pub struct DeviceInfo {
+    pub name: String,
+    pub os: String,
+    pub app_version: String,
 }
 
 #[derive(Deserialize)]
-pub struct RegisterBody {
+pub struct RegisterReq {
     pub email: String,
     pub password: String,
+    pub device: DeviceInfo,
 }
 
 #[derive(Deserialize)]
-pub struct LoginBody {
+pub struct LoginReq {
     pub email: String,
     pub password: String,
+    pub device: DeviceInfo,
 }
 
 #[derive(Deserialize)]
@@ -60,92 +56,30 @@ pub struct LogoutBody {
     pub refresh_token: String,
 }
 
-pub fn extract_auth(headers: &HeaderMap) -> Result<String, (StatusCode, String)> {
-    let secret = jwt_secret()?;
-    let token =
-        extract_bearer(headers).ok_or((StatusCode::UNAUTHORIZED, "未登录".to_string()))?;
-    let claims =
-        verify_access(&secret, &token).map_err(|_| (StatusCode::UNAUTHORIZED, "token 无效或已过期".to_string()))?;
-    Ok(claims.sub)
+#[derive(Serialize)]
+pub struct AuthSession {
+    pub user_id: String,
+    pub email: String,
+    pub access_token: String,
+    pub refresh_token: String,
+    pub device_id: String,
+    pub expires_in: u64,
 }
 
-fn jwt_secret() -> Result<Vec<u8>, (StatusCode, String)> {
-    match std::env::var("WEAVINE_JWT_SECRET") {
-        Ok(v) if v.len() >= 32 => Ok(v.into_bytes()),
-        Ok(v) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("WEAVINE_JWT_SECRET must be at least 32 chars, got {}", v.len()),
-        )),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "WEAVINE_JWT_SECRET env var not set".to_string(),
-        )),
-    }
+#[derive(Serialize)]
+pub struct MeResponse {
+    pub id: String,
+    pub email: String,
+    pub devices: Vec<DeviceResponse>,
 }
 
-fn now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("system time")
-        .as_secs() as i64
-}
-
-fn issue_access_token(
-    secret: &[u8],
-    user_id: &str,
-    email: &str,
-) -> Result<String, (StatusCode, String)> {
-    let iat = now() as u64;
-    let exp = iat + ACCESS_TOKEN_TTL_SECS;
-    let claims = Claims {
-        sub: user_id.to_string(),
-        email: email.to_string(),
-        iat,
-        exp,
-    };
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret),
-    )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("jwt encode: {e}")))
-}
-
-async fn issue_refresh_token(
-    pool: &PgPool,
-    user_id: &str,
-) -> Result<String, (StatusCode, String)> {
-    let raw: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(64)
-        .map(char::from)
-        .collect();
-    let token_hash = blake_hash(&raw);
-    let id = uuid::Uuid::new_v4().to_string();
-    let expires_at = (Utc::now() + Duration::seconds(REFRESH_TOKEN_TTL_SECS as i64))
-        .format("%Y-%m-%d %H:%M:%S")
-        .to_string();
-    let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    sqlx::query(
-        "INSERT INTO refresh_token (id, user_id, token_hash, expires_at, created_at) VALUES ($1, $2, $3, $4, $5)",
-    )
-    .bind(&id)
-    .bind(user_id)
-    .bind(&token_hash)
-    .bind(&expires_at)
-    .bind(&now)
-    .execute(pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert refresh: {e}")))?;
-    Ok(raw)
-}
-
-fn blake_hash(s: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut h = DefaultHasher::new();
-    s.hash(&mut h);
-    format!("{:016x}", h.finish())
+#[derive(Serialize)]
+pub struct DeviceResponse {
+    pub id: String,
+    pub name: String,
+    pub os: String,
+    pub app_version: String,
+    pub last_seen_at: String,
 }
 
 fn extract_bearer(headers: &HeaderMap) -> Option<String> {
@@ -163,22 +97,104 @@ fn extract_bearer(headers: &HeaderMap) -> Option<String> {
     }
 }
 
-fn verify_access(
-    secret: &[u8],
-    token: &str,
-) -> Result<Claims, (StatusCode, String)> {
-    decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret),
-        &Validation::default(),
+fn now_epoch() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time")
+        .as_secs() as i64
+}
+
+fn blake_hash(s: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut h = DefaultHasher::new();
+    s.hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
+pub fn extract_auth(headers: &HeaderMap) -> Result<String, (StatusCode, String)> {
+    let token =
+        extract_bearer(headers).ok_or((StatusCode::UNAUTHORIZED, "未登录".to_string()))?;
+    let claims = verify_access(&token)
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "token 无效或已过期".to_string()))?;
+    Ok(claims.sub)
+}
+
+pub fn extract_auth_with_device(
+    headers: &HeaderMap,
+) -> Result<(String, String), (StatusCode, String)> {
+    let token =
+        extract_bearer(headers).ok_or((StatusCode::UNAUTHORIZED, "未登录".to_string()))?;
+    let claims = verify_access(&token)
+        .map_err(|_| (StatusCode::UNAUTHORIZED, "token 无效或已过期".to_string()))?;
+    Ok((claims.sub, claims.device_id))
+}
+
+fn verify_access(token: &str) -> Result<Claims, (StatusCode, String)> {
+    let keys = JWT_KEYS
+        .get()
+        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "JWT keys not loaded".to_string()))?;
+    decode::<Claims>(token, &keys.decoding, &Validation::new(Algorithm::RS256))
+        .map(|data| data.claims)
+        .map_err(|e| (StatusCode::UNAUTHORIZED, format!("invalid token: {e}")))
+}
+
+fn issue_access_token(
+    user_id: &str,
+    email: &str,
+    device_id: &str,
+) -> Result<String, (StatusCode, String)> {
+    let keys = JWT_KEYS
+        .get()
+        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "JWT keys not loaded".to_string()))?;
+    let iat = now_epoch() as u64;
+    let exp = iat + ACCESS_TOKEN_TTL_SECS;
+    let claims = Claims {
+        sub: user_id.to_string(),
+        email: email.to_string(),
+        device_id: device_id.to_string(),
+        iat,
+        exp,
+    };
+    encode(&Header::new(Algorithm::RS256), &claims, &keys.encoding)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("jwt encode: {e}")))
+}
+
+async fn issue_refresh_token(
+    pool: &PgPool,
+    user_id: &str,
+    device_id: &str,
+) -> Result<String, (StatusCode, String)> {
+    let raw: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+    let token_hash = blake_hash(&raw);
+    let id = uuid::Uuid::new_v4().to_string();
+    let expires_at = (Utc::now() + Duration::seconds(REFRESH_TOKEN_TTL_SECS as i64))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+    let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    sqlx::query(
+        "INSERT INTO refresh_token (id, user_id, device_id, token_hash, expires_at, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
-    .map(|data| data.claims)
-    .map_err(|e| (StatusCode::UNAUTHORIZED, format!("invalid token: {e}")))
+    .bind(&id)
+    .bind(user_id)
+    .bind(device_id)
+    .bind(&token_hash)
+    .bind(&expires_at)
+    .bind(&now)
+    .execute(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert refresh: {e}")))?;
+    Ok(raw)
 }
 
 pub async fn register(
     State(pool): State<Arc<PgPool>>,
-    Json(body): Json<RegisterBody>,
+    Json(body): Json<RegisterReq>,
 ) -> Result<Json<AuthSession>, (StatusCode, String)> {
     let email = body.email.trim().to_lowercase();
     if !email.contains('@') {
@@ -190,7 +206,6 @@ pub async fn register(
             format!("密码至少 {} 位", MIN_PASSWORD_LEN),
         ));
     }
-    let secret = jwt_secret()?;
 
     let existing: Option<String> = sqlx::query_scalar("SELECT id FROM user_account WHERE email = $1")
         .bind(&email)
@@ -201,42 +216,98 @@ pub async fn register(
         return Err((StatusCode::CONFLICT, "该邮箱已注册".into()));
     }
 
-    let id = uuid::Uuid::new_v4().to_string();
+    let user_id = uuid::Uuid::new_v4().to_string();
+    let device_id = uuid::Uuid::new_v4().to_string();
     let pwhash = hash(body.password.as_bytes(), DEFAULT_COST)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("hash: {e}")))?;
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query(
-        "INSERT INTO user_account (id, email, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO user_account (id, email, password_hash, created_at, updated_at) \
+         VALUES ($1, $2, $3, $4, $5)",
     )
-    .bind(&id)
+    .bind(&user_id)
     .bind(&email)
     .bind(&pwhash)
     .bind(&now)
     .bind(&now)
-    .execute(&*pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert user: {e}")))?;
 
-    let access = issue_access_token(&secret, &id, &email)?;
-    let refresh = issue_refresh_token(&pool, &id).await?;
+    sqlx::query(
+        "INSERT INTO devices (id, user_id, name, os, app_version, last_seen_at, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(&device_id)
+    .bind(&user_id)
+    .bind(&body.device.name)
+    .bind(&body.device.os)
+    .bind(&body.device.app_version)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert device: {e}")))?;
+
+    let raw: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+    let token_hash = blake_hash(&raw);
+    let expires_at = (Utc::now() + Duration::seconds(REFRESH_TOKEN_TTL_SECS as i64))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+    let refresh_id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO refresh_token (id, user_id, device_id, token_hash, expires_at, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(&refresh_id)
+    .bind(&user_id)
+    .bind(&device_id)
+    .bind(&token_hash)
+    .bind(&expires_at)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert refresh: {e}")))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let access = issue_access_token(&user_id, &email, &device_id)?;
     Ok(Json(AuthSession {
-        user_id: id,
+        user_id,
         email,
         access_token: access,
-        refresh_token: refresh,
+        refresh_token: raw,
+        device_id,
         expires_in: ACCESS_TOKEN_TTL_SECS,
     }))
 }
 
 pub async fn login(
     State(pool): State<Arc<PgPool>>,
-    Json(body): Json<LoginBody>,
+    Json(body): Json<LoginReq>,
 ) -> Result<Json<AuthSession>, (StatusCode, String)> {
     let email = body.email.trim().to_lowercase();
     if email.is_empty() || body.password.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "邮箱和密码必填".into()));
     }
-    let secret = jwt_secret()?;
 
     let row: Option<(String, String)> = sqlx::query_as(
         "SELECT id, password_hash FROM user_account WHERE email = $1",
@@ -257,13 +328,71 @@ pub async fn login(
         return Err((StatusCode::UNAUTHORIZED, "邮箱或密码错误".into()));
     }
 
-    let access = issue_access_token(&secret, &user_id, &email)?;
-    let refresh = issue_refresh_token(&pool, &user_id).await?;
+    let device_id = uuid::Uuid::new_v4().to_string();
+    let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+sqlx::query(
+        "INSERT INTO devices (id, user_id, name, os, app_version, last_seen_at, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) \
+         ON CONFLICT (user_id, name, os) DO UPDATE SET last_seen_at = $6",
+    )
+    .bind(&device_id)
+    .bind(&user_id)
+    .bind(&body.device.name)
+    .bind(&body.device.os)
+    .bind(&body.device.app_version)
+    .bind(&now)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("upsert device: {e}")))?;
+
+    let raw: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+    let token_hash = blake_hash(&raw);
+    let expires_at = (Utc::now() + Duration::seconds(REFRESH_TOKEN_TTL_SECS as i64))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+    let refresh_id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO refresh_token (id, user_id, device_id, token_hash, expires_at, created_at) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(&refresh_id)
+    .bind(&user_id)
+    .bind(&device_id)
+    .bind(&token_hash)
+    .bind(&expires_at)
+    .bind(&now)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert refresh: {e}")))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let access = issue_access_token(&user_id, &email, &device_id)?;
     Ok(Json(AuthSession {
         user_id,
         email,
         access_token: access,
-        refresh_token: refresh,
+        refresh_token: raw,
+        device_id,
         expires_in: ACCESS_TOKEN_TTL_SECS,
     }))
 }
@@ -272,14 +401,14 @@ pub async fn refresh(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<RefreshBody>,
 ) -> Result<Json<AuthSession>, (StatusCode, String)> {
-    let secret = jwt_secret()?;
     let token_hash = blake_hash(&body.refresh_token);
-
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT rt.user_id, ua.email \
+
+    let row: Option<(String, String, String, Option<String>)> = sqlx::query_as(
+        "SELECT rt.user_id, ua.email, rt.device_id, d.revoked_at \
          FROM refresh_token rt \
          JOIN user_account ua ON ua.id = rt.user_id \
+         JOIN devices d ON d.id = rt.device_id \
          WHERE rt.token_hash = $1 AND rt.revoked_at IS NULL AND rt.expires_at > $2",
     )
     .bind(&token_hash)
@@ -288,18 +417,23 @@ pub async fn refresh(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let (user_id, email) = match row {
+    let (user_id, email, device_id, device_revoked) = match row {
         Some(r) => r,
         None => return Err((StatusCode::UNAUTHORIZED, "refresh token 无效或已过期".into())),
     };
 
-    let access = issue_access_token(&secret, &user_id, &email)?;
-    let refresh = issue_refresh_token(&pool, &user_id).await?;
+    if device_revoked.is_some() {
+        return Err((StatusCode::UNAUTHORIZED, "设备已被吊销".into()));
+    }
+
+    let access = issue_access_token(&user_id, &email, &device_id)?;
+    let refresh = issue_refresh_token(&pool, &user_id, &device_id).await?;
     Ok(Json(AuthSession {
         user_id,
         email,
         access_token: access,
         refresh_token: refresh,
+        device_id,
         expires_in: ACCESS_TOKEN_TTL_SECS,
     }))
 }
@@ -331,6 +465,7 @@ pub async fn me(
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<MeResponse>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
+
     let email: Option<String> =
         sqlx::query_scalar("SELECT email FROM user_account WHERE id = $1")
             .bind(&auth)
@@ -338,8 +473,31 @@ pub async fn me(
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let email = email.ok_or((StatusCode::UNAUTHORIZED, "用户不存在".to_string()))?;
+
+    let device_rows = sqlx::query_as::<_, (String, String, String, String, String)>(
+        "SELECT id, name, os, app_version, last_seen_at \
+         FROM devices WHERE user_id = $1 AND revoked_at IS NULL \
+         ORDER BY last_seen_at DESC",
+    )
+    .bind(&auth)
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let devices = device_rows
+        .into_iter()
+        .map(|(id, name, os, app_version, last_seen_at)| DeviceResponse {
+            id,
+            name,
+            os,
+            app_version,
+            last_seen_at,
+        })
+        .collect();
+
     Ok(Json(MeResponse {
-        user_id: auth,
+        id: auth,
         email,
+        devices,
     }))
 }

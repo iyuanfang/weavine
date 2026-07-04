@@ -4,15 +4,15 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
-use super::auth::extract_auth;
+use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Project;
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub owner_id: Option<String>,
+    pub user_id: Option<String>,
     pub template: Option<String>,
     pub stage: Option<String>,
     pub archived: Option<String>,
@@ -25,9 +25,9 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Project>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let mut sql = "SELECT id, owner_id, title, description, template, stage, \
+    let mut sql = "SELECT id, user_id, title, description, template, stage, \
                     start_at, due_at, completed_at, archived_at, created_at, updated_at \
-                    FROM project WHERE owner_id = $1".to_string();
+                    FROM project WHERE user_id = $1".to_string();
     let mut idx = 2u32;
 
     if let Some(ref t) = p.template {
@@ -65,9 +65,9 @@ pub async fn get(
 ) -> Result<Json<Project>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let project: Project = sqlx::query_as(
-        "SELECT id, owner_id, title, description, template, stage, \
+        "SELECT id, user_id, title, description, template, stage, \
          start_at, due_at, completed_at, archived_at, created_at, updated_at \
-         FROM project WHERE id = $1 AND owner_id = $2",
+         FROM project WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)
     .bind(&auth)
@@ -83,14 +83,25 @@ pub async fn create(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<Project>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
     let template = body.get("template").and_then(|v| v.as_str()).unwrap_or("general");
     let stage = body.get("stage").and_then(|v| v.as_str()).unwrap_or("待启动");
 
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query(
-        "INSERT INTO project (id, owner_id, title, description, template, stage, \
+        "INSERT INTO project (id, user_id, title, description, template, stage, \
          start_at, due_at, created_at, updated_at) \
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
     )
@@ -104,9 +115,13 @@ pub async fn create(
     .bind(body.get("due_at").and_then(|v| v.as_str()))
     .bind(&now)
     .bind(&now)
-    .execute(&*pool)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     get(headers, State(pool), Path(id)).await
 }
@@ -117,8 +132,20 @@ pub async fn update(
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Project>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let now = super::now_str();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let mut sets = Vec::new();
     let mut params: Vec<String> = Vec::new();
     let mut idx = 1u32;
@@ -135,14 +162,18 @@ pub async fn update(
     idx += 1;
 
     let sql = format!(
-        "UPDATE project SET {} WHERE id = ${} AND owner_id = ${}",
+        "UPDATE project SET {} WHERE id = ${} AND user_id = ${}",
         sets.join(", "), idx, idx + 1
     );
     let mut q = sqlx::query(&sql);
     for p in &params { q = q.bind(p); }
     q = q.bind(&id).bind(&auth);
 
-    q.execute(&*pool)
+    q.execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -154,13 +185,30 @@ pub async fn delete(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
-    sqlx::query("DELETE FROM project WHERE id = $1 AND owner_id = $2")
-        .bind(&id)
-        .bind(&auth)
-        .execute(&*pool)
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
+
+    let mut tx = pool
+        .begin()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("DELETE FROM project WHERE id = $1 AND user_id = $2")
+        .bind(&id)
+        .bind(&auth)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     Ok(Json(()))
 }
 

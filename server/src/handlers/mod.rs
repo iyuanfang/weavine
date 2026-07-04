@@ -12,6 +12,11 @@ pub mod search;
 pub mod setting;
 pub mod tag;
 
+use std::sync::OnceLock;
+use crate::auth_keys::Keys;
+
+pub static JWT_KEYS: OnceLock<Keys> = OnceLock::new();
+
 pub fn now_str() -> String {
     chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
 }

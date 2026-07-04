@@ -7,12 +7,12 @@ use serde::Deserialize;
 use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
-use super::auth::extract_auth;
+use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Reminder;
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub owner_id: Option<String>,
+    pub user_id: Option<String>,
     pub contact_id: Option<String>,
     pub event_id: Option<String>,
     pub include_dismissed: Option<bool>,
@@ -26,8 +26,8 @@ pub async fn list(
 ) -> Result<Json<Vec<Reminder>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let rows = sqlx::query_as::<_, Reminder>(
-        "SELECT id, owner_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM reminder WHERE owner_id = $1 \
+        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
+         FROM reminder WHERE user_id = $1 \
          AND ($2::text IS NULL OR contact_id = $2) \
          AND ($3::text IS NULL OR event_id = $3) \
          AND ($4::bool IS NULL OR $4 = false OR dismissed = $4) \
@@ -46,11 +46,23 @@ pub async fn create(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<Reminder>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     sqlx::query(
-        "INSERT INTO reminder (id, owner_id, contact_id, event_id, trigger_at, kind, created_at) \
+        "INSERT INTO reminder (id, user_id, contact_id, event_id, trigger_at, kind, created_at) \
          VALUES ($1,$2,$3,$4,$5,$6,$7)",
     )
     .bind(&id).bind(&auth)
@@ -59,10 +71,15 @@ pub async fn create(
     .bind(body.get("trigger_at").and_then(|v| v.as_str()).unwrap_or(&now))
     .bind(body.get("kind").and_then(|v| v.as_str()).unwrap_or("event"))
     .bind(&now)
-    .execute(&*pool).await
+    .execute(&mut *tx).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let reminder = sqlx::query_as::<_, Reminder>(
-        "SELECT id, owner_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
+        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
          FROM reminder WHERE id = $1",
     )
     .bind(&id)
@@ -78,8 +95,8 @@ pub async fn get(
 ) -> Result<Json<Reminder>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let reminder = sqlx::query_as::<_, Reminder>(
-        "SELECT id, owner_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM reminder WHERE id = $1 AND owner_id = $2",
+        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
+         FROM reminder WHERE id = $1 AND user_id = $2",
     )
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
@@ -94,8 +111,20 @@ pub async fn update(
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Reminder>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
     let now = super::now_str();
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let mut sets = Vec::new();
     let mut params: Vec<String> = Vec::new();
     let mut idx = 1u32;
@@ -113,11 +142,16 @@ pub async fn update(
     }
     sets.push(format!("created_at = ${}", idx));
     params.push(now); idx += 1;
-    let sql = format!("UPDATE reminder SET {} WHERE id = ${} AND owner_id = ${}", sets.join(", "), idx, idx + 1);
+    let sql = format!("UPDATE reminder SET {} WHERE id = ${} AND user_id = ${}", sets.join(", "), idx, idx + 1);
     let mut q = sqlx::query(&sql);
     for p in &params { q = q.bind(p); }
     q = q.bind(&id).bind(&auth);
-    q.execute(&*pool).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     get(headers, State(pool), Path(id)).await
 }
 
@@ -126,11 +160,28 @@ pub async fn delete(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
-    sqlx::query("DELETE FROM reminder WHERE id = $1 AND owner_id = $2")
-        .bind(&id).bind(&auth)
-        .execute(&*pool).await
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
+
+    let mut tx = pool
+        .begin()
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("DELETE FROM reminder WHERE id = $1 AND user_id = $2")
+        .bind(&id).bind(&auth)
+        .execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     Ok(Json(()))
 }
 
@@ -139,10 +190,27 @@ pub async fn dismiss(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
-    sqlx::query("UPDATE reminder SET dismissed = true WHERE id = $1 AND owner_id = $2")
-        .bind(&id).bind(&auth)
-        .execute(&*pool).await
+    let (auth, device_id) = extract_auth_with_device(&headers)?;
+
+    let mut tx = pool
+        .begin()
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    sqlx::query("UPDATE reminder SET dismissed = true WHERE id = $1 AND user_id = $2")
+        .bind(&id).bind(&auth)
+        .execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     Ok(Json(()))
 }

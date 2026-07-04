@@ -5,9 +5,9 @@ use serde::Deserialize;
 use tauri::State;
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn list_tags(db: State<Database>, owner_id: String) -> Result<Vec<Tag>, String> {
+pub fn list_tags(db: State<Database>, user_id: String) -> Result<Vec<Tag>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::tag::list(&conn, &owner_id).map_err(|e| e.to_string())
+    business::tag::list(&conn, &user_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

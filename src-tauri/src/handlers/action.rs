@@ -12,7 +12,7 @@ use weavine_lib::{
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub owner_id: String,
+    pub user_id: String,
     pub status: Option<String>,
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
@@ -27,7 +27,7 @@ pub async fn list(
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     business::action::list(
         &conn,
-        &p.owner_id,
+        &p.user_id,
         p.status.as_deref(),
         p.contact_id.as_deref(),
         p.project_id.as_deref(),

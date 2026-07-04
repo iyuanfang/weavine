@@ -12,7 +12,7 @@ use weavine_lib::{
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub owner_id: String,
+    pub user_id: String,
     pub tag_id: Option<String>,
     pub search: Option<String>,
     pub importance: Option<String>,
@@ -23,7 +23,7 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
     let params = ListContactsParams {
-        owner_id: p.owner_id,
+        user_id: p.user_id,
         tag_id: p.tag_id,
         search: p.search,
         importance: p.importance,

@@ -11,6 +11,7 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
 };
 
+mod auth_keys;
 mod handlers;
 
 #[tokio::main]
@@ -33,6 +34,11 @@ async fn main() {
     }
 
     let pool = Arc::new(pool);
+
+    // Initialize JWT keys from PEM files (RS256)
+    handlers::JWT_KEYS
+        .set(auth_keys::Keys::from_env().expect("Failed to load JWT keys from PEM files"))
+        .expect("JWT_KEYS already initialized");
 
     let app = Router::new()
         .route("/api/health", get(|| async { "OK" }))

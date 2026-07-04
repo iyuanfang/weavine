@@ -9,7 +9,7 @@ const PROJECT_COLS: &str =
 pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
     Ok(Project {
         id: row.get(0)?,
-        owner_id: row.get(1)?,
+        user_id: row.get(1)?,
         title: row.get(2)?,
         description: row.get(3)?,
         template: row.get(4)?,
@@ -25,7 +25,7 @@ pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
 
 pub fn list(
     conn: &Connection,
-    owner_id: &str,
+    user_id: &str,
     template: Option<&str>,
     stage: Option<&str>,
     archived: Option<&str>,
@@ -37,7 +37,7 @@ pub fn list(
         "SELECT {PROJECT_COLS} FROM \"Project\" WHERE ownerId = ?1"
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
-        vec![Box::new(owner_id.to_string())];
+        vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
     if let Some(t) = template {
@@ -92,7 +92,7 @@ pub fn create(conn: &Connection, input: &CreateProjectInput) -> rusqlite::Result
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             &id,
-            &input.owner_id,
+            &input.user_id,
             &input.title,
             &input.description,
             &input.template,

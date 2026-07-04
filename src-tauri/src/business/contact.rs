@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
     Ok(Contact {
         id: row.get(0)?,
-        owner_id: row.get(1)?,
+        user_id: row.get(1)?,
         nickname: row.get(2)?,
         name: row.get(3)?,
         company: row.get(4)?,
@@ -40,7 +40,7 @@ pub(crate) fn load_tags_for_contact(
         .query_map([contact_id], |row| {
             Ok(Tag {
                 id: row.get(0)?,
-                owner_id: row.get(1)?,
+                user_id: row.get(1)?,
                 name: row.get(2)?,
                 color: row.get(3)?,
                 created_at: row.get(4)?,
@@ -63,7 +63,7 @@ pub(crate) fn hydrate_tags(
 pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<Vec<Contact>> {
     let mut sql = String::from("SELECT * FROM Contact WHERE ownerId = ?1");
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
-        vec![Box::new(p.owner_id.clone())];
+        vec![Box::new(p.user_id.clone())];
     let mut idx = 2;
 
     if let Some(ref search) = p.search {
@@ -122,7 +122,7 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
                  ?14, ?15, ?16, ?17)",
         rusqlite::params![
             &id,
-            &input.owner_id,
+            &input.user_id,
             &input.nickname,
             &input.name,
             &input.company,
@@ -145,7 +145,7 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
         for tag_id in tag_ids {
             conn.execute(
                 "INSERT INTO ContactTag (ownerId, contactId, tagId) VALUES (?1, ?2, ?3)",
-                rusqlite::params![&input.owner_id, &id, tag_id],
+                rusqlite::params![&input.user_id, &id, tag_id],
             )?;
         }
     }
@@ -236,7 +236,7 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
     }
 
     if let Some(ref tag_ids) = input.tag_ids {
-        let owner_id: String = conn.query_row(
+        let user_id: String = conn.query_row(
             "SELECT ownerId FROM Contact WHERE id = ?1",
             rusqlite::params![&input.id],
             |row| row.get(0),
@@ -250,7 +250,7 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
         for tag_id in tag_ids {
             conn.execute(
                 "INSERT INTO ContactTag (ownerId, contactId, tagId) VALUES (?1, ?2, ?3)",
-                rusqlite::params![&owner_id, &input.id, tag_id],
+                rusqlite::params![&user_id, &input.id, tag_id],
             )?;
         }
     }

@@ -3,7 +3,7 @@ use rusqlite::{params, Connection};
 
 fn row_to_project_contact(row: &rusqlite::Row) -> rusqlite::Result<ProjectContact> {
     Ok(ProjectContact {
-        owner_id: row.get(0)?,
+        user_id: row.get(0)?,
         project_id: row.get(1)?,
         contact_id: row.get(2)?,
         role: row.get(3)?,
@@ -17,7 +17,7 @@ pub fn add(
     contact_id: &str,
     role: Option<&str>,
 ) -> rusqlite::Result<ProjectContact> {
-    let owner_id: String = conn
+    let user_id: String = conn
         .query_row(
             "SELECT ownerId FROM Project WHERE id = ?1",
             params![project_id],
@@ -37,7 +37,7 @@ pub fn add(
         )
         .ok();
     match contact_owner {
-        Some(c) if c == owner_id => {}
+        Some(c) if c == user_id => {}
         Some(_) => {
             return Err(rusqlite::Error::InvalidParameterName(format!(
                 "contact {contact_id} owner mismatch"
@@ -54,7 +54,7 @@ pub fn add(
         "INSERT INTO ProjectContact (ownerId, projectId, contactId, role) \
          VALUES (?1, ?2, ?3, ?4) \
          ON CONFLICT(projectId, contactId) DO UPDATE SET role = excluded.role",
-        params![owner_id, project_id, contact_id, role],
+        params![user_id, project_id, contact_id, role],
     )?;
 
     let pc: ProjectContact = conn.query_row(

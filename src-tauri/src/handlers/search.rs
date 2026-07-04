@@ -9,7 +9,7 @@ use weavine_lib::{business, models::SearchResults};
 
 #[derive(Deserialize)]
 pub struct SearchParams {
-    pub owner_id: String,
+    pub user_id: String,
     pub query: String,
     pub limit: Option<i64>,
     #[serde(default)]
@@ -23,7 +23,7 @@ pub async fn query(
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     business::search::search(
         &conn,
-        &p.owner_id,
+        &p.user_id,
         &p.query,
         p.limit,
         p.include_archived.unwrap_or(true),

@@ -9,7 +9,7 @@ const EVENT_COLS: &str =
 pub(crate) fn row_to_event(row: &rusqlite::Row) -> rusqlite::Result<Event> {
     Ok(Event {
         id: row.get(0)?,
-        owner_id: row.get(1)?,
+        user_id: row.get(1)?,
         title: row.get(2)?,
         event_type: row.get(3)?,
         start_at: row.get(4)?,
@@ -27,7 +27,7 @@ pub(crate) fn row_to_event(row: &rusqlite::Row) -> rusqlite::Result<Event> {
 
 pub fn list(
     conn: &Connection,
-    owner_id: &str,
+    user_id: &str,
     contact_id: Option<&str>,
     project_id: Option<&str>,
     start_after: Option<&str>,
@@ -38,7 +38,7 @@ pub fn list(
     let limit = limit.unwrap_or(100);
 
     let mut sql = format!("SELECT {EVENT_COLS} FROM Event WHERE ownerId = ?1");
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(owner_id.to_string())];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
     if let Some(cid) = contact_id {
@@ -98,7 +98,7 @@ pub fn create(conn: &Connection, input: &CreateEventInput) -> rusqlite::Result<E
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         rusqlite::params![
             &id,
-            &input.owner_id,
+            &input.user_id,
             &input.title,
             &input.event_type,
             &input.start_at,
@@ -229,7 +229,7 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Event> {
     )
 }
 
-pub fn get_upcoming(conn: &Connection, owner_id: &str, limit: Option<i64>) -> rusqlite::Result<Vec<Event>> {
+pub fn get_upcoming(conn: &Connection, user_id: &str, limit: Option<i64>) -> rusqlite::Result<Vec<Event>> {
     let limit = limit.unwrap_or(5);
     let now_iso = chrono::Utc::now()
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
@@ -243,7 +243,7 @@ pub fn get_upcoming(conn: &Connection, owner_id: &str, limit: Option<i64>) -> ru
     )?;
 
     let events = stmt
-        .query_map(rusqlite::params![owner_id, &now_iso, &limit], row_to_event)?
+        .query_map(rusqlite::params![user_id, &now_iso, &limit], row_to_event)?
         .filter_map(|r| r.ok())
         .collect();
 

@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub(crate) fn row_to_reminder(row: &rusqlite::Row) -> rusqlite::Result<Reminder> {
     Ok(Reminder {
         id: row.get(0)?,
-        owner_id: row.get(1)?,
+        user_id: row.get(1)?,
         contact_id: row.get(2)?,
         event_id: row.get(3)?,
         trigger_at: row.get(4)?,
@@ -18,7 +18,7 @@ pub(crate) fn row_to_reminder(row: &rusqlite::Row) -> rusqlite::Result<Reminder>
 
 pub fn list(
     conn: &Connection,
-    owner_id: &str,
+    user_id: &str,
     contact_id: Option<&str>,
     event_id: Option<&str>,
     include_dismissed: Option<bool>,
@@ -31,7 +31,7 @@ pub fn list(
         "SELECT id, ownerId, contactId, eventId, triggerAt, kind, dispatched, dismissed, createdAt \
          FROM Reminder WHERE ownerId = ?1",
     );
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(owner_id.to_string())];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
     if let Some(cid) = contact_id {
@@ -76,7 +76,7 @@ pub fn create(conn: &Connection, input: &CreateReminderInput) -> rusqlite::Resul
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7)",
         rusqlite::params![
             &id,
-            &input.owner_id,
+            &input.user_id,
             &input.contact_id,
             &input.event_id,
             &input.trigger_at,
@@ -197,7 +197,7 @@ pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> r
         conn.execute(
             "INSERT INTO Reminder (id, ownerId, eventId, triggerAt, kind, dispatched, dismissed, createdAt) \
              VALUES (?1, ?2, ?3, ?4, 'event', 0, 0, ?5)",
-            rusqlite::params![id, event.owner_id, event.id, trigger_str, now],
+            rusqlite::params![id, event.user_id, event.id, trigger_str, now],
         )?;
     }
     Ok(())

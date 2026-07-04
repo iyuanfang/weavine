@@ -8,7 +8,7 @@ use rusqlite::Connection;
 
 pub fn search(
     conn: &Connection,
-    owner_id: &str,
+    user_id: &str,
     query: &str,
     limit: Option<i64>,
     include_archived: bool,
@@ -25,7 +25,7 @@ pub fn search(
              ORDER BY updatedAt DESC LIMIT ?3",
         )?;
         let results = stmt
-            .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_contact)?
+            .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_contact)?
             .filter_map(|r| r.ok())
             .collect::<Vec<Contact>>();
         results
@@ -38,7 +38,7 @@ pub fn search(
              ORDER BY occurredAt DESC LIMIT ?3",
         )?;
         let results = stmt
-            .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_interaction)?
+            .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_interaction)?
             .filter_map(|r| r.ok())
             .collect::<Vec<Interaction>>();
         results
@@ -54,7 +54,7 @@ pub fn search(
         );
         let mut stmt = conn.prepare(&sql)?;
         let results = stmt
-            .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_event)?
+            .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_event)?
             .filter_map(|r| r.ok())
             .collect::<Vec<Event>>();
         results
@@ -70,7 +70,7 @@ pub fn search(
         );
         let mut stmt = conn.prepare(&sql)?;
         let results = stmt
-            .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_action)?
+            .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_action)?
             .filter_map(|r| r.ok())
             .collect::<Vec<Action>>();
         results
@@ -86,7 +86,7 @@ pub fn search(
         );
         let mut stmt = conn.prepare(&sql)?;
         let results = stmt
-            .query_map(rusqlite::params![owner_id, &pattern, &limit], row_to_project)?
+            .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_project)?
             .filter_map(|r| r.ok())
             .collect::<Vec<Project>>();
         results

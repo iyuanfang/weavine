@@ -10,7 +10,7 @@ use crate::AppState;
 
 #[derive(Deserialize)]
 pub struct ArchiveSummaryParams {
-    pub owner_id: String,
+    pub user_id: String,
 }
 
 #[derive(Serialize)]
@@ -28,14 +28,14 @@ pub async fn archive_summary(
     Query(p): Query<ArchiveSummaryParams>,
 ) -> Result<Json<ArchiveSummary>, (StatusCode, String)> {
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let summary = compute_summary(&conn, &p.owner_id)
+    let summary = compute_summary(&conn, &p.user_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(summary))
 }
 
 #[derive(Deserialize)]
 pub struct BulkUnarchiveBody {
-    pub owner_id: String,
+    pub user_id: String,
     pub entity: String,
 }
 
@@ -57,21 +57,21 @@ pub async fn bulk_unarchive(
             .execute(
                 "UPDATE Action SET archivedAt = NULL, updatedAt = ?1 \
                  WHERE ownerId = ?2 AND archivedAt IS NOT NULL AND archivedAt >= ?3",
-                rusqlite::params![&cutoff, &body.owner_id, &cutoff],
+                rusqlite::params![&cutoff, &body.user_id, &cutoff],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "event" => conn
             .execute(
                 "UPDATE Event SET archivedAt = NULL, updatedAt = ?1 \
                  WHERE ownerId = ?2 AND archivedAt IS NOT NULL AND archivedAt >= ?3",
-                rusqlite::params![&cutoff, &body.owner_id, &cutoff],
+                rusqlite::params![&cutoff, &body.user_id, &cutoff],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "project" => conn
             .execute(
                 "UPDATE \"Project\" SET archivedAt = NULL, updatedAt = ?1 \
                  WHERE ownerId = ?2 AND archivedAt IS NOT NULL AND archivedAt >= ?3",
-                rusqlite::params![&cutoff, &body.owner_id, &cutoff],
+                rusqlite::params![&cutoff, &body.user_id, &cutoff],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         other => {
@@ -86,7 +86,7 @@ pub async fn bulk_unarchive(
 
 #[derive(Deserialize)]
 pub struct UnarchiveOneBody {
-    pub owner_id: String,
+    pub user_id: String,
     pub entity: String,
     pub id: String,
 }
@@ -102,21 +102,21 @@ pub async fn unarchive_one(
             .execute(
                 "UPDATE Action SET archivedAt = NULL, updatedAt = ?1 \
                  WHERE id = ?2 AND ownerId = ?3",
-                rusqlite::params![&now, &body.id, &body.owner_id],
+                rusqlite::params![&now, &body.id, &body.user_id],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "event" => conn
             .execute(
                 "UPDATE Event SET archivedAt = NULL, updatedAt = ?1 \
                  WHERE id = ?2 AND ownerId = ?3",
-                rusqlite::params![&now, &body.id, &body.owner_id],
+                rusqlite::params![&now, &body.id, &body.user_id],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "project" => conn
             .execute(
                 "UPDATE \"Project\" SET archivedAt = NULL, updatedAt = ?1 \
                  WHERE id = ?2 AND ownerId = ?3",
-                rusqlite::params![&now, &body.id, &body.owner_id],
+                rusqlite::params![&now, &body.id, &body.user_id],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         other => {
@@ -134,7 +134,7 @@ pub async fn unarchive_one(
 
 #[derive(Deserialize)]
 pub struct ArchiveListParams {
-    pub owner_id: String,
+    pub user_id: String,
     pub entity: String,
     pub limit: Option<i64>,
 }
@@ -170,7 +170,7 @@ pub async fn archive_list(
     };
     let mut stmt = conn.prepare(&sql).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let rows: Vec<serde_json::Value> = stmt
-        .query_map(rusqlite::params![&p.owner_id], |r| {
+        .query_map(rusqlite::params![&p.user_id], |r| {
             Ok(serde_json::json!({
                 "id": r.get::<_, String>(0)?,
                 "title": r.get::<_, String>(1)?,
@@ -185,7 +185,7 @@ pub async fn archive_list(
 
 #[derive(Deserialize)]
 pub struct ArchiveCountParams {
-    pub owner_id: String,
+    pub user_id: String,
 }
 
 #[derive(Serialize)]
@@ -203,21 +203,21 @@ pub async fn archive_counts(
     let action: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM Action WHERE ownerId = ?1 AND archivedAt IS NOT NULL",
-            rusqlite::params![&p.owner_id],
+            rusqlite::params![&p.user_id],
             |r| r.get(0),
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let event: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM Event WHERE ownerId = ?1 AND archivedAt IS NOT NULL",
-            rusqlite::params![&p.owner_id],
+            rusqlite::params![&p.user_id],
             |r| r.get(0),
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let project: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM \"Project\" WHERE ownerId = ?1 AND archivedAt IS NOT NULL",
-            rusqlite::params![&p.owner_id],
+            rusqlite::params![&p.user_id],
             |r| r.get(0),
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -228,24 +228,24 @@ pub async fn archive_counts(
     }))
 }
 
-fn compute_summary(conn: &Connection, owner_id: &str) -> rusqlite::Result<ArchiveSummary> {
+fn compute_summary(conn: &Connection, user_id: &str) -> rusqlite::Result<ArchiveSummary> {
     let cutoff = (Utc::now() - Duration::days(30))
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
     Ok(ArchiveSummary {
-        action_count: count(conn, "Action", owner_id, None)?,
-        event_count: count(conn, "Event", owner_id, None)?,
-        project_count: count(conn, "Project", owner_id, None)?,
-        action_30d: count(conn, "Action", owner_id, Some(&cutoff))?,
-        event_30d: count(conn, "Event", owner_id, Some(&cutoff))?,
-        project_30d: count(conn, "Project", owner_id, Some(&cutoff))?,
+        action_count: count(conn, "Action", user_id, None)?,
+        event_count: count(conn, "Event", user_id, None)?,
+        project_count: count(conn, "Project", user_id, None)?,
+        action_30d: count(conn, "Action", user_id, Some(&cutoff))?,
+        event_30d: count(conn, "Event", user_id, Some(&cutoff))?,
+        project_30d: count(conn, "Project", user_id, Some(&cutoff))?,
     })
 }
 
 fn count(
     conn: &Connection,
     table: &str,
-    owner_id: &str,
+    user_id: &str,
     since: Option<&str>,
 ) -> rusqlite::Result<i64> {
     let quoted = match table {
@@ -263,9 +263,9 @@ fn count(
         ),
     };
     if since.is_some() {
-        conn.query_row(&sql, rusqlite::params![owner_id, since.unwrap()], |r| r.get(0))
+        conn.query_row(&sql, rusqlite::params![user_id, since.unwrap()], |r| r.get(0))
     } else {
-        conn.query_row(&sql, rusqlite::params![owner_id], |r| r.get(0))
+        conn.query_row(&sql, rusqlite::params![user_id], |r| r.get(0))
     }
 }
 

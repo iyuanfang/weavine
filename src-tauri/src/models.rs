@@ -28,7 +28,7 @@ pub struct LocalUser {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Contact {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub nickname: String,
     pub name: Option<String>,
     pub company: Option<String>,
@@ -52,7 +52,7 @@ pub struct Contact {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Tag {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub name: String,
     pub color: Option<String>,
     pub created_at: String,
@@ -62,7 +62,7 @@ pub struct Tag {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Event {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub title: String,
     #[serde(rename = "type")]
     pub event_type: String,
@@ -82,7 +82,7 @@ pub struct Event {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Interaction {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub contact_id: Option<String>,
     pub action_id: Option<String>,
     pub event_id: Option<String>,
@@ -96,7 +96,7 @@ pub struct Interaction {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Project {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub title: String,
     pub description: Option<String>,
     pub template: String,
@@ -113,7 +113,7 @@ pub struct Project {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Action {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub title: String,
     pub description: Option<String>,
     pub status: String,
@@ -130,7 +130,7 @@ pub struct Action {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectContact {
-    pub owner_id: String,
+    pub user_id: String,
     pub project_id: String,
     pub contact_id: String,
     pub role: Option<String>,
@@ -148,7 +148,7 @@ pub struct ProjectContactWithContact {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Reminder {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub contact_id: Option<String>,
     pub event_id: Option<String>,
     pub trigger_at: String,
@@ -162,7 +162,7 @@ pub struct Reminder {
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Setting {
     pub id: String,
-    pub owner_id: String,
+    pub user_id: String,
     pub key: String,
     pub value: String,
     pub updated_at: String,
@@ -174,7 +174,7 @@ pub struct Setting {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListContactsParams {
-    pub owner_id: String,
+    pub user_id: String,
     pub tag_id: Option<String>,
     pub search: Option<String>,
     pub importance: Option<String>,
@@ -182,7 +182,7 @@ pub struct ListContactsParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateContactInput {
-    pub owner_id: String,
+    pub user_id: String,
     pub nickname: String,
     pub name: Option<String>,
     pub company: Option<String>,
@@ -232,7 +232,7 @@ pub struct SearchResults {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateActionInput {
-    pub owner_id: String,
+    pub user_id: String,
     pub title: String,
     pub description: Option<String>,
     pub status: Option<String>,
@@ -265,7 +265,7 @@ pub struct UpdateActionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateEventInput {
-    pub owner_id: String,
+    pub user_id: String,
     pub title: String,
     #[serde(rename = "type")]
     pub event_type: String,
@@ -301,7 +301,7 @@ pub struct UpdateEventInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateInteractionInput {
-    pub owner_id: String,
+    pub user_id: String,
     pub contact_id: Option<String>,
     pub action_id: Option<String>,
     pub event_id: Option<String>,
@@ -328,7 +328,7 @@ pub struct UpdateInteractionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateProjectInput {
-    pub owner_id: String,
+    pub user_id: String,
     pub title: String,
     pub description: Option<String>,
     pub template: String,
@@ -355,7 +355,7 @@ pub struct UpdateProjectInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateReminderInput {
-    pub owner_id: String,
+    pub user_id: String,
     pub contact_id: Option<String>,
     pub event_id: Option<String>,
     pub trigger_at: String,
@@ -378,7 +378,7 @@ pub struct UpdateReminderInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTagInput {
-    pub owner_id: String,
+    pub user_id: String,
     pub name: String,
 }
 

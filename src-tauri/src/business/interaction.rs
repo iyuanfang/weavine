@@ -5,7 +5,7 @@ use uuid::Uuid;
 pub(crate) fn row_to_interaction(row: &rusqlite::Row) -> rusqlite::Result<Interaction> {
     Ok(Interaction {
         id: row.get(0)?,
-        owner_id: row.get(1)?,
+        user_id: row.get(1)?,
         contact_id: row.get(2)?,
         action_id: row.get(3)?,
         event_id: row.get(4)?,
@@ -18,7 +18,7 @@ pub(crate) fn row_to_interaction(row: &rusqlite::Row) -> rusqlite::Result<Intera
 
 pub fn list(
     conn: &Connection,
-    owner_id: &str,
+    user_id: &str,
     contact_id: Option<&str>,
     action_id: Option<&str>,
     event_id: Option<&str>,
@@ -30,7 +30,7 @@ pub fn list(
         "SELECT id, ownerId, contactId, actionId, eventId, occurredAt, channel, summary, createdAt \
          FROM Interaction WHERE ownerId = ?1",
     );
-    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(owner_id.to_string())];
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
     if let Some(cid) = contact_id {
@@ -76,7 +76,7 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         rusqlite::params![
             &id,
-            &input.owner_id,
+            &input.user_id,
             &input.contact_id,
             &input.action_id,
             &input.event_id,
