@@ -28,6 +28,13 @@ export function EventDetail() {
     enabled: !!contactId,
   });
 
+  const projectId = eventQuery.data?.project_id ?? null;
+  const projectQuery = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => adapter.projects.get(projectId!),
+    enabled: !!projectId && projectId !== 'projectId',
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (eventId: string) => adapter.events.delete(eventId),
     onSuccess: () => navigate('/calendar'),
@@ -91,50 +98,118 @@ export function EventDetail() {
         }
       />
 
-      {event.location && (
-        <section className="section">
-          <h2 className="section__title">地点</h2>
-          <div className="card" style={{ marginTop: 10, padding: 16 }}>
-            <div style={{ fontSize: 14 }}>📍 {event.location}</div>
+      <section className="section">
+        <h2 className="section__title">详情</h2>
+        <div className="card" style={{ marginTop: 10, padding: 16 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '14px 24px',
+            }}
+          >
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                类型
+              </div>
+              <div style={{ fontSize: 14 }}>{formatEventType(event.type) || '—'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                开始时间
+              </div>
+              <div style={{ fontSize: 14 }}>{start.toLocaleString('zh-CN')}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                结束时间
+              </div>
+              {end ? (
+                <div style={{ fontSize: 14 }}>{end.toLocaleString('zh-CN')}</div>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                提前提醒
+              </div>
+              {event.reminder_lead_minutes != null ? (
+                <div style={{ fontSize: 14 }}>⏰ {event.reminder_lead_minutes} 分钟</div>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                地点
+              </div>
+              {event.location ? (
+                <div style={{ fontSize: 14 }}>📍 {event.location}</div>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       <section className="section">
         <h2 className="section__title">关联</h2>
         <div className="card" style={{ marginTop: 10, padding: 16 }}>
-          <div className="text-xs text-muted" style={{ marginBottom: 6 }}>
-            联系人
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '12px 24px',
+            }}
+          >
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                联系人
+              </div>
+              {contactId && contactQuery.data ? (
+                <Link
+                  to={`/contacts/${contactId}`}
+                  className="tag-chip tag-chip--active"
+                >
+                  {contactQuery.data.nickname ?? contactQuery.data.name ?? '?'}
+                </Link>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                项目
+              </div>
+              {projectQuery.data ? (
+                <Link
+                  to={`/projects/${projectQuery.data.id}`}
+                  className="tag-chip tag-chip--active"
+                >
+                  {projectQuery.data.title}
+                </Link>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
           </div>
-          {contactId ? (
-            <Link
-              to={`/contacts/${contactId}`}
-              className="tag-chip"
-              style={{
-                background: 'var(--accent-soft)',
-                borderColor: 'var(--accent)',
-                color: 'var(--accent)',
-                textDecoration: 'none',
-              }}
-            >
-              {contactQuery.data?.nickname ?? contactQuery.data?.name ?? '?'}
-            </Link>
-          ) : (
-            <div className="text-sm text-muted">无</div>
-          )}
         </div>
       </section>
 
-      {event.notes && (
-        <section className="section">
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
+      <section className="section">
+        <h2 className="section__title">备注</h2>
+        <div className="card" style={{ marginTop: 10, padding: 16, minHeight: 60 }}>
+          {event.notes ? (
             <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
               {event.notes}
             </p>
-          </div>
-        </section>
-      )}
+          ) : (
+            <span className="text-sm text-muted">暂无备注</span>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

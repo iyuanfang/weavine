@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { UpdateActionInput } from '../lib/adapter/types';
+import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
 
 const STATUS_LABEL: Record<string, string> = {
   inbox: '📥 收件箱',
@@ -51,6 +52,13 @@ export function ActionDetail() {
     acc[c.id] = { id: c.id, nickname: c.nickname, name: c.name };
     return acc;
   }, {});
+
+  const projectId = actionQuery.data?.project_id ?? null;
+  const projectQuery = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => adapter.projects.get(projectId!),
+    enabled: !!projectId && projectId !== 'projectId',
+  });
 
   const completeMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
@@ -161,17 +169,6 @@ export function ActionDetail() {
         }
       />
 
-      {action.description && (
-        <section className="section">
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-              {action.description}
-            </p>
-          </div>
-        </section>
-      )}
-
       <section className="section">
         <h2 className="section__title">详情</h2>
         <div className="card" style={{ marginTop: 10, padding: 16 }}>
@@ -179,40 +176,101 @@ export function ActionDetail() {
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '12px 24px',
+              gap: '14px 24px',
             }}
           >
-            {action.category && (
-              <div>
-                <div className="text-xs text-muted" style={{ marginBottom: 2 }}>
-                  分类
-                </div>
-                <div style={{ fontSize: 14 }}>{action.category}</div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                分类
               </div>
-            )}
-            {contact && (
-              <div>
-                <div className="text-xs text-muted" style={{ marginBottom: 2 }}>
-                  关联联系人
-                </div>
-                <div style={{ fontSize: 14 }}>
-                  <Link to={`/contacts/${contact.id}`} className="tag-chip tag-chip--active">
-                    {contact.nickname ?? contact.name ?? '?'}
-                  </Link>
-                </div>
+              {action.category ? (
+                (() => {
+                  const m = categoryMeta(action.category, ACTION_PRESETS);
+                  return (
+                    <span style={{ fontSize: 14 }}>
+                      <span style={{ marginRight: 4 }}>{m.icon}</span>
+                      {m.label}
+                    </span>
+                  );
+                })()
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                截止时间
               </div>
-            )}
+              {action.due_at ? (
+                <span style={{ fontSize: 14 }}>
+                  📅 {new Date(action.due_at).toLocaleString('zh-CN')}
+                </span>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                关联联系人
+              </div>
+              {contact ? (
+                <Link
+                  to={`/contacts/${contact.id}`}
+                  className="tag-chip tag-chip--active"
+                >
+                  {contact.nickname ?? contact.name ?? '?'}
+                </Link>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                关联项目
+              </div>
+              {projectQuery.data ? (
+                <Link
+                  to={`/projects/${projectQuery.data.id}`}
+                  className="tag-chip tag-chip--active"
+                >
+                  {projectQuery.data.title}
+                </Link>
+              ) : (
+                <span className="text-sm text-muted">—</span>
+              )}
+            </div>
             {action.completed_at && (
               <div>
-                <div className="text-xs text-muted" style={{ marginBottom: 2 }}>
+                <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                   完成时间
                 </div>
                 <div style={{ fontSize: 14 }}>
-                  {new Date(action.completed_at).toLocaleString('zh-CN')}
+                  ✅ {new Date(action.completed_at).toLocaleString('zh-CN')}
                 </div>
               </div>
             )}
+            <div>
+              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+                创建
+              </div>
+              <div className="text-sm text-muted">
+                {new Date(action.created_at).toLocaleString('zh-CN')}
+              </div>
+            </div>
           </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <h2 className="section__title">备注</h2>
+        <div className="card" style={{ marginTop: 10, padding: 16, minHeight: 60 }}>
+          {action.description ? (
+            <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+              {action.description}
+            </p>
+          ) : (
+            <span className="text-sm text-muted">暂无备注</span>
+          )}
         </div>
       </section>
 
