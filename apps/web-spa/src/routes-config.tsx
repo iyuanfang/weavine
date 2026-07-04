@@ -7,6 +7,7 @@ import type { ComponentType, LazyExoticComponent } from 'react';
 import type { RouteObject } from 'react-router-dom';
 
 import { App } from './App';
+import { LoginPage } from './routes/Login';
 import { TodayPage } from './routes/Today';
 import { ContactsList } from './routes/ContactsList';
 import { ContactNew } from './routes/ContactNew';
@@ -42,6 +43,8 @@ export interface AppRoute {
    * Not user-facing.
    */
   label: string;
+  /** Render outside the AppShell (e.g. login). Default false. */
+  bare?: boolean;
 }
 
 /**
@@ -50,6 +53,7 @@ export interface AppRoute {
  * above. Do NOT edit main.tsx directly — it iterates this list.
  */
 export const routes: AppRoute[] = [
+  { path: '/login', Component: LoginPage, label: 'Login' },
   { path: '/', Component: TodayPage, label: 'Today' },
 
   // Placeholder entries below — replaced as Phase 4 lands.

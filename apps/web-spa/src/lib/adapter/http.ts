@@ -54,13 +54,10 @@ const VITE_API_BASE: string = (() => {
 
 // ── Auth helper ────────────────────────────────────────
 
-function getBearerToken(): string | null {
-  if (typeof localStorage === 'undefined') return null;
-  return localStorage.getItem('prm_token');
-}
+import { clearSession, getAccessToken } from '../auth/storage';
 
 function authHeaders(): Record<string, string> {
-  const token = getBearerToken();
+  const token = getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -99,6 +96,13 @@ async function request<R>(
   const resp = await fetch(url, opts);
 
   if (!resp.ok) {
+    if (resp.status === 401 && typeof window !== 'undefined') {
+      clearSession();
+      if (!window.location.pathname.startsWith('/login')) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.assign(`/login?next=${next}`);
+      }
+    }
     let msg: string;
     try {
       msg = await resp.text();

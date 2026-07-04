@@ -1194,3 +1194,113 @@ textarea.input-base {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding: 1.5rem;
+}
+.login-card {
+  width: min(100%, 380px);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+.login-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  text-align: center;
+}
+.login-subtitle {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.95rem;
+}
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--fg-soft);
+}
+.login-field input {
+  font: inherit;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  color: var(--fg);
+}
+.login-field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+.login-field input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.login-error {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+}
+.login-submit {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: var(--accent-fg);
+  cursor: pointer;
+}
+.login-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.login-switch {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.login-switch-btn {
+  font: inherit;
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.login-switch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
