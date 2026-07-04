@@ -37,6 +37,30 @@ pub fn run() {
         }
     };
 
+    {
+        let conn = match database.conn.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                boot_log::log(&format!("sweep: lock failed: {e}"));
+                return;
+            }
+        };
+        let now = chrono::Utc::now();
+        match business::archive_sweep::sweep_archives(&conn, now) {
+            Ok(n) if n > 0 => {
+                let msg = format!("[archive] sweep archived {n} items at startup");
+                boot_log::log(&msg);
+                eprintln!("{msg}");
+            }
+            Ok(_) => boot_log::log("[archive] sweep: nothing to archive"),
+            Err(e) => {
+                let msg = format!("[archive] sweep failed: {e}");
+                boot_log::log(&msg);
+                eprintln!("{msg}");
+            }
+        }
+    }
+
     tauri::Builder::default()
         .manage(database)
         .invoke_handler(tauri::generate_handler![
