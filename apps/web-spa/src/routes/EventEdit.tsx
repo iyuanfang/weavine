@@ -4,6 +4,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
+import { SearchablePicker } from '../components/SearchablePicker';
 import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
@@ -226,35 +227,31 @@ export function EventEdit() {
               <div className="grid-2">
                 <div>
                   <label className="input-label">关联项目</label>
-                  <select
-                    className="input-base"
-                    style={{ cursor: 'pointer' }}
+                  <SearchablePicker
                     value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
-                  >
-                    <option value="">无</option>
-                    {projects.map((p: Project) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setProjectId}
+                    options={projects.map((p: Project) => ({
+                      id: p.id,
+                      label: p.title,
+                      sublabel: p.stage,
+                    }))}
+                    placeholder="搜索项目…"
+                    emptyText="还没有项目"
+                  />
                 </div>
                 <div>
                   <label className="input-label">关联联系人</label>
-                  <select
-                    className="input-base"
-                    style={{ cursor: 'pointer' }}
+                  <SearchablePicker
                     value={contactId}
-                    onChange={(e) => setContactId(e.target.value)}
-                  >
-                    <option value="">无</option>
-                    {contacts.map((c: Contact) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nickname ?? c.name ?? '?'}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setContactId}
+                    options={contacts.map((c: Contact) => ({
+                      id: c.id,
+                      label: c.nickname ?? c.name ?? '?',
+                      sublabel: c.company ?? c.title ?? null,
+                    }))}
+                    placeholder="搜索联系人…"
+                    emptyText="还没有联系人"
+                  />
                 </div>
               </div>
             </div>
