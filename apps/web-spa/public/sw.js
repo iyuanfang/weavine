@@ -1,7 +1,8 @@
-const CACHE = 'prm-v4';
+const CACHE = 'prm-v5';
 
 const PRECACHE_URLS = [
   '/',
+  '/login',
   '/today',
   '/contacts',
   '/calendar',
@@ -25,6 +26,7 @@ const API_PATHS = [
   '/reminders',
   '/settings',
   '/search',
+  '/auth',
   '/diagnostic',
 ];
 
