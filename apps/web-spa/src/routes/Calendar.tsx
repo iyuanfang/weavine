@@ -93,12 +93,13 @@ export function Calendar() {
   }, [monthOffset]);
 
   const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'by-month', monthOffset],
+    queryKey: ['events', ownerId, 'by-month', monthOffset, 'active'],
     queryFn: () =>
       adapter.events.list({
         owner_id: ownerId!,
         start_after: monthStart.toISOString(),
         start_before: monthEnd.toISOString(),
+        archived: 'false',
       }),
     enabled: Boolean(ownerId),
     refetchOnMount: 'always',
@@ -108,6 +109,13 @@ export function Calendar() {
     queryKey: ['events', ownerId, 'upcoming'],
     queryFn: () => adapter.events.upcoming(ownerId!, 5),
     enabled: Boolean(ownerId),
+    refetchOnMount: 'always',
+  });
+
+  const archiveCountsQuery = useQuery({
+    queryKey: ['archive', 'counts', ownerId],
+    queryFn: () => adapter.archive.counts(ownerId!),
+    enabled: !!ownerId,
     refetchOnMount: 'always',
   });
 
@@ -330,6 +338,25 @@ export function Calendar() {
                     </Link>
                   );
                 })}
+              </div>
+            </>
+          )}
+
+          {archiveCountsQuery.data && archiveCountsQuery.data.event > 0 && (
+            <>
+              <div className="filter-panel__divider" />
+              <div className="filter-panel__section">
+                <Link
+                  to="/archive"
+                  className="filter-panel__item"
+                  style={{ opacity: 0.7 }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>📦</span>
+                    <span>已归档 {archiveCountsQuery.data.event} 项</span>
+                  </span>
+                  <span aria-hidden>查看 →</span>
+                </Link>
               </div>
             </>
           )}

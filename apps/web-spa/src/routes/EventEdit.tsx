@@ -13,6 +13,10 @@ import type { Contact, Event, Project, UpdateEventInput } from '../lib/adapter/t
 function toLocalInput(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
+  return formatLocal(d);
+}
+
+function formatLocal(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -67,6 +71,21 @@ export function EventEdit() {
       setHydrated(true);
     }
   }, [eventQuery.data, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || !startAt) return;
+    const start = new Date(startAt);
+    if (Number.isNaN(start.getTime())) return;
+    const inferred = formatLocal(new Date(start.getTime() + 60 * 60 * 1000));
+    if (!endAt) {
+      setEndAt(inferred);
+      return;
+    }
+    const currentEnd = new Date(endAt);
+    if (Number.isNaN(currentEnd.getTime()) || currentEnd.getTime() <= start.getTime()) {
+      setEndAt(inferred);
+    }
+  }, [hydrated, startAt]);
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateEventInput) => adapter.events.update(input),

@@ -10,6 +10,11 @@ import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Contact, CreateEventInput, Event, Project } from '../lib/adapter/types';
 
+function formatLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function EventNew() {
   const adapter = useAdapter();
   const ownerId = useOwnerId();
@@ -31,6 +36,22 @@ export function EventNew() {
   useEffect(() => {
     if (projectIdParam) setProjectId(projectIdParam);
   }, [projectIdParam]);
+
+  useEffect(() => {
+    if (!startAt) return;
+    const start = new Date(startAt);
+    if (Number.isNaN(start.getTime())) return;
+    const inferred = new Date(start.getTime() + 60 * 60 * 1000);
+    const inferredLocal = formatLocal(inferred);
+    if (!endAt) {
+      setEndAt(inferredLocal);
+      return;
+    }
+    const currentEnd = new Date(endAt);
+    if (Number.isNaN(currentEnd.getTime()) || currentEnd.getTime() <= start.getTime()) {
+      setEndAt(inferredLocal);
+    }
+  }, [startAt]);
 
   const contactsQuery = useQuery({
     queryKey: ['contacts', ownerId],
@@ -147,12 +168,13 @@ export function EventNew() {
                   />
                 </div>
                 <div>
-                  <label className="input-label">结束时间</label>
+                  <label className="input-label">结束时间（默认 +1 小时）</label>
                   <input
                     className="input-base"
                     type="datetime-local"
                     value={endAt}
                     onChange={(e) => setEndAt(e.target.value)}
+                    required
                   />
                 </div>
               </div>

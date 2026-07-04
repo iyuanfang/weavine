@@ -35,12 +35,20 @@ export function ProjectsList() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId],
+    queryKey: ['projects', ownerId, 'active'],
     queryFn: () =>
       adapter.projects.list({
         owner_id: ownerId!,
+        archived: 'false',
       }),
     enabled: !!ownerId,
+  });
+
+  const archiveCountsQuery = useQuery({
+    queryKey: ['archive', 'counts', ownerId],
+    queryFn: () => adapter.archive.counts(ownerId!),
+    enabled: !!ownerId,
+    refetchOnMount: 'always',
   });
 
   const projects = projectsQuery.data ?? [];
@@ -163,6 +171,22 @@ export function ProjectsList() {
             </button>
           );
         })}
+      </div>
+
+      <div className="filter-panel__divider" />
+
+      <div className="filter-panel__section">
+        <Link
+          to="/archive"
+          className="filter-panel__item"
+          style={{ opacity: 0.7 }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>📦</span>
+            <span>已归档 {archiveCountsQuery.data?.project ?? 0} 项</span>
+          </span>
+          <span aria-hidden>查看 →</span>
+        </Link>
       </div>
     </>
   );

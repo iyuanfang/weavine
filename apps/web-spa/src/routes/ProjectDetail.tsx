@@ -109,16 +109,26 @@ export function ProjectDetail() {
   });
 
   const tasksQuery = useQuery({
-    queryKey: ['project-actions', id],
+    queryKey: ['project-actions', id, 'active'],
     queryFn: () =>
-      adapter.actions.list({ owner_id: ownerId!, project_id: id, limit: 100 }),
+      adapter.actions.list({
+        owner_id: ownerId!,
+        project_id: id,
+        archived: 'false',
+        limit: 100,
+      }),
     enabled: !!ownerId,
   });
 
   const eventsQuery = useQuery({
-    queryKey: ['project-events', id],
+    queryKey: ['project-events', id, 'active'],
     queryFn: () =>
-      adapter.events.list({ owner_id: ownerId!, project_id: id, limit: 100 }),
+      adapter.events.list({
+        owner_id: ownerId!,
+        project_id: id,
+        archived: 'false',
+        limit: 100,
+      }),
     enabled: !!ownerId,
   });
 

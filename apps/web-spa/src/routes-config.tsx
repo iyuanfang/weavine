@@ -30,6 +30,7 @@ import { TagDetail } from './routes/TagDetail';
 import { InteractionDetail } from './routes/InteractionDetail';
 import { SearchPage } from './routes/Search';
 import { SettingsPage } from './routes/Settings';
+import ArchivePage from './routes/Archive';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -76,6 +77,7 @@ export const routes: AppRoute[] = [
   { path: '/tags/:tagId', Component: TagDetail, label: 'TagDetail' },
   { path: '/search', Component: SearchPage, label: 'Search' },
   { path: '/settings', Component: SettingsPage, label: 'Settings' },
+  { path: '/archive', Component: ArchivePage, label: 'Archive' },
 ];
 
 /**

@@ -14,6 +14,9 @@ import { invoke } from '@tauri-apps/api/core';
 
 import type {
   Action,
+  ArchivedItem,
+  ArchiveCounts,
+  ArchiveSummary,
   Contact,
   CreateActionInput,
   CreateContactInput,
@@ -202,8 +205,37 @@ export class TauriAdapter implements PRMAdapter {
       owner_id: string,
       query: string,
       limit?: number | null,
+      options?: { include_archived?: boolean | null },
     ): Promise<SearchResults> =>
-      invoke<SearchResults>('search', { owner_id, query, limit: limit ?? null }),
+      invoke<SearchResults>('search', {
+        owner_id,
+        query,
+        limit: limit ?? null,
+        include_archived: options?.include_archived ?? true,
+      }),
+  };
+
+  archive = {
+    summary: (owner_id: string): Promise<ArchiveSummary> =>
+      invoke<ArchiveSummary>('archive_summary', { owner_id }),
+    counts: (owner_id: string): Promise<ArchiveCounts> =>
+      invoke<ArchiveCounts>('archive_counts', { owner_id }),
+    list: (
+      owner_id: string,
+      entity: 'action' | 'event' | 'project',
+    ): Promise<ArchivedItem[]> =>
+      invoke<ArchivedItem[]>('list_archive', { owner_id, entity }),
+    unarchiveOne: (
+      owner_id: string,
+      entity: 'action' | 'event' | 'project',
+      id: string,
+    ): Promise<void> =>
+      invoke<void>('unarchive_one', { owner_id, entity, id }),
+    bulkUnarchive: (
+      owner_id: string,
+      entity: 'action' | 'event' | 'project',
+    ): Promise<{ unarchived: number }> =>
+      invoke<{ unarchived: number }>('bulk_unarchive', { owner_id, entity }),
   };
 }
 

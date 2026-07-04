@@ -75,10 +75,11 @@ export function Reminders() {
   }, {});
 
   const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'all'],
+    queryKey: ['events', ownerId, 'all', 'active'],
     queryFn: () =>
       adapter.events.list({
         owner_id: ownerId!,
+        archived: 'false',
         limit: 200,
       }),
     enabled: !!ownerId,

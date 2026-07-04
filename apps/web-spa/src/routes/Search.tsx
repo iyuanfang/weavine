@@ -10,7 +10,7 @@ function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
     const id = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(id);
+    return () => clearInterval(id);
   }, [value, delay]);
   return debounced;
 }
@@ -20,6 +20,7 @@ const SECTION_ICONS: Record<string, string> = {
   互动: '💬',
   日程: '📅',
   待办: '📌',
+  项目: '🎯',
 };
 
 export function SearchPage() {
@@ -27,11 +28,13 @@ export function SearchPage() {
   const ownerId = useOwnerId();
 
   const [query, setQuery] = useState('');
+  const [includeArchived, setIncludeArchived] = useState(true);
   const debouncedQuery = useDebouncedValue(query, 300);
 
   const searchQuery = useQuery({
-    queryKey: ['search', ownerId, debouncedQuery],
-    queryFn: () => adapter.search.query(ownerId!, debouncedQuery),
+    queryKey: ['search', ownerId, debouncedQuery, includeArchived],
+    queryFn: () =>
+      adapter.search.query(ownerId!, debouncedQuery, null, { include_archived: includeArchived }),
     enabled: !!ownerId && debouncedQuery.length > 0,
   });
 
@@ -52,7 +55,9 @@ export function SearchPage() {
   const interactions = results?.interactions ?? [];
   const events = results?.events ?? [];
   const actions = results?.actions ?? [];
-  const totalCount = contacts.length + interactions.length + events.length + actions.length;
+  const projects = results?.projects ?? [];
+  const totalCount =
+    contacts.length + interactions.length + events.length + actions.length + projects.length;
 
   return (
     <div className="page">
@@ -61,7 +66,7 @@ export function SearchPage() {
         subtitle={
           debouncedQuery && results
             ? `「${debouncedQuery}」共 ${totalCount} 条结果`
-            : '跨联系人、互动、日程、待办'
+            : '跨联系人、互动、日程、待办、项目'
         }
       />
 
@@ -74,6 +79,26 @@ export function SearchPage() {
           onChange={(e) => setQuery(e.target.value)}
           autoFocus
         />
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 10,
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(e) => setIncludeArchived(e.target.checked)}
+            style={{ cursor: 'pointer' }}
+          />
+          包含已归档项（默认开启，关闭后只显示活跃内容）
+        </label>
       </div>
 
       {!query.trim() ? (
@@ -127,6 +152,7 @@ export function SearchPage() {
                   minute: '2-digit',
                   hour12: false,
                 }),
+                isArchived: !!e.archived_at,
               }))}
             />
           )}
@@ -144,6 +170,20 @@ export function SearchPage() {
                       day: 'numeric',
                     })
                   : '',
+                isArchived: !!a.archived_at,
+              }))}
+            />
+          )}
+          {projects.length > 0 && (
+            <SearchSection
+              title="项目"
+              viewAllHref="/projects"
+              items={projects.map((p) => ({
+                key: p.id,
+                href: `/projects/${p.id}`,
+                title: p.title,
+                meta: p.stage,
+                isArchived: !!p.archived_at,
               }))}
             />
           )}
@@ -165,7 +205,7 @@ function SearchSection({
 }: {
   title: string;
   viewAllHref: string;
-  items: { key: string; href: string; title: string; meta: string }[];
+  items: { key: string; href: string; title: string; meta: string; isArchived?: boolean }[];
 }) {
   return (
     <section className="section" style={{ marginBottom: 0 }}>
@@ -185,7 +225,10 @@ function SearchSection({
             className="row-card"
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
-            <span className="row-card__title">{item.title}</span>
+            <span className="row-card__title" style={{ opacity: item.isArchived ? 0.65 : 1 }}>
+              {item.isArchived && <span aria-hidden style={{ marginRight: 6 }}>📦</span>}
+              {item.title}
+            </span>
             {item.meta && <span className="row-card__meta">{item.meta}</span>}
           </Link>
         ))}

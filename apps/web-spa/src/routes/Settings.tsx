@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Setting } from '../lib/adapter/types';
+import type { ArchiveSummary, Setting } from '../lib/adapter/types';
 
 export function SettingsPage() {
   const adapter = useAdapter();
@@ -89,6 +90,8 @@ export function SettingsPage() {
           </button>
         }
       />
+
+      <ArchivePanel />
 
       {showAdd && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -236,6 +239,101 @@ function SettingRow({
           删除
         </button>
       </div>
+    </div>
+  );
+}
+function ArchivePanel() {
+  const adapter = useAdapter();
+  const ownerId = useOwnerId();
+  const queryClient = useQueryClient();
+
+  const summaryQuery = useQuery({
+    queryKey: ['archive', 'summary', ownerId],
+    queryFn: () => adapter.archive.summary(ownerId!),
+    enabled: !!ownerId,
+    refetchOnMount: 'always',
+  });
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['archive'] });
+    queryClient.invalidateQueries({ queryKey: ['actions'] });
+    queryClient.invalidateQueries({ queryKey: ['events'] });
+    queryClient.invalidateQueries({ queryKey: ['projects'] });
+  };
+
+  const bulkUnarchiveMutation = useMutation({
+    mutationFn: async (entity: 'action' | 'event' | 'project') =>
+      adapter.archive.bulkUnarchive(ownerId!, entity),
+    onSuccess: invalidateAll,
+  });
+
+  if (!ownerId) return null;
+
+  const summary: ArchiveSummary | undefined = summaryQuery.data;
+
+  const entityRows: Array<{
+    key: 'action' | 'event' | 'project';
+    label: string;
+    rule: string;
+    total: number;
+    recent: number;
+  }> = [
+    { key: 'action', label: '待办', rule: '已完成超过 1 天', total: summary?.action_count ?? 0, recent: summary?.action_30d ?? 0 },
+    { key: 'event', label: '日程', rule: '已结束（按结束时间）', total: summary?.event_count ?? 0, recent: summary?.event_30d ?? 0 },
+    { key: 'project', label: '项目', rule: '进入终止阶段并超过 7 天', total: summary?.project_count ?? 0, recent: summary?.project_30d ?? 0 },
+  ];
+
+  const totalRecent = (summary?.action_30d ?? 0) + (summary?.event_30d ?? 0) + (summary?.project_30d ?? 0);
+  const totalAll = (summary?.action_count ?? 0) + (summary?.event_count ?? 0) + (summary?.project_count ?? 0);
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>📦 数据整理 — 自动归档</h3>
+        <Link to="/archive" style={{ fontSize: 12 }}>查看所有归档 →</Link>
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 12px', lineHeight: 1.6 }}>
+        应用每次启动时会扫描一次。命中的条目会在列表中隐藏，集中到 <Link to="/archive">归档页</Link>，不会丢失 — 取消归档即可恢复。
+      </p>
+      <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>
+            <th style={{ padding: '6px 8px' }}>类型</th>
+            <th style={{ padding: '6px 8px' }}>规则</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>累计</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>30 天内</th>
+            <th style={{ padding: '6px 8px', textAlign: 'right' }}>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entityRows.map((row) => (
+            <tr key={row.key} style={{ borderTop: '1px solid var(--border, #f1f1f1)' }}>
+              <td style={{ padding: '8px' }}>{row.label}</td>
+              <td style={{ padding: '8px', color: 'var(--text-muted)' }}>{row.rule}</td>
+              <td style={{ padding: '8px', textAlign: 'right' }}>{row.total}</td>
+              <td style={{ padding: '8px', textAlign: 'right', fontWeight: row.recent > 0 ? 600 : 400 }}>{row.recent}</td>
+              <td style={{ padding: '8px', textAlign: 'right' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  disabled={bulkUnarchiveMutation.isPending || row.recent === 0}
+                  onClick={() => {
+                    if (confirm(`确定恢复最近 30 天的 ${row.recent} 个已归档${row.label}？`)) {
+                      bulkUnarchiveMutation.mutate(row.key);
+                    }
+                  }}
+                  style={{ fontSize: 11, padding: '3px 8px' }}
+                >
+                  全部恢复
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 0' }}>
+        合计 {totalAll} 项归档，最近 30 天 {totalRecent} 项。
+      </p>
     </div>
   );
 }

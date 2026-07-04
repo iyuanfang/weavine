@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 
 import { useLocalUser } from '../lib/auth';
 
@@ -11,11 +11,16 @@ const navItems = [
   { to: '/projects', label: '项目', icon: '📁' },
   { to: '/reminders', label: '提醒', icon: '🔔' },
   { to: '/tags', label: '标签', icon: '🏷️' },
+  { to: '/archive', label: '归档', icon: '📦' },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading: userLoading } = useLocalUser();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showArchiveTip, setShowArchiveTip] = useState(() => {
+    if (typeof localStorage === 'undefined') return false;
+    return localStorage.getItem('archive-tip-dismissed') !== '1';
+  });
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -99,7 +104,48 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {nav}
       </aside>
 
-      <main className="app-shell__main">{children}</main>
+      <main className="app-shell__main">
+        {showArchiveTip && (
+          <div
+            className="card"
+            role="note"
+            style={{
+              margin: '12px 16px 0',
+              padding: '10px 14px',
+              fontSize: 13,
+              lineHeight: 1.6,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 12,
+              background: 'var(--accent-soft, rgba(139, 92, 246, 0.08))',
+              border: '1px solid var(--accent, #8b5cf6)',
+            }}
+          >
+            <span>
+              📦 <strong>v0.1.7 新增 自动归档</strong>。
+              已完成超过 1 天的待办、已结束的日程、收尾超过 7 天的项目会自动归档到
+              <Link to="/archive" style={{ marginLeft: 4 }}>
+                /archive
+              </Link>
+              。
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                localStorage.setItem('archive-tip-dismissed', '1');
+                setShowArchiveTip(false);
+              }}
+              aria-label="关闭提示"
+              style={{ flexShrink: 0 }}
+            >
+              知道了
+            </button>
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

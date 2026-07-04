@@ -50,22 +50,24 @@ export function ContactDetail() {
   });
 
   const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'for-contact', id],
+    queryKey: ['events', ownerId, 'for-contact', id, 'active'],
     queryFn: () =>
       adapter.events.list({
         owner_id: ownerId!,
         contact_id: id,
+        archived: 'false',
         limit: 20,
       }),
     enabled: !!ownerId,
   });
 
   const actionsQuery = useQuery({
-    queryKey: ['actions', ownerId, 'for-contact', id],
+    queryKey: ['actions', ownerId, 'for-contact', id, 'active'],
     queryFn: () =>
       adapter.actions.list({
         owner_id: ownerId!,
         contact_id: id,
+        archived: 'false',
         limit: 20,
       }),
     enabled: !!ownerId,

@@ -12,6 +12,9 @@
 
 import type {
   Action,
+  ArchivedItem,
+  ArchiveCounts,
+  ArchiveSummary,
   Contact,
   CreateActionInput,
   CreateContactInput,
@@ -329,7 +332,58 @@ export class HttpAdapter implements PRMAdapter {
       owner_id: string,
       query: string,
       limit?: number | null,
+      options?: { include_archived?: boolean | null },
     ): Promise<SearchResults> =>
-      request<SearchResults>(this.baseUrl, 'GET', '/api/search' + qs({ owner_id, query, limit })),
+      request<SearchResults>(
+        this.baseUrl,
+        'GET',
+        '/api/search' +
+          qs({
+            owner_id,
+            query,
+            limit: limit ?? null,
+            include_archived: options?.include_archived ?? true,
+          }),
+      ),
+  };
+
+  archive = {
+    summary: (owner_id: string): Promise<ArchiveSummary> =>
+      request<ArchiveSummary>(this.baseUrl, 'GET', '/api/archive/summary' + qs({ owner_id })),
+
+    counts: (owner_id: string): Promise<ArchiveCounts> =>
+      request<ArchiveCounts>(this.baseUrl, 'GET', '/api/archive/counts' + qs({ owner_id })),
+
+    list: (
+      owner_id: string,
+      entity: 'action' | 'event' | 'project',
+    ): Promise<ArchivedItem[]> =>
+      request<ArchivedItem[]>(
+        this.baseUrl,
+        'GET',
+        '/api/archive/list' + qs({ owner_id, entity, limit: 500 }),
+      ),
+
+    unarchiveOne: (
+      owner_id: string,
+      entity: 'action' | 'event' | 'project',
+      id: string,
+    ): Promise<void> =>
+      request<void>(this.baseUrl, 'POST', '/api/archive/unarchive-one', {
+        owner_id,
+        entity,
+        id,
+      }),
+
+    bulkUnarchive: (
+      owner_id: string,
+      entity: 'action' | 'event' | 'project',
+    ): Promise<{ unarchived: number }> =>
+      request<{ unarchived: number }>(
+        this.baseUrl,
+        'POST',
+        '/api/archive/bulk-unarchive',
+        { owner_id, entity },
+      ),
   };
 }

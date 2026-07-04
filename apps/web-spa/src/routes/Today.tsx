@@ -45,6 +45,7 @@ export function TodayPage() {
     queryFn: () =>
       adapter.actions.list({
         owner_id: ownerId!,
+        archived: 'false',
         limit: 200,
       }),
     enabled: Boolean(ownerId),

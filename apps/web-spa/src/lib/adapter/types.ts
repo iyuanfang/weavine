@@ -69,6 +69,7 @@ export interface Event {
   contact_id: string | null;
   project_id: string | null;
   reminder_lead_minutes: number | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -95,6 +96,7 @@ export interface Project {
   start_at: string | null;
   due_at: string | null;
   completed_at: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -111,6 +113,7 @@ export interface Action {
   contact_id: string | null;
   project_id: string | null;
   completed_at: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -184,6 +187,7 @@ export interface UpdateProjectInput {
   start_at?: string | null;
   due_at?: string | null;
   completed_at?: string | null;
+  archived_at?: string | null;
 }
 
 export interface UpdateContactInput {
@@ -225,6 +229,7 @@ export interface UpdateEventInput {
   contact_id?: string | null;
   project_id?: string | null;
   reminder_lead_minutes?: number | null;
+  archived_at?: string | null;
 }
 
 export interface CreateActionInput {
@@ -250,6 +255,7 @@ export interface UpdateActionInput {
   contact_id?: string | null;
   project_id?: string | null;
   completed_at?: string | null;
+  archived_at?: string | null;
 }
 
 export interface ProjectContact {
@@ -321,6 +327,7 @@ export interface SearchResults {
   interactions: Interaction[];
   events: Event[];
   actions: Action[];
+  projects: Project[];
 }
 
 // ──────────────────────────────────────────────
@@ -349,6 +356,7 @@ export interface PRMAdapter {
       owner_id: string;
       template?: string | null;
       stage?: string | null;
+      archived?: 'true' | 'false' | null;
       limit?: number | null;
     }): Promise<Project[]>;
     get(id: string): Promise<Project>;
@@ -365,6 +373,7 @@ export interface PRMAdapter {
       project_id?: string | null;
       start_after?: string | null;
       start_before?: string | null;
+      archived?: 'true' | 'false' | null;
       limit?: number | null;
     }): Promise<Event[]>;
     get(id: string): Promise<Event>;
@@ -380,6 +389,7 @@ export interface PRMAdapter {
       status?: string | null;
       contact_id?: string | null;
       project_id?: string | null;
+      archived?: 'true' | 'false' | null;
       limit?: number | null;
     }): Promise<Action[]>;
     get(id: string): Promise<Action>;
@@ -440,6 +450,36 @@ export interface PRMAdapter {
       owner_id: string,
       query: string,
       limit?: number | null,
+      options?: { include_archived?: boolean | null },
     ): Promise<SearchResults>;
   };
+
+  archive: {
+    summary(owner_id: string): Promise<ArchiveSummary>;
+    counts(owner_id: string): Promise<ArchiveCounts>;
+    list(owner_id: string, entity: 'action' | 'event' | 'project'): Promise<ArchivedItem[]>;
+    unarchiveOne(owner_id: string, entity: 'action' | 'event' | 'project', id: string): Promise<void>;
+    bulkUnarchive(owner_id: string, entity: 'action' | 'event' | 'project'): Promise<{ unarchived: number }>;
+  };
+}
+
+export interface ArchiveSummary {
+  action_count: number;
+  event_count: number;
+  project_count: number;
+  action_30d: number;
+  event_30d: number;
+  project_30d: number;
+}
+
+export interface ArchiveCounts {
+  action: number;
+  event: number;
+  project: number;
+}
+
+export interface ArchivedItem {
+  id: string;
+  title: string;
+  archived_at: string;
 }
