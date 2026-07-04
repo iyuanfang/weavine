@@ -37,3 +37,4 @@ CREATE TABLE refresh_token (
 
 CREATE INDEX IF NOT EXISTS idx_refresh_token_user ON refresh_token(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_token_device ON refresh_token(device_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_token_hash ON refresh_token(token_hash);
