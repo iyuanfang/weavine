@@ -64,7 +64,10 @@ export function LoginPage() {
   return (
     <div className="login-shell">
       <div className="login-card">
-        <h1 className="login-title">Weavine</h1>
+        <h1 className="login-title">
+          Weavine
+          <span className="login-tagline">管好人和事</span>
+        </h1>
         <p className="login-subtitle">
           {mode === 'login' ? '登录到您的账户' : '创建一个新账户'}
         </p>

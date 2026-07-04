@@ -132,6 +132,15 @@ button:focus-visible {
   color: var(--accent);
 }
 
+.app-shell__brand-tagline {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
 .app-shell__menu {
   display: flex;
   flex-direction: column;
@@ -1248,6 +1257,16 @@ textarea.input-base {
   letter-spacing: -0.02em;
   color: var(--accent);
   text-align: center;
+  white-space: nowrap;
+}
+.login-tagline {
+  margin-left: 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  opacity: 0.85;
 }
 .login-subtitle {
   margin: 0 0 0.5rem;
