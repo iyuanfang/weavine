@@ -103,8 +103,10 @@ export function ActionsList() {
     return () => clearTimeout(t);
   }, [search]);
 
+  const activeActionsKey = ['actions', ownerId, 'active'];
+
   const actionsQuery = useQuery({
-    queryKey: ['actions', ownerId, 'active'],
+    queryKey: activeActionsKey,
     queryFn: () =>
       adapter.actions.list({
         owner_id: ownerId!,
@@ -131,10 +133,10 @@ export function ActionsList() {
   const updateMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: ['actions', ownerId] });
-      const prev = queryClient.getQueryData<Action[]>(['actions', ownerId]);
+      await queryClient.cancelQueries({ queryKey: activeActionsKey });
+      const prev = queryClient.getQueryData<Action[]>(activeActionsKey);
       if (prev) {
-        queryClient.setQueryData<Action[]>(['actions', ownerId], (old) =>
+        queryClient.setQueryData<Action[]>(activeActionsKey, (old) =>
           (old ?? []).map((a) =>
             a.id === input.id
               ? {
@@ -151,10 +153,10 @@ export function ActionsList() {
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['actions', ownerId], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(activeActionsKey, ctx.prev);
     },
     onSuccess: (data) => {
-      queryClient.setQueryData<Action[]>(['actions', ownerId], (old) =>
+      queryClient.setQueryData<Action[]>(activeActionsKey, (old) =>
         (old ?? []).map((a) => (a.id === data.id ? data : a)),
       );
     },
@@ -163,17 +165,17 @@ export function ActionsList() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => adapter.actions.delete(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['actions', ownerId] });
-      const prev = queryClient.getQueryData<Action[]>(['actions', ownerId]);
+      await queryClient.cancelQueries({ queryKey: activeActionsKey });
+      const prev = queryClient.getQueryData<Action[]>(activeActionsKey);
       if (prev) {
-        queryClient.setQueryData<Action[]>(['actions', ownerId], (old) =>
+        queryClient.setQueryData<Action[]>(activeActionsKey, (old) =>
           (old ?? []).filter((a) => a.id !== id),
         );
       }
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['actions', ownerId], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(activeActionsKey, ctx.prev);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
