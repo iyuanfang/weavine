@@ -1,0 +1,19 @@
+[package]
+name = "weavine-server"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+weavine = { path = "../src-tauri", default-features = false, features = ["sqlx"] }
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid", "migrate", "macros"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "set-header"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+tower = "0.5"
+bcrypt = "0.15"
+jsonwebtoken = "9"
+rand = "0.8"

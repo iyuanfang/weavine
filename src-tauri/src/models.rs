@@ -25,6 +25,7 @@ pub struct LocalUser {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Contact {
     pub id: String,
     pub owner_id: String,
@@ -43,10 +44,12 @@ pub struct Contact {
     pub last_contacted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[cfg_attr(feature = "sqlx", sqlx(skip))]
     pub tags: Vec<Tag>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Tag {
     pub id: String,
     pub owner_id: String,
@@ -56,6 +59,7 @@ pub struct Tag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Event {
     pub id: String,
     pub owner_id: String,
@@ -75,6 +79,7 @@ pub struct Event {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Interaction {
     pub id: String,
     pub owner_id: String,
@@ -88,6 +93,7 @@ pub struct Interaction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Project {
     pub id: String,
     pub owner_id: String,
@@ -104,6 +110,7 @@ pub struct Project {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Action {
     pub id: String,
     pub owner_id: String,
@@ -138,6 +145,7 @@ pub struct ProjectContactWithContact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Reminder {
     pub id: String,
     pub owner_id: String,
@@ -151,6 +159,7 @@ pub struct Reminder {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Setting {
     pub id: String,
     pub owner_id: String,

@@ -40,5 +40,9 @@ bcrypt = "0.15"
 jsonwebtoken = "9"
 rand = "0.8"
 
+# sqlx: optional — only activated when server crate depends with features=["sqlx"]
+# Provides FromRow derive for models without pulling in runtime deps.
+sqlx = { version = "0.8", optional = true, default-features = false, features = ["macros"] }
+
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
