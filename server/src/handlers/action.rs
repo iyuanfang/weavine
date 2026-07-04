@@ -73,7 +73,7 @@ pub async fn create(
     .bind(body.get("title").and_then(|v| v.as_str()).unwrap_or(""))
     .bind(body.get("description").and_then(|v| v.as_str()))
     .bind(body.get("status").and_then(|v| v.as_str()).unwrap_or("inbox"))
-    .bind(body.get("priority").and_then(|v| v.as_i64()).unwrap_or(0))
+    .bind(body.get("priority").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0))
     .bind(body.get("category").and_then(|v| v.as_str()))
     .bind(body.get("due_at").and_then(|v| v.as_str()))
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
