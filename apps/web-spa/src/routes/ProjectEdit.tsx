@@ -18,6 +18,13 @@ export function ProjectEdit() {
     queryFn: () => adapter.projects.get(id),
   });
 
+  const stagesQuery = useQuery({
+    queryKey: ['project-stages', projectQuery.data?.template ?? ''],
+    queryFn: () => adapter.projects.stages(projectQuery.data!.template),
+    enabled: !!projectQuery.data?.template,
+    staleTime: Infinity,
+  });
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [stage, setStage] = useState('');
@@ -71,8 +78,6 @@ export function ProjectEdit() {
       </div>
     );
   }
-
-  const project = projectQuery.data!;
 
   return (
     <div className="page page--narrow">
@@ -147,24 +152,14 @@ export function ProjectEdit() {
                   style={{ cursor: 'pointer' }}
                   value={stage}
                   onChange={(e) => setStage(e.target.value)}
+                  disabled={stagesQuery.isLoading}
                 >
                   <option value="">保持不变</option>
-                  {project.template && (
-                    <>
-                      {(() => {
-                        const stages: Record<string, string[]> = {
-                          general: ['计划', '进行中', '已完成'],
-                          sales: ['线索', '沟通', '报价', '中标', '丢单'],
-                          event_prep: ['筹备中', '进行中', '已收尾'],
-                        };
-                        return (stages[project.template] ?? []).map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ));
-                      })()}
-                    </>
-                  )}
+                  {(stagesQuery.data ?? []).map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

@@ -8,7 +8,7 @@ import { useOwnerId } from '../lib/auth';
 const TEMPLATE_LABELS: Record<string, string> = {
   general: '通用项目',
   sales: '销售管线',
-  event_prep: '活动筹备',
+  product_dev: '产品开发',
 };
 
 type TabKey = 'overview' | 'people' | 'tasks' | 'schedule';

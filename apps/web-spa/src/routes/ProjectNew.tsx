@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
@@ -9,14 +9,8 @@ import type { CreateProjectInput } from '../lib/adapter/types';
 const TEMPLATES = [
   { value: 'general', label: '通用项目' },
   { value: 'sales', label: '销售管线' },
-  { value: 'event_prep', label: '活动筹备' },
+  { value: 'product_dev', label: '产品开发' },
 ] as const;
-
-const TEMPLATE_STAGES: Record<string, string[]> = {
-  general: ['计划', '进行中', '已完成'],
-  sales: ['线索', '沟通', '报价', '中标', '丢单'],
-  event_prep: ['筹备中', '进行中', '已收尾'],
-};
 
 export function ProjectNew() {
   const adapter = useAdapter();
@@ -29,6 +23,13 @@ export function ProjectNew() {
   const [template, setTemplate] = useState('general');
   const [startAt, setStartAt] = useState('');
   const [dueAt, setDueAt] = useState('');
+
+  const stagesQuery = useQuery({
+    queryKey: ['project-stages', template],
+    queryFn: () => adapter.projects.stages(template),
+    enabled: !!template,
+    staleTime: Infinity,
+  });
 
   const createMutation = useMutation({
     mutationFn: (input: CreateProjectInput) => adapter.projects.create(input),
@@ -55,7 +56,7 @@ export function ProjectNew() {
     return <div className="loading">正在加载用户…</div>;
   }
 
-  const stages = TEMPLATE_STAGES[template] ?? [];
+  const stages = stagesQuery.data ?? [];
 
   return (
     <div className="page page--narrow">

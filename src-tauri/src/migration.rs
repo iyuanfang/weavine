@@ -373,6 +373,39 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         }
     }
 
+    // Data migration: event_prep removed; map existing event_prep projects to general.
+    // Stage mapping preserves data: 筹备中 → 待启动, 进行中 → 进行中, 已收尾 → 已完成.
+    let event_prep_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM \"Project\" WHERE template = 'event_prep'",
+        [],
+        |r| r.get(0),
+    )?;
+    if event_prep_count > 0 {
+        conn.execute_batch(
+            "UPDATE \"Project\" SET template = 'general', stage = '待启动', updatedAt = CURRENT_TIMESTAMP \
+             WHERE template = 'event_prep' AND stage = '筹备中'; \
+             UPDATE \"Project\" SET template = 'general', stage = '进行中', updatedAt = CURRENT_TIMESTAMP \
+             WHERE template = 'event_prep' AND stage = '进行中'; \
+             UPDATE \"Project\" SET template = 'general', stage = '已完成', updatedAt = CURRENT_TIMESTAMP \
+             WHERE template = 'event_prep' AND stage = '已收尾';",
+        )?;
+    }
+
+    // Data migration: general stage 计划 renamed to 待启动 (was renamed as part of
+    // the 4-stage general template redesign: 待启动/进行中/待收尾/已完成).
+    let legacy_general_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM \"Project\" WHERE template = 'general' AND stage = '计划'",
+        [],
+        |r| r.get(0),
+    )?;
+    if legacy_general_count > 0 {
+        conn.execute(
+            "UPDATE \"Project\" SET stage = '待启动', updatedAt = CURRENT_TIMESTAMP \
+             WHERE template = 'general' AND stage = '计划'",
+            [],
+        )?;
+    }
+
     Ok(())
 }
 

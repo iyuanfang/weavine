@@ -10,20 +10,20 @@ import type { Project } from '../lib/adapter/types';
 const TEMPLATE_LABELS: Record<string, string> = {
   general: '通用项目',
   sales: '销售管线',
-  event_prep: '活动筹备',
+  product_dev: '产品开发',
 };
 
 const TEMPLATE_COLORS: Record<string, string> = {
   general: '#6366f1',
   sales: '#f59e0b',
-  event_prep: '#10b981',
+  product_dev: '#8b5cf6',
 };
 
 const TEMPLATE_FILTERS = [
   { value: 'all', label: '全部', color: '#9ca3af' },
   { value: 'general', label: '通用项目', color: TEMPLATE_COLORS.general },
   { value: 'sales', label: '销售管线', color: TEMPLATE_COLORS.sales },
-  { value: 'event_prep', label: '活动筹备', color: TEMPLATE_COLORS.event_prep },
+  { value: 'product_dev', label: '产品开发', color: TEMPLATE_COLORS.product_dev },
 ] as const;
 
 export function ProjectsList() {
