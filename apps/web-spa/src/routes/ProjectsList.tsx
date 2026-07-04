@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
+import { stageDotStyle } from '../lib/projectStageColor';
 import type { Project } from '../lib/adapter/types';
 
 const TEMPLATE_LABELS: Record<string, string> = {
@@ -295,8 +296,23 @@ function ProjectCard({ project: p }: { project: Project }) {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-          <span className="row-card__meta" style={{ fontSize: 12 }}>
-            阶段: {p.stage}
+          <span
+            className="row-card__meta"
+            style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            阶段:
+            <span
+              aria-hidden
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                marginLeft: 2,
+                ...stageDotStyle(p.template, p.stage),
+              }}
+            />
+            {p.stage}
           </span>
           {p.due_at && (
             <>

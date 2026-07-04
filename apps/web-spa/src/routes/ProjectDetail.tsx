@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
+import { stageColor } from '../lib/projectStageColor';
 
 const TEMPLATE_LABELS: Record<string, string> = {
   general: '通用项目',
@@ -356,7 +357,7 @@ export function ProjectDetail() {
                       fontSize: 13,
                       fontWeight: isCurrent ? 600 : 400,
                       background: isCurrent
-                        ? 'var(--accent)'
+                        ? stageColor(project.template, s)
                         : isPast
                           ? '#e0e7ff'
                           : '#f3f4f6',

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
+import { stageDotStyle } from '../lib/projectStageColor';
 import type { UpdateProjectInput } from '../lib/adapter/types';
 
 export function ProjectEdit() {
@@ -161,6 +162,30 @@ export function ProjectEdit() {
                     </option>
                   ))}
                 </select>
+                {stage && projectQuery.data && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        display: 'inline-block',
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        ...stageDotStyle(projectQuery.data.template, stage),
+                      }}
+                    />
+                    当前选择：{stage}
+                  </div>
+                )}
               </div>
             </div>
           </div>
