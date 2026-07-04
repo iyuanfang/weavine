@@ -642,119 +642,133 @@ export function ProjectDetail() {
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'center',
+                      alignItems: 'flex-start',
+                      gap: 8,
                     }}
                   >
-                    <Link to={`/contacts/${c.id}`} style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
-                      >
-                        <span style={{ fontSize: 14, fontWeight: 600 }}>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <Link to={`/contacts/${c.id}`} style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>
                           {c.nickname}
-                        </span>
-                        {editingRoleFor === c.id ? (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {ROLE_PRESETS.map((r) => (
-                              <button
-                                key={r}
-                                type="button"
-                                onClick={() => {
-                                  updateRoleMutation.mutate({ contact_id: c.id, role: r });
-                                  setEditingRoleFor(null);
-                                }}
-                                style={{
-                                  fontSize: 10,
-                                  padding: '2px 8px',
-                                  borderRadius: 999,
-                                  border: `1px solid ${entry.role === r ? 'var(--accent)' : 'var(--border)'}`,
-                                  background: entry.role === r ? 'var(--accent-soft, #eff6ff)' : 'transparent',
-                                  color: entry.role === r ? 'var(--accent)' : 'var(--muted)',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {r}
-                              </button>
-                            ))}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--muted)',
+                            marginTop: 2,
+                          }}
+                        >
+                          {c.company ?? '—'}
+                          {c.title ? ` · ${c.title}` : ''}
+                        </div>
+                        {c.tags && c.tags.length > 0 && (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--muted)',
+                              marginTop: 4,
+                            }}
+                          >
+                            {c.tags.map((t) => t.name).join(' · ')}
+                          </div>
+                        )}
+                      </Link>
+                      {editingRoleFor === c.id ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 220 }}>
+                          {ROLE_PRESETS.map((r) => (
                             <button
+                              key={r}
                               type="button"
-                              onClick={() => setEditingRoleFor(null)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                updateRoleMutation.mutate({ contact_id: c.id, role: r });
+                                setEditingRoleFor(null);
+                              }}
                               style={{
                                 fontSize: 10,
                                 padding: '2px 8px',
                                 borderRadius: 999,
-                                border: '1px solid var(--border)',
-                                background: 'transparent',
-                                color: 'var(--muted)',
+                                border: `1px solid ${entry.role === r ? 'var(--accent)' : 'var(--border)'}`,
+                                background: entry.role === r ? 'var(--accent-soft, #eff6ff)' : 'transparent',
+                                color: entry.role === r ? 'var(--accent)' : 'var(--muted)',
                                 cursor: 'pointer',
                               }}
                             >
-                              ✕
+                              {r}
                             </button>
-                          </div>
-                        ) : entry.role ? (
+                          ))}
                           <button
                             type="button"
-                            onClick={() => setEditingRoleFor(c.id)}
-                            className="badge"
-                            style={{
-                              background: '#eef2ff',
-                              color: '#4338ca',
-                              fontSize: 10,
-                              cursor: 'pointer',
-                              border: '1px solid #e0e7ff',
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setEditingRoleFor(null);
                             }}
-                            title="点击修改角色"
-                          >
-                            {entry.role} ✎
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingRoleFor(c.id)}
                             style={{
                               fontSize: 10,
                               padding: '2px 8px',
                               borderRadius: 999,
-                              border: '1px dashed var(--border)',
+                              border: '1px solid var(--border)',
                               background: 'transparent',
                               color: 'var(--muted)',
                               cursor: 'pointer',
                             }}
-                            title="设置角色"
                           >
-                            + 角色
+                            ✕
                           </button>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: 'var(--muted)',
-                          marginTop: 2,
-                        }}
-                      >
-                        {c.company ?? '—'}
-                        {c.title ? ` · ${c.title}` : ''}
-                      </div>
-                      {c.tags && c.tags.length > 0 && (
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: 'var(--muted)',
-                            marginTop: 4,
-                          }}
-                        >
-                          {c.tags.map((t) => t.name).join(' · ')}
                         </div>
+                      ) : entry.role ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditingRoleFor(c.id);
+                          }}
+                          style={{
+                            background: '#eef2ff',
+                            color: '#4338ca',
+                            fontSize: 10,
+                            cursor: 'pointer',
+                            border: '1px solid #e0e7ff',
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            flexShrink: 0,
+                          }}
+                          title="点击修改角色"
+                        >
+                          {entry.role} ✎
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditingRoleFor(c.id);
+                          }}
+                          style={{
+                            fontSize: 10,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            border: '1px dashed var(--border)',
+                            background: 'transparent',
+                            color: 'var(--muted)',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
+                          title="设置角色"
+                        >
+                          + 角色
+                        </button>
                       )}
-                    </Link>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
                         if (confirm(`从项目中移除「${c.nickname}」？`)) {
                           removeContactMutation.mutate(c.id);
                         }
