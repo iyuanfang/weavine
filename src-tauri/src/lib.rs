@@ -1,5 +1,6 @@
 pub mod boot_log;
 pub mod business;
+#[cfg(feature = "tauri")]
 pub mod commands;
 pub mod db;
 pub mod migration;
@@ -7,16 +8,36 @@ pub mod models;
 pub mod project_template;
 pub mod tag_color;
 
-use commands::{action, contact, diagnostic, event, interaction, project, project_contact, reminder, search, setting, tag};
-use db::Database;
-use std::fs;
-
+#[cfg(feature = "tauri")]
 use std::sync::OnceLock;
 
+#[cfg(feature = "tauri")]
 static STARTUP_ERROR: OnceLock<String> = OnceLock::new();
 
+#[cfg(feature = "tauri")]
+pub(crate) fn startup_error() -> Option<String> {
+    STARTUP_ERROR.get().map(|s| s.clone())
+}
+
+#[cfg(not(feature = "tauri"))]
+pub(crate) fn startup_error() -> Option<String> {
+    None
+}
+
+#[cfg(feature = "tauri")]
+fn dirs_data_dir_fallback() -> std::path::PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("com.weavine.prm")
+}
+
+#[cfg(feature = "tauri")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use commands::{action, contact, diagnostic, event, interaction, project, project_contact, reminder, search, setting, tag};
+    use db::Database;
+    use std::fs;
+
     let initial_data_dir = dirs_data_dir_fallback();
     boot_log::init(&initial_data_dir);
     boot_log::log("Tauri run() invoked");
@@ -115,8 +136,8 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn dirs_data_dir_fallback() -> std::path::PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("com.weavine.prm")
+#[cfg(not(feature = "tauri"))]
+pub fn run() {
+    eprintln!("weavine_lib::run() is only available with the 'tauri' feature");
+    eprintln!("build the 'weavine-web' bin instead for the web server");
 }
