@@ -145,8 +145,71 @@ jobs:
           path: linux-out/*
           if-no-files-found: error
 
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Cargo dependencies (sccache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: macos-cargo
+          cache-on-failure: true
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app (macOS DMG)
+        id: build
+        run: |
+          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build log on failure
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-build-log-macos
+          path: tauri-build.log
+
+      - name: Stage macOS bundle artifacts
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          echo "Bundle directory tree:"
+          find src-tauri/target/release/bundle -maxdepth 4 -type f || true
+          mkdir -p macos-out
+          find src-tauri/target/release/bundle -type f \( -name '*.dmg' -o -name '*.app' \) -print0 2>/dev/null \
+            | xargs -0 -r -I {} cp -rv {} macos-out/ 2>&1 || echo "No .dmg or .app files found to stage"
+          echo "Staged artifacts:"
+          ls -la macos-out/ || true
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: weavine-macos
+          path: macos-out/*
+          if-no-files-found: error
+
   release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-linux, build-macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -180,6 +243,15 @@ jobs:
         run: |
           # actions/upload-artifact@v4 preserves relative paths
           find artifacts/weavine-linux -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload macOS artifacts to Release
+        run: |
+          find artifacts/weavine-macos -type f \( -name '*.dmg' -o -name '*.app' \) -print0 | \
             xargs -0 gh release upload "${{ github.ref_name }}" \
               --repo "${{ github.repository }}" \
               --clobber

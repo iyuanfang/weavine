@@ -317,3 +317,20 @@ Phase 0+1+2 = the entire feature, in one v0.1.7 release. No per-item UI surface 
 3. **Settings bulk-unarchive limits** — 30 days default; make configurable later?
 4. **Default global search** — keep "all" default or add an obvious "📦 已归档" filter chip? Proposal: keep "all" default (search is for finding); chip is optional.
 5. **Long-term archive data** — never deleted in v2; future "purge archived older than X" setting can be added.
+
+## 12. v0.1.7 Addendum — event end_at safety net
+
+Added in the same v0.1.7 ship to prevent recurring "日程 丢了 结束时间" data and keep auto-archive deterministic (an event with no end_at fell outside the auto-archive rule, since `end_at` was the primary past-time check).
+
+- `EventNew.tsx` — when `start_at` changes and `end_at` is empty or `<=` start, auto-fill `end_at = start_at + 60 min`. The `end_at` input is also marked `required`.
+- `EventEdit.tsx` — same behavior after hydration, so editing an existing event also nudges `end_at` forward when the user pushes `start_at`.
+
+Scope note: a v0.2 snap-to-15-min picker helper was prototyped and reverted in v0.1.7 after live testing — minute picker stays at native 1-min resolution; end_at safety net retained.
+
+## 13. v0.1.7 Addendum — release-channel matrix
+
+Added macOS to the release pipeline.
+
+- `src-tauri/tauri.conf.json` — bundle targets now include `app` and `dmg`.
+- `.github/workflows/release.yml` — new `build-macos` job (macos-latest, Rust targets `aarch64-apple-darwin,x86_64-apple-darwin`, produces universal `.app`/`.dmg`); `release` job `needs:` extended to include it.
+
