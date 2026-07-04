@@ -6,8 +6,8 @@ import { useLocalUser } from '../lib/auth';
 const navItems = [
   { to: '/', label: '今天', icon: '🎯', end: true },
   { to: '/contacts', label: '联系人', icon: '👥' },
-  { to: '/calendar', label: '日程', icon: '📅' },
   { to: '/actions', label: '待办', icon: '✅' },
+  { to: '/calendar', label: '日程', icon: '📅' },
   { to: '/projects', label: '项目', icon: '📁' },
   { to: '/reminders', label: '提醒', icon: '🔔' },
   { to: '/tags', label: '标签', icon: '🏷️' },
