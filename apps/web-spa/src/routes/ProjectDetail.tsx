@@ -229,7 +229,7 @@ export function ProjectDetail() {
   const tabs: { key: TabKey; label: string; count: number | null }[] = [
     { key: 'overview', label: '总览', count: null },
     { key: 'people', label: '联系人', count: people.length },
-    { key: 'tasks', label: '任务', count: tasks.length },
+    { key: 'tasks', label: '待办', count: tasks.length },
     { key: 'schedule', label: '日程', count: events.length },
   ];
 
@@ -446,16 +446,16 @@ export function ProjectDetail() {
             icon="👥"
           />
           <SummaryCard
-            label="任务进度"
+            label="待办进度"
             value={`${taskCounts.done} / ${taskCounts.total}`}
             sub={
               taskCounts.open > 0
                 ? `${taskCounts.open} 项进行中`
                 : tasks.length > 0
                   ? '全部完成 🎉'
-                  : '尚无任务'
+                  : '尚无待办'
             }
-            cta="管理任务"
+            cta="管理待办"
             onClick={() => setTab('tasks')}
             icon="✅"
           />
@@ -474,8 +474,8 @@ export function ProjectDetail() {
           <SummaryCard
             label="快速添加"
             value="+"
-            sub="为项目创建一个新任务"
-            cta="新建任务"
+            sub="为项目创建一个新待办"
+            cta="新建待办"
             onClick={() => navigate(`/actions/new?projectId=${id}`)}
             icon="➕"
           />
@@ -692,14 +692,14 @@ export function ProjectDetail() {
             }}
           >
             <h2 className="section__title" style={{ margin: 0 }}>
-              关联任务
+              关联待办
             </h2>
             <button
               type="button"
               className="btn btn-primary"
               onClick={() => navigate(`/actions/new?projectId=${id}`)}
             >
-              + 新建任务
+              + 新建待办
             </button>
           </div>
 
@@ -709,13 +709,13 @@ export function ProjectDetail() {
             <div className="card">
               <div className="empty-state" style={{ padding: 32 }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-                <div style={{ marginBottom: 12 }}>还没有任务</div>
+                <div style={{ marginBottom: 12 }}>还没有待办</div>
                 <button
                   type="button"
                   className="btn btn-primary"
                   onClick={() => navigate(`/actions/new?projectId=${id}`)}
                 >
-                  创建第一个任务
+                  创建第一个待办
                 </button>
               </div>
             </div>
