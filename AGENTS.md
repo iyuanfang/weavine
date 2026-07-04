@@ -132,3 +132,11 @@ sqlite3 /www/weavine/weavine-web.db "SELECT template, stage, COUNT(*) FROM Proje
 ### Lessons learned (do not repeat)
 
 - 2026-07-04: locally-built Rust binary (rustc 1.96.0) crashed on server (glibc 2.32). Service went down for ~30 seconds during rollback. User was angry. Server-side build with `cargo +1.88.0` is the correct path.
+- 2026-07-05: deleted `src-tauri/src/bin/web_server.rs` (sqlite local HTTP shim). Production runs `server/` (Postgres, sqlx, multi-user, sync engine). The two web stacks had diverged — column naming (snake_case vs camelCase), PG-only columns (`server_revision`, `deleted_at`), extra sync tables — so any "share ORM" refactor costs ~2-3 weeks for ~4,500 lines of duplicated query code. Decision: keep dual stack, share only `weavine_lib::models`. Server-side bugs are now server-side only; don't expect fixes here to magically reach the desktop.
+
+### Two-stack architecture (decided 2026-07-05)
+
+- **Desktop** (`src-tauri/`) — Tauri app, single user, SQLite (`weavine.db`), camelCase columns, rusqlite, `business/` direct queries.
+- **Cloud** (`server/`) — weavine-server binary, multi-user, Postgres, snake_case columns, sqlx 0.8, handlers call `sqlx::query` directly.
+- **Shared**: only `weavine_lib::models` (structs + `#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]`).
+- **Do not** try to introduce a `trait Repo` / shared DAL until v0.2.0c sync schema stabilizes. Schema is still evolving (column renames, new sync columns) — abstracting now means re-abstracting later.
