@@ -12,11 +12,6 @@ crate-type = ["lib", "staticlib"]
 name = "weavine"
 path = "src/main.rs"
 
-[[bin]]
-name = "weavine-web"
-path = "src/bin/web_server.rs"
-required-features = []
-
 [features]
 default = ["tauri"]
 tauri = ["dep:tauri", "dep:tauri-build"]
