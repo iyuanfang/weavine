@@ -1,68 +1,69 @@
-# Archive (归档) — Product Design v1
+# Archive (归档) — Product Design v2 (auto-only)
 
-**Date:** 2026-07-04
+**Date:** 2026-07-04 (updated from v1, same day)
 **Status:** Design only — awaiting implementation approval
-**Author:** Design discussion with user (transcribed by Sisyphus)
+**Author:** Iterative design discussion with user (transcribed by Sisyphus)
 
-## 1. Background
+## 1. Change from v1
 
-Weavine currently models 联系人 / 待办 / 日程 / 项目 / 互动 / 提醒 / 标签。Nothing supports graceful retirement of records that are not currently relevant but should not be deleted.
+v1 had manual archive/unarchive buttons and per-page "显示已归档" toggles. The user revised toward a simpler model: **fully automatic archiving with a single bulk recovery utility, no per-item buttons**.
 
-As data accumulates:
+> 待办 完成 多久，日程 结束多久，项目 完成多久 自动归档。也不需要手动改。
 
-- **项目列表 (ProjectsList)** — completed sales pipeline projects (丢单 / 中标) clutter the active view; users hesitate to delete because the data is real history.
-- **待办列表 (ActionsList)** — "全部" view pulls in 30-day-old completed items; the existing "已完成" tab only segments by status, not by recency.
-- **日程视图 (Calendar)** — events from weeks ago still show in upcoming lists; month navigation is the only temporal filter.
-
-The user proposed an 归档 (archive) feature during review of v0.1.6:
-
-> 归档后页面上不再展示，只在联系人页面展示
-
-This design captures the agreed direction with refinements.
+This document supersedes v1. Schema change is the same; UI surface is dramatically simpler.
 
 ## 2. Design Decisions
 
-### 2.1 Archive ≠ delete ≠ hide-filters
+### 2.1 Auto-archive — fully automatic, no per-item buttons
 
-Three distinct operations, semantic boundary:
+| Decision | Choice | Why |
+|---|---|---|
+| Archive trigger | App startup sweep (lazy, O(n), milliseconds) | No background threads, no timers |
+| Per-entity thresholds | 待办 1 day / 日程 0 days / 项目 7 days | Aggressive; lists stay clean |
+| Manual archive button | **None** | User wanted simplicity |
+| Manual unarchive button | **None** (only bulk) | Forces recovery to be deliberate |
+| Filter panel "显示已归档" toggle | **None** | Archived = out of list views |
+| Contact page archived footer | **None** | Cleaner contact page |
 
-| Operation | Meaning | Reversible? | Confirmation |
-|---|---|---|---|
-| **归档** | Remove from active views; keep in DB | 1 click to unarchive | Optional |
-| **删除** | Permanently remove | No | Required double confirm |
-| **Hide filters** | Just visually filter | Always reversible | None |
+### 2.2 What "终态" means for projects
 
-The product offers all three; users pick the right tool per situation.
+A project is archive-eligible when its current stage is the **terminal stage** of its template.
 
-### 2.2 Archive lives at the entity level, not the contact page
+| Template | Terminal stage(s) |
+|---|---|
+| general | 已完成 |
+| sales | 中标 (won) AND 丢单 (lost) — both terminal |
+| event_prep | 已收尾 |
 
-**Decision (refined from user's original proposal):** archived items are surfaced on each entity's list page via a toggle, and on the contact page as a collapsible, secondary panel — **not** as primary content on the contact page.
+**丢单 projects auto-archive** — terminal by design. After 7 days of no activity, they disappear from lists; search still finds them.
 
-**Why this departs from the user's idea:**
+Non-terminal-stage projects (e.g., 线索 / 沟通 / 报价) never auto-archive regardless of activity.
 
-- Contact page primary purpose is "who is this person". Stuffing unrelated archived projects into it pollutes the information hierarchy.
-- Cross-references: an archived project linked to 3 contacts has no clean "home" contact.
-- Discoverability: a contact-page-only archive creates a dead-end when the user remembers "I archived a project last month" but not which contact it relates to.
+### 2.3 Recovery: global search + settings bulk unarchive
 
-**Surfacing pattern:**
+Two recovery paths, neither per-item:
 
-- Each entity list page (待办 / 日程 / 项目) — toggle "显示已归档" in its filter panel
-- Contact page — each "关联待办 / 项目 / 日程" group has a collapsible footer line "归档 N 项 [▼]" that expands to show the archived items as a sub-list, visually de-emphasized
-- Global search `/search` — includes archived by default; result rows show a 📦 badge; offers "仅显示活跃" filter
+1. **Global search `/search`** — always searches both active and archived. Archived results show with a 📦 badge. Primary recovery path; user must remember or search by hint.
 
-### 2.3 No cascade, no auto-archive
+2. **Settings 批量 unarchive utility** — on every app start, count items archived in the last 30 days, offer bulk unarchive:
 
-- **No cascade:** archiving a project does NOT archive its linked actions/events. Active items remain active.
-- **No auto-archive by time:** the user retains full control. A settings-page utility button ("批量归档 30 天前已完成待办") can do bulk operations on demand, but never silently.
+   ```
+   数据整理
+     待办 — 最近 30 天归档 23 项     [取消归档]
+     日程 — 最近 30 天归档 5 项      [取消归档]
+     项目 — 最近 30 天归档 12 项     [取消归档]
+   ```
 
-### 2.4 Schema addition only
+   The only place unarchive happens. Deliberate cost prevents archive/unarchive churn.
 
-A single nullable column per table — `archivedAt TEXT` — is the only schema change. No type discriminator, no new tables, no migration of existing data (everything stays `NULL` = active).
+### 2.4 Delete remains separate and explicit
 
-## 3. Data Model
+Permanent delete is unchanged: red button on detail pages with double-confirmation modal. Archived-or-not, same rule.
+
+## 3. Schema (unchanged from v1)
 
 ```sql
-ALTER TABLE Action  ADD COLUMN archivedAt TEXT;  -- ISO timestamp or NULL
+ALTER TABLE Action  ADD COLUMN archivedAt TEXT;
 ALTER TABLE Event   ADD COLUMN archivedAt TEXT;
 ALTER TABLE Project ADD COLUMN archivedAt TEXT;
 
@@ -71,244 +72,248 @@ CREATE INDEX idx_event_archivedAt    ON Event(archivedAt);
 CREATE INDEX idx_project_archivedAt  ON Project(archivedAt);
 ```
 
-Semantics:
+`archivedAt` nullable: NULL = active, non-NULL = archived timestamp.
 
-- `archivedAt IS NULL` → active (default)
-- `archivedAt IS NOT NULL` → archived; timestamp = when archived, used for sorting and UI display
+## 4. Auto-Archive Rules
 
-## 4. API Surface
+| Entity | Condition | Threshold | Effect |
+|---|---|---|---|
+| Action | `status='done'` AND `completedAt` < now − 1 day | 1 day | set `archivedAt = now` |
+| Event | `ends_at` < now (use `starts_at` fallback when no ends_at) | 0 days (end-of-event-day) | set `archivedAt = now` |
+| Project | current stage is terminal AND `updated_at` < now − 7 days | 7 days | set `archivedAt = now` |
 
-Reuse existing PUT for archive/unarchive — no new endpoints:
+### 4.1 Edge cases
+
+- **Event without ends_at**: archive when `starts_at < now`.
+- **Project with `completedAt` NULL but terminal stage**: trigger via `updated_at` recency as proxy for "stage has been terminal for X days".
+- **Just-completed item**: never archived instantly; waits full threshold.
+- **Cross-midnight events**: sweep uses `ends_at < now` (not calendar-day math) — handles events spanning midnight cleanly.
+
+### 4.2 Sweep implementation
+
+Single Rust function, called once on app startup:
+
+```rust
+pub fn sweep_archives(conn: &Connection, now: DateTime<Utc>) -> Result<usize> {
+    let now_iso = now.to_rfc3339();
+
+    let n_actions = conn.execute(
+        "UPDATE Action SET archivedAt = ?1 \
+         WHERE archivedAt IS NULL \
+           AND status = 'done' \
+           AND completedAt IS NOT NULL \
+           AND datetime(completedAt) < datetime(?1, '-1 day')",
+        params![now_iso],
+    )?;
+
+    let n_events = conn.execute(
+        "UPDATE Event SET archivedAt = ?1 \
+         WHERE archivedAt IS NULL \
+           AND datetime(COALESCE(ends_at, starts_at)) < datetime(?1)",
+        params![now_iso],
+    )?;
+
+    let terminal_stages = terminal_stages_for_all_templates();
+    let placeholders = vec!["?"; terminal_stages.len()].join(",");
+    let sql = format!(
+        "UPDATE Project SET archivedAt = ?1 \
+         WHERE archivedAt IS NULL \
+           AND stage IN ({placeholders}) \
+           AND datetime(updated_at) < datetime(?1, '-7 day')",
+        placeholders = placeholders,
+    );
+    let mut params_vec: Vec<&dyn ToSql> = vec![&now_iso];
+    for s in &terminal_stages { params_vec.push(s); }
+    let n_projects = conn.execute(&sql, params_vec.as_slice())?;
+
+    Ok(n_actions + n_events + n_projects)
+}
+```
+
+`terminal_stages_for_all_templates()` returns the union of all terminal stages across all templates (e.g., `["已完成", "中标", "丢单", "已收尾"]`). Adding a template later just requires updating this lookup.
+
+## 5. API Surface
+
+Same PUT for archive / unarchive (used by settings bulk utility), plus a small settings-specific endpoint:
 
 ```
 GET  /api/actions?archived=false          # default, only active
 GET  /api/actions?archived=true           # only archived
 GET  /api/actions?archived=all            # everything (used by global search)
-                                            # same params for events / projects
 
-PUT  /api/actions/:id  { archived_at: <iso> | null }    # archive or unarchive
+PUT  /api/actions/:id  { archived_at: <iso> | null }
 PUT  /api/events/:id   { archived_at: <iso> | null }
 PUT  /api/projects/:id { archived_at: <iso> | null }
 
-POST /api/actions/batch  { ids: [...], op: "archive" | "unarchive" | "delete" }
-POST /api/events/batch
-POST /api/projects/batch
+GET  /api/settings/archive-summary          # counts archived in last 30 days per type
+POST /api/settings/bulk-unarchive           # { entity: 'action'|'event'|'project' }
 ```
 
-`archived_at` field in PUT body toggles state: setting to current ISO timestamp archives; setting to `null` unarchives.
+`bulk-unarchive` clears `archived_at = NULL` where `archived_at >= now − 30 days`. Older items remain archived.
 
-`batch` endpoint exists to avoid N round trips for multi-select operations; single record operations still use PUT.
+## 6. UI Behavior
 
-## 5. UI Behavior
+### 6.1 What changes vs current state
 
-### 5.1 Entity list pages
-
-Each list page's filter panel gains a top-row toggle:
-
-```
-┌─────────────────────────────────────────┐
-│ [📦 显示已归档]   17 项                 │  ← always visible
-├─────────────────────────────────────────┤
-│ 搜索 [          ]                      │
-│ 状态 ...                               │
-│ 模板 ...                               │
-└─────────────────────────────────────────┘
-```
-
-When toggle is OFF and there are archived items, show an inline hint once:
-
-```
-这里有 23 项 30 天前完成的事，已自动隐藏。 [打开归档视图]
-```
-
-The hint appears at most once per session, dismissible.
-
-### 5.2 Entity detail pages
-
-**Active state (no archive banner):**
-
-```
-┌──────────────────────────────────────────────┐
-│ ← 列表    编辑    [归档]    [永久删除]        │
-├──────────────────────────────────────────────┤
-│ ... 详情字段 ...                             │
-└──────────────────────────────────────────────┘
-```
-
-**Archived state:**
-
-```
-┌──────────────────────────────────────────────┐
-│ 📦 此项已于 2026-04-12 归档                   │  ← yellow notice
-├──────────────────────────────────────────────┤
-│ ← 列表    [取消归档]    [永久删除]            │  ← different buttons
-├──────────────────────────────────────────────┤
-│ ... 详情字段 (dimmed, opacity 0.6) ...        │
-└──────────────────────────────────────────────┘
-```
-
-- 取消归档 = green primary button → PUT archived_at=null → invalidates queries → navigation back or stay
-- 永久删除 = red → confirm modal "确认永久删除「XXX」？此操作不可撤销。" → DELETE
-
-### 5.3 Archived item visual treatment (any list)
-
-- Row opacity 0.6
-- Right side: 📦 badge with archive date
-- Title not struck-through (preserves readability); background tint `#f9fafb`
-
-### 5.4 Contact page cross-references
-
-For each entity group with linked items at the bottom of the section:
-
-```
-关联项目 (5)
-  - [项目A] 活跃    阶段: 计划       →
-  - [项目B] 活跃    阶段: 中标       →
-  - [项目C] 活跃    阶段: 丢单       →
-  ...
-  ─── 分隔线 ───
-  归档 3 项 [▼ 展开]      ← 折叠态
-```
-
-展开后:
-
-```
-  ─── 分隔线 ───
-  归档 3 项 [▲ 收起]
-  📦 已归档 [项目D]  - 2026-04-12 归档  →
-  📦 已归档 [项目E]  - 2026-03-30 归档  →
-  📦 已归档 [项目F]  - 2026-02-08 归档  →
-```
-
-Only relevant entity groups show this — if no archived items in a group, no footer line.
-
-### 5.5 Today / Calendar temporal views
-
-Archived items **never appear** in:
-
-- `/` 今天 page (today/due/overdue sections)
-- `/calendar` 任何时间的日程块
-- "Upcoming N days" widgets on dashboard
-
-If something is overdue AND archived → it stays hidden, never nag. This is the core privacy guarantee.
-
-### 5.6 Global search `/search`
-
-- Default scope: include both active and archived
-- Each result row carries 📦 badge when archived (next to existing metadata badges)
-- Filter chips at top: `全部 / 仅活跃 / 仅归档` (default 全部)
-
-### 5.7 Multi-select + batch operations
-
-Lists with checkbox column (项目 already has one; add to 待办 / 日程):
-
-```
-☑ 已选 5 项   [归档]  [取消归档]  [永久删除]    [✕]
-```
-
-Bar appears when ≥ 1 selected. Disappears on × click.
-
-### 5.8 First-visit empty state
-
-When user opens an archived view for the first time and sees an empty list:
-
-```
-📦 这里放着所有不急但舍不得删的事。
-
-[关掉 · 暂不归档任何东西]   [看看怎么用]
-```
-
-Dismissible. Doesn't repeat.
-
-## 6. Delete semantics
-
-Two distinct operations:
-
-| Confirmed intent | Path |
+| Surface | v2 behavior |
 |---|---|
-| "Hide from view, keep data" | 归档 |
-| "Erase, no recovery" | 永久删除 |
+| 待办 list | nothing else — archived items disappear from results. **Bottom of filter panel** gains an "📦 已归档 N 项 [查看]" link to `/archive`. |
+| 日程 list | nothing else — past events stop appearing. **Bottom of filter panel** gains an "📦 已归档 N 项 [查看]" link to `/archive`. |
+| 项目 list | nothing else — terminal-stage projects disappear after 7 days. **Bottom of filter panel** gains an "📦 已归档 N 项 [查看]" link to `/archive`. |
+| `/archive` route | New dedicated page. Three tables (待办 / 日程 / 项目), sorted by archived_at DESC, with per-row [取消归档] button + [全部取消归档] per section. The only place per-item cancel-archive buttons exist. |
+| Filter panels | no "显示已归档" toggle (archived still hidden by default) — but each list page's filter-panel bottom gets the "📦 已归档 N 项 [查看]" link |
+| Detail pages | no 归档 / 取消归档 button. Permanent delete still exists. |
+| Contact page cross-references | no archived footer section (recover via /archive or search) |
+| Multi-select / batch | no archive / unarchive actions |
+| Today page | archived items never appear |
+| Calendar view | archived items never appear |
+| Global search `/search` | searches everything by default; archived results show 📦 badge |
+| `/settings` | gains "数据整理" section with bulk-unarchive utility |
 
-**Delete confirmation flow:**
+### 6.2 Filter-panel entry (each list page)
 
-1. Click [永久删除]
-2. Modal: "确认永久删除「XXX」？此操作不可撤销。"
-3. Required: type title text OR click checkbox "我已了解此操作不可撤销"
-4. Confirm → DELETE
-
-The double-gate is intentional — it ensures the user really means it, especially for items they may have spent time creating.
-
-Archived items also accept 永久删除 (no different rule), since the same data-loss risk applies.
-
-## 7. Bulk utility (settings)
-
-A single utility button lives in `/settings` under a "数据整理" section:
+In each list page's left filter panel (待办 / 日程 / 项目), at the bottom (after all existing filter sections), add a single quiet link:
 
 ```
-▢ 批量归档「X 天前已完成的待办」    [执行]
-▢ 批量归档「X 天前已结束的日程」    [执行]
-▢ 批量归档「非最终阶段 90 天前的项目」  [执行]
+─── (separator) ───
+📦 已归档 23 项        [查看 →]
 ```
 
-- Each button opens a confirmation modal with a preview count: "将归档 23 项，确认？"
-- No silent background jobs
-- "X" defaults: 待办 30 天, 日程 7 天, 项目 90 天 — configurable per utility
+Styling: muted text, slightly smaller font. Only shown when count > 0. Clicking takes user to `/archive` (auto-scrolled to the relevant section).
 
-This is the user-triggered auto-archive. Never automatic. Manual unarchive remains 1 click from any list page.
+### 6.3 `/archive` route — dedicated archive view
+
+Single page, three sections, each one a sortable table sorted by `archived_at DESC`:
+
+```
+📦 归档                                    [全部取消归档当前 30 天]
+
+待办 (23)
+  ┌──────────────┬─────────────────┬─────────────┬─────────────┬─────────────┐
+  │ 归档时间      │ 标题            │ 完成于       │ 关联项目     │             │
+  ├──────────────┼─────────────────┼─────────────┼─────────────┼─────────────┤
+  │ 今天 09:14   │ 发邮件          │ 7/2         │ E2E v2      │ [取消归档]  │
+  │ 今天 09:14   │ 跟进 决策人      │ 7/2         │ v0.1.5 e2e  │ [取消归档]  │
+  └──────────────┴─────────────────┴─────────────┴─────────────┴─────────────┘
+
+日程 (5)
+  ... same shape: archived_at / title / when / location / [取消归档]
+
+项目 (12)
+  ... same shape: archived_at / title / stage / template / [取消归档]
+```
+
+This is **the only place** per-item [取消归档] button lives. Justification: user has intentionally navigated to the archive view; 1-click recovery is appropriate here. Everywhere else (lists, details) the rule "no per-item buttons" still holds.
+
+顶部 `[全部取消归档当前 30 天]` 按钮触发的就是 settings 那个 bulk 操作——给非 settings 页一个等价入口。
+
+### 6.4 Unarchive semantics — pure visibility flip, no transformation
+
+When an item is unarchived (per-item or bulk):
+
+- `archived_at = NULL` only
+- All other fields unchanged (status, dates, relations, content)
+- **待办**: if `status='done'`, stays done. User must edit to reopen.
+- **日程**: stays in past (won't appear in upcoming). User must edit dates.
+- **项目**: stays at terminal stage. User must move stage to reopen.
+
+No implicit status / stage transformation. User decides what to do with the recovered item.
+
+### 6.5 Settings page — only UI for archive management
+
+```
+数据整理
+
+自动归档规则
+  待办 完成后 1 天 自动归档
+  日程 结束后（次日） 自动归档
+  项目 进入终态阶段后 7 天 自动归档
+  销售管线的「丢单」也算终态
+  上述规则每次启动自动执行
+
+批量恢复（最近 30 天内自动归档的）
+  待办 23 项        [取消归档]
+  日程 5 项         [取消归档]
+  项目 12 项        [取消归档]
+```
+
+### 6.6 Onboarding hint (first time)
+
+When user first opens the app after this feature ships:
+
+> 完成后 1 天自动归档，不在列表显示。需要找回就用搜索（⌘K），或在「设置 → 数据整理」批量恢复。
+
+Dismissible per user, doesn't repeat.
+
+## 7. What users lose vs v1
+
+| Feature in v1 | In v2? |
+|---|---|
+| Per-item 归档 button | No (auto only) |
+| Per-item 取消归档 button | No (bulk only) |
+| Per-list "显示已归档" toggle | No |
+| Contact page archived footer | No |
+| Filter "归档" on list pages | No |
+
+**Trade-off accepted**: if a user wants to look at one archived item, they must (a) remember or search for it, or (b) bulk-unarchive everything archived in the last 30 days.
+
+Justified by simpler mental model: nothing to manually archive, nothing to remember to unarchive. Items live their lifecycle and disappear quietly; search finds them.
 
 ## 8. Acceptance Criteria
 
 A release is shippable when all of the following hold:
 
 - [ ] DB migration adds `archivedAt` cleanly to all 3 tables; new column nullable
-- [ ] All existing PUT requests still work; new `archived_at` field round-trips correctly
-- [ ] Each list page (待办 / 日程 / 项目) supports `?archived=false|true|all`
-- [ ] Filter panel shows the toggle; OFF by default; warning count when archived > 0 and toggle OFF
-- [ ] Detail page banner appears for archived items; 取消归档 / 永久删除 buttons both work
-- [ ] Archived visual (opacity 0.6 + 📦 badge) consistent across all list pages
-- [ ] Contact page cross-reference footer: collapsed by default; expanded shows archived sub-list with separators
-- [ ] Today page and calendar view **never** include archived items (manually verified)
-- [ ] Global `/search` includes archived by default; 📦 badge on result rows; filter chips work
-- [ ] Multi-select with batch archive / unarchive / delete operations
-- [ ] Bulk utility in `/settings` with the three operations and confirmation modals
-- [ ] Delete confirmation modal requires deliberate intent confirmation
-- [ ] No existing user workflow breaks (data integrity: existing records all stay NULL = active)
-- [ ] Performance: filtering by `archivedAt` uses index; no N+1 regressions
+- [ ] All existing PUT requests still work; new `archived_at` field round-trips
+- [ ] On app startup, archive sweep runs:
+  - Action `status='done'` AND `completedAt < now-1d` → archived
+  - Event `ends_at < now` (or `starts_at` fallback) → archived
+  - Project terminal stage AND `updated_at < now-7d` → archived
+- [ ] Lists (待办 / 日程 / 项目) show only active items; no UI toggle
+- [ ] Detail pages have no archive / unarchive button; permanent delete remains
+- [ ] Contact page cross-reference lists show only active items
+- [ ] Today page and calendar view never show archived items (manually verified)
+- [ ] Global `/search` includes archived by default; 📦 badge on archived rows
+- [ ] Settings page shows archive summary counts on every app start
+- [ ] Settings bulk-unarchive works for each entity type; clears `archived_at` for items archived in last 30 days
+- [ ] First-launch onboarding banner shown once, dismissible
+- [ ] No existing user workflow breaks: existing data stays NULL = active
+- [ ] Sweep completes in < 50ms even with 10k rows
 
-## 9. Open Questions (resolve before implementation)
-
-1. **Should "今日" page show items due-today that are archived?** (see 5.5 — current proposal says NO, but user could argue archived-still-due is "I have to deal with this today")
-2. **Should there be a "归档到项目 [X]" action?** i.e., archiving a todo also offers "actually let's track this under a project" — interact with project flow
-3. **Filter UI: toggle vs segmented?** Toggle is simpler, segmented is more discoverable. Proposal: toggle, can revisit
-4. **Cross-entity bulk unarchive?** E.g., "I unarchived this project, should I unarchive all its related actions too?" — current proposal says NO cascade, but UX hint might be worth a second look
-
-## 10. Phased Rollout
-
-Each phase ships independently; user can stop after any phase:
-
-| Phase | Scope | Tag |
-|---|---|---|
-| **0** | DB migration + Adapter layer + `archived` query param | v0.1.7 |
-| **1** | Detail page banner + 归档/取消归档 button + 永久删除 with confirmation | v0.1.7 |
-| **2** | List page toggle + 归档态 visual + warning hint | v0.1.7 |
-| **3** | Contact page cross-reference footer (collapse/archive sub-list) | v0.1.8 |
-| **4** | Multi-select + batch operations (archive / unarchive / delete) | v0.1.8 |
-| **5** | Bulk utility in `/settings` | v0.1.9 |
-
-Phase 0+1+2 = the core (user can archive from any item and view archived items in a dedicated toggle). Subsequent phases enhance cross-page and bulk flows.
-
-## 11. Decisions Log
+## 9. Decisions Log
 
 | Decision | Choice | Rejected alternative |
 |---|---|---|
-| Where to surface archived items | Entity list toggle + contact page collapsible footer | User proposal: contact page primary |
-| Time-based auto-archive | Off, with manual utility on settings | Auto by 90/30/7 days rule |
-| Cascade on archive | Off | Cascade to related actions/events |
-| Schema change | Add nullable timestamp column | New table, type discriminator |
-| API style | Reuse PUT + add batch endpoint | New archive/unarchive endpoints |
-| Version bump | Stay in v0.1.x progressive | Bump to v0.2.0 |
-| Delete confirmation | Required deliberate intent (type or checkbox) | Simple click confirmation |
+| Manual archive buttons | No — auto only | v1: per-item archive/unarchive |
+| Per-list "显示已归档" toggle | No | v1: user toggle |
+| Contact page archived footer | No | v1: collapsible footer |
+| Multi-select batch archive | No | v1: batch operations |
+| Cascade on archive | No | (same as v1) |
+| Time-based auto-archive | **Yes**, every startup | v1: no auto |
+| Sweep trigger | App startup only | Background thread, timer |
+| Recovery path | Search + `/archive` page + bulk unarchive | Per-item unarchive on lists/details |
+| Sales 丢单 | Auto-archive (terminal stage) | Exempt |
+| Project archive trigger | Terminal stage + `updated_at < now-7d` | Need explicit completedAt |
+| Version bump | Stay v0.1.x | v0.2.0 |
+| Defaults | 待办 1d / 日程 0d / 项目 7d | More aggressive, more lenient |
+| Where archived items show | `/archive` page (dedicated), filter-panel link on each list, global search (📦 badge), never on lists/details/today/calendar/contact-page | Per-list toggle |
+| Unarchive semantics | Pure visibility flip; status/dates/stage unchanged | Implicit reset to active state |
+| Per-item [取消归档] button | Yes on `/archive` only | No buttons anywhere |
 
----
+## 10. Phased Rollout
 
-**Next step:** wait for user approval on this spec. Once approved, the phased rollout begins at Phase 0.
+| Phase | Scope | Tag |
+|---|---|---|
+| **0** | DB migration + Adapter + sweep on startup + global search default-includes archived | v0.1.7 |
+| **1** | Settings page archive summary + bulk-unarchive buttons | v0.1.7 |
+| **2** | First-launch onboarding banner | v0.1.7 |
+
+Phase 0+1+2 = the entire feature, in one v0.1.7 release. No per-item UI surface to build, test, or maintain.
+
+## 11. Open Questions (resolve before implementation)
+
+1. **Time-of-day handling for 日程 0-day threshold** — at 11pm Monday, archive a Tuesday event ending 10pm Tuesday? or wait until end-of-Tuesday? Proposal: use `ends_at < now` (instant as event is past).
+2. **Project auto-archive requires terminal stage?** Yes — non-terminal stages can sit for years without archiving (active work).
+3. **Settings bulk-unarchive limits** — 30 days default; make configurable later?
+4. **Default global search** — keep "all" default or add an obvious "📦 已归档" filter chip? Proposal: keep "all" default (search is for finding); chip is optional.
+5. **Long-term archive data** — never deleted in v2; future "purge archived older than X" setting can be added.

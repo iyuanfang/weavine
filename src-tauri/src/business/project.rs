@@ -4,6 +4,9 @@ use crate::project_template::Template;
 use rusqlite::Connection;
 use uuid::Uuid;
 
+const PROJECT_COLS: &str =
+    "id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, archivedAt, createdAt, updatedAt";
+
 pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
     Ok(Project {
         id: row.get(0)?,
@@ -15,8 +18,9 @@ pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
         start_at: row.get(6)?,
         due_at: row.get(7)?,
         completed_at: row.get(8)?,
-        created_at: row.get(9)?,
-        updated_at: row.get(10)?,
+        archived_at: row.get(9)?,
+        created_at: row.get(10)?,
+        updated_at: row.get(11)?,
     })
 }
 
@@ -25,13 +29,13 @@ pub fn list(
     owner_id: &str,
     template: Option<&str>,
     stage: Option<&str>,
+    archived: Option<&str>,
     limit: Option<i64>,
 ) -> rusqlite::Result<Vec<Project>> {
     let limit = limit.unwrap_or(100);
 
-    let mut sql = String::from(
-        "SELECT id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, createdAt, updatedAt \
-         FROM \"Project\" WHERE ownerId = ?1",
+    let mut sql = format!(
+        "SELECT {PROJECT_COLS} FROM \"Project\" WHERE ownerId = ?1"
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
         vec![Box::new(owner_id.to_string())];
@@ -46,6 +50,15 @@ pub fn list(
         sql.push_str(&format!(" AND stage = ?{}", idx));
         param_values.push(Box::new(s.to_string()));
         idx += 1;
+    }
+    match archived {
+        Some(v) if v == "false" || v == "0" => {
+            sql.push_str(" AND archivedAt IS NULL");
+        }
+        Some(v) if v == "true" || v == "1" => {
+            sql.push_str(" AND archivedAt IS NOT NULL");
+        }
+        _ => {}
     }
 
     sql.push_str(&format!(" ORDER BY updatedAt DESC LIMIT ?{}", idx));
@@ -76,8 +89,8 @@ pub fn create(conn: &Connection, input: &CreateProjectInput) -> rusqlite::Result
 
     conn.execute(
         "INSERT INTO \"Project\" \
-         (id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, createdAt, updatedAt) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+         (id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, archivedAt, createdAt, updatedAt) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             &id,
             &input.owner_id,
@@ -88,14 +101,14 @@ pub fn create(conn: &Connection, input: &CreateProjectInput) -> rusqlite::Result
             &input.start_at,
             &input.due_at,
             None::<String>,
+            None::<String>,
             &now,
             &now,
         ],
     )?;
 
     conn.query_row(
-        "SELECT id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, createdAt, updatedAt \
-         FROM \"Project\" WHERE id = ?1",
+        &format!("SELECT {PROJECT_COLS} FROM \"Project\" WHERE id = ?1"),
         rusqlite::params![&id],
         row_to_project,
     )
@@ -106,7 +119,6 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
-    // Fetch current project to validate stage and manage completed_at
     let current = get(conn, &input.id)?;
     let t = Template::from_str_opt(&current.template).ok_or_else(|| {
         rusqlite::Error::InvalidParameterName(format!(
@@ -131,7 +143,6 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
         param_idx += 1;
     }
     if let Some(ref s) = input.stage {
-        // Validate stage belongs to the template's stages
         if !t.stages().contains(&s.as_str()) {
             return Err(rusqlite::Error::InvalidParameterName(format!(
                 "stage '{}' is not valid for template '{}'",
@@ -154,7 +165,6 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
         param_idx += 1;
     }
 
-    // Handle completed_at based on stage transition
     let stage_updated = input.stage.is_some();
     let new_stage = input.stage.as_deref().unwrap_or(&current.stage);
     let now_terminal = t.is_terminal(new_stage);
@@ -165,22 +175,24 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
         .unwrap_or(false);
 
     if let Some(ref ca) = input.completed_at {
-        // Explicit override
         set_clauses.push(format!("completedAt = ?{}", param_idx));
         params.push(Box::new(ca.clone()));
         param_idx += 1;
     } else if stage_updated && now_terminal && !was_terminal {
-        // Auto-set when entering terminal stage
         set_clauses.push(format!("completedAt = ?{}", param_idx));
         params.push(Box::new(now.clone()));
         param_idx += 1;
     } else if stage_updated && !now_terminal && was_terminal {
-        // Auto-clear when moving out of terminal stage
         set_clauses.push(format!("completedAt = ?{}", param_idx));
         params.push(Box::new(None::<String>));
         param_idx += 1;
     }
-    // If neither condition, leave completed_at as-is
+
+    if let Some(ref aa) = input.archived_at {
+        set_clauses.push(format!("archivedAt = ?{}", param_idx));
+        params.push(Box::new(aa.clone()));
+        param_idx += 1;
+    }
 
     set_clauses.push(format!("updatedAt = ?{}", param_idx));
     params.push(Box::new(now));
@@ -197,8 +209,7 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
     }
 
     conn.query_row(
-        "SELECT id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, createdAt, updatedAt \
-         FROM \"Project\" WHERE id = ?1",
+        &format!("SELECT {PROJECT_COLS} FROM \"Project\" WHERE id = ?1"),
         rusqlite::params![&input.id],
         row_to_project,
     )
@@ -211,8 +222,7 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Project> {
     conn.query_row(
-        "SELECT id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, createdAt, updatedAt \
-         FROM \"Project\" WHERE id = ?1",
+        &format!("SELECT {PROJECT_COLS} FROM \"Project\" WHERE id = ?1"),
         rusqlite::params![id],
         row_to_project,
     )

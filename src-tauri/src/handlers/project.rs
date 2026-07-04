@@ -16,6 +16,7 @@ pub struct ListParams {
     pub owner_id: String,
     pub template: Option<String>,
     pub stage: Option<String>,
+    pub archived: Option<String>,
     pub limit: Option<i64>,
 }
 
@@ -29,6 +30,7 @@ pub async fn list(
         &p.owner_id,
         p.template.as_deref(),
         p.stage.as_deref(),
+        p.archived.as_deref(),
         p.limit,
     )
     .map(Json)

@@ -1,4 +1,5 @@
 pub mod action;
+pub mod archive_sweep;
 pub mod contact;
 pub mod diagnostic;
 pub mod event;

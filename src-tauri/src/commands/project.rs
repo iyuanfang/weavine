@@ -24,6 +24,7 @@ pub struct UpdateProjectInput {
     pub start_at: Option<String>,
     pub due_at: Option<String>,
     pub completed_at: Option<String>,
+    pub archived_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +32,7 @@ pub struct ListProjectsParams {
     pub owner_id: String,
     pub template: Option<String>,
     pub stage: Option<String>,
+    pub archived: Option<String>,
     pub limit: Option<i64>,
 }
 
@@ -45,6 +47,7 @@ pub fn list_projects(
         &params.owner_id,
         params.template.as_deref(),
         params.stage.as_deref(),
+        params.archived.as_deref(),
         params.limit,
     )
     .map_err(|e| e.to_string())

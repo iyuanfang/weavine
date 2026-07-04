@@ -17,6 +17,7 @@ pub struct ListParams {
     pub status: Option<String>,
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
+    pub archived: Option<String>,
     pub limit: Option<i64>,
 }
 
@@ -31,6 +32,7 @@ pub async fn list(
         p.status.as_deref(),
         p.contact_id.as_deref(),
         p.project_id.as_deref(),
+        p.archived.as_deref(),
         p.limit,
     )
     .map(Json)

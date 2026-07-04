@@ -33,6 +33,7 @@ pub struct UpdateEventInput {
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
+    pub archived_at: Option<String>,
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -43,6 +44,7 @@ pub fn list_events(
     project_id: Option<String>,
     start_after: Option<String>,
     start_before: Option<String>,
+    archived: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<Event>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -53,6 +55,7 @@ pub fn list_events(
         project_id.as_deref(),
         start_after.as_deref(),
         start_before.as_deref(),
+        archived.as_deref(),
         limit,
     )
     .map_err(|e| e.to_string())

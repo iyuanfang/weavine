@@ -22,6 +22,15 @@ async fn main() {
     let conn = rusqlite::Connection::open(&db_path).expect("open db");
     let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
     weavine_lib::migration::run(&conn).expect("run migrations");
+
+    // Run archive sweep once on startup (spec: lazy, idempotent, O(n)).
+    let now = chrono::Utc::now();
+    match weavine_lib::business::archive_sweep::sweep_archives(&conn, now) {
+        Ok(n) if n > 0 => println!("[archive] sweep archived {n} items at startup"),
+        Ok(_) => {}
+        Err(e) => eprintln!("[archive] sweep failed: {e}"),
+    }
+
     let state = AppState {
         db: Arc::new(Mutex::new(conn)),
     };
@@ -117,6 +126,12 @@ async fn main() {
             "/api/tags/:id",
             put(handlers::tag::update).delete(handlers::tag::delete),
         )
+        // Archive
+        .route("/api/archive/summary", get(handlers::archive::archive_summary))
+        .route("/api/archive/counts", get(handlers::archive::archive_counts))
+        .route("/api/archive/list", get(handlers::archive::archive_list))
+        .route("/api/archive/unarchive-one", post(handlers::archive::unarchive_one))
+        .route("/api/archive/bulk-unarchive", post(handlers::archive::bulk_unarchive))
         // Settings — static route /upsert before parameterized
         .route("/api/settings/upsert", post(handlers::setting::upsert))
         .route(

@@ -3,6 +3,9 @@ use crate::models::*;
 use rusqlite::Connection;
 use uuid::Uuid;
 
+const ACTION_COLS: &str =
+    "id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, archivedAt, createdAt, updatedAt";
+
 pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
     Ok(Action {
         id: row.get(0)?,
@@ -16,8 +19,9 @@ pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
         contact_id: row.get(8)?,
         project_id: row.get(9)?,
         completed_at: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        archived_at: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
     })
 }
 
@@ -27,13 +31,13 @@ pub fn list(
     status: Option<&str>,
     contact_id: Option<&str>,
     project_id: Option<&str>,
+    archived: Option<&str>,
     limit: Option<i64>,
 ) -> rusqlite::Result<Vec<Action>> {
     let limit = limit.unwrap_or(100);
 
-    let mut sql = String::from(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, createdAt, updatedAt \
-         FROM Action WHERE ownerId = ?1",
+    let mut sql = format!(
+        "SELECT {ACTION_COLS} FROM Action WHERE ownerId = ?1"
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(owner_id.to_string())];
     let mut idx = 2;
@@ -52,6 +56,15 @@ pub fn list(
         sql.push_str(&format!(" AND projectId = ?{}", idx));
         param_values.push(Box::new(pid.to_string()));
         idx += 1;
+    }
+    match archived {
+        Some(v) if v == "false" || v == "0" => {
+            sql.push_str(&format!(" AND archivedAt IS NULL"));
+        }
+        Some(v) if v == "true" || v == "1" => {
+            sql.push_str(&format!(" AND archivedAt IS NOT NULL"));
+        }
+        _ => {}
     }
 
     sql.push_str(&format!(" ORDER BY dueAt ASC, priority DESC LIMIT ?{}", idx));
@@ -79,8 +92,8 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
 
     conn.execute(
         "INSERT INTO Action \
-         (id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, createdAt, updatedAt) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+         (id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, archivedAt, createdAt, updatedAt) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         rusqlite::params![
             &id,
             &input.owner_id,
@@ -93,14 +106,14 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
             &input.contact_id,
             input.project_id.as_deref(),
             None::<String>,
+            None::<String>,
             &now,
             &now,
         ],
     )?;
 
     conn.query_row(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, createdAt, updatedAt \
-         FROM Action WHERE id = ?1",
+        &format!("SELECT {ACTION_COLS} FROM Action WHERE id = ?1"),
         rusqlite::params![&id],
         row_to_action,
     )
@@ -161,6 +174,11 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         params.push(Box::new(ca.clone()));
         param_idx += 1;
     }
+    if let Some(ref aa) = input.archived_at {
+        set_clauses.push(format!("archivedAt = ?{}", param_idx));
+        params.push(Box::new(aa.clone()));
+        param_idx += 1;
+    }
 
     set_clauses.push(format!("updatedAt = ?{}", param_idx));
     params.push(Box::new(now));
@@ -177,8 +195,7 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
     }
 
     conn.query_row(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, createdAt, updatedAt \
-         FROM Action WHERE id = ?1",
+        &format!("SELECT {ACTION_COLS} FROM Action WHERE id = ?1"),
         rusqlite::params![&input.id],
         row_to_action,
     )
@@ -191,8 +208,7 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Action> {
     conn.query_row(
-        "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, createdAt, updatedAt \
-         FROM Action WHERE id = ?1",
+        &format!("SELECT {ACTION_COLS} FROM Action WHERE id = ?1"),
         rusqlite::params![id],
         row_to_action,
     )

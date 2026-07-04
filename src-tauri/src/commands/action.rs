@@ -30,6 +30,7 @@ pub struct UpdateActionInput {
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
     pub completed_at: Option<String>,
+    pub archived_at: Option<String>,
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -39,6 +40,7 @@ pub fn list_actions(
     status: Option<String>,
     contact_id: Option<String>,
     project_id: Option<String>,
+    archived: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<Action>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -48,6 +50,7 @@ pub fn list_actions(
         status.as_deref(),
         contact_id.as_deref(),
         project_id.as_deref(),
+        archived.as_deref(),
         limit,
     )
     .map_err(|e| e.to_string())

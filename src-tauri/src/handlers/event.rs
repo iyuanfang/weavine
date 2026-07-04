@@ -18,6 +18,7 @@ pub struct ListParams {
     pub project_id: Option<String>,
     pub start_after: Option<String>,
     pub start_before: Option<String>,
+    pub archived: Option<String>,
     pub limit: Option<i64>,
 }
 
@@ -39,6 +40,7 @@ pub async fn list(
         p.project_id.as_deref(),
         p.start_after.as_deref(),
         p.start_before.as_deref(),
+        p.archived.as_deref(),
         p.limit,
     )
     .map(Json)
