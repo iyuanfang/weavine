@@ -10,6 +10,7 @@ pub mod project_contact;
 pub mod reminder;
 pub mod search;
 pub mod setting;
+pub mod sync;
 pub mod tag;
 
 use std::sync::OnceLock;

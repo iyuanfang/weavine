@@ -88,6 +88,10 @@ async fn main() {
         .route("/api/settings", get(handlers::setting::list).delete(handlers::setting::delete))
         // Search
         .route("/api/search", get(handlers::search::query))
+        // Sync
+        .route("/api/sync/manifest", post(handlers::sync::manifest))
+        .route("/api/sync/push", post(handlers::sync::push))
+        .route("/api/sync/pull", post(handlers::sync::pull))
         // SPA fallback
         .fallback_service({
             let spa_dir =
