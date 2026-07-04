@@ -51,8 +51,9 @@ pub fn add(
     }
 
     conn.execute(
-        "INSERT OR IGNORE INTO ProjectContact (ownerId, projectId, contactId, role) \
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO ProjectContact (ownerId, projectId, contactId, role) \
+         VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(projectId, contactId) DO UPDATE SET role = excluded.role",
         params![owner_id, project_id, contact_id, role],
     )?;
 

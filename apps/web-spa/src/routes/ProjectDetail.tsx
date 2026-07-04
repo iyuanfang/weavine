@@ -87,6 +87,10 @@ export function ProjectDetail() {
   const [tab, setTab] = useState<TabKey>('overview');
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
+  const [draftRoles, setDraftRoles] = useState<Record<string, string>>({});
+  const [editingRoleFor, setEditingRoleFor] = useState<string | null>(null);
+
+  const ROLE_PRESETS = ['决策人', '赞助人', '介绍人', '技术顾问', '商务'] as const;
 
   const projectQuery = useQuery({
     queryKey: ['project', id],
@@ -147,8 +151,16 @@ export function ProjectDetail() {
   });
 
   const addContactMutation = useMutation({
-    mutationFn: (vars: { contact_id: string }) =>
-      adapter.projectContacts.add(id, vars.contact_id, null),
+    mutationFn: (vars: { contact_id: string; role: string | null }) =>
+      adapter.projectContacts.add(id, vars.contact_id, vars.role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-contacts', id] });
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: (vars: { contact_id: string; role: string | null }) =>
+      adapter.projectContacts.add(id, vars.contact_id, vars.role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-contacts', id] });
     },
@@ -527,6 +539,7 @@ export function ProjectDetail() {
                 >
                   {candidateContacts.map((c) => {
                     const already = existingContactIds.has(c.id);
+                    const draftRole = draftRoles[c.id] ?? '';
                     return (
                       <div
                         key={c.id}
@@ -539,15 +552,38 @@ export function ProjectDetail() {
                           background: already ? '#f9fafb' : '#fff',
                           border: '1px solid var(--border, #e5e7eb)',
                           opacity: already ? 0.6 : 1,
+                          gap: 10,
                         }}
                       >
-                        <div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 500 }}>
                             {c.nickname}
                           </div>
                           {c.company && (
                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                               {c.company}
+                            </div>
+                          )}
+                          {!already && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                              {ROLE_PRESETS.map((r) => (
+                                <button
+                                  key={r}
+                                  type="button"
+                                  onClick={() => setDraftRoles({ ...draftRoles, [c.id]: r })}
+                                  style={{
+                                    fontSize: 10,
+                                    padding: '2px 8px',
+                                    borderRadius: 999,
+                                    border: `1px solid ${draftRole === r ? 'var(--accent)' : 'var(--border)'}`,
+                                    background: draftRole === r ? 'var(--accent-soft, #eff6ff)' : 'transparent',
+                                    color: draftRole === r ? 'var(--accent)' : 'var(--muted)',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {r}
+                                </button>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -559,10 +595,14 @@ export function ProjectDetail() {
                           <button
                             type="button"
                             className="btn btn-secondary"
-                            style={{ padding: '4px 10px', fontSize: 12 }}
-                            onClick={() =>
-                              addContactMutation.mutate({ contact_id: c.id })
-                            }
+                            style={{ padding: '4px 10px', fontSize: 12, flexShrink: 0 }}
+                            onClick={() => {
+                              addContactMutation.mutate({
+                                contact_id: c.id,
+                                role: draftRole.trim() || null,
+                              });
+                              setDraftRoles({ ...draftRoles, [c.id]: '' });
+                            }}
                             disabled={addContactMutation.isPending}
                           >
                             添加
@@ -616,17 +656,78 @@ export function ProjectDetail() {
                         <span style={{ fontSize: 14, fontWeight: 600 }}>
                           {c.nickname}
                         </span>
-                        {entry.role && (
-                          <span
+                        {editingRoleFor === c.id ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {ROLE_PRESETS.map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() => {
+                                  updateRoleMutation.mutate({ contact_id: c.id, role: r });
+                                  setEditingRoleFor(null);
+                                }}
+                                style={{
+                                  fontSize: 10,
+                                  padding: '2px 8px',
+                                  borderRadius: 999,
+                                  border: `1px solid ${entry.role === r ? 'var(--accent)' : 'var(--border)'}`,
+                                  background: entry.role === r ? 'var(--accent-soft, #eff6ff)' : 'transparent',
+                                  color: entry.role === r ? 'var(--accent)' : 'var(--muted)',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {r}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setEditingRoleFor(null)}
+                              style={{
+                                fontSize: 10,
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                border: '1px solid var(--border)',
+                                background: 'transparent',
+                                color: 'var(--muted)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : entry.role ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditingRoleFor(c.id)}
                             className="badge"
                             style={{
                               background: '#eef2ff',
                               color: '#4338ca',
                               fontSize: 10,
+                              cursor: 'pointer',
+                              border: '1px solid #e0e7ff',
                             }}
+                            title="点击修改角色"
                           >
-                            {entry.role}
-                          </span>
+                            {entry.role} ✎
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingRoleFor(c.id)}
+                            style={{
+                              fontSize: 10,
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                              border: '1px dashed var(--border)',
+                              background: 'transparent',
+                              color: 'var(--muted)',
+                              cursor: 'pointer',
+                            }}
+                            title="设置角色"
+                          >
+                            + 角色
+                          </button>
                         )}
                       </div>
                       <div
