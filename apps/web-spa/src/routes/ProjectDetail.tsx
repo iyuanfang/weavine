@@ -471,14 +471,6 @@ export function ProjectDetail() {
             onClick={() => setTab('schedule')}
             icon="📅"
           />
-          <SummaryCard
-            label="快速添加"
-            value="+"
-            sub="为项目创建一个新待办"
-            cta="新建待办"
-            onClick={() => navigate(`/actions/new?projectId=${id}`)}
-            icon="➕"
-          />
         </div>
       )}
 
