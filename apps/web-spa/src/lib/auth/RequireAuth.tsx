@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
-import { useAdapter, isTauri } from '../adapter';
+import { isTauri } from '../adapter';
 import { loadSession } from './storage';
 
 interface Props {
@@ -18,7 +18,6 @@ interface Props {
  * or absent token, redirect to `/login?next=<encoded current path>`.
  */
 export function RequireAuth({ children }: Props) {
-  const adapter = useAdapter();
   const location = useLocation();
   const [state, setState] = useState<
     | { kind: 'pass' }
@@ -45,7 +44,7 @@ export function RequireAuth({ children }: Props) {
       };
     }
 
-    fetch((adapter as unknown as { baseUrl: string }).baseUrl + '/api/auth/me', {
+    fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then((r) => {
@@ -56,20 +55,18 @@ export function RequireAuth({ children }: Props) {
           const next = encodeURIComponent(location.pathname + location.search);
           setState({ kind: 'redirect', to: `/login?next=${next}` });
         } else {
-          // transient: let them in; per-call 401s still get caught by http.ts
           setState({ kind: 'pass' });
         }
       })
       .catch(() => {
         if (cancelled) return;
-        // offline-ish: optimistic; http.ts handles real 401s
         setState({ kind: 'pass' });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [adapter, location.pathname, location.search]);
+  }, [location.pathname, location.search]);
 
   if (state.kind === 'loading') {
     return <div style={{ padding: 32, textAlign: 'center', color: '#888' }}>加载中…</div>;
