@@ -106,14 +106,25 @@ export function ProjectEdit() {
                   autoFocus
                 />
               </div>
-              <div>
-                <label className="input-label">备注</label>
-                <textarea
-                  className="input-base"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  style={{ minHeight: 80, resize: 'vertical' }}
-                />
+              <div className="grid-2">
+                <div>
+                  <label className="input-label">开始时间</label>
+                  <input
+                    className="input-base"
+                    type="datetime-local"
+                    value={startAt}
+                    onChange={(e) => setStartAt(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="input-label">截止时间</label>
+                  <input
+                    className="input-base"
+                    type="datetime-local"
+                    value={dueAt}
+                    onChange={(e) => setDueAt(e.target.value)}
+                  />
+                </div>
               </div>
               <div>
                 <label className="input-label">当前阶段</label>
@@ -142,27 +153,20 @@ export function ProjectEdit() {
                   )}
                 </select>
               </div>
-              <div className="grid-2">
-                <div>
-                  <label className="input-label">开始时间</label>
-                  <input
-                    className="input-base"
-                    type="datetime-local"
-                    value={startAt}
-                    onChange={(e) => setStartAt(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="input-label">截止时间</label>
-                  <input
-                    className="input-base"
-                    type="datetime-local"
-                    value={dueAt}
-                    onChange={(e) => setDueAt(e.target.value)}
-                  />
-                </div>
-              </div>
             </div>
+          </div>
+        </section>
+
+        <section className="section" style={{ marginTop: 14 }}>
+          <h2 className="section__title">备注</h2>
+          <div className="card" style={{ marginTop: 10 }}>
+            <textarea
+              className="input-base"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="可选"
+              style={{ minHeight: 80, resize: 'vertical' }}
+            />
           </div>
         </section>
 
