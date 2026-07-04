@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface PickerOption {
   id: string;
@@ -58,9 +59,18 @@ export function SearchablePicker({
     if (open) {
       setQuery('');
       setHighlight(0);
-      const rect = wrapRef.current?.getBoundingClientRect();
-      if (rect) setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      const recalc = () => {
+        const rect = wrapRef.current?.getBoundingClientRect();
+        if (rect) setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      };
+      recalc();
       requestAnimationFrame(() => inputRef.current?.focus());
+      window.addEventListener('scroll', recalc, true);
+      window.addEventListener('resize', recalc);
+      return () => {
+        window.removeEventListener('scroll', recalc, true);
+        window.removeEventListener('resize', recalc);
+      };
     }
   }, [open]);
 
@@ -96,6 +106,77 @@ export function SearchablePicker({
     : selected
     ? selected.label
     : '';
+
+  const dropdown =
+    open && pos ? (
+      <div
+        style={{
+          position: 'fixed',
+          top: pos.top,
+          left: pos.left,
+          width: pos.width,
+          zIndex: 99999,
+          maxHeight: 280,
+          overflowY: 'auto',
+          background: 'var(--surface, #fff)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+        }}
+      >
+        {filtered.length === 0 ? (
+          <div
+            style={{
+              padding: '14px 12px',
+              color: 'var(--muted)',
+              fontSize: 13,
+              textAlign: 'center',
+            }}
+          >
+            {emptyText}
+          </div>
+        ) : (
+          filtered.map((opt, idx) => {
+            const isSel = opt.id === value;
+            const isHi = idx === highlight;
+            return (
+              <div
+                key={opt.id}
+                onMouseEnter={() => setHighlight(idx)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commit(opt.id);
+                }}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  background: isHi ? 'var(--accent-soft, #eff6ff)' : 'transparent',
+                  borderLeft: isSel
+                    ? '3px solid var(--accent)'
+                    : '3px solid transparent',
+                  fontSize: 13,
+                }}
+              >
+                <div style={{ fontWeight: isSel ? 600 : 400 }}>
+                  {opt.label}
+                </div>
+                {opt.sublabel && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--muted)',
+                      marginTop: 2,
+                    }}
+                  >
+                    {opt.sublabel}
+                  </div>
+                  )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    ) : null;
 
   return (
     <div
@@ -154,75 +235,7 @@ export function SearchablePicker({
         <span style={{ color: 'var(--muted)', fontSize: 12 }}>▾</span>
       </div>
 
-      {open && pos && (
-        <div
-          style={{
-            position: 'fixed',
-            top: pos.top,
-            left: pos.left,
-            width: pos.width,
-            zIndex: 9999,
-            maxHeight: 280,
-            overflowY: 'auto',
-            background: 'var(--surface, #fff)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-          }}
-        >
-          {filtered.length === 0 ? (
-            <div
-              style={{
-                padding: '14px 12px',
-                color: 'var(--muted)',
-                fontSize: 13,
-                textAlign: 'center',
-              }}
-            >
-              {emptyText}
-            </div>
-          ) : (
-            filtered.map((opt, idx) => {
-              const isSel = opt.id === value;
-              const isHi = idx === highlight;
-              return (
-                <div
-                  key={opt.id}
-                  onMouseEnter={() => setHighlight(idx)}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    commit(opt.id);
-                  }}
-                  style={{
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    background: isHi ? 'var(--accent-soft, #eff6ff)' : 'transparent',
-                    borderLeft: isSel
-                      ? '3px solid var(--accent)'
-                      : '3px solid transparent',
-                    fontSize: 13,
-                  }}
-                >
-                  <div style={{ fontWeight: isSel ? 600 : 400 }}>
-                    {opt.label}
-                  </div>
-                  {opt.sublabel && (
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: 'var(--muted)',
-                        marginTop: 2,
-                      }}
-                    >
-                      {opt.sublabel}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
+      {createPortal(dropdown, document.body)}
     </div>
   );
 }
