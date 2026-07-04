@@ -7,8 +7,7 @@ use serde::Deserialize;
 use crate::AppState;
 use weavine_lib::{
     business,
-    commands::reminder::{CreateReminderInput, UpdateReminderInput},
-    models::Reminder,
+    models::{CreateReminderInput, Reminder, UpdateReminderInput},
 };
 
 #[derive(Deserialize)]

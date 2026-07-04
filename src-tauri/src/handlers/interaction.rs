@@ -7,8 +7,7 @@ use serde::Deserialize;
 use crate::AppState;
 use weavine_lib::{
     business,
-    commands::interaction::{CreateInteractionInput, UpdateInteractionInput},
-    models::Interaction,
+    models::{CreateInteractionInput, Interaction, UpdateInteractionInput},
 };
 
 #[derive(Deserialize)]

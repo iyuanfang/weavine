@@ -36,6 +36,12 @@ async fn main() {
     };
 
     let app = Router::new()
+        // Auth (v0.1.x bridge — same wire format as v0.2.0 /weavine/v1/auth/*)
+        .route("/api/auth/register", post(handlers::auth::register))
+        .route("/api/auth/login", post(handlers::auth::login))
+        .route("/api/auth/refresh", post(handlers::auth::refresh))
+        .route("/api/auth/logout", post(handlers::auth::logout))
+        .route("/api/auth/me", get(handlers::auth::me))
         // Diagnostic
         .route("/api/diagnostic/user", get(handlers::diagnostic::user))
         .route("/api/diagnostic/startup", get(handlers::diagnostic::startup))

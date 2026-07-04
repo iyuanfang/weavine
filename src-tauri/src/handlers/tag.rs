@@ -7,8 +7,7 @@ use serde::Deserialize;
 use crate::AppState;
 use weavine_lib::{
     business,
-    commands::tag::{CreateTagInput, UpdateTagInput},
-    models::Tag,
+    models::{CreateTagInput, Tag, UpdateTagInput},
 };
 
 #[derive(Deserialize)]

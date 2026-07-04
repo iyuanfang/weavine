@@ -7,8 +7,7 @@ use serde::Deserialize;
 use crate::AppState;
 use weavine_lib::{
     business,
-    commands::project::{CreateProjectInput, UpdateProjectInput},
-    models::Project,
+    models::{CreateProjectInput, Project, UpdateProjectInput},
 };
 
 #[derive(Deserialize)]

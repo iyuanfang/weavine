@@ -7,8 +7,7 @@ use serde::Deserialize;
 use crate::AppState;
 use weavine_lib::{
     business,
-    commands::event::{CreateEventInput, UpdateEventInput},
-    models::Event,
+    models::{CreateEventInput, Event, UpdateEventInput},
 };
 
 #[derive(Deserialize)]

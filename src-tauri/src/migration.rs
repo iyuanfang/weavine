@@ -226,6 +226,25 @@ CREATE INDEX IF NOT EXISTS "Action_ownerId_projectId_idx" ON "Action"("ownerId",
 CREATE INDEX IF NOT EXISTS "Event_ownerId_projectId_idx" ON "Event"("ownerId", "projectId");
 CREATE INDEX IF NOT EXISTS "ProjectContact_ownerId_idx" ON "ProjectContact"("ownerId");
 CREATE INDEX IF NOT EXISTS "ProjectContact_contactId_idx" ON "ProjectContact"("contactId");
+CREATE TABLE IF NOT EXISTS "UserAccount" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "email" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "UserAccount_email_key" ON "UserAccount"("email");
+CREATE TABLE IF NOT EXISTS "RefreshToken" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL REFERENCES "UserAccount"("id") ON DELETE CASCADE,
+    "tokenHash" TEXT NOT NULL,
+    "device" TEXT,
+    "expiresAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "revokedAt" DATETIME
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "RefreshToken_tokenHash_key" ON "RefreshToken"("tokenHash");
+CREATE INDEX IF NOT EXISTS "RefreshToken_userId_idx" ON "RefreshToken"("userId");
 "#;
 
 /// Run all migrations (idempotent).
