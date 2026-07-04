@@ -311,6 +311,28 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         }
     }
 
+    // archive (归档) feature — see docs/superpowers/specs/2026-07-04-archive-feature-design.md
+    let archive_cols = [
+        ("Action", "archivedAt", "TEXT"),
+        ("Event", "archivedAt", "TEXT"),
+        ("Project", "archivedAt", "TEXT"),
+    ];
+    for (table, col, decl) in archive_cols {
+        let present: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
+            rusqlite::params![table, col],
+            |r| r.get(0),
+        )?;
+        if present == 0 {
+            conn.execute(&format!("ALTER TABLE \"{table}\" ADD COLUMN \"{col}\" {decl}"), [])?;
+        }
+    }
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS \"Action_archivedAt_idx\" ON \"Action\"(\"archivedAt\");
+         CREATE INDEX IF NOT EXISTS \"Event_archivedAt_idx\" ON \"Event\"(\"archivedAt\");
+         CREATE INDEX IF NOT EXISTS \"Project_archivedAt_idx\" ON \"Project\"(\"archivedAt\");",
+    )?;
+
     Ok(())
 }
 
