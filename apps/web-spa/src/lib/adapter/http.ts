@@ -134,7 +134,15 @@ export class HttpAdapter implements PRMAdapter {
   constructor(public baseUrl: string = VITE_API_BASE) {}
 
   getLocalUser(): Promise<LocalUser> {
-    return request<LocalUser>(this.baseUrl, 'GET', '/api/diagnostic/user');
+    return request<{ user_id: string; email: string }>(
+      this.baseUrl,
+      'GET',
+      '/api/auth/me',
+    ).then((r) => ({
+      id: r.user_id,
+      name: null,
+      email: r.email,
+    }));
   }
 
   getStartupInfo(): Promise<StartupInfo> {

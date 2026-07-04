@@ -6,7 +6,9 @@
 import type { ComponentType, LazyExoticComponent } from 'react';
 import type { RouteObject } from 'react-router-dom';
 
-import { App } from './App';
+import { Providers } from './App';
+import { AppShell } from './components/AppShell';
+import { RequireAuth } from './lib/auth/RequireAuth';
 import { LoginPage } from './routes/Login';
 import { TodayPage } from './routes/Today';
 import { ContactsList } from './routes/ContactsList';
@@ -53,7 +55,7 @@ export interface AppRoute {
  * above. Do NOT edit main.tsx directly — it iterates this list.
  */
 export const routes: AppRoute[] = [
-  { path: '/login', Component: LoginPage, label: 'Login' },
+  { path: '/login', Component: LoginPage, label: 'Login', bare: true },
   { path: '/', Component: TodayPage, label: 'Today' },
 
   // Placeholder entries below — replaced as Phase 4 lands.
@@ -85,17 +87,27 @@ export const routes: AppRoute[] = [
 ];
 
 /**
- * Build the React Router v6 data object array. Wraps every
- * route element in <App> so the QueryClient / adapter / shell
- * are always available, regardless of which page mounts.
+ * Build the React Router v6 data object array.
+ *
+ *   bare=true   → just <Providers> (QueryClient + adapter). Used for /login.
+ *   bare=false  → <RequireAuth> → <Providers> → <AppShell> + page. On web,
+ *                 RequireAuth gates on a valid JWT in localStorage.
  */
 export function buildRouterObjects(): RouteObject[] {
-  return routes.map(({ path, Component }) => ({
+  return routes.map(({ path, Component, bare }) => ({
     path,
-    element: (
-      <App>
+    element: bare ? (
+      <Providers>
         <Component />
-      </App>
+      </Providers>
+    ) : (
+      <RequireAuth>
+        <Providers>
+          <AppShell>
+            <Component />
+          </AppShell>
+        </Providers>
+      </RequireAuth>
     ),
   }));
 }
