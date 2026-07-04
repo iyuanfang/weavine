@@ -195,6 +195,12 @@ pub async fn register(
         params![id, email, hash],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert user: {e}")))?;
+    // Mirror to legacy User table — ownerId FKs everywhere reference User.id.
+    conn.execute(
+        "INSERT INTO \"User\" (\"id\", \"email\", \"passwordHash\", \"isLocal\", \"updatedAt\") VALUES (?1, ?2, ?3, 0, datetime('now'))",
+        params![id, email, hash],
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert User row: {e}")))?;
     let session = build_session(&conn, &secret, &id, &email, None)?;
     Ok(Json(session))
 }
