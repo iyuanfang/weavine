@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
 
-pub const ACCESS_TOKEN_TTL_SECS: u64 = 15 * 60;
+pub const ACCESS_TOKEN_TTL_SECS: u64 = 7 * 24 * 60 * 60;
 pub const REFRESH_TOKEN_TTL_SECS: u64 = 30 * 24 * 60 * 60;
 const MIN_PASSWORD_LEN: usize = 8;
 
