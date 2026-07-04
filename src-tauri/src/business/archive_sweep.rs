@@ -6,7 +6,7 @@ use rusqlite::Connection;
 /// Rules (defaults, can be tuned from settings later):
 ///   - Action: status='done' AND completedAt IS NOT NULL AND
 ///     datetime(completedAt) < now - 1 day
-///   - Event:  datetime(COALESCE(endAt, startAt)) < now  (zero-day, fires immediately)
+///   - Event:  datetime(COALESCE(endAt, startAt)) < now - 1 day
 ///   - Project: stage in (terminal stages of project's template) AND
 ///     datetime(updatedAt) < now - 7 days.  Terminal stages are sourced
 ///     from `Template::is_terminal`.
@@ -16,6 +16,9 @@ use rusqlite::Connection;
 pub fn sweep_archives(conn: &Connection, now: DateTime<Utc>) -> rusqlite::Result<usize> {
     let now_str = now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     let action_cutoff = (now - Duration::days(1))
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    let event_cutoff = (now - Duration::days(1))
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
     let project_cutoff = (now - Duration::days(7))
@@ -40,7 +43,7 @@ pub fn sweep_archives(conn: &Connection, now: DateTime<Utc>) -> rusqlite::Result
          SET archivedAt = ?1, updatedAt = ?1 \
          WHERE archivedAt IS NULL \
            AND datetime(COALESCE(endAt, startAt)) < datetime(?2)",
-        rusqlite::params![&now_str, &now_str],
+        rusqlite::params![&now_str, &event_cutoff],
     )?;
     total += event_archived;
 

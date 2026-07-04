@@ -79,7 +79,7 @@ CREATE INDEX idx_project_archivedAt  ON Project(archivedAt);
 | Entity | Condition | Threshold | Effect |
 |---|---|---|---|
 | Action | `status='done'` AND `completedAt` < now − 1 day | 1 day | set `archivedAt = now` |
-| Event | `ends_at` < now (use `starts_at` fallback when no ends_at) | 0 days (end-of-event-day) | set `archivedAt = now` |
+| Event | `ends_at` < now (use `starts_at` fallback when no ends_at) | 1 day | set `archivedAt = now` |
 | Project | current stage is terminal AND `updated_at` < now − 7 days | 7 days | set `archivedAt = now` |
 
 ### 4.1 Edge cases
@@ -87,7 +87,7 @@ CREATE INDEX idx_project_archivedAt  ON Project(archivedAt);
 - **Event without ends_at**: archive when `starts_at < now`.
 - **Project with `completedAt` NULL but terminal stage**: trigger via `updated_at` recency as proxy for "stage has been terminal for X days".
 - **Just-completed item**: never archived instantly; waits full threshold.
-- **Cross-midnight events**: sweep uses `ends_at < now` (not calendar-day math) — handles events spanning midnight cleanly.
+- **Cross-midnight events**: sweep uses `ends_at < now - 1 day` (not calendar-day math) — handles events spanning midnight cleanly. Today's meetings stay visible all day.
 
 ### 4.2 Sweep implementation
 
@@ -295,7 +295,7 @@ A release is shippable when all of the following hold:
 | Sales 丢单 | Auto-archive (terminal stage) | Exempt |
 | Project archive trigger | Terminal stage + `updated_at < now-7d` | Need explicit completedAt |
 | Version bump | Stay v0.1.x | v0.2.0 |
-| Defaults | 待办 1d / 日程 0d / 项目 7d | More aggressive, more lenient |
+| Defaults | 待办 1d / 日程 1d / 项目 7d | More aggressive, more lenient |
 | Where archived items show | `/archive` page (dedicated), filter-panel link on each list, global search (📦 badge), never on lists/details/today/calendar/contact-page | Per-list toggle |
 | Unarchive semantics | Pure visibility flip; status/dates/stage unchanged | Implicit reset to active state |
 | Per-item [取消归档] button | Yes on `/archive` only | No buttons anywhere |
@@ -312,7 +312,7 @@ Phase 0+1+2 = the entire feature, in one v0.1.7 release. No per-item UI surface 
 
 ## 11. Open Questions (resolve before implementation)
 
-1. **Time-of-day handling for 日程 0-day threshold** — at 11pm Monday, archive a Tuesday event ending 10pm Tuesday? or wait until end-of-Tuesday? Proposal: use `ends_at < now` (instant as event is past).
+1. **Time-of-day handling for 日程 1-day threshold** — at 11pm Monday, archive a Tuesday event ending 10pm Tuesday? Proposal: use `ends_at < now - 1 day` (postpone one day so today's events stay visible all day).
 2. **Project auto-archive requires terminal stage?** Yes — non-terminal stages can sit for years without archiving (active work).
 3. **Settings bulk-unarchive limits** — 30 days default; make configurable later?
 4. **Default global search** — keep "all" default or add an obvious "📦 已归档" filter chip? Proposal: keep "all" default (search is for finding); chip is optional.
