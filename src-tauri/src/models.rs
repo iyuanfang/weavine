@@ -216,3 +216,166 @@ pub struct SearchResults {
     pub actions: Vec<Action>,
     pub projects: Vec<Project>,
 }
+
+// ──────────────────────────────────────────────
+// Action inputs
+// ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateActionInput {
+    pub owner_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<i64>,
+    pub category: Option<String>,
+    pub due_at: Option<String>,
+    pub contact_id: Option<String>,
+    pub project_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateActionInput {
+    #[serde(default)]
+    pub id: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<i64>,
+    pub category: Option<String>,
+    pub due_at: Option<String>,
+    pub contact_id: Option<String>,
+    pub project_id: Option<String>,
+    pub completed_at: Option<String>,
+    pub archived_at: Option<String>,
+}
+
+// ──────────────────────────────────────────────
+// Event inputs
+// ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateEventInput {
+    pub owner_id: String,
+    pub title: String,
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub start_at: String,
+    pub end_at: Option<String>,
+    pub location: Option<String>,
+    pub notes: Option<String>,
+    pub contact_id: Option<String>,
+    pub project_id: Option<String>,
+    pub reminder_lead_minutes: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateEventInput {
+    #[serde(default)]
+    pub id: String,
+    pub title: Option<String>,
+    #[serde(rename = "type")]
+    pub event_type: Option<String>,
+    pub start_at: Option<String>,
+    pub end_at: Option<String>,
+    pub location: Option<String>,
+    pub notes: Option<String>,
+    pub contact_id: Option<String>,
+    pub project_id: Option<String>,
+    pub reminder_lead_minutes: Option<i64>,
+    pub archived_at: Option<String>,
+}
+
+// ──────────────────────────────────────────────
+// Interaction inputs
+// ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateInteractionInput {
+    pub owner_id: String,
+    pub contact_id: Option<String>,
+    pub action_id: Option<String>,
+    pub event_id: Option<String>,
+    pub occurred_at: String,
+    pub channel: Option<String>,
+    pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateInteractionInput {
+    #[serde(default)]
+    pub id: String,
+    pub contact_id: Option<String>,
+    pub action_id: Option<String>,
+    pub event_id: Option<String>,
+    pub occurred_at: Option<String>,
+    pub channel: Option<String>,
+    pub summary: Option<String>,
+}
+
+// ──────────────────────────────────────────────
+// Project inputs
+// ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateProjectInput {
+    pub owner_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub template: String,
+    pub start_at: Option<String>,
+    pub due_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateProjectInput {
+    #[serde(default)]
+    pub id: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub stage: Option<String>,
+    pub start_at: Option<String>,
+    pub due_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub archived_at: Option<String>,
+}
+
+// ──────────────────────────────────────────────
+// Reminder inputs
+// ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateReminderInput {
+    pub owner_id: String,
+    pub contact_id: Option<String>,
+    pub event_id: Option<String>,
+    pub trigger_at: String,
+    pub kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateReminderInput {
+    #[serde(default)]
+    pub id: String,
+    pub trigger_at: Option<String>,
+    pub kind: Option<String>,
+    pub dispatched: Option<bool>,
+    pub dismissed: Option<bool>,
+}
+
+// ──────────────────────────────────────────────
+// Tag inputs
+// ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTagInput {
+    pub owner_id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateTagInput {
+    #[serde(default)]
+    pub id: String,
+    pub name: Option<String>,
+}

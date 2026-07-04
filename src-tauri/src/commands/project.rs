@@ -5,29 +5,6 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateProjectInput {
-    pub owner_id: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub template: String,
-    pub start_at: Option<String>,
-    pub due_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateProjectInput {
-    #[serde(default)]
-    pub id: String,
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub stage: Option<String>,
-    pub start_at: Option<String>,
-    pub due_at: Option<String>,
-    pub completed_at: Option<String>,
-    pub archived_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListProjectsParams {
     pub owner_id: String,
     pub template: Option<String>,

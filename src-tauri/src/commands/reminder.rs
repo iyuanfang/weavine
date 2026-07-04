@@ -1,27 +1,8 @@
 use crate::business;
 use crate::db::Database;
 use crate::models::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::State;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateReminderInput {
-    pub owner_id: String,
-    pub contact_id: Option<String>,
-    pub event_id: Option<String>,
-    pub trigger_at: String,
-    pub kind: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateReminderInput {
-    #[serde(default)]
-    pub id: String,
-    pub trigger_at: Option<String>,
-    pub kind: Option<String>,
-    pub dispatched: Option<bool>,
-    pub dismissed: Option<bool>,
-}
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_reminders(

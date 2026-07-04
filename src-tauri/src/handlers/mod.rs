@@ -1,5 +1,6 @@
 pub mod action;
 pub mod archive;
+pub mod auth;
 pub mod contact;
 pub mod diagnostic;
 pub mod event;

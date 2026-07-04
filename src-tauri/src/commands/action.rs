@@ -1,37 +1,8 @@
 use crate::business;
 use crate::db::Database;
 use crate::models::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::State;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateActionInput {
-    pub owner_id: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub status: Option<String>,
-    pub priority: Option<i64>,
-    pub category: Option<String>,
-    pub due_at: Option<String>,
-    pub contact_id: Option<String>,
-    pub project_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateActionInput {
-    #[serde(default)]
-    pub id: String,
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub status: Option<String>,
-    pub priority: Option<i64>,
-    pub category: Option<String>,
-    pub due_at: Option<String>,
-    pub contact_id: Option<String>,
-    pub project_id: Option<String>,
-    pub completed_at: Option<String>,
-    pub archived_at: Option<String>,
-}
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_actions(

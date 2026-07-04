@@ -9,7 +9,7 @@ pub struct StartupInfo {
 }
 
 pub fn get_startup_info() -> StartupInfo {
-    let error = crate::STARTUP_ERROR.get().map(|s| s.clone());
+    let error = crate::startup_error();
     StartupInfo {
         server_ready: error.is_none(),
         error,

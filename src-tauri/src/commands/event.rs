@@ -1,40 +1,8 @@
 use crate::business;
 use crate::db::Database;
 use crate::models::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::State;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateEventInput {
-    pub owner_id: String,
-    pub title: String,
-    #[serde(rename = "type")]
-    pub event_type: String,
-    pub start_at: String,
-    pub end_at: Option<String>,
-    pub location: Option<String>,
-    pub notes: Option<String>,
-    pub contact_id: Option<String>,
-    pub project_id: Option<String>,
-    pub reminder_lead_minutes: Option<i64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateEventInput {
-    #[serde(default)]
-    pub id: String,
-    pub title: Option<String>,
-    #[serde(rename = "type")]
-    pub event_type: Option<String>,
-    pub start_at: Option<String>,
-    pub end_at: Option<String>,
-    pub location: Option<String>,
-    pub notes: Option<String>,
-    pub contact_id: Option<String>,
-    pub project_id: Option<String>,
-    pub reminder_lead_minutes: Option<i64>,
-    pub archived_at: Option<String>,
-}
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_events(

@@ -1,4 +1,3 @@
-use crate::commands::tag::{CreateTagInput, UpdateTagInput};
 use crate::models::*;
 use crate::tag_color::color_for;
 use rusqlite::Connection;

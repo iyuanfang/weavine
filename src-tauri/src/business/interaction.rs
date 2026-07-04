@@ -1,4 +1,3 @@
-use crate::commands::interaction::{CreateInteractionInput, UpdateInteractionInput};
 use crate::models::*;
 use rusqlite::Connection;
 use uuid::Uuid;

@@ -1,21 +1,8 @@
 use crate::business;
 use crate::db::Database;
 use crate::models::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::State;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateTagInput {
-    pub owner_id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateTagInput {
-    #[serde(default)]
-    pub id: String,
-    pub name: Option<String>,
-}
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_tags(db: State<Database>, owner_id: String) -> Result<Vec<Tag>, String> {
