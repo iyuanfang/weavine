@@ -113,6 +113,20 @@ export function ProjectNew() {
                   />
                 </div>
               </div>
+              {startAt && dueAt && new Date(startAt) > new Date(dueAt) && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--warn, #b45309)',
+                    background: '#fef3c7',
+                    border: '1px solid #fde68a',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                  }}
+                >
+                  ⚠ 开始时间晚于截止时间，请确认。
+                </div>
+              )}
               <div>
                 <label className="input-label">模板</label>
                 <select
@@ -134,26 +148,30 @@ export function ProjectNew() {
                       fontSize: 12,
                       color: 'var(--muted)',
                       display: 'flex',
-                      gap: 4,
+                      gap: 6,
                       alignItems: 'center',
                       flexWrap: 'wrap',
                     }}
                   >
-                    <span>这个模板的阶段：</span>
+                    <span>阶段流程：</span>
                     {stages.map((s, i) => (
-                      <span key={s}>
+                      <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span
                           style={{
-                            color: 'var(--accent)',
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            background: 'var(--surface-soft, #f3f4f6)',
+                            color: 'var(--fg)',
+                            fontSize: 11,
                             fontWeight: 500,
+                            border: '1px solid var(--border)',
                           }}
                         >
                           {s}
                         </span>
                         {i < stages.length - 1 && (
-                          <span style={{ margin: '0 4px', color: 'var(--border)' }}>
-                            →
-                          </span>
+                          <span style={{ color: 'var(--muted)', fontSize: 10 }}>→</span>
                         )}
                       </span>
                     ))}

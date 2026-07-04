@@ -18,12 +18,13 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 }
 
 const IMPORTANCE_LABELS: Record<string, string> = {
+  normal: '普通',
   high: '高',
   medium: '中',
   low: '低',
 };
 
-const IMPORTANCE_VALUES = ['high', 'medium', 'low'] as const;
+const IMPORTANCE_VALUES = ['normal', 'high', 'medium', 'low'] as const;
 
 const IMPORTANCE_DOT: Record<string, string> = {
   high: '#ef4444',
@@ -187,25 +188,27 @@ export function ContactsList() {
               </span>
               <span className="filter-panel__count">{contacts.length}</span>
             </button>
-            {IMPORTANCE_VALUES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setSelectedImportance(value)}
-                className={`filter-panel__item ${
-                  selectedImportance === value ? 'filter-panel__item--active' : ''
-                }`}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    className="filter-panel__item-dot"
-                    style={{ background: IMPORTANCE_DOT[value] }}
-                  />
-                  <span>{IMPORTANCE_LABELS[value]}</span>
-                </span>
-                <span className="filter-panel__count">{countsByImportance[value] ?? 0}</span>
-              </button>
-            ))}
+            {IMPORTANCE_VALUES
+              .filter((v) => (countsByImportance[v] ?? 0) > 0 || selectedImportance === v)
+              .map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setSelectedImportance(value)}
+                  className={`filter-panel__item ${
+                    selectedImportance === value ? 'filter-panel__item--active' : ''
+                  }`}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span
+                      className="filter-panel__item-dot"
+                      style={{ background: IMPORTANCE_DOT[value] }}
+                    />
+                    <span>{IMPORTANCE_LABELS[value]}</span>
+                  </span>
+                  <span className="filter-panel__count">{countsByImportance[value] ?? 0}</span>
+                </button>
+              ))}
           </div>
 
           {tags.length > 0 && (
@@ -226,25 +229,38 @@ export function ContactsList() {
                   </span>
                   <span className="filter-panel__count">{contacts.length}</span>
                 </button>
-                {tags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => setSelectedTagId(tag.id)}
-                    className={`filter-panel__item ${
-                      selectedTagId === tag.id ? 'filter-panel__item--active' : ''
-                    }`}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span
-                        className="filter-panel__item-dot"
-                        style={{ background: tagColor(tag) }}
-                      />
-                      <span>{tag.name}</span>
-                    </span>
-                    <span className="filter-panel__count">{countsByTag[tag.id] ?? 0}</span>
-                  </button>
-                ))}
+                {tags
+                  .filter((tag) => (countsByTag[tag.id] ?? 0) > 0 || selectedTagId === tag.id)
+                  .map((tag) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => setSelectedTagId(tag.id)}
+                      className={`filter-panel__item ${
+                        selectedTagId === tag.id ? 'filter-panel__item--active' : ''
+                      }`}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                        <span
+                          className="filter-panel__item-dot"
+                          style={{ background: tagColor(tag), flexShrink: 0 }}
+                        />
+                        <span
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                          title={tag.name}
+                        >
+                          {tag.name}
+                        </span>
+                      </span>
+                      <span className="filter-panel__count">{countsByTag[tag.id] ?? 0}</span>
+                    </button>
+                  ))}
               </div>
             </>
           )}

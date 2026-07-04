@@ -126,6 +126,20 @@ export function ProjectEdit() {
                   />
                 </div>
               </div>
+              {startAt && dueAt && new Date(startAt) > new Date(dueAt) && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--warn, #b45309)',
+                    background: '#fef3c7',
+                    border: '1px solid #fde68a',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                  }}
+                >
+                  ⚠ 开始时间晚于截止时间，请确认。
+                </div>
+              )}
               <div>
                 <label className="input-label">当前阶段</label>
                 <select

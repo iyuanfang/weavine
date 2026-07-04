@@ -8,6 +8,7 @@ import { tagColor } from '../lib/tagColor';
 import type { CreateInteractionInput } from '../lib/adapter/types';
 
 const IMPORTANCE_LABELS: Record<string, string> = {
+  normal: '普通',
   high: '高',
   medium: '中',
   low: '低',
