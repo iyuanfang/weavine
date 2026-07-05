@@ -79,6 +79,12 @@ export class TauriAdapter implements PRMAdapter {
     return { user_id, ...rest };
   }
 
+  private rewriteOwnerId<I extends object>(input: I): I {
+    if (!('owner_id' in input)) return input;
+    const { owner_id, ...rest } = input as Record<string, unknown>;
+    return { user_id: owner_id, ...rest } as I;
+  }
+
   async getLocalUser(): Promise<LocalUser> {
     return invoke<LocalUser>('get_local_user');
   }
@@ -100,9 +106,9 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Contact> =>
       invoke<Contact>('get_contact', { id }),
     create: (input: CreateContactInput): Promise<Contact> =>
-      invoke<Contact>('create_contact', { input }),
+      invoke<Contact>('create_contact', { input: this.rewriteOwnerId(input) }),
     update: (input: UpdateContactInput): Promise<Contact> =>
-      invoke<Contact>('update_contact', { input }),
+      invoke<Contact>('update_contact', { input: this.rewriteOwnerId(input) }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_contact', { id }),
   };
@@ -120,9 +126,9 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Project> =>
       invoke<Project>('get_project', { id }),
     create: (input: CreateProjectInput): Promise<Project> =>
-      invoke<Project>('create_project', { input }),
+      invoke<Project>('create_project', { input: this.rewriteOwnerId(input) }),
     update: (input: UpdateProjectInput): Promise<Project> =>
-      invoke<Project>('update_project', { input }),
+      invoke<Project>('update_project', { input: this.rewriteOwnerId(input) }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_project', { id }),
     stages: (template: string): Promise<string[]> =>
@@ -144,9 +150,9 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Event> =>
       invoke<Event>('get_event', { id }),
     create: (input: CreateEventInput): Promise<Event> =>
-      invoke<Event>('create_event', { input }),
+      invoke<Event>('create_event', { input: this.rewriteOwnerId(input) }),
     update: (input: UpdateEventInput): Promise<Event> =>
-      invoke<Event>('update_event', { input }),
+      invoke<Event>('update_event', { input: this.rewriteOwnerId(input) }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_event', { id }),
     upcoming: async (
@@ -175,9 +181,9 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Action> =>
       invoke<Action>('get_action', { id }),
     create: (input: CreateActionInput): Promise<Action> =>
-      invoke<Action>('create_action', { input }),
+      invoke<Action>('create_action', { input: this.rewriteOwnerId(input) }),
     update: (input: UpdateActionInput): Promise<Action> =>
-      invoke<Action>('update_action', { input }),
+      invoke<Action>('update_action', { input: this.rewriteOwnerId(input) }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_action', { id }),
   };
@@ -213,9 +219,9 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Interaction> =>
       invoke<Interaction>('get_interaction', { id }),
     create: (input: CreateInteractionInput): Promise<Interaction> =>
-      invoke<Interaction>('create_interaction', { input }),
+      invoke<Interaction>('create_interaction', { input: this.rewriteOwnerId(input) }),
     update: (input: UpdateInteractionInput): Promise<Interaction> =>
-      invoke<Interaction>('update_interaction', { input }),
+      invoke<Interaction>('update_interaction', { input: this.rewriteOwnerId(input) }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_interaction', { id }),
   };
@@ -232,9 +238,9 @@ export class TauriAdapter implements PRMAdapter {
       return invoke<Reminder[]>('list_reminders', flat);
     },
     create: (input: CreateReminderInput): Promise<Reminder> =>
-      invoke<Reminder>('create_reminder', { input }),
+      invoke<Reminder>('create_reminder', { input: this.rewriteOwnerId(input) }),
     update: (input: UpdateReminderInput): Promise<Reminder> =>
-      invoke<Reminder>('update_reminder', { input }),
+      invoke<Reminder>('update_reminder', { input: this.rewriteOwnerId(input) }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_reminder', { id }),
     dismiss: (id: string): Promise<void> =>
@@ -247,7 +253,7 @@ export class TauriAdapter implements PRMAdapter {
       return invoke<Tag[]>('list_tags', { user_id });
     },
     create: (input: CreateTagInput): Promise<Tag> =>
-      invoke<Tag>('create_tag', { input }),
+      invoke<Tag>('create_tag', { input: this.rewriteOwnerId(input) }),
     update: (input: UpdateTagInput): Promise<Tag> =>
       invoke<Tag>('update_tag', { input }),
     delete: (id: string): Promise<void> =>
