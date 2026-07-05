@@ -267,7 +267,7 @@ function ProjectCard({ project: p }: { project: Project }) {
         📁
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span className="row-card__title">{p.title}</span>
           <span
             className="badge"
@@ -276,6 +276,7 @@ function ProjectCard({ project: p }: { project: Project }) {
               color: templateColor,
               border: `1px solid ${templateColor}30`,
               fontSize: 'var(--text-xs)',
+              marginLeft: 2,
             }}
           >
             {templateLabel}
