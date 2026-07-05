@@ -61,6 +61,48 @@ pub async fn sync_once(conn: &Connection) -> anyhow::Result<SyncResult> {
     sync_once_with_conn(conn).await
 }
 
+/// Spawn a blocking thread that periodically runs `sync_once`.
+///
+/// Runs one cycle immediately, then sleeps `interval_secs` between cycles.
+/// Each iteration re-checks `is_linked`: unlinked devices stay quiet,
+/// devices linked later via `cloud_login` start syncing on the next tick.
+pub fn spawn_periodic(db_path: std::path::PathBuf, interval_secs: u64) {
+    std::thread::spawn(move || {
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[sync] periodic: create runtime: {e}");
+                return;
+            }
+        };
+        let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE;
+        let conn = match rusqlite::Connection::open_with_flags(&db_path, flags) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[sync] periodic: open db: {e}");
+                return;
+            }
+        };
+        let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
+
+        let interval = std::time::Duration::from_secs(interval_secs);
+        loop {
+            if config::is_linked(&conn).unwrap_or(false) {
+                rt.block_on(async {
+                    match sync_once_with_conn(&conn).await {
+                        Ok(r) => eprintln!(
+                            "[sync] periodic: pushed={} pulled={} conflicts={}",
+                            r.pushed, r.pulled, r.conflicts
+                        ),
+                        Err(e) => eprintln!("[sync] periodic failed: {e}"),
+                    }
+                });
+            }
+            std::thread::sleep(interval);
+        }
+    });
+}
+
 // ── Internal implementation ───────────────────────────
 
 async fn sync_once_with_conn(conn: &Connection) -> anyhow::Result<SyncResult> {

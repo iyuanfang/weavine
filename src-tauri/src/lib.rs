@@ -94,46 +94,11 @@ pub fn run() {
         };
         let is_linked = sync::is_linked(&conn).unwrap_or(false);
         if is_linked {
-            boot_log::log("[sync] cloud sync linked — spawning background sync");
-            let db_path = db::get_db_path();
-            std::thread::spawn(move || {
-                let rt = match tokio::runtime::Runtime::new() {
-                    Ok(r) => r,
-                    Err(e) => {
-                        eprintln!("[sync] create runtime: {e}");
-                        return;
-                    }
-                };
-                let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE;
-                let bg_conn = match rusqlite::Connection::open_with_flags(&db_path, flags) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        eprintln!("[sync] open background db: {e}");
-                        return;
-                    }
-                };
-                let _ = bg_conn.execute_batch(
-                    "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;",
-                );
-                rt.block_on(async {
-                    match sync::sync_once(&bg_conn).await {
-                        Ok(result) => {
-                            let msg = format!(
-                                "[sync] background sync done: pushed={}, pulled={}, conflicts={}",
-                                result.pushed, result.pulled, result.conflicts,
-                            );
-                            eprintln!("{msg}");
-                        }
-                        Err(e) => {
-                            let msg = format!("[sync] background sync failed: {e}");
-                            eprintln!("{msg}");
-                        }
-                    }
-                });
-            });
+            boot_log::log("[sync] cloud sync linked — spawning periodic sync");
         } else {
-            boot_log::log("[sync] not linked — skipping background sync");
+            boot_log::log("[sync] not linked — periodic sync will idle-poll is_linked");
         }
+        sync::spawn_periodic(db::get_db_path(), 300);
     }
 
     tauri::Builder::default()
