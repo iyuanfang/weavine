@@ -35,7 +35,7 @@ impl Database {
     }
 }
 
-fn get_db_path() -> PathBuf {
+pub(crate) fn get_db_path() -> PathBuf {
     let data_dir = dirs::data_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("com.weavine.prm");

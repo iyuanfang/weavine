@@ -6,6 +6,7 @@ pub mod db;
 pub mod migration;
 pub mod models;
 pub mod project_template;
+pub mod sync;
 pub mod tag_color;
 
 #[cfg(feature = "tauri")]
@@ -79,6 +80,59 @@ pub fn run() {
                 boot_log::log(&msg);
                 eprintln!("{msg}");
             }
+        }
+    }
+
+    // ── Background cloud sync ────────────────────────
+    {
+        let conn = match database.conn.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                boot_log::log(&format!("sync: lock failed: {e}"));
+                return;
+            }
+        };
+        let is_linked = sync::is_linked(&conn).unwrap_or(false);
+        if is_linked {
+            boot_log::log("[sync] cloud sync linked — spawning background sync");
+            let db_path = db::get_db_path();
+            std::thread::spawn(move || {
+                let rt = match tokio::runtime::Runtime::new() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("[sync] create runtime: {e}");
+                        return;
+                    }
+                };
+                let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE;
+                let bg_conn = match rusqlite::Connection::open_with_flags(&db_path, flags) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("[sync] open background db: {e}");
+                        return;
+                    }
+                };
+                let _ = bg_conn.execute_batch(
+                    "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;",
+                );
+                rt.block_on(async {
+                    match sync::sync_once(&bg_conn).await {
+                        Ok(result) => {
+                            let msg = format!(
+                                "[sync] background sync done: pushed={}, pulled={}, conflicts={}",
+                                result.pushed, result.pulled, result.conflicts,
+                            );
+                            eprintln!("{msg}");
+                        }
+                        Err(e) => {
+                            let msg = format!("[sync] background sync failed: {e}");
+                            eprintln!("{msg}");
+                        }
+                    }
+                });
+            });
+        } else {
+            boot_log::log("[sync] not linked — skipping background sync");
         }
     }
 
