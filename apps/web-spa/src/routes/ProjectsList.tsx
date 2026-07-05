@@ -247,7 +247,7 @@ function ProjectCard({ project: p }: { project: Project }) {
 
   return (
     <Link
-      to={`/projects/${p.id}`}
+      to={`/projects/${p.id}?from=/projects`}
       className="row-card"
       style={{ textDecoration: 'none', color: 'inherit' }}
     >

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import { stageColor } from '../lib/projectStageColor';
+import { backTarget } from '../lib/backNavigation';
 
 const TEMPLATE_LABELS: Record<string, string> = {
   general: '通用项目',
@@ -84,6 +85,10 @@ export function ProjectDetail() {
   const ownerId = useOwnerId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const fromParam = searchParams.get('from');
+
+  const back = backTarget(fromParam, '/projects');
 
   const [tab, setTab] = useState<TabKey>('overview');
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
@@ -158,7 +163,7 @@ export function ProjectDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: () => adapter.projects.delete(id),
-    onSuccess: () => navigate('/projects'),
+    onSuccess: () => navigate(fromParam || '/projects'),
   });
 
   const addContactMutation = useMutation({
@@ -321,10 +326,13 @@ export function ProjectDetail() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <Link to="/projects" className="btn btn-ghost">
-              ← 列表
+            <Link to={back.href} className="btn btn-ghost">
+              {back.label}
             </Link>
-            <Link to={`/projects/${id}/edit`} className="btn btn-secondary">
+            <Link
+              to={`/projects/${id}/edit?from=${encodeURIComponent(fromParam || `/projects/${id}`)}`}
+              className="btn btn-secondary"
+            >
               编辑
             </Link>
             <button

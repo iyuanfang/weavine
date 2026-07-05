@@ -260,7 +260,7 @@ function ReminderRow({
         )}
         {reminder.contact_id && (
           <Link
-            to={`/contacts/${reminder.contact_id}`}
+            to={`/contacts/${reminder.contact_id}?from=/reminders`}
             className="badge badge--muted"
             style={{ textDecoration: 'none' }}
           >

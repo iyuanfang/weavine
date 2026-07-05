@@ -104,7 +104,7 @@ export function TagDetail() {
       ) : (
         <div style={{ display: 'grid', gap: 6 }}>
           {contacts.map((c) => (
-            <ContactRow key={c.id} contact={c} />
+            <ContactRow key={c.id} contact={c} tagId={tagId} />
           ))}
         </div>
       )}
@@ -112,14 +112,14 @@ export function TagDetail() {
   );
 }
 
-function ContactRow({ contact: c }: { contact: Contact }) {
+function ContactRow({ contact: c, tagId }: { contact: Contact; tagId: string }) {
   const displayName = c.nickname || c.name || '?';
   const { bg, fg } = IMPORTANCE_BADGE[c.importance] ?? IMPORTANCE_BADGE.low;
   const impLabel = IMPORTANCE_LABELS[c.importance];
 
   return (
     <Link
-      to={`/contacts/${c.id}`}
+      to={`/contacts/${c.id}?from=/tags/${tagId}`}
       className="row-card"
       style={{ textDecoration: 'none', color: 'inherit' }}
     >

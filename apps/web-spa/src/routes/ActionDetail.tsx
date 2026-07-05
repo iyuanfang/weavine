@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
+import { backTarget } from '../lib/backNavigation';
 import type { UpdateActionInput } from '../lib/adapter/types';
 import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
 
@@ -27,21 +28,6 @@ const PRIORITY_BADGE: Record<number, { bg: string; fg: string }> = {
   2: { bg: '#fffbeb', fg: '#d97706' },
   3: { bg: '#fef2f2', fg: '#dc2626' },
 };
-
-function backTarget(from: string | null, fallback: string): { href: string; label: string } {
-  if (!from) return { href: fallback, label: '← 返回' };
-  if (from === '/actions') return { href: '/actions', label: '← 待办列表' };
-  if (from === '/calendar') return { href: '/calendar', label: '← 日历' };
-  if (from === '/reminders') return { href: '/reminders', label: '← 提醒' };
-  if (from === '/archive') return { href: '/archive', label: '← 归档' };
-  if (from === '/search') return { href: '/search', label: '← 搜索' };
-  if (from.startsWith('/contacts/')) return { href: from, label: '← 联系人' };
-  if (from.startsWith('/projects/')) return { href: from, label: '← 项目' };
-  if (from.startsWith('/interactions/')) return { href: from, label: '← 互动' };
-  if (from.startsWith('/actions/')) return { href: from, label: '← 待办' };
-  if (from.startsWith('/events/')) return { href: from, label: '← 日程' };
-  return { href: from, label: '← 返回' };
-}
 
 export function ActionDetail() {
   const { id } = useParams() as { id: string };

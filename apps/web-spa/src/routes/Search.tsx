@@ -116,7 +116,7 @@ export function SearchPage() {
               viewAllHref="/contacts"
               items={contacts.map((c) => ({
                 key: c.id,
-                href: `/contacts/${c.id}`,
+                href: `/contacts/${c.id}?from=/search`,
                 title: c.nickname,
                 meta: c.company ?? '',
               }))}
@@ -180,7 +180,7 @@ export function SearchPage() {
               viewAllHref="/projects"
               items={projects.map((p) => ({
                 key: p.id,
-                href: `/projects/${p.id}`,
+                href: `/projects/${p.id}?from=/search`,
                 title: p.title,
                 meta: p.stage,
                 isArchived: !!p.archived_at,

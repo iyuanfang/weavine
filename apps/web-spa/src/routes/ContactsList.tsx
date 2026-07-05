@@ -312,7 +312,7 @@ function ContactRow({
       style={{ padding: '14px 18px' }}
     >
       <Link
-        to={`/contacts/${c.id}`}
+        to={`/contacts/${c.id}?from=/contacts`}
         style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}
       >
         <div
@@ -366,7 +366,7 @@ function ContactRow({
       />
 
       <Link
-        to={`/contacts/${c.id}`}
+        to={`/contacts/${c.id}?from=/contacts`}
         style={{ fontSize: 'var(--text-base)', color: 'var(--muted)', textDecoration: 'none' }}
       >
         →

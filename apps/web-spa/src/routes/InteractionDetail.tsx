@@ -98,7 +98,7 @@ export function InteractionDetail() {
         subtitle={formatDateTime(new Date(interaction.occurred_at))}
         back={
           contact ? (
-            <Link to={`/contacts/${contact.id}`} className="btn btn-ghost">
+            <Link to={`/contacts/${contact.id}?from=/interactions/${id}`} className="btn btn-ghost">
               ← 联系人
             </Link>
           ) : undefined
@@ -141,7 +141,7 @@ export function InteractionDetail() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {contact && (
                 <Link
-                  to={`/contacts/${contact.id}`}
+                  to={`/contacts/${contact.id}?from=/interactions/${id}`}
                   className="tag-chip tag-chip--active"
                   style={{ alignSelf: 'flex-start', textDecoration: 'none' }}
                 >

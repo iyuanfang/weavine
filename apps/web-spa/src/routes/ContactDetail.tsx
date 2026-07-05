@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
+import { backTarget } from '../lib/backNavigation';
 import type { CreateInteractionInput } from '../lib/adapter/types';
 
 const IMPORTANCE_LABELS: Record<string, string> = {
@@ -27,6 +28,10 @@ export function ContactDetail() {
   const ownerId = useOwnerId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const fromParam = searchParams.get('from');
+
+  const back = backTarget(fromParam, '/contacts');
 
   const contactQuery = useQuery({
     queryKey: ['contact', id],
@@ -85,7 +90,7 @@ export function ContactDetail() {
   const deleteMutation = useMutation({
     mutationFn: (contactId: string) => adapter.contacts.delete(contactId),
     onSuccess: () => {
-      navigate('/contacts');
+      navigate(fromParam || '/contacts');
     },
   });
 
@@ -197,10 +202,13 @@ export function ContactDetail() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <Link to="/contacts" className="btn btn-ghost">
-            ← 联系人列表
+          <Link to={back.href} className="btn btn-ghost">
+            {back.label}
           </Link>
-          <Link to={`/contacts/${id}/edit`} className="btn btn-secondary">
+          <Link
+            to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
+            className="btn btn-secondary"
+          >
             编辑
           </Link>
           <button
