@@ -73,7 +73,7 @@ pub fn list(
         }
     }
 
-    sql.push_str(&format!(" ORDER BY due_at ASC, priority DESC LIMIT ?{}", idx));
+    sql.push_str(&format!(" ORDER BY Action.due_at ASC, Action.priority DESC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
 
     let mut stmt = conn.prepare(&sql)?;

@@ -78,7 +78,7 @@ pub fn list(
         }
     }
 
-    sql.push_str(&format!(" ORDER BY start_at ASC LIMIT ?{}", idx));
+    sql.push_str(&format!(" ORDER BY Event.start_at ASC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
 
     let mut stmt = conn.prepare(&sql)?;
