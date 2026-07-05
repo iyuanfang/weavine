@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const EVENT_COLS: &str =
-    "id, user_id, title, event_type, start_at, end_at, location, notes, contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at";
+    "Event.id, Event.user_id, Event.title, Event.event_type, Event.start_at, Event.end_at, Event.location, Event.notes, Event.contact_id, Event.project_id, Event.reminder_lead_minutes, Event.archived_at, Event.created_at, Event.updated_at";
 
 const EVENT_REL_COLS: &str = ", c.nickname AS contact_nickname, p.title AS project_title";
 
@@ -49,32 +49,32 @@ pub fn list(
     let mut idx = 2;
 
     if let Some(cid) = contact_id {
-        sql.push_str(&format!(" AND contact_id = ?{}", idx));
+        sql.push_str(&format!(" AND Event.contact_id = ?{}", idx));
         param_values.push(Box::new(cid.to_string()));
         idx += 1;
     }
     if let Some(pid) = project_id {
-        sql.push_str(&format!(" AND project_id = ?{}", idx));
+        sql.push_str(&format!(" AND Event.project_id = ?{}", idx));
         param_values.push(Box::new(pid.to_string()));
         idx += 1;
     }
     if let Some(after) = start_after {
-        sql.push_str(&format!(" AND start_at >= ?{}", idx));
+        sql.push_str(&format!(" AND Event.start_at >= ?{}", idx));
         param_values.push(Box::new(after.to_string()));
         idx += 1;
     }
     if let Some(before) = start_before {
-        sql.push_str(&format!(" AND start_at <= ?{}", idx));
+        sql.push_str(&format!(" AND Event.start_at <= ?{}", idx));
         param_values.push(Box::new(before.to_string()));
         idx += 1;
     }
     match archived {
         Some(v) if v == "true" || v == "1" => {
-            sql.push_str(" AND archived_at IS NOT NULL");
+            sql.push_str(" AND Event.archived_at IS NOT NULL");
         }
         Some(v) if v == "all" => {}
         _ => {
-            sql.push_str(" AND archived_at IS NULL");
+            sql.push_str(" AND Event.archived_at IS NULL");
         }
     }
 

@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const ACTION_COLS: &str =
-    "id, user_id, title, description, status, priority, category, due_at, contact_id, project_id, completed_at, archived_at, created_at, updated_at";
+    "Action.id, Action.user_id, Action.title, Action.description, Action.status, Action.priority, Action.category, Action.due_at, Action.contact_id, Action.project_id, Action.completed_at, Action.archived_at, Action.created_at, Action.updated_at";
 
 const ACTION_REL_COLS: &str = ", c.nickname AS contact_nickname, p.title AS project_title";
 
@@ -49,27 +49,27 @@ pub fn list(
     let mut idx = 2;
 
     if let Some(s) = status {
-        sql.push_str(&format!(" AND status = ?{}", idx));
+        sql.push_str(&format!(" AND Action.status = ?{}", idx));
         param_values.push(Box::new(s.to_string()));
         idx += 1;
     }
     if let Some(cid) = contact_id {
-        sql.push_str(&format!(" AND contact_id = ?{}", idx));
+        sql.push_str(&format!(" AND Action.contact_id = ?{}", idx));
         param_values.push(Box::new(cid.to_string()));
         idx += 1;
     }
     if let Some(pid) = project_id {
-        sql.push_str(&format!(" AND project_id = ?{}", idx));
+        sql.push_str(&format!(" AND Action.project_id = ?{}", idx));
         param_values.push(Box::new(pid.to_string()));
         idx += 1;
     }
     match archived {
         Some(v) if v == "true" || v == "1" => {
-            sql.push_str(" AND archived_at IS NOT NULL");
+            sql.push_str(" AND Action.archived_at IS NOT NULL");
         }
         Some(v) if v == "all" => {}
         _ => {
-            sql.push_str(" AND archived_at IS NULL");
+            sql.push_str(" AND Action.archived_at IS NULL");
         }
     }
 
