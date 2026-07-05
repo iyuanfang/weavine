@@ -146,7 +146,8 @@ pub async fn update(
         }
     }
     if let Some(v) = body.get("priority").and_then(|v| v.as_i64()) {
-        sets.push(format!("priority = ${}", idx));
+        let p_idx = idx;
+        sets.push(format!("priority = ${}::BIGINT", p_idx));
         params.push(v.to_string());
         idx += 1;
     }

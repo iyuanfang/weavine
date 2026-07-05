@@ -92,7 +92,7 @@ pub async fn create(
     .bind(body.get("notes").and_then(|v| v.as_str()))
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
     .bind(body.get("project_id").and_then(|v| v.as_str()))
-    .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()).map(|n| n as i32))
+    .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()).map(|n| n as i64))
     .bind(&now)
     .bind(&now)
     .execute(&mut *tx)
