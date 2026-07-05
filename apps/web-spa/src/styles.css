@@ -539,26 +539,26 @@ button:focus-visible {
 }
 
 @media (max-width: 640px) {
-  .row-card,
-  .row-card > a {
+  .row-card--mobile-stacked,
+  .row-card--mobile-stacked > a {
     flex-wrap: wrap;
     align-items: flex-start;
     gap: 6px 10px;
   }
-  .row-card__title {
+  .row-card--mobile-stacked .row-card__title {
     order: 1;
     flex: 1 1 100%;
     min-width: 0;
   }
-  .row-card__icon {
+  .row-card--mobile-stacked .row-card__icon {
     order: 2;
     flex: 0 0 auto;
   }
-  .row-card__badges {
+  .row-card--mobile-stacked .row-card__badges {
     order: 3;
     flex: 0 1 auto;
   }
-  .row-card__meta {
+  .row-card--mobile-stacked .row-card__meta {
     order: 4;
     flex: 0 1 auto;
     margin-left: auto;

@@ -362,7 +362,7 @@ function ActionCard({
 
   return (
     <div
-      className={`row-card row-card--${tone}`}
+      className={`row-card row-card--${tone} row-card--mobile-stacked`}
       style={{ opacity: isDone ? 0.55 : 1 }}
     >
       <button
@@ -462,7 +462,7 @@ function EventCard({
   return (
     <Link
       to={`/events/${event.id}?from=/today`}
-      className="row-card"
+      className="row-card row-card--mobile-stacked"
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       <span className="row-card__icon" style={{ fontSize: 'var(--text-lg)' }}>📅</span>
