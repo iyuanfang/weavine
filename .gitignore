@@ -42,3 +42,4 @@ tauri-dist/
 
 # Local logo preview renders (scratch files for design review)
 .weavine-logo-*.png
+target/
