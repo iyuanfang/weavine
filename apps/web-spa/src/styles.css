@@ -538,6 +538,34 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+@media (max-width: 640px) {
+  .row-card,
+  .row-card > a {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px 10px;
+  }
+  .row-card__title {
+    order: 1;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .row-card__icon {
+    order: 2;
+    flex: 0 0 auto;
+  }
+  .row-card__badges {
+    order: 3;
+    flex: 0 1 auto;
+  }
+  .row-card__meta {
+    order: 4;
+    flex: 0 1 auto;
+    margin-left: auto;
+    font-size: var(--text-xs);
+  }
+}
+
 /* ── Inputs ─────────────────────────────────────────── */
 
 .input-base {

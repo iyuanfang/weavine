@@ -405,7 +405,7 @@ function ActionCard({
           gap: 10,
         }}
       >
-        <span style={{ fontSize: 'var(--text-lg)', flexShrink: 0 }}>
+        <span className="row-card__icon" style={{ fontSize: 'var(--text-lg)', flexShrink: 0 }}>
           {isOverdue ? '⏰' : '📌'}
         </span>
         <span
@@ -419,6 +419,7 @@ function ActionCard({
         </span>
         {(action.project_title || action.contact_nickname) && (
           <span
+            className="row-card__badges"
             style={{
               display: 'inline-flex',
               gap: 4,
@@ -464,10 +465,11 @@ function EventCard({
       className="row-card"
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
-      <span style={{ fontSize: 'var(--text-lg)' }}>📅</span>
+      <span className="row-card__icon" style={{ fontSize: 'var(--text-lg)' }}>📅</span>
       <span className="row-card__title">{event.title}</span>
       {(event.location || event.contact_nickname || event.project_title) && (
         <span
+          className="row-card__badges"
           style={{
             display: 'inline-flex',
             gap: 4,
