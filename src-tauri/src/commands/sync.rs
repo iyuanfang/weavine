@@ -18,7 +18,7 @@ pub struct CloudStatus {
     pub last_pushed_revision: i64,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn cloud_login(
     server_url: String,
     email: String,
@@ -46,7 +46,7 @@ pub async fn cloud_login(
     .map_err(|e| format!("status thread panicked: {e}"))?
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn cloud_logout() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {
         let conn = open_db().map_err(|e| e.to_string())?;
@@ -56,7 +56,7 @@ pub async fn cloud_logout() -> Result<(), String> {
     .map_err(|e| format!("logout thread panicked: {e}"))?
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn cloud_sync_now() -> Result<sync::SyncResult, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let conn = open_db().map_err(|e| e.to_string())?;
@@ -68,7 +68,7 @@ pub async fn cloud_sync_now() -> Result<sync::SyncResult, String> {
     .map_err(|e| format!("sync thread panicked: {e}"))?
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn cloud_status(db: State<'_, Database>) -> Result<CloudStatus, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     Ok(cloud_status_inner(&conn))
