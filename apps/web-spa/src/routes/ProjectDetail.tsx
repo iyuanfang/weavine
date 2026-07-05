@@ -238,6 +238,7 @@ export function ProjectDetail() {
     inbox: tasks.filter((t) => t.status === 'inbox').length,
     open: tasks.filter((t) => t.status === 'open').length,
     waiting: tasks.filter((t) => t.status === 'waiting').length,
+    done: tasks.filter((t) => t.status === 'done').length,
   };
   const taskSubText =
     tasks.length === 0
@@ -246,6 +247,7 @@ export function ProjectDetail() {
           taskStatusCounts.inbox ? `${taskStatusCounts.inbox} 收件箱` : null,
           taskStatusCounts.open ? `${taskStatusCounts.open} 进行中` : null,
           taskStatusCounts.waiting ? `${taskStatusCounts.waiting} 等待中` : null,
+          taskStatusCounts.done ? `${taskStatusCounts.done} 已完成` : null,
         ]
           .filter(Boolean)
           .join(' · ');
