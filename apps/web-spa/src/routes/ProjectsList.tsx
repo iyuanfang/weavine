@@ -272,18 +272,6 @@ function ProjectCard({ project: p }: { project: Project }) {
           <span
             className="badge"
             style={{
-              background: `${templateColor}14`,
-              color: templateColor,
-              border: `1px solid ${templateColor}30`,
-              fontSize: 'var(--text-xs)',
-              marginLeft: 2,
-            }}
-          >
-            {templateLabel}
-          </span>
-          <span
-            className="badge"
-            style={{
               background: '#dcfce7',
               color: '#15803d',
               fontSize: 'var(--text-xs)',
@@ -294,6 +282,17 @@ function ProjectCard({ project: p }: { project: Project }) {
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <span
+            className="badge"
+            style={{
+              background: `${templateColor}14`,
+              color: templateColor,
+              border: `1px solid ${templateColor}30`,
+              fontSize: 'var(--text-xs)',
+            }}
+          >
+            {templateLabel}
+          </span>
           <span
             className="row-card__meta"
             style={{ fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
