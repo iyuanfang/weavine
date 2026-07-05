@@ -30,7 +30,7 @@ jobs:
       - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
           shared-key: windows-cargo
           cache-on-failure: true
 
@@ -61,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weavine-windows-msi
-          path: src-tauri/target/release/bundle/msi/*
+          path: target/release/bundle/msi/*
           if-no-files-found: error
 
   build-linux:
@@ -102,7 +102,7 @@ jobs:
       - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
           shared-key: linux-cargo
           cache-on-failure: true
 
@@ -130,10 +130,10 @@ jobs:
         if: always() && steps.build.outcome == 'success'
         run: |
           echo "Bundle directory tree:"
-          find src-tauri/target/release/bundle -maxdepth 4 -type f || true
+          find target/release/bundle -maxdepth 4 -type f || true
           mkdir -p linux-out
           # Use xargs so empty result is not an error
-          find src-tauri/target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 2>/dev/null \
+          find target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 2>/dev/null \
             | xargs -0 -r -I {} cp -v {} linux-out/ 2>&1 || echo "No .deb or .AppImage files found to stage"
           echo "Staged artifacts:"
           ls -la linux-out/ || true
@@ -168,7 +168,7 @@ jobs:
       - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
           shared-key: macos-cargo
           cache-on-failure: true
 
@@ -194,9 +194,9 @@ jobs:
         if: always() && steps.build.outcome == 'success'
         run: |
           echo "Bundle directory tree:"
-          find src-tauri/target/release/bundle -maxdepth 4 -type f || true
+          find target/release/bundle -maxdepth 4 -type f || true
           mkdir -p macos-out
-          find src-tauri/target/release/bundle -type f \( -name '*.dmg' -o -name '*.app' \) -print0 2>/dev/null \
+          find target/release/bundle -type f \( -name '*.dmg' -o -name '*.app' \) -print0 2>/dev/null \
             | xargs -0 -r -I {} cp -rv {} macos-out/ 2>&1 || echo "No .dmg or .app files found to stage"
           echo "Staged artifacts:"
           ls -la macos-out/ || true
