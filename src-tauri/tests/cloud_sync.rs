@@ -25,7 +25,16 @@ fn setup() -> Connection {
         let conn = Connection::open(TEST_DB).expect("open existing test db");
         let _ = conn.execute_batch(
             "DELETE FROM SyncState;
+             DELETE FROM ContactTag;
+             DELETE FROM ProjectContact;
+             DELETE FROM Reminder;
+             DELETE FROM Interaction;
+             DELETE FROM Action;
+             DELETE FROM Event;
+             DELETE FROM Project;
+             DELETE FROM Contact;
              DELETE FROM Tag;
+             DELETE FROM Setting;
              DELETE FROM \"User\" WHERE is_local = 1;
              INSERT INTO \"User\" (id, name, email, is_local, created_at, updated_at)
                VALUES ('local-default', 'Local', 'local@prm.local', 1,
@@ -113,12 +122,13 @@ async fn push_with_boolean_columns_succeeds() {
         .expect("initial link");
 
     let contact_id: String = format!("test-bool-{}", uuid::Uuid::new_v4());
+    let unique_email = format!("bool-{}@test.local", uuid::Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
-        "INSERT INTO \"Contact\" (id, user_id, nickname, importance, reminder_enabled, \
+        "INSERT INTO \"Contact\" (id, user_id, nickname, email, importance, reminder_enabled, \
                                 reminder_interval_days, created_at, updated_at) \
-         VALUES (?1, 'local-default', ?2, 'normal', 1, 7, ?3, ?3)",
-        rusqlite::params![&contact_id, "Bool Test", &now],
+         VALUES (?1, 'local-default', ?2, ?3, 'normal', 1, 7, ?4, ?4)",
+        rusqlite::params![&contact_id, "Bool Test", &unique_email, &now],
     )
     .expect("insert contact");
 

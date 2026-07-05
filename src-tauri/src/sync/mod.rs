@@ -285,7 +285,7 @@ async fn pull_all(
     access_token: &str,
     result: &mut SyncResult,
 ) -> anyhow::Result<()> {
-    let since = last_pulled_revision(conn)?;
+    let mut since = last_pulled_revision(conn)?;
     let local_user_id = "local-default";
 
     loop {
@@ -314,6 +314,7 @@ async fn pull_all(
         if !pull_resp.has_more {
             break;
         }
+        since = pull_resp.latest_revision;
     }
 
     Ok(())
