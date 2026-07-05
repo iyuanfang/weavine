@@ -36,6 +36,9 @@ export function ProjectBadge({ project }: ProjectBadgeProps) {
         className="dot dot--xs"
         style={{ background: color }}
       />
+      <span aria-hidden style={{ flexShrink: 0, fontSize: '0.85em' }}>
+        📁
+      </span>
       <span
         style={{
           overflow: 'hidden',

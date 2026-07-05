@@ -19,6 +19,9 @@ export function ContactBadge({ contact }: ContactBadgeProps) {
         className="contact-badge__marker"
         style={{ background: avatarBg(name) }}
       />
+      <span aria-hidden style={{ flexShrink: 0, fontSize: '0.85em' }}>
+        👤
+      </span>
       <span
         style={{
           overflow: 'hidden',
