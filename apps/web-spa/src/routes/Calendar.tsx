@@ -7,7 +7,7 @@ import { ProjectBadge } from '../components/ProjectBadge';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Event, Project } from '../lib/adapter/types';
+import type { Event } from '../lib/adapter/types';
 
 const TYPE_OPTIONS = [
   { value: 'all', label: '全部', icon: '●', color: '#6b7280' },
@@ -119,21 +119,6 @@ export function Calendar() {
     enabled: !!ownerId,
     refetchOnMount: 'always',
   });
-
-  const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId],
-    queryFn: () =>
-      adapter.projects.list({ owner_id: ownerId!, archived: 'false', limit: 500 }),
-    enabled: !!ownerId,
-  });
-
-  const projectMap = (projectsQuery.data ?? []).reduce<Record<string, Project>>(
-    (acc, p) => {
-      if (!p.archived_at) acc[p.id] = p;
-      return acc;
-    },
-    {},
-  );
 
   const deleteMutation = useMutation({
     mutationFn: (eventId: string) => adapter.events.delete(eventId),
@@ -446,9 +431,14 @@ export function Calendar() {
                               style={{ minWidth: 0 }}
                             >
                               <span className="row-card__meta">{subtitle}</span>
-                              {event.project_id && (
+                              {event.project_id && event.project_title && (
                                 <ProjectBadge
-                                  project={projectMap[event.project_id] ?? null}
+                                  project={{
+                                    id: event.project_id,
+                                    title: event.project_title,
+                                    template: 'general',
+                                    stage: 'planning',
+                                  }}
                                 />
                               )}
                             </span>

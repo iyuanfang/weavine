@@ -10,6 +10,13 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Event;
 
+const EVENT_SELECT: &str = "SELECT e.id, e.user_id, e.title, e.event_type, e.start_at, e.end_at, e.location, e.notes, \
+     e.contact_id, e.project_id, e.reminder_lead_minutes::BIGINT AS reminder_lead_minutes, e.archived_at, e.created_at, e.updated_at, \
+     c.nickname AS contact_nickname, p.title AS project_title \
+     FROM event e \
+     LEFT JOIN contact c ON c.id = e.contact_id AND c.user_id = e.user_id \
+     LEFT JOIN project p ON p.id = e.project_id AND p.user_id = e.user_id";
+
 #[derive(Deserialize)]
 pub struct ListParams {
     pub user_id: Option<String>,
@@ -33,17 +40,15 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Event>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let rows = sqlx::query_as::<_, Event>(
-        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
-         FROM event WHERE user_id = $1 \
-         AND ($2::text IS NULL OR contact_id = $2) \
-         AND ($3::text IS NULL OR project_id = $3) \
-         AND ($4::text IS NULL OR start_at >= $4) \
-         AND ($5::text IS NULL OR start_at <= $5) \
-         AND ($6::text IS NULL OR ($6::text = 'true' AND archived_at IS NOT NULL) OR ($6::text = 'false' AND archived_at IS NULL)) \
-         ORDER BY start_at DESC LIMIT $7",
-    )
+    let rows = sqlx::query_as::<_, Event>(&format!(
+        "{EVENT_SELECT} WHERE e.user_id = $1 \
+         AND ($2::text IS NULL OR e.contact_id = $2) \
+         AND ($3::text IS NULL OR e.project_id = $3) \
+         AND ($4::text IS NULL OR e.start_at >= $4) \
+         AND ($5::text IS NULL OR e.start_at <= $5) \
+         AND ($6::text IS NULL OR ($6::text = 'true' AND e.archived_at IS NOT NULL) OR ($6::text = 'false' AND e.archived_at IS NULL)) \
+         ORDER BY e.start_at DESC LIMIT $7",
+    ))
     .bind(&auth)
     .bind(&p.contact_id)
     .bind(&p.project_id)
@@ -103,11 +108,9 @@ pub async fn create(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let event = sqlx::query_as::<_, Event>(
-        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
-         FROM event WHERE id = $1",
-    )
+    let event = sqlx::query_as::<_, Event>(&format!(
+        "{EVENT_SELECT} WHERE e.id = $1",
+    ))
     .bind(&id)
     .fetch_one(&*pool)
     .await
@@ -121,11 +124,9 @@ pub async fn get(
     Path(id): Path<String>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let event = sqlx::query_as::<_, Event>(
-        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
-         FROM event WHERE id = $1 AND user_id = $2",
-    )
+    let event = sqlx::query_as::<_, Event>(&format!(
+        "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2",
+    ))
     .bind(&id)
     .bind(&auth)
     .fetch_optional(&*pool)
@@ -241,12 +242,10 @@ pub async fn upcoming(
 ) -> Result<Json<Vec<Event>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let now = super::now_str();
-    let rows = sqlx::query_as::<_, Event>(
-        "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
-         FROM event WHERE user_id = $1 AND start_at >= $2 AND archived_at IS NULL \
-         ORDER BY start_at LIMIT $3",
-    )
+    let rows = sqlx::query_as::<_, Event>(&format!(
+        "{EVENT_SELECT} WHERE e.user_id = $1 AND e.start_at >= $2 AND e.archived_at IS NULL \
+         ORDER BY e.start_at LIMIT $3",
+    ))
     .bind(&auth).bind(&now)
     .bind(p.limit.unwrap_or(20))
     .fetch_all(&*pool).await

@@ -1,10 +1,16 @@
 import { Link } from 'react-router-dom';
 
 import { stageColor } from '../lib/projectStageColor';
-import type { Project } from '../lib/adapter/types';
+
+export interface ProjectBadgeProject {
+  id: string;
+  title: string;
+  template: string;
+  stage: string;
+}
 
 interface ProjectBadgeProps {
-  project: Project | null | undefined;
+  project: ProjectBadgeProject | null | undefined;
 }
 
 export function ProjectBadge({ project }: ProjectBadgeProps) {

@@ -5,6 +5,11 @@ use uuid::Uuid;
 const ACTION_COLS: &str =
     "id, user_id, title, description, status, priority, category, due_at, contact_id, project_id, completed_at, archived_at, created_at, updated_at";
 
+const ACTION_REL_COLS: &str = ", c.nickname AS contact_nickname, p.title AS project_title";
+
+const ACTION_JOINS: &str = " LEFT JOIN \"Contact\" c ON c.id = Action.contact_id AND c.user_id = Action.user_id \
+                             LEFT JOIN \"Project\" p ON p.id = Action.project_id AND p.user_id = Action.user_id";
+
 pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
     Ok(Action {
         id: row.get(0)?,
@@ -21,6 +26,8 @@ pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
         archived_at: row.get(11)?,
         created_at: row.get(12)?,
         updated_at: row.get(13)?,
+        contact_nickname: row.get(14)?,
+        project_title: row.get(15)?,
     })
 }
 
@@ -36,7 +43,7 @@ pub fn list(
     let limit = limit.unwrap_or(100);
 
     let mut sql = format!(
-        "SELECT {ACTION_COLS} FROM Action WHERE user_id = ?1"
+        "SELECT {ACTION_COLS}{ACTION_REL_COLS} FROM Action{ACTION_JOINS} WHERE Action.user_id = ?1"
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
@@ -112,7 +119,7 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
     )?;
 
     conn.query_row(
-        &format!("SELECT {ACTION_COLS} FROM Action WHERE id = ?1"),
+        &format!("SELECT {ACTION_COLS}{ACTION_REL_COLS} FROM Action{ACTION_JOINS} WHERE Action.id = ?1"),
         rusqlite::params![&id],
         row_to_action,
     )
@@ -194,7 +201,7 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
     }
 
     conn.query_row(
-        &format!("SELECT {ACTION_COLS} FROM Action WHERE id = ?1"),
+        &format!("SELECT {ACTION_COLS}{ACTION_REL_COLS} FROM Action{ACTION_JOINS} WHERE Action.id = ?1"),
         rusqlite::params![&input.id],
         row_to_action,
     )
@@ -207,7 +214,7 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Action> {
     conn.query_row(
-        &format!("SELECT {ACTION_COLS} FROM Action WHERE id = ?1"),
+        &format!("SELECT {ACTION_COLS}{ACTION_REL_COLS} FROM Action{ACTION_JOINS} WHERE Action.id = ?1"),
         rusqlite::params![id],
         row_to_action,
     )

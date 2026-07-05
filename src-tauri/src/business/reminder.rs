@@ -2,6 +2,12 @@ use crate::models::*;
 use rusqlite::Connection;
 use uuid::Uuid;
 
+const REMINDER_COLS: &str =
+    "Reminder.id, Reminder.user_id, Reminder.contact_id, Reminder.event_id, Reminder.trigger_at, Reminder.kind, Reminder.dispatched, Reminder.dismissed, Reminder.created_at, c.nickname AS contact_nickname";
+
+const REMINDER_JOIN: &str =
+    " LEFT JOIN \"Contact\" c ON c.id = Reminder.contact_id AND c.user_id = Reminder.user_id";
+
 pub(crate) fn row_to_reminder(row: &rusqlite::Row) -> rusqlite::Result<Reminder> {
     Ok(Reminder {
         id: row.get(0)?,
@@ -13,6 +19,7 @@ pub(crate) fn row_to_reminder(row: &rusqlite::Row) -> rusqlite::Result<Reminder>
         dispatched: row.get::<_, i64>(6)? != 0,
         dismissed: row.get::<_, i64>(7)? != 0,
         created_at: row.get(8)?,
+        contact_nickname: row.get(9)?,
     })
 }
 
@@ -27,9 +34,8 @@ pub fn list(
     let limit = limit.unwrap_or(100);
     let include_dismissed = include_dismissed.unwrap_or(false);
 
-    let mut sql = String::from(
-        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM Reminder WHERE user_id = ?1",
+    let mut sql = format!(
+        "SELECT {REMINDER_COLS} FROM Reminder{REMINDER_JOIN} WHERE Reminder.user_id = ?1",
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
@@ -86,8 +92,7 @@ pub fn create(conn: &Connection, input: &CreateReminderInput) -> rusqlite::Resul
     )?;
 
     conn.query_row(
-        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM Reminder WHERE id = ?1",
+        &format!("SELECT {REMINDER_COLS} FROM Reminder{REMINDER_JOIN} WHERE Reminder.id = ?1"),
         rusqlite::params![&id],
         row_to_reminder,
     )
@@ -131,8 +136,7 @@ pub fn update(conn: &Connection, input: &UpdateReminderInput) -> rusqlite::Resul
     }
 
     conn.query_row(
-        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM Reminder WHERE id = ?1",
+        &format!("SELECT {REMINDER_COLS} FROM Reminder{REMINDER_JOIN} WHERE Reminder.id = ?1"),
         rusqlite::params![&input.id],
         row_to_reminder,
     )
@@ -154,8 +158,10 @@ pub fn dismiss(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 pub fn claim_due_reminders(conn: &Connection) -> rusqlite::Result<Vec<Reminder>> {
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     let mut stmt = conn.prepare(
-        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM Reminder WHERE dismissed = 0 AND dispatched = 0 AND trigger_at <= ?1",
+        &format!(
+            "SELECT {REMINDER_COLS} FROM Reminder{REMINDER_JOIN} \
+             WHERE Reminder.dismissed = 0 AND Reminder.dispatched = 0 AND Reminder.trigger_at <= ?1",
+        ),
     )?;
     let reminders: Vec<Reminder> = stmt
         .query_map([&now], row_to_reminder)?

@@ -13,8 +13,15 @@ pub(crate) fn row_to_interaction(row: &rusqlite::Row) -> rusqlite::Result<Intera
         channel: row.get(6)?,
         summary: row.get(7)?,
         created_at: row.get(8)?,
+        contact_nickname: row.get(9)?,
     })
 }
+
+const INTERACTION_COLS: &str =
+    "Interaction.id, Interaction.user_id, Interaction.contact_id, Interaction.action_id, Interaction.event_id, Interaction.occurred_at, Interaction.channel, Interaction.summary, Interaction.created_at, c.nickname AS contact_nickname";
+
+const INTERACTION_JOIN: &str =
+    " LEFT JOIN \"Contact\" c ON c.id = Interaction.contact_id AND c.user_id = Interaction.user_id";
 
 pub fn list(
     conn: &Connection,
@@ -26,9 +33,8 @@ pub fn list(
 ) -> rusqlite::Result<Vec<Interaction>> {
     let limit = limit.unwrap_or(50);
 
-    let mut sql = String::from(
-        "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
-         FROM Interaction WHERE user_id = ?1",
+    let mut sql = format!(
+        "SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.user_id = ?1",
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
@@ -88,8 +94,7 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
     )?;
 
     conn.query_row(
-        "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
-         FROM Interaction WHERE id = ?1",
+        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
         rusqlite::params![&id],
         row_to_interaction,
     )
@@ -143,8 +148,7 @@ pub fn update(conn: &Connection, input: &UpdateInteractionInput) -> rusqlite::Re
     }
 
     conn.query_row(
-        "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
-         FROM Interaction WHERE id = ?1",
+        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
         rusqlite::params![&input.id],
         row_to_interaction,
     )
@@ -157,8 +161,7 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Interaction> {
     conn.query_row(
-        "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
-         FROM Interaction WHERE id = ?1",
+        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
         rusqlite::params![id],
         row_to_interaction,
     )

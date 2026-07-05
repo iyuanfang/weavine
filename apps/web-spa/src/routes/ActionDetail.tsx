@@ -40,19 +40,6 @@ export function ActionDetail() {
     queryFn: () => adapter.actions.get(id),
   });
 
-  const contactQuery = useQuery({
-    queryKey: ['contacts', ownerId, 'all'],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
-  });
-
-  const contactMap = (contactQuery.data ?? []).reduce<
-    Record<string, { id: string; nickname: string; name: string | null }>
-  >((acc, c) => {
-    acc[c.id] = { id: c.id, nickname: c.nickname, name: c.name };
-    return acc;
-  }, {});
-
   const projectId = actionQuery.data?.project_id ?? null;
   const projectQuery = useQuery({
     queryKey: ['project', projectId],
@@ -108,7 +95,6 @@ export function ActionDetail() {
   }
 
   const action = actionQuery.data!;
-  const contact = action.contact_id ? contactMap[action.contact_id] : null;
   const statusLabel = STATUS_LABEL[action.status] ?? action.status;
   const prio = PRIORITY_BADGE[action.priority] ?? PRIORITY_BADGE[0];
   const prioLabel = PRIORITY_LABELS[action.priority] ?? '';
@@ -213,12 +199,12 @@ export function ActionDetail() {
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 关联联系人
               </div>
-              {contact ? (
+              {action.contact_id ? (
                 <Link
-                  to={`/contacts/${contact.id}`}
+                  to={`/contacts/${action.contact_id}`}
                   className="tag-chip tag-chip--active"
                 >
-                  {contact.nickname ?? contact.name ?? '?'}
+                  {action.contact_nickname ?? '?'}
                 </Link>
               ) : (
                 <span className="text-sm text-muted">—</span>

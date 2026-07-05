@@ -24,7 +24,7 @@ import { priorityMeta } from '../components/PriorityPicker';
 import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Action, Project, UpdateActionInput } from '../lib/adapter/types';
+import type { Action, UpdateActionInput } from '../lib/adapter/types';
 
 const PRIORITY_OPTIONS = [
   { value: 'all', label: '全部' },
@@ -119,34 +119,6 @@ export function ActionsList() {
     refetchOnMount: 'always',
   });
 
-  const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
-  });
-
-  const contactMap = (contactsQuery.data ?? []).reduce<
-    Record<string, { id: string; nickname: string; name: string | null }>
-  >((acc, c) => {
-    acc[c.id] = { id: c.id, nickname: c.nickname, name: c.name };
-    return acc;
-  }, {});
-
-  const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId],
-    queryFn: () =>
-      adapter.projects.list({ owner_id: ownerId!, archived: 'false', limit: 500 }),
-    enabled: !!ownerId,
-  });
-
-  const projectMap = (projectsQuery.data ?? []).reduce<Record<string, Project>>(
-    (acc, p) => {
-      if (!p.archived_at) acc[p.id] = p;
-      return acc;
-    },
-    {},
-  );
-
   const updateMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
     onMutate: async (input) => {
@@ -232,8 +204,7 @@ export function ActionsList() {
         a.title,
         a.description ?? '',
         a.category ?? '',
-        a.contact_id ? contactMap[a.contact_id]?.nickname ?? '' : '',
-        a.contact_id ? contactMap[a.contact_id]?.name ?? '' : '',
+        a.contact_nickname ?? '',
       ]
         .join(' ')
         .toLowerCase();
@@ -537,8 +508,6 @@ export function ActionsList() {
                       isCollapsed={isCollapsed}
                       onToggle={toggle}
                       overdueInSection={overdueInSection}
-                      contactMap={contactMap}
-                      projectMap={projectMap}
                       updateMutation={updateMutation}
                       deleteMutation={deleteMutation}
                       activeDragId={activeDragId}
@@ -560,12 +529,6 @@ export function ActionsList() {
                   >
                     <ActionRowBody
                       action={activeDragAction}
-                      contact={
-                        activeDragAction.contact_id
-                          ? contactMap[activeDragAction.contact_id] ?? null
-                          : null
-                      }
-                      projectMap={projectMap}
                       onToggleDone={() => {}}
                       onDelete={() => {}}
                       isUpdating={false}
@@ -585,8 +548,6 @@ export function ActionsList() {
 
 type ActionRowBodyProps = {
   action: Action;
-  contact: { id: string; nickname: string; name: string | null } | null;
-  projectMap: Record<string, Project>;
   onToggleDone: () => void;
   onDelete: () => void;
   isUpdating: boolean;
@@ -596,8 +557,6 @@ type ActionRowBodyProps = {
 
 function ActionRowBody({
   action,
-  contact,
-  projectMap,
   onToggleDone,
   onDelete,
   isUpdating,
@@ -605,7 +564,20 @@ function ActionRowBody({
   dragHandleProps,
 }: ActionRowBodyProps) {
   const isDone = action.status === 'done';
-  const displayName = contact ? (contact.nickname ?? contact.name ?? '?') : '';
+  const contactMini =
+    action.contact_id && action.contact_nickname
+      ? { id: action.contact_id, nickname: action.contact_nickname, name: null }
+      : null;
+  const projectMini =
+    action.project_id && action.project_title
+      ? {
+          id: action.project_id,
+          title: action.project_title,
+          template: 'general',
+          stage: 'planning',
+          owner_id: action.owner_id,
+        }
+      : null;
   const [hovered, setHovered] = useState(false);
 
   const dueDate = action.due_at ? new Date(action.due_at) : null;
@@ -741,10 +713,8 @@ function ActionRowBody({
               {category.label}
             </span>
           )}
-          {displayName && contact && <ContactBadge contact={contact} />}
-          {action.project_id && (
-            <ProjectBadge project={projectMap[action.project_id] ?? null} />
-          )}
+          {contactMini && <ContactBadge contact={contactMini} />}
+          {action.project_id && <ProjectBadge project={projectMini} />}
         </div>
       </Link>
 
@@ -805,15 +775,11 @@ function ActionRowBody({
 
 function DraggableActionRow({
   action,
-  contact,
-  projectMap,
   onToggleDone,
   onDelete,
   isUpdating,
 }: {
   action: Action;
-  contact: { id: string; nickname: string; name: string | null } | null;
-  projectMap: Record<string, Project>;
   onToggleDone: () => void;
   onDelete: () => void;
   isUpdating: boolean;
@@ -831,8 +797,6 @@ function DraggableActionRow({
     >
       <ActionRowBody
         action={action}
-        contact={contact}
-        projectMap={projectMap}
         onToggleDone={onToggleDone}
         onDelete={onDelete}
         isUpdating={isUpdating}
@@ -850,8 +814,6 @@ type StatusSectionProps = {
   isCollapsed: boolean;
   onToggle: () => void;
   overdueInSection: number;
-  contactMap: Record<string, { id: string; nickname: string; name: string | null }>;
-  projectMap: Record<string, Project>;
   updateMutation: ReturnType<typeof useMutation<unknown, Error, UpdateActionInput, { prev: Action[] | undefined }>>;
   deleteMutation: ReturnType<typeof useMutation<unknown, Error, string, { prev: Action[] | undefined }>>;
   activeDragId: string | null;
@@ -864,8 +826,6 @@ function StatusSection({
   isCollapsed,
   onToggle,
   overdueInSection,
-  contactMap,
-  projectMap,
   updateMutation,
   deleteMutation,
   activeDragId,
@@ -956,8 +916,6 @@ function StatusSection({
             <DraggableActionRow
               key={a.id}
               action={a}
-              contact={a.contact_id ? contactMap[a.contact_id] : null}
-              projectMap={projectMap}
               onToggleDone={() =>
                 updateMutation.mutate({
                   id: a.id,

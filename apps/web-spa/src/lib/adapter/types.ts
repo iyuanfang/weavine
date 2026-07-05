@@ -72,6 +72,10 @@ export interface Event {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  /** LEFT JOIN Contact — only set when contact_id is not null */
+  contact_nickname?: string | null;
+  /** LEFT JOIN Project — only set when project_id is not null */
+  project_title?: string | null;
 }
 
 export interface Interaction {
@@ -84,6 +88,8 @@ export interface Interaction {
   channel: string | null;
   summary: string;
   created_at: string;
+  /** LEFT JOIN Contact — only set when contact_id is not null */
+  contact_nickname?: string | null;
 }
 
 export interface Project {
@@ -116,6 +122,10 @@ export interface Action {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  /** LEFT JOIN Contact — only set when contact_id is not null */
+  contact_nickname?: string | null;
+  /** LEFT JOIN Project — only set when project_id is not null */
+  project_title?: string | null;
 }
 
 export interface Reminder {
@@ -128,6 +138,8 @@ export interface Reminder {
   dispatched: boolean;
   dismissed: boolean;
   created_at: string;
+  /** LEFT JOIN Contact — only set when contact_id is not null */
+  contact_nickname?: string | null;
 }
 
 export interface Setting {

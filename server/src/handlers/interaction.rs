@@ -10,6 +10,11 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Interaction;
 
+const INTERACTION_SELECT: &str = "SELECT i.id, i.user_id, i.contact_id, i.action_id, i.event_id, i.occurred_at, i.channel, i.summary, i.created_at, \
+     c.nickname AS contact_nickname \
+     FROM interaction i \
+     LEFT JOIN contact c ON c.id = i.contact_id AND c.user_id = i.user_id";
+
 #[derive(Deserialize)]
 pub struct ListParams {
     pub user_id: Option<String>,
@@ -25,14 +30,13 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Interaction>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let rows = sqlx::query_as::<_, Interaction>(
-        "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
-         FROM interaction WHERE user_id = $1 \
-         AND ($2::text IS NULL OR contact_id = $2) \
-         AND ($3::text IS NULL OR action_id = $3) \
-         AND ($4::text IS NULL OR event_id = $4) \
-         ORDER BY occurred_at DESC LIMIT $5",
-    )
+    let rows = sqlx::query_as::<_, Interaction>(&format!(
+        "{INTERACTION_SELECT} WHERE i.user_id = $1 \
+         AND ($2::text IS NULL OR i.contact_id = $2) \
+         AND ($3::text IS NULL OR i.action_id = $3) \
+         AND ($4::text IS NULL OR i.event_id = $4) \
+         ORDER BY i.occurred_at DESC LIMIT $5",
+    ))
     .bind(&auth).bind(&p.contact_id).bind(&p.action_id)
     .bind(&p.event_id).bind(p.limit.unwrap_or(100))
     .fetch_all(&*pool).await
@@ -79,10 +83,9 @@ pub async fn create(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let interaction = sqlx::query_as::<_, Interaction>(
-        "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
-         FROM interaction WHERE id = $1",
-    )
+    let interaction = sqlx::query_as::<_, Interaction>(&format!(
+        "{INTERACTION_SELECT} WHERE i.id = $1",
+    ))
     .bind(&id)
     .fetch_one(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -95,10 +98,9 @@ pub async fn get(
     Path(id): Path<String>,
 ) -> Result<Json<Interaction>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let interaction = sqlx::query_as::<_, Interaction>(
-        "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
-         FROM interaction WHERE id = $1 AND user_id = $2",
-    )
+    let interaction = sqlx::query_as::<_, Interaction>(&format!(
+        "{INTERACTION_SELECT} WHERE i.id = $1 AND i.user_id = $2",
+    ))
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?

@@ -21,20 +21,6 @@ export function EventDetail() {
     queryFn: () => adapter.events.get(id),
   });
 
-  const contactId = eventQuery.data?.contact_id ?? null;
-  const contactQuery = useQuery({
-    queryKey: ['contact', contactId],
-    queryFn: () => adapter.contacts.get(contactId!),
-    enabled: !!contactId,
-  });
-
-  const projectId = eventQuery.data?.project_id ?? null;
-  const projectQuery = useQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => adapter.projects.get(projectId!),
-    enabled: !!projectId && projectId !== 'projectId',
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (eventId: string) => adapter.events.delete(eventId),
     onSuccess: () => navigate('/calendar'),
@@ -168,12 +154,12 @@ export function EventDetail() {
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 联系人
               </div>
-              {contactId && contactQuery.data ? (
+              {eventQuery.data?.contact_id ? (
                 <Link
-                  to={`/contacts/${contactId}`}
+                  to={`/contacts/${eventQuery.data.contact_id}`}
                   className="tag-chip tag-chip--active"
                 >
-                  {contactQuery.data.nickname ?? contactQuery.data.name ?? '?'}
+                  {eventQuery.data.contact_nickname ?? '?'}
                 </Link>
               ) : (
                 <span className="text-sm text-muted">—</span>
@@ -183,12 +169,12 @@ export function EventDetail() {
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 项目
               </div>
-              {projectQuery.data ? (
+              {eventQuery.data?.project_id && eventQuery.data.project_title ? (
                 <Link
-                  to={`/projects/${projectQuery.data.id}`}
+                  to={`/projects/${eventQuery.data.project_id}`}
                   className="tag-chip tag-chip--active"
                 >
-                  {projectQuery.data.title}
+                  {eventQuery.data.project_title}
                 </Link>
               ) : (
                 <span className="text-sm text-muted">—</span>

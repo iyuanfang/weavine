@@ -6,6 +6,11 @@ use uuid::Uuid;
 const EVENT_COLS: &str =
     "id, user_id, title, event_type, start_at, end_at, location, notes, contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at";
 
+const EVENT_REL_COLS: &str = ", c.nickname AS contact_nickname, p.title AS project_title";
+
+const EVENT_JOINS: &str = " LEFT JOIN \"Contact\" c ON c.id = Event.contact_id AND c.user_id = Event.user_id \
+                            LEFT JOIN \"Project\" p ON p.id = Event.project_id AND p.user_id = Event.user_id";
+
 pub(crate) fn row_to_event(row: &rusqlite::Row) -> rusqlite::Result<Event> {
     Ok(Event {
         id: row.get(0)?,
@@ -22,6 +27,8 @@ pub(crate) fn row_to_event(row: &rusqlite::Row) -> rusqlite::Result<Event> {
         archived_at: row.get(11)?,
         created_at: row.get(12)?,
         updated_at: row.get(13)?,
+        contact_nickname: row.get(14)?,
+        project_title: row.get(15)?,
     })
 }
 
@@ -37,7 +44,7 @@ pub fn list(
 ) -> rusqlite::Result<Vec<Event>> {
     let limit = limit.unwrap_or(100);
 
-    let mut sql = format!("SELECT {EVENT_COLS} FROM Event WHERE user_id = ?1");
+    let mut sql = format!("SELECT {EVENT_COLS}{EVENT_REL_COLS} FROM Event{EVENT_JOINS} WHERE Event.user_id = ?1");
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
@@ -115,7 +122,7 @@ pub fn create(conn: &Connection, input: &CreateEventInput) -> rusqlite::Result<E
     )?;
 
     let event = conn.query_row(
-        &format!("SELECT {EVENT_COLS} FROM Event WHERE id = ?1"),
+        &format!("SELECT {EVENT_COLS}{EVENT_REL_COLS} FROM Event{EVENT_JOINS} WHERE Event.id = ?1"),
         rusqlite::params![&id],
         row_to_event,
     )?;
@@ -203,7 +210,7 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
     }
 
     let event = conn.query_row(
-        &format!("SELECT {EVENT_COLS} FROM Event WHERE id = ?1"),
+        &format!("SELECT {EVENT_COLS}{EVENT_REL_COLS} FROM Event{EVENT_JOINS} WHERE Event.id = ?1"),
         rusqlite::params![&input.id],
         row_to_event,
     )?;
@@ -223,7 +230,7 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Event> {
     conn.query_row(
-        &format!("SELECT {EVENT_COLS} FROM Event WHERE id = ?1"),
+        &format!("SELECT {EVENT_COLS}{EVENT_REL_COLS} FROM Event{EVENT_JOINS} WHERE Event.id = ?1"),
         rusqlite::params![id],
         row_to_event,
     )
@@ -237,8 +244,8 @@ pub fn get_upcoming(conn: &Connection, user_id: &str, limit: Option<i64>) -> rus
 
     let mut stmt = conn.prepare(
         &format!(
-            "SELECT {EVENT_COLS} FROM Event WHERE user_id = ?1 AND start_at >= ?2 AND archived_at IS NULL \
-             ORDER BY start_at ASC LIMIT ?3"
+            "SELECT {EVENT_COLS}{EVENT_REL_COLS} FROM Event{EVENT_JOINS} WHERE Event.user_id = ?1 AND Event.start_at >= ?2 AND Event.archived_at IS NULL \
+             ORDER BY Event.start_at ASC LIMIT ?3"
         ),
     )?;
 

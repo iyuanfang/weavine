@@ -10,6 +10,11 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Reminder;
 
+const REMINDER_SELECT: &str = "SELECT r.id, r.user_id, r.contact_id, r.event_id, r.trigger_at, r.kind, r.dispatched, r.dismissed, r.created_at, \
+     c.nickname AS contact_nickname \
+     FROM reminder r \
+     LEFT JOIN contact c ON c.id = r.contact_id AND c.user_id = r.user_id";
+
 #[derive(Deserialize)]
 pub struct ListParams {
     pub user_id: Option<String>,
@@ -25,14 +30,13 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Reminder>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let rows = sqlx::query_as::<_, Reminder>(
-        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM reminder WHERE user_id = $1 \
-         AND ($2::text IS NULL OR contact_id = $2) \
-         AND ($3::text IS NULL OR event_id = $3) \
-         AND ($4::bool IS NULL OR $4 = false OR dismissed = $4) \
-         ORDER BY trigger_at LIMIT $5",
-    )
+    let rows = sqlx::query_as::<_, Reminder>(&format!(
+        "{REMINDER_SELECT} WHERE r.user_id = $1 \
+         AND ($2::text IS NULL OR r.contact_id = $2) \
+         AND ($3::text IS NULL OR r.event_id = $3) \
+         AND ($4::bool IS NULL OR $4 = false OR r.dismissed = $4) \
+         ORDER BY r.trigger_at LIMIT $5",
+    ))
     .bind(&auth).bind(&p.contact_id).bind(&p.event_id)
     .bind(p.include_dismissed.unwrap_or(false))
     .bind(p.limit.unwrap_or(50))
@@ -78,10 +82,9 @@ pub async fn create(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let reminder = sqlx::query_as::<_, Reminder>(
-        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM reminder WHERE id = $1",
-    )
+    let reminder = sqlx::query_as::<_, Reminder>(&format!(
+        "{REMINDER_SELECT} WHERE r.id = $1",
+    ))
     .bind(&id)
     .fetch_one(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -94,10 +97,9 @@ pub async fn get(
     Path(id): Path<String>,
 ) -> Result<Json<Reminder>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let reminder = sqlx::query_as::<_, Reminder>(
-        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
-         FROM reminder WHERE id = $1 AND user_id = $2",
-    )
+    let reminder = sqlx::query_as::<_, Reminder>(&format!(
+        "{REMINDER_SELECT} WHERE r.id = $1 AND r.user_id = $2",
+    ))
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?

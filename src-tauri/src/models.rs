@@ -76,6 +76,10 @@ pub struct Event {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub contact_nickname: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub project_title: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,6 +94,8 @@ pub struct Interaction {
     pub channel: Option<String>,
     pub summary: String,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub contact_nickname: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +132,10 @@ pub struct Action {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub contact_nickname: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub project_title: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,6 +166,8 @@ pub struct Reminder {
     pub dispatched: bool,
     pub dismissed: bool,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub contact_nickname: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

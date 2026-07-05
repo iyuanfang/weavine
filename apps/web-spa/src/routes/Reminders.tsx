@@ -61,19 +61,6 @@ export function Reminders() {
     enabled: !!ownerId,
   });
 
-  const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
-  });
-
-  const contactMap = (contactsQuery.data ?? []).reduce<
-    Record<string, { id: string; nickname: string; name: string | null }>
-  >((acc, c) => {
-    acc[c.id] = { id: c.id, nickname: c.nickname, name: c.name };
-    return acc;
-  }, {});
-
   const eventsQuery = useQuery({
     queryKey: ['events', ownerId, 'all', 'active'],
     queryFn: () =>
@@ -135,7 +122,7 @@ export function Reminders() {
   const visible = kindFilter === 'all' ? allReminders : allReminders.filter((r) => r.kind === kindFilter);
 
   const isLoading =
-    remindersQuery.isLoading || contactsQuery.isLoading || eventsQuery.isLoading;
+    remindersQuery.isLoading || eventsQuery.isLoading;
 
   return (
     <div className="page">
@@ -206,7 +193,6 @@ export function Reminders() {
                 <ReminderRow
                   key={r.id}
                   reminder={r}
-                  contact={r.contact_id ? contactMap[r.contact_id] : null}
                   event={r.event_id ? eventMap[r.event_id] : null}
                   onDismiss={dismissMutation.mutate}
                   onDelete={deleteMutation.mutate}
@@ -224,7 +210,6 @@ export function Reminders() {
 
 function ReminderRow({
   reminder,
-  contact,
   event,
   onDismiss,
   onDelete,
@@ -232,7 +217,6 @@ function ReminderRow({
   isDeleting,
 }: {
   reminder: Reminder;
-  contact: { id: string; nickname: string; name: string | null } | null;
   event: { id: string; title: string } | null;
   onDismiss: (id: string) => void;
   onDelete: (id: string) => void;
@@ -242,7 +226,7 @@ function ReminderRow({
   const triggerTime = formatReminderTime(new Date(reminder.trigger_at));
   const kindLabel = KIND_LABELS[reminder.kind] ?? reminder.kind;
   const kindIcon = KIND_ICONS[reminder.kind] ?? '';
-  const contactLabel = contact ? (contact.nickname ?? contact.name ?? '?') : '';
+  const contactLabel = reminder.contact_nickname ?? '';
   const displayName = event?.title ?? contactLabel;
 
   return (
@@ -274,9 +258,9 @@ function ReminderRow({
             日程
           </Link>
         )}
-        {contact && (
+        {reminder.contact_id && (
           <Link
-            to={`/contacts/${contact.id}`}
+            to={`/contacts/${reminder.contact_id}`}
             className="badge badge--muted"
             style={{ textDecoration: 'none' }}
           >

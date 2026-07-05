@@ -10,6 +10,13 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Action;
 
+const ACTION_SELECT: &str = "SELECT a.id, a.user_id, a.title, a.description, a.status, a.priority::BIGINT AS priority, a.category, a.due_at, \
+     a.contact_id, a.project_id, a.completed_at, a.archived_at, a.created_at, a.updated_at, \
+     c.nickname AS contact_nickname, p.title AS project_title \
+     FROM action a \
+     LEFT JOIN contact c ON c.id = a.contact_id AND c.user_id = a.user_id \
+     LEFT JOIN project p ON p.id = a.project_id AND p.user_id = a.user_id";
+
 #[derive(Deserialize)]
 pub struct ListParams {
     pub user_id: Option<String>,
@@ -26,16 +33,14 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Action>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let rows = sqlx::query_as::<_, Action>(
-        "SELECT id, user_id, title, description, status, priority::BIGINT AS priority, category, due_at, \
-                contact_id, project_id, completed_at, archived_at, created_at, updated_at \
-         FROM action WHERE user_id = $1 \
-         AND ($2::text IS NULL OR status = $2) \
-         AND ($3::text IS NULL OR contact_id = $3) \
-         AND ($4::text IS NULL OR project_id = $4) \
-         AND ($5::text IS NULL OR ($5::text = 'true' AND archived_at IS NOT NULL) OR ($5::text = 'false' AND archived_at IS NULL)) \
-         ORDER BY created_at DESC LIMIT $6",
-    )
+    let rows = sqlx::query_as::<_, Action>(&format!(
+        "{ACTION_SELECT} WHERE a.user_id = $1 \
+         AND ($2::text IS NULL OR a.status = $2) \
+         AND ($3::text IS NULL OR a.contact_id = $3) \
+         AND ($4::text IS NULL OR a.project_id = $4) \
+         AND ($5::text IS NULL OR ($5::text = 'true' AND a.archived_at IS NOT NULL) OR ($5::text = 'false' AND a.archived_at IS NULL)) \
+         ORDER BY a.created_at DESC LIMIT $6",
+    ))
     .bind(&auth).bind(&p.status).bind(&p.contact_id)
     .bind(&p.project_id).bind(&p.archived)
     .bind(p.limit.unwrap_or(100))
@@ -86,11 +91,9 @@ pub async fn create(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let action = sqlx::query_as::<_, Action>(
-        "SELECT id, user_id, title, description, status, priority::BIGINT AS priority, category, due_at, \
-                contact_id, project_id, completed_at, archived_at, created_at, updated_at \
-         FROM action WHERE id = $1",
-    )
+    let action = sqlx::query_as::<_, Action>(&format!(
+        "{ACTION_SELECT} WHERE a.id = $1",
+    ))
     .bind(&id)
     .fetch_one(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -103,11 +106,9 @@ pub async fn get(
     Path(id): Path<String>,
 ) -> Result<Json<Action>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let action = sqlx::query_as::<_, Action>(
-        "SELECT id, user_id, title, description, status, priority::BIGINT AS priority, category, due_at, \
-                contact_id, project_id, completed_at, archived_at, created_at, updated_at \
-         FROM action WHERE id = $1 AND user_id = $2",
-    )
+    let action = sqlx::query_as::<_, Action>(&format!(
+        "{ACTION_SELECT} WHERE a.id = $1 AND a.user_id = $2",
+    ))
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
