@@ -41,7 +41,7 @@ pub async fn list(
          AND ($3::text IS NULL OR project_id = $3) \
          AND ($4::text IS NULL OR start_at >= $4) \
          AND ($5::text IS NULL OR start_at <= $5) \
-         AND ($6::text IS NULL OR archived_at IS NOT NULL) \
+         AND ($6::text IS NULL OR ($6::text = 'true' AND archived_at IS NOT NULL) OR ($6::text = 'false' AND archived_at IS NULL)) \
          ORDER BY start_at DESC LIMIT $7",
     )
     .bind(&auth)

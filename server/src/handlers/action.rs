@@ -33,7 +33,7 @@ pub async fn list(
          AND ($2::text IS NULL OR status = $2) \
          AND ($3::text IS NULL OR contact_id = $3) \
          AND ($4::text IS NULL OR project_id = $4) \
-         AND ($5::text IS NULL OR archived_at IS NOT NULL) \
+         AND ($5::text IS NULL OR ($5::text = 'true' AND archived_at IS NOT NULL) OR ($5::text = 'false' AND archived_at IS NULL)) \
          ORDER BY created_at DESC LIMIT $6",
     )
     .bind(&auth).bind(&p.status).bind(&p.contact_id)
