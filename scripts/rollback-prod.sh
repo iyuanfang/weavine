@@ -6,7 +6,7 @@ set -euo pipefail
 APP="prm"
 REMOTE="root@47.79.43.80"
 REMOTE_DIR="/opt/$APP"
-SITE="ai.financialagent.cc"
+SITE="weavine.financialagent.cc"
 HEALTH_URL="https://$SITE/api/health"
 
 ssh "$REMOTE" bash -s -- "$REMOTE_DIR" "$APP" "$HEALTH_URL" <<'REMOTESCRIPT'

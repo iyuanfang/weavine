@@ -9,7 +9,7 @@ REMOTE_DIR="/opt/$APP"
 RELEASE_DIR="$REMOTE_DIR/releases"
 RELEASE_NAME="$APP.release.$(date +%Y%m%d%H%M%S)"
 ARCHIVE="/tmp/$RELEASE_NAME.tar.gz"
-SITE="ai.financialagent.cc"
+SITE="weavine.financialagent.cc"
 HEALTH_URL="https://$SITE/api/health"
 # Max releases to keep (including the active one)
 MAX_KEEP=5

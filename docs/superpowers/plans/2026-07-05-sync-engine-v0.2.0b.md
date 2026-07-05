@@ -137,7 +137,7 @@ File: `server/src/main.rs`
 - [ ] `journalctl -u weavine-web --since "30 seconds ago" --no-pager | tail -20`
 
 ### Task 13: Curl smoke test
-- [ ] `curl -s https://ai.financialagent.cc/api/health` → 200
+- [ ] `curl -s https://weavine.financialagent.cc/api/health` → 200
 - [ ] Register with device payload: `curl -X POST .../api/auth/register -d '{"email":"smoke@test.com","password":"...","device":{"name":"smoke","os":"linux","app_version":"0.2.0b"}}' -H 'Content-Type: application/json'`
 - [ ] Login with device: `curl -X POST .../api/auth/login ...`
 - [ ] Get access token, hit `curl -X POST .../api/sync/manifest -H 'Authorization: Bearer ...'` → returns manifest JSON

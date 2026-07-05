@@ -271,11 +271,11 @@ JWT_REFRESH_TTL_SECS=2592000  # 30 days
 
 ## Deployment + HTTPS
 
-- **不动 nginx 拓扑。** 已有的 `https://ai.financialagent.cc → axum :3000` 链路复用。
+- **不动 nginx 拓扑。** 已有的 `https://weavine.financialagent.cc → axum :3000` 链路复用。
 - `/api/sync/*` 走同一条 HTTPS 路径。
 - nginx 配置**不改**(如果 user 要"公网字面不可达",再加 `location /api/sync/ { allow <internal-ip>; deny all; }`,但默认不加)。
 - JWT 鉴权足够防外网爬虫。`/api/sync/*` 不进任何公开 API 文档,只 desktop client 知道。
-- Desktop 用 `https://ai.financialagent.cc/api/sync/*`(同域名)。Local dev 用 `http://localhost:3000`。
+- Desktop 用 `https://weavine.financialagent.cc/api/sync/*`(同域名)。Local dev 用 `http://localhost:3000`。
 
 ## 数据迁移(v0.2.0a → v0.2.0b)
 
