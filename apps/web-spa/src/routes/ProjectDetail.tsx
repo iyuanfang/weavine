@@ -234,11 +234,21 @@ export function ProjectDetail() {
         company: c.company,
       }));
 
-  const taskCounts = {
-    total: tasks.length,
-    done: tasks.filter((t) => t.status === 'done').length,
-    open: tasks.filter((t) => t.status !== 'done').length,
+  const taskStatusCounts = {
+    inbox: tasks.filter((t) => t.status === 'inbox').length,
+    open: tasks.filter((t) => t.status === 'open').length,
+    waiting: tasks.filter((t) => t.status === 'waiting').length,
   };
+  const taskSubText =
+    tasks.length === 0
+      ? '尚无待办'
+      : [
+          taskStatusCounts.inbox ? `${taskStatusCounts.inbox} 收件箱` : null,
+          taskStatusCounts.open ? `${taskStatusCounts.open} 进行中` : null,
+          taskStatusCounts.waiting ? `${taskStatusCounts.waiting} 等待中` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
 
   const upcomingEvents = events
     .filter(
@@ -462,15 +472,9 @@ export function ProjectDetail() {
             icon="👥"
           />
           <SummaryCard
-            label="待办进度"
-            value={`${taskCounts.done} / ${taskCounts.total}`}
-            sub={
-              taskCounts.open > 0
-                ? `${taskCounts.open} 项进行中`
-                : tasks.length > 0
-                  ? '全部完成 🎉'
-                  : '尚无待办'
-            }
+            label="待办"
+            value={tasks.length}
+            sub={taskSubText}
             cta="管理待办"
             onClick={() => setTab('tasks')}
             icon="✅"
