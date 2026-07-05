@@ -57,6 +57,7 @@ export interface AppRoute {
 export const routes: AppRoute[] = [
   { path: '/login', Component: LoginPage, label: 'Login', bare: true },
   { path: '/', Component: TodayPage, label: 'Today' },
+  { path: '/today', Component: TodayPage, label: 'Today' },
 
   // Placeholder entries below — replaced as Phase 4 lands.
   // Each migration subagent removes its placeholder and
