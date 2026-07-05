@@ -9,14 +9,17 @@
   --bg-subtle: #f3f4f6;
   --fg: #111827;
   --fg-soft: #374151;
-  --muted: #6b7280;
+  --fg-muted: #4b5563;
+  --fg-subtle: #6b7280;
+  --muted: var(--fg-subtle);
   --border: #e5e7eb;
   --border-strong: #d1d5db;
 
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-soft: #eff6ff;
+  --accent: #059669;
+  --accent-hover: #047857;
+  --accent-soft: #ecfdf5;
   --accent-fg: #ffffff;
+  --accent-rgb: 5, 150, 105;
 
   --success: #10b981;
   --success-soft: #ecfdf5;
@@ -38,6 +41,37 @@
   --radius-pill: 999px;
 
   --transition: 160ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── Typography tokens ─────────────────────────────── */
+  /* Display (Latin headings): Plus Jakarta Sans — distinctive geometric, NOT Inter/Roboto/system.
+     Body Latin: Manrope. CJK: Noto Sans SC (designed for screens). Mono: JetBrains Mono. */
+  --font-display: "Plus Jakarta Sans", "Noto Sans SC", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-body: "Manrope", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-cjk: "Noto Sans SC", "Manrope", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* 7-step type scale. Body baseline = 14px/1.55 (CJK comfortable on screen). */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  /* Tracking. Display tightens for presence; body near-default; mono tabular for dates/IDs. */
+  --tracking-tight: -0.02em;
+  --tracking-normal: -0.005em;
+  --tracking-wide: 0.04em;
 }
 
 * {
@@ -52,11 +86,10 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--fg);
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -114,9 +147,9 @@ button:focus-visible {
 
 .app-shell__brand {
   padding: 22px 18px 18px;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--tracking-tight);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -134,7 +167,7 @@ button:focus-visible {
 
 .app-shell__brand-tagline {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 400;
   letter-spacing: 0.2px;
   white-space: nowrap;
@@ -173,14 +206,14 @@ button:focus-visible {
 .app-shell__menu-icon {
   width: 18px;
   text-align: center;
-  font-size: 15px;
+  font-size: var(--text-md);
 }
 
 .app-shell__user {
   margin-top: auto;
   padding: 14px 18px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   display: flex;
   align-items: center;
@@ -190,7 +223,7 @@ button:focus-visible {
 .app-shell__user::before {
   content: "●";
   color: var(--success);
-  font-size: 10px;
+  font-size: var(--text-xs);
 }
 
 .app-shell__user-name {
@@ -207,7 +240,7 @@ button:focus-visible {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -273,14 +306,14 @@ button:focus-visible {
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 700;
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-tight);
 }
 
 .page-subtitle {
-  font-size: 13px;
+  font-size: var(--text-base);
   color: var(--muted);
   margin: 4px 0 0;
 }
@@ -306,15 +339,15 @@ button:focus-visible {
 }
 
 .section__title {
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 600;
   margin: 0;
   color: var(--fg);
-  letter-spacing: -0.005em;
+  letter-spacing: var(--tracking-normal);
 }
 
 .section__view-all {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   transition: color var(--transition);
 }
@@ -362,10 +395,10 @@ button:focus-visible {
 }
 
 .filter-panel__title {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: var(--tracking-wide);
   color: var(--muted);
   padding: 0 4px 4px;
 }
@@ -377,7 +410,7 @@ button:focus-visible {
   gap: 8px;
   padding: 7px 10px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: var(--text-base);
   color: var(--fg-soft);
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
@@ -406,7 +439,7 @@ button:focus-visible {
 }
 
 .filter-panel__count {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
   font-weight: 500;
   padding: 1px 7px;
@@ -415,7 +448,7 @@ button:focus-visible {
 }
 
 .filter-panel__item--active .filter-panel__count {
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(var(--accent-rgb), 0.15);
   color: var(--accent);
 }
 
@@ -452,7 +485,7 @@ button:focus-visible {
 }
 
 .card--accent {
-  border-color: rgba(37, 99, 235, 0.18);
+  border-color: rgba(var(--accent-rgb), 0.18);
   background: linear-gradient(180deg, var(--accent-soft), var(--bg-elev));
 }
 
@@ -489,7 +522,9 @@ button:focus-visible {
 }
 
 .row-card__title {
-  font-weight: 500;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-normal);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -498,7 +533,7 @@ button:focus-visible {
 }
 
 .row-card__meta {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -510,7 +545,7 @@ button:focus-visible {
   padding: 9px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: var(--text-base);
   background: var(--bg-elev);
   transition: border-color var(--transition), box-shadow var(--transition);
 }
@@ -518,7 +553,7 @@ button:focus-visible {
 .input-base:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
 .input-base:disabled {
@@ -531,7 +566,7 @@ button:focus-visible {
   padding: 6px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: var(--text-base);
   background: var(--bg-elev);
 }
 
@@ -543,7 +578,7 @@ textarea.input-base {
 
 .input-label {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--fg-soft);
   margin-bottom: 6px;
@@ -551,13 +586,13 @@ textarea.input-base {
 }
 
 .input-helper {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   margin-top: 4px;
 }
 
 .input-error {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--danger);
   margin-top: 4px;
 }
@@ -571,7 +606,7 @@ textarea.input-base {
   gap: 6px;
   padding: 9px 16px;
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
   transition: background var(--transition), opacity var(--transition),
@@ -591,7 +626,7 @@ textarea.input-base {
 .btn-primary {
   background: var(--accent);
   color: var(--accent-fg);
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 1px 2px rgba(var(--accent-rgb), 0.25);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -629,7 +664,7 @@ textarea.input-base {
 
 .btn-sm {
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 /* ── Badge / chip ───────────────────────────────────── */
@@ -640,7 +675,7 @@ textarea.input-base {
   gap: 4px;
   padding: 3px 9px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -660,7 +695,7 @@ textarea.input-base {
   gap: 5px;
   padding: 4px 11px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 500;
   border: 1px solid var(--border);
   background: var(--bg-elev);
@@ -706,7 +741,7 @@ textarea.input-base {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -714,7 +749,7 @@ textarea.input-base {
 
 .tag-picker__bar-label {
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .tag-picker__bar-clear {
@@ -722,7 +757,7 @@ textarea.input-base {
   background: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   transition: all var(--transition);
@@ -744,7 +779,7 @@ textarea.input-base {
   gap: 6px;
   padding: 4px 4px 4px 10px;
   border-radius: var(--radius-pill);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   border: 1px solid transparent;
   line-height: 1;
@@ -761,7 +796,7 @@ textarea.input-base {
   background: rgba(255, 255, 255, 0.25);
   color: inherit;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1;
   padding: 0;
   transition: background var(--transition);
@@ -771,7 +806,7 @@ textarea.input-base {
 }
 
 .tag-picker__empty {
-  font-size: 13px;
+  font-size: var(--text-base);
   color: var(--muted);
   padding: 12px;
   text-align: center;
@@ -799,12 +834,12 @@ textarea.input-base {
 .tag-picker__hint {
   padding: 10px 12px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 .tag-picker__hint--header {
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-wide);
   font-weight: 600;
   padding: 6px 12px 2px;
   border-bottom: 1px solid var(--border);
@@ -820,7 +855,7 @@ textarea.input-base {
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--accent);
   text-align: left;
@@ -842,7 +877,7 @@ textarea.input-base {
   height: 18px;
   border-radius: 4px;
   border: 1px dashed currentColor;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -861,7 +896,7 @@ textarea.input-base {
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-base);
   text-align: left;
   border-radius: var(--radius-sm);
   transition: background var(--transition);
@@ -902,19 +937,19 @@ textarea.input-base {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-base);
   background: var(--bg-elev);
 }
 
 .empty-state__title {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--fg-soft);
   margin: 0 0 4px;
 }
 
 .empty-state__hint {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--muted);
   margin: 0;
   line-height: 1.5;
@@ -924,7 +959,7 @@ textarea.input-base {
   text-align: center;
   padding: 48px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-base);
 }
 
 .loading::after {
@@ -946,7 +981,7 @@ textarea.input-base {
   background: var(--danger-soft);
   border: 1px solid #fecaca;
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--text-base);
   margin-bottom: 16px;
   display: flex;
   align-items: flex-start;
@@ -980,7 +1015,7 @@ textarea.input-base {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
-  font-size: 13px;
+  font-size: var(--text-base);
   animation: toast-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   align-items: flex-start;
@@ -1060,7 +1095,7 @@ textarea.input-base {
   border: 0;
   background: transparent;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-base);
   text-align: left;
   transition: background 100ms;
   border-radius: var(--radius-sm);
@@ -1081,9 +1116,11 @@ textarea.input-base {
 /* ── Utility ────────────────────────────────────────── */
 
 .text-muted { color: var(--muted); }
-.text-sm { font-size: 13px; }
-.text-xs { font-size: 12px; }
+.text-sm { font-size: var(--text-sm); }
+.text-md { font-size: var(--text-md); }
+.text-xs { font-size: var(--text-xs); }
 .text-right { text-align: right; }
+.text-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 .flex { display: flex; }
 .flex-col { display: flex; flex-direction: column; }
@@ -1098,6 +1135,91 @@ textarea.input-base {
 .mb-4 { margin-bottom: 16px; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ── Atomic layout primitives (reusable) ────────── */
+
+.cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cluster--tight { gap: 4px; }
+.cluster--loose { gap: 10px; }
+.cluster--row { flex-wrap: nowrap; }
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stack--tight { gap: 2px; }
+.stack--loose { gap: 8px; }
+.stack--looser { gap: 12px; }
+
+/* ── Dot indicator (round colored marker) ──────── */
+
+.dot {
+  display: inline-block;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot--xs { width: 6px; height: 6px; }
+.dot--sm { width: 8px; height: 8px; }
+.dot--md { width: 10px; height: 10px; }
+.dot--lg { width: 12px; height: 12px; }
+.dot--xl { width: 14px; height: 14px; }
+
+/* ── Avatar circle (initials inside round bg) ──── */
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: var(--muted);
+}
+.avatar--sm {
+  width: 40px;
+  height: 40px;
+  font-size: var(--text-md);
+}
+.avatar--lg {
+  width: 72px;
+  height: 72px;
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Pill chip (rounded inline label) ──────────── */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font: 600 var(--text-xs) / 1.4 var(--font-body);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.pill--sm { padding: 1px 6px; font-size: 10px; }
+.pill--lg {
+  padding: 4px 12px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* Dynamic-colored pill: bind --pill-bg / --pill-border / --pill-fg */
+.pill--colored {
+  background: var(--pill-bg, transparent);
+  color: var(--pill-fg, inherit);
+  border: 1px solid var(--pill-border, transparent);
+}
 
 /* ── Hamburger + drawer (mobile) ──────────────────── */
 
@@ -1142,7 +1264,7 @@ textarea.input-base {
     box-shadow: var(--shadow-sm);
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: var(--text-lg);
     cursor: pointer;
     color: var(--fg);
   }
@@ -1191,7 +1313,7 @@ textarea.input-base {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--text-base);
   }
   .app-shell__close:hover {
     background: var(--bg-subtle);
@@ -1254,7 +1376,7 @@ textarea.input-base {
   margin: 0;
   font-size: 1.75rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
   color: var(--accent);
   text-align: center;
   white-space: nowrap;
