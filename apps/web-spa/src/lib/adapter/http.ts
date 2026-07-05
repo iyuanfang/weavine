@@ -7,7 +7,8 @@
  *
  * VITE_API_BASE: base URL for the Axum REST gateway.
  *   Reads `import.meta.env.VITE_API_BASE` (Vite env var)
- *   with a fallback to `http://localhost:3000`.
+ *   with a fallback to `''` (relative — same-origin via nginx).
+ *   Set to `http://localhost:3000` for dev if not using Vite proxy.
  */
 
 import type {
@@ -45,11 +46,11 @@ import type {
 
 // ── API base URL ───────────────────────────────────────
 const VITE_API_BASE: string = (() => {
-  if (typeof import.meta === 'undefined') return 'http://localhost:3000';
+  if (typeof import.meta === 'undefined') return '';
   const env = (import.meta as unknown as Record<string, unknown>).env as
     | Record<string, string | undefined>
     | undefined;
-  return env?.VITE_API_BASE ?? 'http://localhost:3000';
+  return env?.VITE_API_BASE ?? '';
 })();
 
 // ── Auth helper ────────────────────────────────────────
