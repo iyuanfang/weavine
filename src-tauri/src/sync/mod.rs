@@ -4,10 +4,10 @@
 //! Architecture: push-then-pull. Local changes are pushed to the server first,
 //! then remote changes are pulled and applied locally.
 
-mod api;
+pub mod api;
 pub mod config;
 mod keys;
-mod translate;
+pub mod translate;
 
 use api::*;
 use config::*;
