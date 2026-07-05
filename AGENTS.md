@@ -141,20 +141,18 @@ sqlite3 /www/weavine/weavine-web.db "SELECT template, stage, COUNT(*) FROM Proje
 - **Shared**: only `weavine_lib::models` (structs + `#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]`).
 - **Do not** try to introduce a `trait Repo` / shared DAL until v0.2.0c sync schema stabilizes. Schema is still evolving (column renames, new sync columns) — abstracting now means re-abstracting later.
 
-### Sync v0.2.0b — schema migration warning (2026-07-05)
+### Sync v0.2.0b — schema migration (2026-07-05)
 
-When deploying `feature/sync-v0.2` from the prod state (only migration `20260704000001_initial_schema` applied), migrations `20260705000001` through `20260705000004` will auto-apply on service start. **Migration 0001 (`auth_and_devices.sql`) DROPS `user_account` and `refresh_token`** because TEXT→UUID conversion of PK columns requires drop+recreate. All existing users + their sessions will be **lost**.
+When deploying `feature/sync-v0.2` from the prod state (only migration `20260704000001_initial_schema` applied), migrations `20260705000001` through `20260705000004` will auto-apply on service start.
 
-Mitigation if user data matters:
-1. `pg_dump --data-only` of `user_account`, `refresh_token`, `contact`, `event`, `action`, etc. BEFORE deploying.
-2. After migration, re-insert users (password hashes still work) and re-create data with new UUID PKs.
+**All migrations use TEXT columns** (no UUID PG types) to keep sqlx bindings simple (`&String` → PG TEXT). IDs are still generated as UUID strings via `gen_random_uuid()::TEXT` in DEFAULT expressions.
 
 Schema after full migration:
-- `user_account.id` is UUID (was TEXT)
-- `contact.user_id` / `tag.user_id` / `event.user_id` / `action.user_id` / `project.user_id` / `reminder.user_id` / `interaction.user_id` / `setting.user_id` / `push_subscription.user_id` / `contact_tag.user_id` / `project_contact.user_id` are UUID (renamed from `owner_id`)
-- Every domain table has `server_revision BIGINT NOT NULL DEFAULT nextval('server_revision_seq')` and `deleted_at TEXT`
-- `contact_tag` and `project_contact` gained an `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` column (junction tables needed an id for the sync trigger)
-- New tables: `devices`, `sync_manifest`, `sync_change_log`
-- 11 sync triggers (BEFORE/AFTER INSERT/UPDATE/DELETE) emit changes into `sync_change_log`
-
-**Handler binding gotcha**: `extract_auth(&headers)` returns the JWT `sub` claim as String. After migration, every `user_id` column is UUID, so every handler must `uuid::Uuid::parse_str(&auth).map_err(...)` before binding. Phase 2 only fixed `sync.rs` — every other handler still binds `&auth` (String) and will 500 with "invalid input syntax for type uuid" until fixed. Fix pattern: `let auth = uuid::Uuid::parse_str(&auth_str).map_err(...)?;` then `.bind(auth)`.
+- All PK/FK columns remain `TEXT` (unchanged from initial schema)
+- `contact.user_id` / `tag.user_id` / etc. renamed from `owner_id` (migration 0002)
+- Every domain table gains `server_revision BIGINT NOT NULL DEFAULT nextval('server_revision_seq')` and `deleted_at TEXT`
+- `contact_tag` and `project_contact` gained an `id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT` column (needed for sync triggers)
+- New tables: `devices`, `sync_manifest`, `sync_change_log`, `sync_meta`
+- 11 sync triggers emit changes into `sync_change_log`
+- `user_account` is **not** dropped by migration 0001 — only `refresh_token` is dropped/recreated to add `device_id FK`. Existing users are preserved.
+- Handler bindings are unaffected: `extract_auth` returns `String`, `.bind(&auth)` works as before.
