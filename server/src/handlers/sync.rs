@@ -13,6 +13,14 @@ use super::now_str;
 
 const UPDATED_AT_TABLES: &[&str] = &["contact", "project", "event", "action", "setting"];
 
+/// Postgres errors that should become 200 + `conflicts` instead of 500.
+fn is_data_conflict_error(msg: &str) -> bool {
+    msg.contains("unique constraint")
+        || msg.contains("duplicate key")
+        || msg.contains("foreign key")
+        || msg.contains("violates")
+}
+
 // ---------------------------------------------------------------------------
 // Manifest
 // ---------------------------------------------------------------------------
@@ -214,24 +222,37 @@ pub async fn push(
                     .filter(|s| !s.is_empty());
 
                 if deleted_at.is_some() {
-                    sqlx::query(&format!(
+                    let del = sqlx::query(&format!(
                         "DELETE FROM {} WHERE id = $1 AND user_id = $2",
                         table
                     ))
                     .bind(&row_id)
                     .bind(&user_id)
                     .execute(&mut *tx)
-                    .await
-                    .map_err(|e| {
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("delete: {e}"),
-                        )
-                    })?;
-                    tx.commit()
-                        .await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}")))?;
-                    accepted.push(format!("{}:{}", entity.kind, row_id));
+                    .await;
+
+                    match del {
+                        Ok(_) => {
+                            tx.commit().await.map_err(|e| {
+                                (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}"))
+                            })?;
+                            accepted.push(format!("{}:{}", entity.kind, row_id));
+                        }
+                        Err(e) => {
+                            let msg = e.to_string();
+                            let is_data_conflict = is_data_conflict_error(&msg);
+                            tx.rollback().await.ok();
+                            if is_data_conflict {
+                                conflicts.push(Conflict {
+                                    kind: entity.kind.clone(),
+                                    row_id: row_id.clone(),
+                                    reason: msg,
+                                });
+                            } else {
+                                return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("delete: {e}")));
+                            }
+                        }
+                    }
                 } else {
                     let row_str = serde_json::to_string(&row_json)
                         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("serialize: {e}")))?;
@@ -257,21 +278,33 @@ pub async fn push(
                         table, table, update_set
                     );
 
-                    sqlx::query(&sql)
+                    let upsert = sqlx::query(&sql)
                         .bind(&row_str)
                         .execute(&mut *tx)
-                        .await
-                        .map_err(|e| {
-                            (
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                format!("upsert: {e}"),
-                            )
-                        })?;
+                        .await;
 
-                    tx.commit()
-                        .await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}")))?;
-                    accepted.push(format!("{}:{}", entity.kind, row_id));
+                    match upsert {
+                        Ok(_) => {
+                            tx.commit().await.map_err(|e| {
+                                (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}"))
+                            })?;
+                            accepted.push(format!("{}:{}", entity.kind, row_id));
+                        }
+                        Err(e) => {
+                            let msg = e.to_string();
+                            let is_data_conflict = is_data_conflict_error(&msg);
+                            tx.rollback().await.ok();
+                            if is_data_conflict {
+                                conflicts.push(Conflict {
+                                    kind: entity.kind.clone(),
+                                    row_id: row_id.clone(),
+                                    reason: msg,
+                                });
+                            } else {
+                                return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("upsert: {e}")));
+                            }
+                        }
+                    }
                 }
             } else {
                 tx.rollback().await.ok();

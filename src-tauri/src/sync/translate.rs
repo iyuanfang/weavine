@@ -28,9 +28,24 @@ pub fn obj_snake_to_camel(v: &Value) -> Value {
     }
 }
 
+// Push order MUST respect FK dependencies so the server doesn't see
+// orphans (e.g. event.project_id before project.id is synced).
+// Levels:
+//   0: contact, tag, project, setting       (only FK to user_account)
+//   1: event (-> project), action (-> contact, project)
+//   2: interaction (-> contact, project, action, event),
+//      reminder   (-> contact, event)
+//   3: contact_tag    (-> contact, tag),
+//      project_contact (-> project, contact)
 pub const ENTITY_KINDS: &[&str] = &[
-    "contact", "tag", "event", "action", "interaction",
-    "project", "reminder", "setting", "contact_tag", "project_contact",
+    // level 0
+    "contact", "tag", "project", "setting",
+    // level 1
+    "event", "action",
+    // level 2
+    "interaction", "reminder",
+    // level 3
+    "contact_tag", "project_contact",
 ];
 
 pub const UPDATED_AT_TABLES: &[&str] = &[
