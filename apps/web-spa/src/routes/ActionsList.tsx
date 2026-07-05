@@ -23,7 +23,7 @@ import { statusMeta } from '../components/StatusPicker';
 import { priorityMeta } from '../components/PriorityPicker';
 import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Action, UpdateActionInput } from '../lib/adapter/types';
 
 const PRIORITY_OPTIONS = [
@@ -61,7 +61,7 @@ function useLocalStorageSet(key: string) {
 
 export function ActionsList() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
@@ -105,17 +105,17 @@ export function ActionsList() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const activeActionsKey = ['actions', ownerId, 'active'];
+  const activeActionsKey = ['actions', userId, 'active'];
 
   const actionsQuery = useQuery({
     queryKey: activeActionsKey,
     queryFn: () =>
       adapter.actions.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         archived: 'false',
         limit: 500,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
@@ -167,7 +167,7 @@ export function ActionsList() {
       if (ctx?.prev) queryClient.setQueryData(activeActionsKey, ctx.prev);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['actions', userId] });
     },
   });
 
@@ -178,13 +178,13 @@ export function ActionsList() {
   );
 
   const archiveCountsQuery = useQuery({
-    queryKey: ['archive', 'counts', ownerId],
-    queryFn: () => adapter.archive.counts(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'counts', userId],
+    queryFn: () => adapter.archive.counts(userId!),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 
@@ -575,7 +575,7 @@ function ActionRowBody({
           title: action.project_title,
           template: 'general',
           stage: 'planning',
-          owner_id: action.owner_id,
+          user_id: action.user_id,
         }
       : null;
   const [hovered, setHovered] = useState(false);

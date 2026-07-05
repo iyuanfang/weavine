@@ -7,7 +7,7 @@ import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Action, Contact, CreateActionInput, Project } from '../lib/adapter/types';
 
 const STATUS_OPTIONS = [
@@ -26,7 +26,7 @@ const PRIORITY_OPTIONS = [
 
 export function ActionNew() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -47,16 +47,16 @@ export function ActionNew() {
   }, [projectIdParam]);
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['contacts', userId],
+    queryFn: () => adapter.contacts.list({ user_id: userId! }),
+    enabled: !!userId,
   });
   const contacts = contactsQuery.data ?? [];
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId],
-    queryFn: () => adapter.projects.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['projects', userId],
+    queryFn: () => adapter.projects.list({ user_id: userId! }),
+    enabled: !!userId,
   });
   const projects = projectsQuery.data ?? [];
 
@@ -71,12 +71,12 @@ export function ActionNew() {
   const createMutation = useMutation({
     mutationFn: (input: CreateActionInput) => adapter.actions.create(input),
     onSuccess: (created) => {
-      queryClient.setQueryData<Action[]>(['actions', ownerId], (old) => {
+      queryClient.setQueryData<Action[]>(['actions', userId], (old) => {
         const list = old ?? [];
         if (list.some((a) => a.id === created.id)) return list;
         return [created, ...list];
       });
-      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['actions', userId] });
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: ['project-actions', projectId] });
       }
@@ -86,9 +86,9 @@ export function ActionNew() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !ownerId) return;
+    if (!title.trim() || !userId) return;
     createMutation.mutate({
-      owner_id: ownerId,
+      user_id: userId,
       title: title.trim(),
       description: description.trim() || null,
       status,
@@ -100,7 +100,7 @@ export function ActionNew() {
     });
   };
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

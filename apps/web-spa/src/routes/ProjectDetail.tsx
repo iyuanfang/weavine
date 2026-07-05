@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { stageColor } from '../lib/projectStageColor';
 import { backTarget } from '../lib/backNavigation';
 
@@ -82,7 +82,7 @@ function priorityLabel(p: number): string {
 export function ProjectDetail() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -118,36 +118,36 @@ export function ProjectDetail() {
     queryKey: ['project-actions', id, 'active'],
     queryFn: () =>
       adapter.actions.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         project_id: id,
         archived: 'false',
         limit: 100,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const eventsQuery = useQuery({
     queryKey: ['project-events', id, 'active'],
     queryFn: () =>
       adapter.events.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         project_id: id,
         archived: 'false',
         limit: 100,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: contactPickerOpen && contactSearch.trim().length === 0 && !!ownerId,
+    queryKey: ['contacts', userId],
+    queryFn: () => adapter.contacts.list({ user_id: userId! }),
+    enabled: contactPickerOpen && contactSearch.trim().length === 0 && !!userId,
   });
 
   const searchQuery = useQuery({
-    queryKey: ['contact-search', contactSearch, ownerId],
-    queryFn: () => adapter.search.query(ownerId!, contactSearch.trim(), 20),
-    enabled: contactPickerOpen && contactSearch.trim().length > 0 && !!ownerId,
+    queryKey: ['contact-search', contactSearch, userId],
+    queryFn: () => adapter.search.query(userId!, contactSearch.trim(), 20),
+    enabled: contactPickerOpen && contactSearch.trim().length > 0 && !!userId,
   });
 
   const existingContactIds = new Set((peopleQuery.data ?? []).map((p) => p.contact.id));
@@ -157,7 +157,7 @@ export function ProjectDetail() {
       adapter.projects.update(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', id] });
-      queryClient.invalidateQueries({ queryKey: ['projects', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['projects', userId] });
     },
   });
 

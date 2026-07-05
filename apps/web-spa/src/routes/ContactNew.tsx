@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { TagPicker } from '../components/TagPicker';
 import type { CreateContactInput } from '../lib/adapter/types';
 
@@ -19,7 +19,7 @@ const IMPORTANCE_OPTIONS = [
 
 export function ContactNew() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -38,16 +38,16 @@ export function ContactNew() {
   const createMutation = useMutation({
     mutationFn: (input: CreateContactInput) => adapter.contacts.create(input),
     onSuccess: (contact) => {
-      queryClient.invalidateQueries({ queryKey: ['contacts', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['contacts', userId] });
       navigate(`/contacts/${contact.id}`);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nickname.trim() || !ownerId) return;
+    if (!nickname.trim() || !userId) return;
     createMutation.mutate({
-      owner_id: ownerId,
+      user_id: userId,
       nickname: nickname.trim(),
       name: name.trim() || null,
       company: company.trim() || null,
@@ -62,7 +62,7 @@ export function ContactNew() {
     });
   };
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

@@ -2,7 +2,7 @@
 //! on the 10 flat-arg commands actually accepts snake_case payloads from the
 //! web-spa.
 //!
-//! Background: web-spa calls `invoke('list_tags', { owner_id: ... })` etc.
+//! Background: web-spa calls `invoke('list_tags', { user_id: ... })` etc.
 //! with snake_case keys. Tauri v2's default is `rename_all = "camelCase"`,
 //! which would reject snake_case. The fix adds `rename_all = "snake_case"`
 //! to those 10 commands.
@@ -62,7 +62,7 @@ fn build_invoke_request(cmd: &str, params: serde_json::Value) -> InvokeRequest {
 }
 
 /// Helper: invoke a Tauri command via the IPC layer with a snake_case
-/// payload, mimicking exactly what web-spa's `invoke('list_tags', { owner_id })`
+/// payload, mimicking exactly what web-spa's `invoke('list_tags', { user_id })`
 /// sends. Asserts no error. Limited to MockRuntime because `get_ipc_response`
 /// is part of `tauri::test` and only implements for that runtime.
 fn assert_snake_case_accepted(
@@ -91,7 +91,7 @@ fn assert_snake_case_accepted(
 }
 
 #[test]
-fn list_tags_accepts_snake_case_owner_id() {
+fn list_tags_accepts_snake_case_user_id() {
     let db = fresh_db();
     let app = tauri::test::mock_builder()
         .manage(db)
@@ -109,7 +109,7 @@ fn list_tags_accepts_snake_case_owner_id() {
     .build()
     .expect("build webview window");
 
-    // EXACT payload web-spa sends: `{ owner_id: "..." }` in snake_case.
+    // EXACT payload web-spa sends: `{ user_id: "..." }` in snake_case.
     assert_snake_case_accepted(
         &app,
         "list_tags",

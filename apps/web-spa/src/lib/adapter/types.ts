@@ -29,7 +29,7 @@ export interface LocalUser {
 
 export interface Tag {
   id: string;
-  owner_id: string;
+  user_id: string;
   name: string;
   color: string | null;
   created_at: string;
@@ -37,7 +37,7 @@ export interface Tag {
 
 export interface Contact {
   id: string;
-  owner_id: string;
+  user_id: string;
   nickname: string;
   name: string | null;
   company: string | null;
@@ -58,7 +58,7 @@ export interface Contact {
 
 export interface Event {
   id: string;
-  owner_id: string;
+  user_id: string;
   title: string;
   // Rust field is `event_type` but serialized as `type` via #[serde(rename)]
   type: string;
@@ -80,7 +80,7 @@ export interface Event {
 
 export interface Interaction {
   id: string;
-  owner_id: string;
+  user_id: string;
   contact_id: string | null;
   action_id: string | null;
   event_id: string | null;
@@ -94,7 +94,7 @@ export interface Interaction {
 
 export interface Project {
   id: string;
-  owner_id: string;
+  user_id: string;
   title: string;
   description: string | null;
   template: string;
@@ -109,7 +109,7 @@ export interface Project {
 
 export interface Action {
   id: string;
-  owner_id: string;
+  user_id: string;
   title: string;
   description: string | null;
   status: string;
@@ -130,7 +130,7 @@ export interface Action {
 
 export interface Reminder {
   id: string;
-  owner_id: string;
+  user_id: string;
   contact_id: string | null;
   event_id: string | null;
   trigger_at: string;
@@ -144,7 +144,7 @@ export interface Reminder {
 
 export interface Setting {
   id: string;
-  owner_id: string;
+  user_id: string;
   key: string;
   value: string;
   updated_at: string;
@@ -161,14 +161,14 @@ export interface StartupInfo {
 // ──────────────────────────────────────────────
 
 export interface ListContactsParams {
-  owner_id: string;
+  user_id: string;
   tag_id?: string | null;
   search?: string | null;
   importance?: string | null;
 }
 
 export interface CreateContactInput {
-  owner_id: string;
+  user_id: string;
   nickname: string;
   name?: string | null;
   company?: string | null;
@@ -183,7 +183,7 @@ export interface CreateContactInput {
 }
 
 export interface CreateProjectInput {
-  owner_id: string;
+  user_id: string;
   title: string;
   description?: string | null;
   template: string;
@@ -219,7 +219,7 @@ export interface UpdateContactInput {
 }
 
 export interface CreateEventInput {
-  owner_id: string;
+  user_id: string;
   title: string;
   type: string;
   start_at: string;
@@ -246,7 +246,7 @@ export interface UpdateEventInput {
 }
 
 export interface CreateActionInput {
-  owner_id: string;
+  user_id: string;
   title: string;
   description?: string | null;
   status?: string | null;
@@ -272,7 +272,7 @@ export interface UpdateActionInput {
 }
 
 export interface ProjectContact {
-  owner_id: string;
+  user_id: string;
   project_id: string;
   contact_id: string;
   role: string | null;
@@ -286,7 +286,7 @@ export interface ProjectContactWithContact {
 }
 
 export interface CreateInteractionInput {
-  owner_id: string;
+  user_id: string;
   contact_id?: string | null;
   action_id?: string | null;
   event_id?: string | null;
@@ -306,7 +306,7 @@ export interface UpdateInteractionInput {
 }
 
 export interface CreateReminderInput {
-  owner_id: string;
+  user_id: string;
   contact_id?: string | null;
   event_id?: string | null;
   trigger_at: string;
@@ -322,7 +322,7 @@ export interface UpdateReminderInput {
 }
 
 export interface CreateTagInput {
-  owner_id: string;
+  user_id: string;
   name: string;
 }
 
@@ -366,7 +366,7 @@ export interface PRMAdapter {
 
   projects: {
     list(params: {
-      owner_id: string;
+      user_id: string;
       template?: string | null;
       stage?: string | null;
       archived?: 'true' | 'false' | null;
@@ -381,7 +381,7 @@ export interface PRMAdapter {
 
   events: {
     list(params: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       project_id?: string | null;
       start_after?: string | null;
@@ -393,12 +393,12 @@ export interface PRMAdapter {
     create(input: CreateEventInput): Promise<Event>;
     update(input: UpdateEventInput): Promise<Event>;
     delete(id: string): Promise<void>;
-    upcoming(owner_id: string, limit?: number | null): Promise<Event[]>;
+    upcoming(user_id: string, limit?: number | null): Promise<Event[]>;
   };
 
   actions: {
     list(params: {
-      owner_id: string;
+      user_id: string;
       status?: string | null;
       contact_id?: string | null;
       project_id?: string | null;
@@ -419,7 +419,7 @@ export interface PRMAdapter {
 
   interactions: {
     list(params: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       action_id?: string | null;
       event_id?: string | null;
@@ -433,7 +433,7 @@ export interface PRMAdapter {
 
   reminders: {
     list(params: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       event_id?: string | null;
       include_dismissed?: boolean | null;
@@ -446,21 +446,21 @@ export interface PRMAdapter {
   };
 
   tags: {
-    list(owner_id: string): Promise<Tag[]>;
+    list(user_id: string): Promise<Tag[]>;
     create(input: CreateTagInput): Promise<Tag>;
     update(input: UpdateTagInput): Promise<Tag>;
     delete(id: string): Promise<void>;
   };
 
   settings: {
-    list(owner_id: string): Promise<Setting[]>;
-    upsert(owner_id: string, key: string, value: string): Promise<Setting>;
-    delete(owner_id: string, key: string): Promise<void>;
+    list(user_id: string): Promise<Setting[]>;
+    upsert(user_id: string, key: string, value: string): Promise<Setting>;
+    delete(user_id: string, key: string): Promise<void>;
   };
 
   search: {
     query(
-      owner_id: string,
+      user_id: string,
       query: string,
       limit?: number | null,
       options?: { include_archived?: boolean | null },
@@ -468,11 +468,11 @@ export interface PRMAdapter {
   };
 
   archive: {
-    summary(owner_id: string): Promise<ArchiveSummary>;
-    counts(owner_id: string): Promise<ArchiveCounts>;
-    list(owner_id: string, entity: 'action' | 'event' | 'project'): Promise<ArchivedItem[]>;
-    unarchiveOne(owner_id: string, entity: 'action' | 'event' | 'project', id: string): Promise<void>;
-    bulkUnarchive(owner_id: string, entity: 'action' | 'event' | 'project'): Promise<{ unarchived: number }>;
+    summary(user_id: string): Promise<ArchiveSummary>;
+    counts(user_id: string): Promise<ArchiveCounts>;
+    list(user_id: string, entity: 'action' | 'event' | 'project'): Promise<ArchivedItem[]>;
+    unarchiveOne(user_id: string, entity: 'action' | 'event' | 'project', id: string): Promise<void>;
+    bulkUnarchive(user_id: string, entity: 'action' | 'event' | 'project'): Promise<{ unarchived: number }>;
   };
 
   cloud: {

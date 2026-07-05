@@ -3,7 +3,7 @@
 // `getLocalUser()` is the only auth call. There's no login
 // flow: the Tauri app boots, the Rust side seeds a `User`
 // row with `isLocal=1`, and we cache it via TanStack Query.
-// Every data hook then derives `ownerId` from this query.
+// Every data hook then derives `userId` from this query.
 
 import { useQuery } from '@tanstack/react-query';
 
@@ -23,13 +23,13 @@ export function useLocalUser() {
 }
 
 /**
- * Convenience hook: returns the current owner id, or
+ * Convenience hook: returns the current user id, or
  * `null` while the query is loading or if it failed.
  *
- * Use this for `useQuery({ enabled: !!ownerId, ... })`
+ * Use this for `useQuery({ enabled: !!userId, ... })`
  * guards in feature hooks.
  */
-export function useOwnerId(): string | null {
+export function useUserId(): string | null {
   const { data } = useLocalUser();
   return data?.id ?? null;
 }

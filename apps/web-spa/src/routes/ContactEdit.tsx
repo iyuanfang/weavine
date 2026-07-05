@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { TagPicker } from '../components/TagPicker';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { UpdateContactInput } from '../lib/adapter/types';
 
 const IMPORTANCE_OPTIONS = [
@@ -17,7 +17,7 @@ const IMPORTANCE_OPTIONS = [
 export function ContactEdit() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -61,7 +61,7 @@ export function ContactEdit() {
     mutationFn: (input: UpdateContactInput) => adapter.contacts.update(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contact', id] });
-      queryClient.invalidateQueries({ queryKey: ['contacts', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['contacts', userId] });
       navigate('/contacts');
     },
   });

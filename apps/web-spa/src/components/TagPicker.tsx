@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { tagColor } from '../lib/tagColor';
 import { Popover } from './Popover';
 import type { Tag } from '../lib/adapter/types';
@@ -13,7 +13,7 @@ interface Props {
 
 export function TagPicker({ selectedIds, onChange }: Props) {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const [query, setQuery] = useState('');
@@ -23,9 +23,9 @@ export function TagPicker({ selectedIds, onChange }: Props) {
   const close = () => setOpen(false);
 
   const tagsQuery = useQuery({
-    queryKey: ['tags', ownerId],
-    queryFn: () => adapter.tags.list(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['tags', userId],
+    queryFn: () => adapter.tags.list(userId!),
+    enabled: !!userId,
   });
 
   const allTags: Tag[] = tagsQuery.data ?? [];
@@ -52,9 +52,9 @@ export function TagPicker({ selectedIds, onChange }: Props) {
 
   const createMut = useMutation({
     mutationFn: (name: string) =>
-      adapter.tags.create({ owner_id: ownerId!, name }),
+      adapter.tags.create({ user_id: userId!, name }),
     onSuccess: (newTag) => {
-      queryClient.invalidateQueries({ queryKey: ['tags', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['tags', userId] });
       onChange([...selectedIds, newTag.id]);
       setQuery('');
       inputRef.current?.focus();

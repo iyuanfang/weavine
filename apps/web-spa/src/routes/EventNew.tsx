@@ -7,7 +7,7 @@ import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Contact, CreateEventInput, Event, Project } from '../lib/adapter/types';
 
 function formatLocal(d: Date): string {
@@ -17,7 +17,7 @@ function formatLocal(d: Date): string {
 
 export function EventNew() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -55,16 +55,16 @@ export function EventNew() {
   }, [startAt]);
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['contacts', userId],
+    queryFn: () => adapter.contacts.list({ user_id: userId! }),
+    enabled: !!userId,
   });
   const contacts = contactsQuery.data ?? [];
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId],
-    queryFn: () => adapter.projects.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['projects', userId],
+    queryFn: () => adapter.projects.list({ user_id: userId! }),
+    enabled: !!userId,
   });
   const projects = projectsQuery.data ?? [];
 
@@ -90,9 +90,9 @@ export function EventNew() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !startAt || !ownerId) return;
+    if (!title.trim() || !startAt || !userId) return;
     createMutation.mutate({
-      owner_id: ownerId,
+      user_id: userId,
       title: title.trim(),
       type,
       start_at: new Date(startAt).toISOString(),
@@ -105,7 +105,7 @@ export function EventNew() {
     });
   };
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

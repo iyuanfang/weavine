@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { ContactBadge } from '../components/ContactBadge';
 import { ProjectBadge } from '../components/ProjectBadge';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Action, Event, Interaction, UpdateActionInput } from '../lib/adapter/types';
 
 // Window helpers — local time, no UTC confusion.
@@ -50,7 +50,7 @@ function relativeDueLabel(dueAt: Date, now: Date): string {
 
 export function TodayPage() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   // Fetch the three feeds in parallel. We over-fetch slightly
@@ -58,41 +58,41 @@ export function TodayPage() {
   // down to the "today" window client-side, because the Rust
   // list commands don't expose a due_at range filter.
   const actionsQuery = useQuery({
-    queryKey: ['actions', ownerId, 'all-for-today'],
+    queryKey: ['actions', userId, 'all-for-today'],
     queryFn: () =>
       adapter.actions.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         archived: 'false',
         limit: 200,
       }),
-    enabled: Boolean(ownerId),
+    enabled: Boolean(userId),
   });
 
   const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'upcoming-for-today'],
-    queryFn: () => adapter.events.upcoming(ownerId!, 10),
-    enabled: Boolean(ownerId),
+    queryKey: ['events', userId, 'upcoming-for-today'],
+    queryFn: () => adapter.events.upcoming(userId!, 10),
+    enabled: Boolean(userId),
   });
 
   const interactionsQuery = useQuery({
-    queryKey: ['interactions', ownerId, 'recent-for-today'],
+    queryKey: ['interactions', userId, 'recent-for-today'],
     queryFn: () =>
       adapter.interactions.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         limit: 20,
       }),
-    enabled: Boolean(ownerId),
+    enabled: Boolean(userId),
   });
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId, 'active-for-today'],
+    queryKey: ['projects', userId, 'active-for-today'],
     queryFn: () =>
       adapter.projects.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         archived: 'false',
         limit: 200,
       }),
-    enabled: Boolean(ownerId),
+    enabled: Boolean(userId),
   });
 
   const toggleDoneMutation = useMutation({
@@ -102,11 +102,11 @@ export function TodayPage() {
         status: input.status,
       } as UpdateActionInput),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['actions', userId] });
     },
   });
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

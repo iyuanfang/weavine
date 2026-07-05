@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { ImportancePicker } from '../components/ImportancePicker';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import type { Contact, UpdateContactInput } from '../lib/adapter/types';
@@ -35,7 +35,7 @@ const IMPORTANCE_DOT: Record<string, string> = {
 
 export function ContactsList() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
@@ -46,33 +46,33 @@ export function ContactsList() {
   const updateMutation = useMutation({
     mutationFn: (input: UpdateContactInput) => adapter.contacts.update(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['contacts', userId] });
     },
   });
 
   const tagsQuery = useQuery({
-    queryKey: ['tags', ownerId],
-    queryFn: () => adapter.tags.list(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['tags', userId],
+    queryFn: () => adapter.tags.list(userId!),
+    enabled: !!userId,
   });
 
   const contactsQuery = useQuery({
     queryKey: [
       'contacts',
-      ownerId,
+      userId,
       { search: debouncedSearch, tag_id: selectedTagId, importance: selectedImportance },
     ],
     queryFn: () =>
       adapter.contacts.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         tag_id: selectedTagId,
         search: debouncedSearch || null,
         importance: selectedImportance,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

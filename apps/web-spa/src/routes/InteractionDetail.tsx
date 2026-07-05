@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 
 function formatDateTime(d: Date): string {
   return d.toLocaleString('zh-CN', {
@@ -19,7 +19,7 @@ function formatDateTime(d: Date): string {
 export function InteractionDetail() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -52,7 +52,7 @@ export function InteractionDetail() {
     onSuccess: () => {
       if (contactQuery.data) {
         queryClient.invalidateQueries({
-          queryKey: ['interactions', ownerId, 'for-contact', contactQuery.data.id],
+          queryKey: ['interactions', userId, 'for-contact', contactQuery.data.id],
         });
       }
       if (contactQuery.data) {

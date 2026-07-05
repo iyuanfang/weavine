@@ -4,28 +4,28 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { CreateTagInput, Contact } from '../lib/adapter/types';
 import { tagColor } from '../lib/tagColor';
 
 export function Tags() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
 
   const tagsQuery = useQuery({
-    queryKey: ['tags', ownerId],
-    queryFn: () => adapter.tags.list(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['tags', userId],
+    queryFn: () => adapter.tags.list(userId!),
+    enabled: !!userId,
   });
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['contacts', userId],
+    queryFn: () => adapter.contacts.list({ user_id: userId! }),
+    enabled: !!userId,
   });
 
   const createMutation = useMutation({
@@ -46,14 +46,14 @@ export function Tags() {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !ownerId) return;
+    if (!newName.trim() || !userId) return;
     createMutation.mutate({
-      owner_id: ownerId,
+      user_id: userId,
       name: newName.trim(),
     });
   };
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

@@ -7,7 +7,7 @@ import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Contact, Project, UpdateActionInput } from '../lib/adapter/types';
 
 const STATUS_OPTIONS = [
@@ -34,7 +34,7 @@ function toLocalInput(iso: string | null | undefined): string {
 export function ActionEdit() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -47,16 +47,16 @@ export function ActionEdit() {
   });
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['contacts', userId],
+    queryFn: () => adapter.contacts.list({ user_id: userId! }),
+    enabled: !!userId,
   });
   const contacts = contactsQuery.data ?? [];
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId],
-    queryFn: () => adapter.projects.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['projects', userId],
+    queryFn: () => adapter.projects.list({ user_id: userId! }),
+    enabled: !!userId,
   });
   const projects = projectsQuery.data ?? [];
 
@@ -88,7 +88,7 @@ export function ActionEdit() {
   const updateMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['actions', userId] });
       queryClient.invalidateQueries({ queryKey: ['action', id] });
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: ['project-actions', projectId] });
@@ -99,7 +99,7 @@ export function ActionEdit() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !ownerId) return;
+    if (!title.trim() || !userId) return;
     updateMutation.mutate({
       id,
       title: title.trim(),
@@ -113,7 +113,7 @@ export function ActionEdit() {
     });
   };
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

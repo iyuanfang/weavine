@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { ArchivedItem } from '../lib/adapter/types';
 
 const ENTITY_LABEL: Record<'action' | 'event' | 'project', string> = {
@@ -33,34 +33,34 @@ function formatArchived(iso: string): string {
 
 export default function ArchivePage() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const summaryQuery = useQuery({
-    queryKey: ['archive', 'summary', ownerId],
-    queryFn: () => adapter.archive.summary(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'summary', userId],
+    queryFn: () => adapter.archive.summary(userId!),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
   const actionListQuery = useQuery({
-    queryKey: ['archive', 'list', ownerId, 'action'],
-    queryFn: () => adapter.archive.list(ownerId!, 'action'),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'list', userId, 'action'],
+    queryFn: () => adapter.archive.list(userId!, 'action'),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
   const eventListQuery = useQuery({
-    queryKey: ['archive', 'list', ownerId, 'event'],
-    queryFn: () => adapter.archive.list(ownerId!, 'event'),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'list', userId, 'event'],
+    queryFn: () => adapter.archive.list(userId!, 'event'),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
   const projectListQuery = useQuery({
-    queryKey: ['archive', 'list', ownerId, 'project'],
-    queryFn: () => adapter.archive.list(ownerId!, 'project'),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'list', userId, 'project'],
+    queryFn: () => adapter.archive.list(userId!, 'project'),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
@@ -76,13 +76,13 @@ export default function ArchivePage() {
 
   const unarchiveOne = useMutation({
     mutationFn: async ({ entity, id }: { entity: 'action' | 'event' | 'project'; id: string }) =>
-      adapter.archive.unarchiveOne(ownerId!, entity, id),
+      adapter.archive.unarchiveOne(userId!, entity, id),
     onSuccess: invalidateAll,
   });
 
   const bulkUnarchive = useMutation({
     mutationFn: async (entity: 'action' | 'event' | 'project') =>
-      adapter.archive.bulkUnarchive(ownerId!, entity),
+      adapter.archive.bulkUnarchive(userId!, entity),
     onSuccess: invalidateAll,
   });
 
@@ -106,7 +106,7 @@ export default function ArchivePage() {
     };
   }, [sections, summaryQuery.data]);
 
-  if (!ownerId) return <div className="loading">正在加载用户…</div>;
+  if (!userId) return <div className="loading">正在加载用户…</div>;
 
   return (
     <div className="page">

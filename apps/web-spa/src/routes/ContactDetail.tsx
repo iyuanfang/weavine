@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import { backTarget } from '../lib/backNavigation';
@@ -25,7 +25,7 @@ const IMPORTANCE_BADGE: Record<string, { bg: string; fg: string }> = {
 export function ContactDetail() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -39,38 +39,38 @@ export function ContactDetail() {
   });
 
   const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'for-contact', id, 'active'],
+    queryKey: ['events', userId, 'for-contact', id, 'active'],
     queryFn: () =>
       adapter.events.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         contact_id: id,
         archived: 'false',
         limit: 20,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const actionsQuery = useQuery({
-    queryKey: ['actions', ownerId, 'for-contact', id, 'active'],
+    queryKey: ['actions', userId, 'for-contact', id, 'active'],
     queryFn: () =>
       adapter.actions.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         contact_id: id,
         archived: 'false',
         limit: 20,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const interactionsQuery = useQuery({
-    queryKey: ['interactions', ownerId, 'for-contact', id],
+    queryKey: ['interactions', userId, 'for-contact', id],
     queryFn: () =>
       adapter.interactions.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         contact_id: id,
         limit: 20,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const [interactionSummary, setInteractionSummary] = useState('');
@@ -80,7 +80,7 @@ export function ContactDetail() {
     mutationFn: (input: CreateInteractionInput) => adapter.interactions.create(input),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['interactions', ownerId, 'for-contact', id],
+        queryKey: ['interactions', userId, 'for-contact', id],
       });
       setInteractionSummary('');
       setInteractionChannel('');
@@ -96,9 +96,9 @@ export function ContactDetail() {
 
   const handleCreateInteraction = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!interactionSummary.trim() || !ownerId) return;
+    if (!interactionSummary.trim() || !userId) return;
     createInteractionMutation.mutate({
-      owner_id: ownerId,
+      user_id: userId,
       contact_id: id,
       occurred_at: new Date().toISOString(),
       channel: interactionChannel.trim() || null,

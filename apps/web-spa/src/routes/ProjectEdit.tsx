@@ -3,14 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { stageDotStyle } from '../lib/projectStageColor';
 import type { UpdateProjectInput } from '../lib/adapter/types';
 
 export function ProjectEdit() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -49,7 +49,7 @@ export function ProjectEdit() {
     mutationFn: (input: UpdateProjectInput) => adapter.projects.update(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', id] });
-      queryClient.invalidateQueries({ queryKey: ['projects', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['projects', userId] });
       navigate(`/projects/${id}`);
     },
   });

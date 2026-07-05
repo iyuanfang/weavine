@@ -175,7 +175,7 @@ async fn push_all(
     result: &mut SyncResult,
 ) -> anyhow::Result<i64> {
     let mut entities = Vec::new();
-    let local_owner_id = "local-default";
+    let local_user_id = "local-default";
 
     for kind in ENTITY_KINDS {
         let table = match kind_to_sqlite_table(kind) {
@@ -208,7 +208,7 @@ async fn push_all(
             }
         };
 
-        let rows: Vec<Value> = match stmt.query_map([local_owner_id], |row| {
+        let rows: Vec<Value> = match stmt.query_map([local_user_id], |row| {
             let mut map = Map::new();
             let bool_cols = boolean_columns(kind);
             let int_cols = integer_columns(kind);
@@ -286,13 +286,13 @@ async fn pull_all(
     result: &mut SyncResult,
 ) -> anyhow::Result<()> {
     let since = last_pulled_revision(conn)?;
-    let local_owner_id = "local-default";
+    let local_user_id = "local-default";
 
     loop {
         let pull_resp = api::pull(server_url, access_token, since, 200).await?;
 
         for change in &pull_resp.rows {
-            if let Err(e) = apply_change(conn, change, local_owner_id) {
+            if let Err(e) = apply_change(conn, change, local_user_id) {
                 eprintln!(
                     "[sync] apply {} {} failed: {}",
                     change.kind,
@@ -323,7 +323,7 @@ async fn pull_all(
 fn apply_change(
     conn: &Connection,
     change: &ChangeRow,
-    local_owner_id: &str,
+    local_user_id: &str,
 ) -> anyhow::Result<()> {
     let table = match kind_to_sqlite_table(&change.kind) {
         Some(t) => t,
@@ -376,7 +376,7 @@ fn apply_change(
                 .iter()
                 .map(|col| {
                     if *col == "user_id" {
-                        Box::new(local_owner_id.to_string()) as Box<dyn rusqlite::types::ToSql>
+                        Box::new(local_user_id.to_string()) as Box<dyn rusqlite::types::ToSql>
                     } else if bool_cols.contains(col) {
                         let v = obj.get(*col).and_then(|x| x.as_bool()).unwrap_or(false);
                         Box::new(if v { 1i64 } else { 0i64 }) as Box<dyn rusqlite::types::ToSql>
@@ -409,7 +409,7 @@ fn apply_change(
                     "DELETE FROM \"{}\" WHERE \"id\" = ?1 AND \"user_id\" = ?2",
                     table
                 ),
-                rusqlite::params![change.row_id, local_owner_id],
+                rusqlite::params![change.row_id, local_user_id],
             )?;
         }
         _ => {

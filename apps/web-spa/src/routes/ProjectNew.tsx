@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { stageDotStyle } from '../lib/projectStageColor';
 import type { CreateProjectInput } from '../lib/adapter/types';
 
@@ -15,7 +15,7 @@ const TEMPLATES = [
 
 export function ProjectNew() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -47,16 +47,16 @@ export function ProjectNew() {
   const createMutation = useMutation({
     mutationFn: (input: CreateProjectInput) => adapter.projects.create(input),
     onSuccess: (project) => {
-      queryClient.invalidateQueries({ queryKey: ['projects', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['projects', userId] });
       navigate(`/projects/${project.id}`);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !ownerId) return;
+    if (!title.trim() || !userId) return;
     createMutation.mutate({
-      owner_id: ownerId,
+      user_id: userId,
       title: title.trim(),
       description: description.trim() || null,
       template,
@@ -66,7 +66,7 @@ export function ProjectNew() {
     });
   };
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

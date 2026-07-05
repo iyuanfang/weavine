@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Reminder } from '../lib/adapter/types';
 
 function formatReminderTime(d: Date): string {
@@ -44,32 +44,32 @@ const KIND_FILTERS: { value: string; label: string }[] = [
 
 export function Reminders() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const [includeDismissed, setIncludeDismissed] = useState(false);
   const [kindFilter, setKindFilter] = useState('all');
 
   const remindersQuery = useQuery({
-    queryKey: ['reminders', ownerId, { include_dismissed: includeDismissed }],
+    queryKey: ['reminders', userId, { include_dismissed: includeDismissed }],
     queryFn: () =>
       adapter.reminders.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         include_dismissed: includeDismissed || null,
         limit: 200,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'all', 'active'],
+    queryKey: ['events', userId, 'all', 'active'],
     queryFn: () =>
       adapter.events.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         archived: 'false',
         limit: 200,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const eventMap = (eventsQuery.data ?? []).reduce<Record<string, { id: string; title: string }>>(
@@ -83,18 +83,18 @@ export function Reminders() {
   const dismissMutation = useMutation({
     mutationFn: (reminderId: string) => adapter.reminders.dismiss(reminderId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reminders', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['reminders', userId] });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (reminderId: string) => adapter.reminders.delete(reminderId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reminders', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['reminders', userId] });
     },
   });
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

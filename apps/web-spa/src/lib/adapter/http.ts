@@ -152,7 +152,7 @@ export class HttpAdapter implements PRMAdapter {
 
   contacts = {
     list: (p: {
-      owner_id: string;
+      user_id: string;
       tag_id?: string | null;
       search?: string | null;
       importance?: string | null;
@@ -174,7 +174,7 @@ export class HttpAdapter implements PRMAdapter {
 
   projects = {
     list: (p: {
-      owner_id: string;
+      user_id: string;
       template?: string | null;
       stage?: string | null;
       limit?: number | null;
@@ -199,7 +199,7 @@ export class HttpAdapter implements PRMAdapter {
 
   events = {
     list: (p: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       project_id?: string | null;
       start_after?: string | null;
@@ -220,17 +220,17 @@ export class HttpAdapter implements PRMAdapter {
     delete: (id: string): Promise<void> =>
       request<void>(this.baseUrl, 'DELETE', `/api/events/${id}`),
 
-    upcoming: (owner_id: string, limit?: number | null): Promise<Event[]> =>
+    upcoming: (user_id: string, limit?: number | null): Promise<Event[]> =>
       request<Event[]>(
         this.baseUrl,
         'GET',
-        '/api/events/upcoming' + qs({ owner_id, limit }),
+        '/api/events/upcoming' + qs({ user_id, limit }),
       ),
   };
 
   actions = {
     list: (p: {
-      owner_id: string;
+      user_id: string;
       status?: string | null;
       contact_id?: string | null;
       project_id?: string | null;
@@ -271,7 +271,7 @@ export class HttpAdapter implements PRMAdapter {
 
   interactions = {
     list: (p: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       action_id?: string | null;
       event_id?: string | null;
@@ -294,7 +294,7 @@ export class HttpAdapter implements PRMAdapter {
 
   reminders = {
     list: (p: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       event_id?: string | null;
       include_dismissed?: boolean | null;
@@ -316,8 +316,8 @@ export class HttpAdapter implements PRMAdapter {
   };
 
   tags = {
-    list: (owner_id: string): Promise<Tag[]> =>
-      request<Tag[]>(this.baseUrl, 'GET', '/api/tags' + qs({ owner_id })),
+    list: (user_id: string): Promise<Tag[]> =>
+      request<Tag[]>(this.baseUrl, 'GET', '/api/tags' + qs({ user_id })),
 
     create: (input: CreateTagInput): Promise<Tag> =>
       request<Tag>(this.baseUrl, 'POST', '/api/tags', input),
@@ -330,19 +330,19 @@ export class HttpAdapter implements PRMAdapter {
   };
 
   settings = {
-    list: (owner_id: string): Promise<Setting[]> =>
-      request<Setting[]>(this.baseUrl, 'GET', '/api/settings' + qs({ owner_id })),
+    list: (user_id: string): Promise<Setting[]> =>
+      request<Setting[]>(this.baseUrl, 'GET', '/api/settings' + qs({ user_id })),
 
-    upsert: (owner_id: string, key: string, value: string): Promise<Setting> =>
-      request<Setting>(this.baseUrl, 'POST', '/api/settings/upsert', { owner_id, key, value }),
+    upsert: (user_id: string, key: string, value: string): Promise<Setting> =>
+      request<Setting>(this.baseUrl, 'POST', '/api/settings/upsert', { user_id, key, value }),
 
-    delete: (owner_id: string, key: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', '/api/settings' + qs({ owner_id, key })),
+    delete: (user_id: string, key: string): Promise<void> =>
+      request<void>(this.baseUrl, 'DELETE', '/api/settings' + qs({ user_id, key })),
   };
 
   search = {
     query: (
-      owner_id: string,
+      user_id: string,
       query: string,
       limit?: number | null,
       options?: { include_archived?: boolean | null },
@@ -352,7 +352,7 @@ export class HttpAdapter implements PRMAdapter {
         'GET',
         '/api/search' +
           qs({
-            owner_id,
+            user_id,
             query,
             limit: limit ?? null,
             include_archived: options?.include_archived ?? true,
@@ -361,42 +361,42 @@ export class HttpAdapter implements PRMAdapter {
   };
 
   archive = {
-    summary: (owner_id: string): Promise<ArchiveSummary> =>
-      request<ArchiveSummary>(this.baseUrl, 'GET', '/api/archive/summary' + qs({ owner_id })),
+    summary: (user_id: string): Promise<ArchiveSummary> =>
+      request<ArchiveSummary>(this.baseUrl, 'GET', '/api/archive/summary' + qs({ user_id })),
 
-    counts: (owner_id: string): Promise<ArchiveCounts> =>
-      request<ArchiveCounts>(this.baseUrl, 'GET', '/api/archive/counts' + qs({ owner_id })),
+    counts: (user_id: string): Promise<ArchiveCounts> =>
+      request<ArchiveCounts>(this.baseUrl, 'GET', '/api/archive/counts' + qs({ user_id })),
 
     list: (
-      owner_id: string,
+      user_id: string,
       entity: 'action' | 'event' | 'project',
     ): Promise<ArchivedItem[]> =>
       request<ArchivedItem[]>(
         this.baseUrl,
         'GET',
-        '/api/archive/list' + qs({ owner_id, entity, limit: 500 }),
+        '/api/archive/list' + qs({ user_id, entity, limit: 500 }),
       ),
 
     unarchiveOne: (
-      owner_id: string,
+      user_id: string,
       entity: 'action' | 'event' | 'project',
       id: string,
     ): Promise<void> =>
       request<void>(this.baseUrl, 'POST', '/api/archive/unarchive-one', {
-        owner_id,
+        user_id,
         entity,
         id,
       }),
 
     bulkUnarchive: (
-      owner_id: string,
+      user_id: string,
       entity: 'action' | 'event' | 'project',
     ): Promise<{ unarchived: number }> =>
       request<{ unarchived: number }>(
         this.baseUrl,
         'POST',
         '/api/archive/bulk-unarchive',
-        { owner_id, entity },
+        { user_id, entity },
       ),
   };
 

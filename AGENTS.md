@@ -15,7 +15,7 @@ When `feature/sync-v0.2` runs against a fresh database, migrations `202607050000
 
 Schema after full migration:
 - All PK/FK columns remain `TEXT` (unchanged from initial schema)
-- `contact.user_id` / `tag.user_id` / etc. renamed from `owner_id` (migration 0002)
+- `contact.user_id` / `tag.user_id` / etc. established column name (initial schema uses `user_id`)
 - Every domain table gains `server_revision BIGINT NOT NULL DEFAULT nextval('server_revision_seq')` and `deleted_at TEXT`
 - `contact_tag` and `project_contact` gained an `id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT` column (needed for sync triggers)
 - New tables: `devices`, `sync_manifest`, `sync_change_log`, `sync_meta`

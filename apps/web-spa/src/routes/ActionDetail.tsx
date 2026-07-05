@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 import type { UpdateActionInput } from '../lib/adapter/types';
 import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
@@ -32,7 +32,7 @@ const PRIORITY_BADGE: Record<number, { bg: string; fg: string }> = {
 export function ActionDetail() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -55,7 +55,7 @@ export function ActionDetail() {
   const completeMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['actions', userId] });
       queryClient.invalidateQueries({ queryKey: ['action', id] });
     },
   });

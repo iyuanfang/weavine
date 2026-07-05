@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { stageDotStyle } from '../lib/projectStageColor';
 import type { Project } from '../lib/adapter/types';
 
@@ -29,26 +29,26 @@ const TEMPLATE_FILTERS = [
 
 export function ProjectsList() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
 
   const [search, setSearch] = useState('');
   const [templateFilter, setTemplateFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId, 'active'],
+    queryKey: ['projects', userId, 'active'],
     queryFn: () =>
       adapter.projects.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         archived: 'false',
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
   const archiveCountsQuery = useQuery({
-    queryKey: ['archive', 'counts', ownerId],
-    queryFn: () => adapter.archive.counts(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'counts', userId],
+    queryFn: () => adapter.archive.counts(userId!),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
@@ -90,7 +90,7 @@ export function ProjectsList() {
     done: projects.filter((p) => !!p.completed_at).length,
   }), [projects]);
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

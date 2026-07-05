@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import type { Contact } from '../lib/adapter/types';
@@ -24,27 +24,27 @@ const IMPORTANCE_BADGE: Record<string, { bg: string; fg: string }> = {
 export function TagDetail() {
   const { tagId } = useParams() as { tagId: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
 
   const tagsQuery = useQuery({
-    queryKey: ['tags', ownerId],
-    queryFn: () => adapter.tags.list(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['tags', userId],
+    queryFn: () => adapter.tags.list(userId!),
+    enabled: !!userId,
   });
 
   const currentTag = (tagsQuery.data ?? []).find((t) => t.id === tagId) ?? null;
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId, { tag_id: tagId }],
+    queryKey: ['contacts', userId, { tag_id: tagId }],
     queryFn: () =>
       adapter.contacts.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         tag_id: tagId,
       }),
-    enabled: !!ownerId,
+    enabled: !!userId,
   });
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

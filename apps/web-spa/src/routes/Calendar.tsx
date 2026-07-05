@@ -7,7 +7,7 @@ import { ProjectBadge } from '../components/ProjectBadge';
 import { ContactBadge } from '../components/ContactBadge';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Event } from '../lib/adapter/types';
 
 const TYPE_OPTIONS = [
@@ -78,7 +78,7 @@ function isDateInMonth(d: Date, monthStart: Date, monthEnd: Date): boolean {
 
 export function Calendar() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -95,29 +95,29 @@ export function Calendar() {
   }, [monthOffset]);
 
   const eventsQuery = useQuery({
-    queryKey: ['events', ownerId, 'by-month', monthOffset, 'active'],
+    queryKey: ['events', userId, 'by-month', monthOffset, 'active'],
     queryFn: () =>
       adapter.events.list({
-        owner_id: ownerId!,
+        user_id: userId!,
         start_after: monthStart.toISOString(),
         start_before: monthEnd.toISOString(),
         archived: 'false',
       }),
-    enabled: Boolean(ownerId),
+    enabled: Boolean(userId),
     refetchOnMount: 'always',
   });
 
   const upcomingQuery = useQuery({
-    queryKey: ['events', ownerId, 'upcoming'],
-    queryFn: () => adapter.events.upcoming(ownerId!, 5),
-    enabled: Boolean(ownerId),
+    queryKey: ['events', userId, 'upcoming'],
+    queryFn: () => adapter.events.upcoming(userId!, 5),
+    enabled: Boolean(userId),
     refetchOnMount: 'always',
   });
 
   const archiveCountsQuery = useQuery({
-    queryKey: ['archive', 'counts', ownerId],
-    queryFn: () => adapter.archive.counts(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'counts', userId],
+    queryFn: () => adapter.archive.counts(userId!),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
@@ -134,7 +134,7 @@ export function Calendar() {
     }
   };
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

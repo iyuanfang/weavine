@@ -4,32 +4,32 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { ArchiveSummary, Setting } from '../lib/adapter/types';
 
 export function SettingsPage() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
-    queryKey: ['settings', ownerId],
-    queryFn: () => adapter.settings.list(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['settings', userId],
+    queryFn: () => adapter.settings.list(userId!),
+    enabled: !!userId,
   });
 
   const upsertMutation = useMutation({
     mutationFn: (input: { key: string; value: string }) =>
-      adapter.settings.upsert(ownerId!, input.key, input.value),
+      adapter.settings.upsert(userId!, input.key, input.value),
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['settings', userId] });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (key: string) => adapter.settings.delete(ownerId!, key),
+    mutationFn: (key: string) => adapter.settings.delete(userId!, key),
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings', ownerId] });
+      queryClient.invalidateQueries({ queryKey: ['settings', userId] });
     },
   });
 
@@ -40,7 +40,7 @@ export function SettingsPage() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 
@@ -245,13 +245,13 @@ function SettingRow({
 }
 function ArchivePanel() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const queryClient = useQueryClient();
 
   const summaryQuery = useQuery({
-    queryKey: ['archive', 'summary', ownerId],
-    queryFn: () => adapter.archive.summary(ownerId!),
-    enabled: !!ownerId,
+    queryKey: ['archive', 'summary', userId],
+    queryFn: () => adapter.archive.summary(userId!),
+    enabled: !!userId,
     refetchOnMount: 'always',
   });
 
@@ -264,11 +264,11 @@ function ArchivePanel() {
 
   const bulkUnarchiveMutation = useMutation({
     mutationFn: async (entity: 'action' | 'event' | 'project') =>
-      adapter.archive.bulkUnarchive(ownerId!, entity),
+      adapter.archive.bulkUnarchive(userId!, entity),
     onSuccess: invalidateAll,
   });
 
-  if (!ownerId) return null;
+  if (!userId) return null;
 
   const summary: ArchiveSummary | undefined = summaryQuery.data;
 

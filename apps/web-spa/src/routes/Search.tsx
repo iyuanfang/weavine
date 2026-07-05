@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -25,20 +25,20 @@ const SECTION_ICONS: Record<string, string> = {
 
 export function SearchPage() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
 
   const [query, setQuery] = useState('');
   const [includeArchived, setIncludeArchived] = useState(true);
   const debouncedQuery = useDebouncedValue(query, 300);
 
   const searchQuery = useQuery({
-    queryKey: ['search', ownerId, debouncedQuery, includeArchived],
+    queryKey: ['search', userId, debouncedQuery, includeArchived],
     queryFn: () =>
-      adapter.search.query(ownerId!, debouncedQuery, null, { include_archived: includeArchived }),
-    enabled: !!ownerId && debouncedQuery.length > 0,
+      adapter.search.query(userId!, debouncedQuery, null, { include_archived: includeArchived }),
+    enabled: !!userId && debouncedQuery.length > 0,
   });
 
-  if (!ownerId) {
+  if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 

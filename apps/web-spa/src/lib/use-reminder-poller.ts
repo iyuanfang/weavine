@@ -1,24 +1,24 @@
 import { useEffect } from "react";
 
 import { useAdapter } from "./adapter";
-import { useOwnerId } from "./auth";
+import { useUserId } from "./auth";
 import { ensurePermission, fire } from "./notifications";
 
 const POLL_INTERVAL_MS = 30_000;
 
 export function useReminderPoller() {
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
 
   useEffect(() => {
-    if (!ownerId) return;
+    if (!userId) return;
     let timerId: ReturnType<typeof setInterval> | null = null;
 
     async function tick() {
       let reminders;
       try {
         reminders = await adapter.reminders.list({
-          owner_id: ownerId ?? "local-default",
+          user_id: userId ?? "local-default",
           include_dismissed: false,
         });
       } catch (e) {
@@ -59,5 +59,5 @@ export function useReminderPoller() {
       cancelled = true;
       if (timerId) clearInterval(timerId);
     };
-  }, [adapter, ownerId]);
+  }, [adapter, userId]);
 }

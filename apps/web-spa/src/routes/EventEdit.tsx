@@ -7,7 +7,7 @@ import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
-import { useOwnerId } from '../lib/auth';
+import { useUserId } from '../lib/auth';
 import type { Contact, Event, Project, UpdateEventInput } from '../lib/adapter/types';
 
 function toLocalInput(iso: string | null | undefined): string {
@@ -24,7 +24,7 @@ function formatLocal(d: Date): string {
 export function EventEdit() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
-  const ownerId = useOwnerId();
+  const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -37,15 +37,15 @@ export function EventEdit() {
   });
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts', ownerId],
-    queryFn: () => adapter.contacts.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['contacts', userId],
+    queryFn: () => adapter.contacts.list({ user_id: userId! }),
+    enabled: !!userId,
   });
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', ownerId],
-    queryFn: () => adapter.projects.list({ owner_id: ownerId! }),
-    enabled: !!ownerId,
+    queryKey: ['projects', userId],
+    queryFn: () => adapter.projects.list({ user_id: userId! }),
+    enabled: !!userId,
   });
 
   const [title, setTitle] = useState('');

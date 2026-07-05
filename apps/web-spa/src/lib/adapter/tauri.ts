@@ -15,8 +15,8 @@
 //   (`isLocal=1`) and `get_local_user` returns it. Every data
 //   command takes `user_id` at the wire boundary — the JS
 //   adapter supplies it transparently from the cached local
-//   user. The HTTP server adapter uses `owner_id` instead; the
-//   two stacks diverge here by design.
+//   user. The HTTP server adapter also uses `user_id` now;
+//   the two stacks are aligned on `user_id` end-to-end.
 
 import { invoke } from '@tauri-apps/api/core';
 
@@ -56,7 +56,7 @@ import type {
   UpdateTagInput,
 } from './types';
 
-type UserIdPayload = { owner_id?: string | null; [k: string]: unknown };
+type UserIdPayload = { user_id?: string | null; [k: string]: unknown };
 
 export class TauriAdapter implements PRMAdapter {
   private userIdReady: Promise<string>;
@@ -75,14 +75,7 @@ export class TauriAdapter implements PRMAdapter {
     payload: UserIdPayload = {},
   ): Promise<Record<string, unknown>> {
     const user_id = await this.userIdReady;
-    const { owner_id: _owner_id, ...rest } = payload;
-    return { user_id, ...rest };
-  }
-
-  private rewriteOwnerId<I extends object>(input: I): I {
-    if (!('owner_id' in input)) return input;
-    const { owner_id, ...rest } = input as Record<string, unknown>;
-    return { user_id: owner_id, ...rest } as I;
+    return { user_id, ...payload };
   }
 
   async getLocalUser(): Promise<LocalUser> {
@@ -95,7 +88,7 @@ export class TauriAdapter implements PRMAdapter {
 
   contacts = {
     list: async (p: {
-      owner_id: string;
+      user_id: string;
       tag_id?: string | null;
       search?: string | null;
       importance?: string | null;
@@ -106,16 +99,16 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Contact> =>
       invoke<Contact>('get_contact', { id }),
     create: (input: CreateContactInput): Promise<Contact> =>
-      invoke<Contact>('create_contact', { input: this.rewriteOwnerId(input) }),
+      invoke<Contact>('create_contact', { input }),
     update: (input: UpdateContactInput): Promise<Contact> =>
-      invoke<Contact>('update_contact', { input: this.rewriteOwnerId(input) }),
+      invoke<Contact>('update_contact', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_contact', { id }),
   };
 
   projects = {
     list: async (p: {
-      owner_id: string;
+      user_id: string;
       template?: string | null;
       stage?: string | null;
       limit?: number | null;
@@ -126,9 +119,9 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Project> =>
       invoke<Project>('get_project', { id }),
     create: (input: CreateProjectInput): Promise<Project> =>
-      invoke<Project>('create_project', { input: this.rewriteOwnerId(input) }),
+      invoke<Project>('create_project', { input }),
     update: (input: UpdateProjectInput): Promise<Project> =>
-      invoke<Project>('update_project', { input: this.rewriteOwnerId(input) }),
+      invoke<Project>('update_project', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_project', { id }),
     stages: (template: string): Promise<string[]> =>
@@ -137,7 +130,7 @@ export class TauriAdapter implements PRMAdapter {
 
   events = {
     list: async (p: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       project_id?: string | null;
       start_after?: string | null;
@@ -150,13 +143,13 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Event> =>
       invoke<Event>('get_event', { id }),
     create: (input: CreateEventInput): Promise<Event> =>
-      invoke<Event>('create_event', { input: this.rewriteOwnerId(input) }),
+      invoke<Event>('create_event', { input }),
     update: (input: UpdateEventInput): Promise<Event> =>
-      invoke<Event>('update_event', { input: this.rewriteOwnerId(input) }),
+      invoke<Event>('update_event', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_event', { id }),
     upcoming: async (
-      _owner_id: string,
+      _user_id: string,
       limit?: number | null,
     ): Promise<Event[]> => {
       const user_id = await this.userIdReady;
@@ -169,7 +162,7 @@ export class TauriAdapter implements PRMAdapter {
 
   actions = {
     list: async (p: {
-      owner_id: string;
+      user_id: string;
       status?: string | null;
       contact_id?: string | null;
       project_id?: string | null;
@@ -181,9 +174,9 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Action> =>
       invoke<Action>('get_action', { id }),
     create: (input: CreateActionInput): Promise<Action> =>
-      invoke<Action>('create_action', { input: this.rewriteOwnerId(input) }),
+      invoke<Action>('create_action', { input }),
     update: (input: UpdateActionInput): Promise<Action> =>
-      invoke<Action>('update_action', { input: this.rewriteOwnerId(input) }),
+      invoke<Action>('update_action', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_action', { id }),
   };
@@ -207,7 +200,7 @@ export class TauriAdapter implements PRMAdapter {
 
   interactions = {
     list: async (p: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       action_id?: string | null;
       event_id?: string | null;
@@ -219,16 +212,16 @@ export class TauriAdapter implements PRMAdapter {
     get: (id: string): Promise<Interaction> =>
       invoke<Interaction>('get_interaction', { id }),
     create: (input: CreateInteractionInput): Promise<Interaction> =>
-      invoke<Interaction>('create_interaction', { input: this.rewriteOwnerId(input) }),
+      invoke<Interaction>('create_interaction', { input }),
     update: (input: UpdateInteractionInput): Promise<Interaction> =>
-      invoke<Interaction>('update_interaction', { input: this.rewriteOwnerId(input) }),
+      invoke<Interaction>('update_interaction', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_interaction', { id }),
   };
 
   reminders = {
     list: async (p: {
-      owner_id: string;
+      user_id: string;
       contact_id?: string | null;
       event_id?: string | null;
       include_dismissed?: boolean | null;
@@ -238,9 +231,9 @@ export class TauriAdapter implements PRMAdapter {
       return invoke<Reminder[]>('list_reminders', flat);
     },
     create: (input: CreateReminderInput): Promise<Reminder> =>
-      invoke<Reminder>('create_reminder', { input: this.rewriteOwnerId(input) }),
+      invoke<Reminder>('create_reminder', { input }),
     update: (input: UpdateReminderInput): Promise<Reminder> =>
-      invoke<Reminder>('update_reminder', { input: this.rewriteOwnerId(input) }),
+      invoke<Reminder>('update_reminder', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_reminder', { id }),
     dismiss: (id: string): Promise<void> =>
@@ -248,12 +241,12 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   tags = {
-    list: async (_owner_id: string): Promise<Tag[]> => {
+    list: async (_user_id: string): Promise<Tag[]> => {
       const user_id = await this.userIdReady;
       return invoke<Tag[]>('list_tags', { user_id });
     },
     create: (input: CreateTagInput): Promise<Tag> =>
-      invoke<Tag>('create_tag', { input: this.rewriteOwnerId(input) }),
+      invoke<Tag>('create_tag', { input }),
     update: (input: UpdateTagInput): Promise<Tag> =>
       invoke<Tag>('update_tag', { input }),
     delete: (id: string): Promise<void> =>
@@ -261,19 +254,19 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   settings = {
-    list: async (_owner_id: string): Promise<Setting[]> => {
+    list: async (_user_id: string): Promise<Setting[]> => {
       const user_id = await this.userIdReady;
       return invoke<Setting[]>('list_settings', { user_id });
     },
     upsert: async (
-      _owner_id: string,
+      _user_id: string,
       key: string,
       value: string,
     ): Promise<Setting> => {
       const user_id = await this.userIdReady;
       return invoke<Setting>('upsert_setting', { user_id, key, value });
     },
-    delete: async (_owner_id: string, key: string): Promise<void> => {
+    delete: async (_user_id: string, key: string): Promise<void> => {
       const user_id = await this.userIdReady;
       return invoke<void>('delete_setting', { user_id, key });
     },
@@ -281,7 +274,7 @@ export class TauriAdapter implements PRMAdapter {
 
   search = {
     query: async (
-      _owner_id: string,
+      _user_id: string,
       query: string,
       limit?: number | null,
       options?: { include_archived?: boolean | null },
@@ -297,23 +290,23 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   archive = {
-    summary: async (_owner_id: string): Promise<ArchiveSummary> => {
+    summary: async (_user_id: string): Promise<ArchiveSummary> => {
       const user_id = await this.userIdReady;
       return invoke<ArchiveSummary>('archive_summary', { user_id });
     },
-    counts: async (_owner_id: string): Promise<ArchiveCounts> => {
+    counts: async (_user_id: string): Promise<ArchiveCounts> => {
       const user_id = await this.userIdReady;
       return invoke<ArchiveCounts>('archive_counts', { user_id });
     },
     list: async (
-      _owner_id: string,
+      _user_id: string,
       entity: 'action' | 'event' | 'project',
     ): Promise<ArchivedItem[]> => {
       const user_id = await this.userIdReady;
       return invoke<ArchivedItem[]>('list_archive', { user_id, entity });
     },
     unarchiveOne: async (
-      _owner_id: string,
+      _user_id: string,
       entity: 'action' | 'event' | 'project',
       id: string,
     ): Promise<void> => {
@@ -321,7 +314,7 @@ export class TauriAdapter implements PRMAdapter {
       return invoke<void>('unarchive_one', { user_id, entity, id });
     },
     bulkUnarchive: async (
-      _owner_id: string,
+      _user_id: string,
       entity: 'action' | 'event' | 'project',
     ): Promise<{ unarchived: number }> => {
       const user_id = await this.userIdReady;
