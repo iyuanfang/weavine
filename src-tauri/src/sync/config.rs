@@ -6,6 +6,7 @@ pub const KEY_ACCESS_TOKEN: &str = "access_token";
 pub const KEY_REFRESH_TOKEN: &str = "refresh_token";
 pub const KEY_DEVICE_ID: &str = "device_id";
 pub const KEY_USER_ID: &str = "user_id";
+pub const KEY_USER_EMAIL: &str = "user_email";
 pub const KEY_LAST_PULLED_REVISION: &str = "last_pulled_revision";
 pub const KEY_LAST_PUSHED_REVISION: &str = "last_pushed_revision";
 

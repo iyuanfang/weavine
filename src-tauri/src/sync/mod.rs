@@ -5,7 +5,7 @@
 //! then remote changes are pulled and applied locally.
 
 mod api;
-mod config;
+pub mod config;
 mod keys;
 mod translate;
 
@@ -20,7 +20,7 @@ pub use config::{clear_all as unlink, is_linked};
 // ── Result types ──────────────────────────────────────
 
 /// Outcome of a single sync cycle.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize)]
 pub struct SyncResult {
     pub pushed: usize,
     pub pulled: usize,
@@ -47,6 +47,7 @@ pub async fn link(
     config::set(conn, KEY_REFRESH_TOKEN, &resp.refresh_token)?;
     config::set(conn, KEY_DEVICE_ID, &resp.device_id)?;
     config::set(conn, KEY_USER_ID, &resp.user_id)?;
+    config::set(conn, KEY_USER_EMAIL, email)?;
 
     // Mark last_revision as 0 so first pull gets everything
     config::set(conn, KEY_LAST_PULLED_REVISION, "0")?;

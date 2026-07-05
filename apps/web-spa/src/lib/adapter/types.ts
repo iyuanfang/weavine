@@ -474,6 +474,33 @@ export interface PRMAdapter {
     unarchiveOne(owner_id: string, entity: 'action' | 'event' | 'project', id: string): Promise<void>;
     bulkUnarchive(owner_id: string, entity: 'action' | 'event' | 'project'): Promise<{ unarchived: number }>;
   };
+
+  cloud: {
+    status(): Promise<CloudStatus>;
+    login(input: CloudLoginInput): Promise<CloudStatus>;
+    logout(): Promise<void>;
+    syncNow(): Promise<CloudSyncResult>;
+  };
+}
+
+export interface CloudStatus {
+  linked: boolean;
+  server_url: string | null;
+  user_email: string | null;
+  last_pulled_revision: number;
+  last_pushed_revision: number;
+}
+
+export interface CloudLoginInput {
+  server_url: string;
+  email: string;
+  password: string;
+}
+
+export interface CloudSyncResult {
+  pushed: number;
+  pulled: number;
+  conflicts: number;
 }
 
 export interface ArchiveSummary {

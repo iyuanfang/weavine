@@ -184,6 +184,10 @@ pub fn run() {
             project_contact::add_project_contact,
             project_contact::list_project_contacts,
             project_contact::remove_project_contact,
+            commands::sync::cloud_login,
+            commands::sync::cloud_logout,
+            commands::sync::cloud_sync_now,
+            commands::sync::cloud_status,
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())

@@ -25,6 +25,9 @@ import type {
   ArchivedItem,
   ArchiveCounts,
   ArchiveSummary,
+  CloudLoginInput,
+  CloudStatus,
+  CloudSyncResult,
   Contact,
   CreateActionInput,
   CreateContactInput,
@@ -321,6 +324,19 @@ export class TauriAdapter implements PRMAdapter {
         entity,
       });
     },
+  };
+
+  cloud = {
+    status: (): Promise<CloudStatus> => invoke<CloudStatus>('cloud_status'),
+    login: (input: CloudLoginInput): Promise<CloudStatus> =>
+      invoke<CloudStatus>('cloud_login', {
+        server_url: input.server_url,
+        email: input.email,
+        password: input.password,
+      }),
+    logout: (): Promise<void> => invoke<void>('cloud_logout'),
+    syncNow: (): Promise<CloudSyncResult> =>
+      invoke<CloudSyncResult>('cloud_sync_now'),
   };
 }
 
