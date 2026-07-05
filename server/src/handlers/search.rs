@@ -25,7 +25,7 @@ pub async fn query(
 
     let contacts = sqlx::query_as::<_, Contact>(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
-                notes, importance, reminder_enabled, reminder_interval_days, last_contacted_at, \
+                notes, importance, reminder_enabled, reminder_interval_days::BIGINT AS reminder_interval_days, last_contacted_at, \
                 created_at, updated_at \
          FROM contact WHERE user_id = $1 AND (nickname ILIKE $2 OR name ILIKE $2 OR company ILIKE $2)",
     )
@@ -41,14 +41,14 @@ pub async fn query(
 
     let events = sqlx::query_as::<_, Event>(
         "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
+                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
          FROM event WHERE user_id = $1 AND (title ILIKE $2 OR notes ILIKE $2)",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
 
     let actions = sqlx::query_as::<_, Action>(
-        "SELECT id, user_id, title, description, status, priority, category, due_at, \
+        "SELECT id, user_id, title, description, status, priority::BIGINT AS priority, category, due_at, \
                 contact_id, project_id, completed_at, archived_at, created_at, updated_at \
          FROM action WHERE user_id = $1 AND (title ILIKE $2 OR description ILIKE $2)",
     )

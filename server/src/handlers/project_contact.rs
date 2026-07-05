@@ -40,7 +40,7 @@ pub async fn list(
     let auth = extract_auth(&headers)?;
     let rows = sqlx::query_as::<_, ContactWithRole>(
         "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.city, c.email, c.phone, c.wechat, \
-                c.notes, c.importance, c.reminder_enabled, c.reminder_interval_days, c.last_contacted_at, \
+                c.notes, c.importance, c.reminder_enabled, c.reminder_interval_days::BIGINT AS reminder_interval_days, c.last_contacted_at, \
                 c.created_at, c.updated_at, pc.role, pc.added_at \
          FROM project_contact pc \
          JOIN contact c ON c.id = pc.contact_id \

@@ -27,7 +27,7 @@ pub async fn list(
 ) -> Result<Json<Vec<Action>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let rows = sqlx::query_as::<_, Action>(
-        "SELECT id, user_id, title, description, status, priority, category, due_at, \
+        "SELECT id, user_id, title, description, status, priority::BIGINT AS priority, category, due_at, \
                 contact_id, project_id, completed_at, archived_at, created_at, updated_at \
          FROM action WHERE user_id = $1 \
          AND ($2::text IS NULL OR status = $2) \
@@ -73,7 +73,7 @@ pub async fn create(
     .bind(body.get("title").and_then(|v| v.as_str()).unwrap_or(""))
     .bind(body.get("description").and_then(|v| v.as_str()))
     .bind(body.get("status").and_then(|v| v.as_str()).unwrap_or("inbox"))
-    .bind(body.get("priority").and_then(|v| v.as_i64()).map(|n| n).unwrap_or(0i64))
+    .bind(body.get("priority").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0i32))
     .bind(body.get("category").and_then(|v| v.as_str()))
     .bind(body.get("due_at").and_then(|v| v.as_str()))
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
@@ -87,7 +87,7 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let action = sqlx::query_as::<_, Action>(
-        "SELECT id, user_id, title, description, status, priority, category, due_at, \
+        "SELECT id, user_id, title, description, status, priority::BIGINT AS priority, category, due_at, \
                 contact_id, project_id, completed_at, archived_at, created_at, updated_at \
          FROM action WHERE id = $1",
     )
@@ -104,7 +104,7 @@ pub async fn get(
 ) -> Result<Json<Action>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
     let action = sqlx::query_as::<_, Action>(
-        "SELECT id, user_id, title, description, status, priority, category, due_at, \
+        "SELECT id, user_id, title, description, status, priority::BIGINT AS priority, category, due_at, \
                 contact_id, project_id, completed_at, archived_at, created_at, updated_at \
          FROM action WHERE id = $1 AND user_id = $2",
     )
@@ -135,27 +135,38 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    enum Bind<'a> {
+        Text(&'a str),
+        I32(i32),
+    }
+
     let mut sets = Vec::new();
-    let mut params: Vec<String> = Vec::new();
+    let mut binds: Vec<Bind> = Vec::new();
     let mut idx = 1u32;
     for field in &["title", "description", "status", "category", "due_at", "contact_id", "project_id", "completed_at", "archived_at"] {
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx));
-            params.push(v.to_string());
+            binds.push(Bind::Text(v));
             idx += 1;
         }
     }
     if let Some(v) = body.get("priority").and_then(|v| v.as_i64()) {
-        let p_idx = idx;
-        sets.push(format!("priority = ${}::BIGINT", p_idx));
-        params.push(v.to_string());
+        sets.push(format!("priority = ${}", idx));
+        binds.push(Bind::I32(v as i32));
         idx += 1;
     }
     sets.push(format!("updated_at = ${}", idx));
-    params.push(now); idx += 1;
-    let sql = format!("UPDATE action SET {} WHERE id = ${} AND user_id = ${}", sets.join(", "), idx, idx + 1);
+    binds.push(Bind::Text(&now));
+    let where_id_idx = idx + 1;
+    let where_auth_idx = idx + 2;
+    let sql = format!("UPDATE action SET {} WHERE id = ${} AND user_id = ${}", sets.join(", "), where_id_idx, where_auth_idx);
     let mut q = sqlx::query(&sql);
-    for p in &params { q = q.bind(p); }
+    for b in &binds {
+        q = match b {
+            Bind::Text(s) => q.bind(*s),
+            Bind::I32(n) => q.bind(*n),
+        };
+    }
     q = q.bind(&id).bind(&auth);
     q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

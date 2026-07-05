@@ -35,7 +35,7 @@ pub async fn list(
     let auth = extract_auth(&headers)?;
     let rows = sqlx::query_as::<_, Event>(
         "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
+                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
          FROM event WHERE user_id = $1 \
          AND ($2::text IS NULL OR contact_id = $2) \
          AND ($3::text IS NULL OR project_id = $3) \
@@ -92,7 +92,7 @@ pub async fn create(
     .bind(body.get("notes").and_then(|v| v.as_str()))
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
     .bind(body.get("project_id").and_then(|v| v.as_str()))
-    .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()).map(|n| n as i64))
+    .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()).map(|n| n as i32))
     .bind(&now)
     .bind(&now)
     .execute(&mut *tx)
@@ -105,7 +105,7 @@ pub async fn create(
 
     let event = sqlx::query_as::<_, Event>(
         "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
+                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
          FROM event WHERE id = $1",
     )
     .bind(&id)
@@ -123,7 +123,7 @@ pub async fn get(
     let auth = extract_auth(&headers)?;
     let event = sqlx::query_as::<_, Event>(
         "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
+                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
          FROM event WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)
@@ -155,35 +155,45 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    enum Bind<'a> {
+        Text(&'a str),
+        I32(i32),
+    }
+
     let mut sets = Vec::new();
-    let mut params: Vec<String> = Vec::new();
+    let mut binds: Vec<Bind> = Vec::new();
     let mut idx = 1u32;
     for field in &["title", "event_type", "start_at", "end_at", "location", "notes", "contact_id", "project_id"] {
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx));
-            params.push(v.to_string());
+            binds.push(Bind::Text(v));
             idx += 1;
         }
     }
     if let Some(v) = body.get("reminder_lead_minutes").and_then(|v| v.as_i64()) {
         sets.push(format!("reminder_lead_minutes = ${}", idx));
-        params.push(v.to_string());
+        binds.push(Bind::I32(v as i32));
         idx += 1;
     }
     if let Some(v) = body.get("archived_at").and_then(|v| v.as_str()) {
         sets.push(format!("archived_at = ${}", idx));
-        params.push(v.to_string());
+        binds.push(Bind::Text(v));
         idx += 1;
     }
     sets.push(format!("updated_at = ${}", idx));
-    params.push(now);
+    binds.push(Bind::Text(&now));
     idx += 1;
     let sql = format!(
         "UPDATE event SET {} WHERE id = ${} AND user_id = ${}",
         sets.join(", "), idx, idx + 1
     );
     let mut q = sqlx::query(&sql);
-    for p in &params { q = q.bind(p); }
+    for b in &binds {
+        q = match b {
+            Bind::Text(s) => q.bind(*s),
+            Bind::I32(n) => q.bind(*n),
+        };
+    }
     q = q.bind(&id).bind(&auth);
     q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -233,7 +243,7 @@ pub async fn upcoming(
     let now = super::now_str();
     let rows = sqlx::query_as::<_, Event>(
         "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, \
-                contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
+                contact_id, project_id, reminder_lead_minutes::BIGINT AS reminder_lead_minutes, archived_at, created_at, updated_at \
          FROM event WHERE user_id = $1 AND start_at >= $2 AND archived_at IS NULL \
          ORDER BY start_at LIMIT $3",
     )
