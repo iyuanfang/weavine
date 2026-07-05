@@ -390,11 +390,22 @@ fn apply_change(
                         let n = obj.get(*col).and_then(|x| x.as_i64()).unwrap_or(0);
                         Box::new(n) as Box<dyn rusqlite::types::ToSql>
                     } else {
-                        let val = obj
-                            .get(*col)
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        Box::new(val.to_string()) as Box<dyn rusqlite::types::ToSql>
+                        // TEXT: preserve NULL instead of coercing to "".
+                        // Critical: pushing "" back to server corrupts
+                        // project.archived_at (UI treats "" as archived)
+                        // and breaks UNIQUE(user_id, email) on Contact
+                        // when multiple contacts have null email.
+                        match obj.get(*col) {
+                            Some(Value::String(s)) => {
+                                Box::new(s.clone()) as Box<dyn rusqlite::types::ToSql>
+                            }
+                            Some(Value::Null) | None => {
+                                Box::new(rusqlite::types::Null) as Box<dyn rusqlite::types::ToSql>
+                            }
+                            Some(other) => {
+                                Box::new(other.to_string()) as Box<dyn rusqlite::types::ToSql>
+                            }
+                        }
                     }
                 })
                 .collect();
@@ -419,4 +430,149 @@ fn apply_change(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sync::translate::push_columns;
+    use rusqlite::Connection;
+    use serde_json::json;
+
+    fn open_minimal() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE Project (
+                id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                template TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                start_at TEXT,
+                due_at TEXT,
+                completed_at TEXT,
+                archived_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE Contact (
+                id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                nickname TEXT,
+                name TEXT,
+                company TEXT,
+                title TEXT,
+                city TEXT,
+                email TEXT,
+                phone TEXT,
+                wechat TEXT,
+                notes TEXT,
+                importance TEXT,
+                reminder_enabled INTEGER,
+                reminder_interval_days INTEGER,
+                last_contacted_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX Contact_user_id_email_key ON Contact(user_id, email);",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn change_row(kind: &str, op: &str, row_id: &str, data: Value) -> ChangeRow {
+        ChangeRow {
+            kind: kind.into(),
+            op: op.into(),
+            row_id: row_id.into(),
+            data: Some(data),
+            revision: 1,
+        }
+    }
+
+    #[test]
+    fn pull_preserves_null_for_nullable_text_column() {
+        let conn = open_minimal();
+        let data = json!({
+            "id": "p1", "user_id": "u1", "title": "Demo",
+            "description": null, "template": "general", "stage": "进行中",
+            "start_at": null, "due_at": null, "completed_at": null,
+            "archived_at": null,
+            "created_at": "2026-07-05T00:00:00Z",
+            "updated_at": "2026-07-05T00:00:00Z"
+        });
+        apply_change(&conn, &change_row("project", "UPDATE", "p1", data), "local-default")
+            .expect("apply");
+
+        let (desc, archived): (Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT description, archived_at FROM Project WHERE id='p1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("query");
+        assert!(desc.is_none(), "null description must stay NULL, got {desc:?}");
+        assert!(archived.is_none(), "null archived_at must stay NULL, got {archived:?}");
+    }
+
+    #[test]
+    fn pull_preserves_string_for_set_text_column() {
+        let conn = open_minimal();
+        let data = json!({
+            "id": "p1", "user_id": "u1", "title": "Demo",
+            "description": "hello", "template": "general", "stage": "进行中",
+            "start_at": "2026-08-01T00:00:00Z", "due_at": null, "completed_at": null,
+            "archived_at": "2026-07-05T12:00:00Z",
+            "created_at": "2026-07-05T00:00:00Z",
+            "updated_at": "2026-07-05T00:00:00Z"
+        });
+        apply_change(&conn, &change_row("project", "UPDATE", "p1", data), "local-default")
+            .expect("apply");
+
+        let (desc, archived, due): (String, String, Option<String>) = conn
+            .query_row(
+                "SELECT description, archived_at, due_at FROM Project WHERE id='p1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .expect("query");
+        assert_eq!(desc, "hello");
+        assert_eq!(archived, "2026-07-05T12:00:00Z");
+        assert!(due.is_none());
+    }
+
+    #[test]
+    fn pull_multiple_null_emails_do_not_collide_on_unique_index() {
+        let conn = open_minimal();
+        for i in 0..3 {
+            let data = json!({
+                "id": format!("c{i}"), "user_id": "local-default",
+                "nickname": null, "name": format!("Person {i}"),
+                "company": null, "title": null, "city": null,
+                "email": null, "phone": null, "wechat": null,
+                "notes": null, "importance": null,
+                "reminder_enabled": false, "reminder_interval_days": null,
+                "last_contacted_at": null,
+                "created_at": "2026-07-05T00:00:00Z",
+                "updated_at": "2026-07-05T00:00:00Z"
+            });
+            apply_change(
+                &conn,
+                &change_row("contact", "INSERT", &format!("c{i}"), data),
+                "local-default",
+            )
+            .expect("apply");
+        }
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM Contact", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 3, "all 3 contacts must insert despite null email");
+    }
+
+    #[test]
+    fn push_columns_includes_archived_at() {
+        let cols = push_columns("project");
+        assert!(cols.contains(&"archived_at"));
+    }
 }
