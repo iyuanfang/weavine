@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
+import { ContactBadge } from '../components/ContactBadge';
+import { ProjectBadge } from '../components/ProjectBadge';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
 import type { Action, Event, Interaction, UpdateActionInput } from '../lib/adapter/types';
@@ -82,6 +84,17 @@ export function TodayPage() {
     enabled: Boolean(ownerId),
   });
 
+  const projectsQuery = useQuery({
+    queryKey: ['projects', ownerId, 'active-for-today'],
+    queryFn: () =>
+      adapter.projects.list({
+        owner_id: ownerId!,
+        archived: 'false',
+        limit: 200,
+      }),
+    enabled: Boolean(ownerId),
+  });
+
   const toggleDoneMutation = useMutation({
     mutationFn: (input: { id: string; status: 'done' | 'open' }) =>
       adapter.actions.update({
@@ -146,6 +159,11 @@ export function TodayPage() {
     interactionsQuery.isLoading;
 
   const overdueCount = todayDoActions.filter((a) => new Date(a.due_at!) < now).length;
+
+  const activeProjects = (projectsQuery.data ?? []).filter(
+    (p) => !p.completed_at,
+  );
+  const activeProjectCount = activeProjects.length;
 
   return (
     <div className="page">
@@ -225,7 +243,7 @@ export function TodayPage() {
           </div>
         </Link>
         <Link
-          to="/contacts?from=/today"
+          to="/projects?from=/today"
           className="card"
           style={{
             padding: '20px 22px',
@@ -235,16 +253,16 @@ export function TodayPage() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 'var(--text-md)' }}>💬</span>
+            <span style={{ fontSize: 'var(--text-md)' }}>📁</span>
             <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-              互动
+              项目
             </div>
           </div>
           <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
-            {recentInteractions.length}
+            {activeProjectCount}
           </div>
           <div className="text-xs text-muted" style={{ marginTop: 4 }}>
-            最近 7 天
+            进行中
           </div>
         </Link>
       </div>
@@ -401,18 +419,20 @@ function ActionCard({
         </span>
         {(action.project_title || action.contact_nickname) && (
           <span
-            className="text-xs text-muted"
             style={{
+              display: 'inline-flex',
+              gap: 4,
               flexShrink: 1,
               minWidth: 0,
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
             }}
           >
-            {action.project_title && <>📁 {action.project_title}</>}
-            {action.project_title && action.contact_nickname && <> · </>}
-            {action.contact_nickname && <>👤 {action.contact_nickname}</>}
+            {action.project_title && (
+              <ProjectBadge project={action.project_title} compact />
+            )}
+            {action.contact_nickname && (
+              <ContactBadge contact={action.contact_nickname} compact />
+            )}
           </span>
         )}
         <span
@@ -448,20 +468,34 @@ function EventCard({
       <span className="row-card__title">{event.title}</span>
       {(event.location || event.contact_nickname || event.project_title) && (
         <span
-          className="text-xs text-muted"
           style={{
+            display: 'inline-flex',
+            gap: 4,
             flexShrink: 1,
             minWidth: 0,
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            alignItems: 'center',
           }}
         >
-          {event.location && <>📍 {event.location}</>}
-          {event.location && (event.contact_nickname || event.project_title) && <> · </>}
-          {event.contact_nickname && <>👤 {event.contact_nickname}</>}
-          {event.contact_nickname && event.project_title && <> · </>}
-          {event.project_title && <>📁 {event.project_title}</>}
+          {event.project_title && (
+            <ProjectBadge project={event.project_title} compact />
+          )}
+          {event.contact_nickname && (
+            <ContactBadge contact={event.contact_nickname} compact />
+          )}
+          {event.location && (
+            <span
+              className="text-xs text-muted"
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              📍 {event.location}
+            </span>
+          )}
         </span>
       )}
       <span className="row-card__meta" style={{ marginLeft: 'auto' }}>
@@ -485,18 +519,7 @@ function InteractionRow({ interaction }: { interaction: Interaction }) {
       </span>
       <span className="row-card__title">{interaction.summary}</span>
       {interaction.contact_nickname && (
-        <span
-          className="text-xs text-muted"
-          style={{
-            flexShrink: 1,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          👤 {interaction.contact_nickname}
-        </span>
+        <ContactBadge contact={interaction.contact_nickname} compact />
       )}
       {interaction.channel && (
         <span className="badge badge--muted">{interaction.channel}</span>

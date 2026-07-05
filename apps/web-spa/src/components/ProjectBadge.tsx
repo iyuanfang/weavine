@@ -1,28 +1,35 @@
-import { stageColor } from '../lib/projectStageColor';
-
 export interface ProjectBadgeProject {
-  id: string;
+  id?: string;
   title: string;
-  template: string;
-  stage: string;
+  template?: string;
+  stage?: string;
 }
+
+type ProjectBadgeInput = string | ProjectBadgeProject | null | undefined;
 
 interface ProjectBadgeProps {
-  project: ProjectBadgeProject | null | undefined;
+  project: ProjectBadgeInput;
+  compact?: boolean;
 }
 
-export function ProjectBadge({ project }: ProjectBadgeProps) {
+export function ProjectBadge({ project, compact = false }: ProjectBadgeProps) {
   if (!project) return null;
 
-  const color = stageColor(project.template, project.stage);
+  const title =
+    typeof project === 'string' ? project.trim() : project.title.trim();
+  if (!title) return null;
 
   return (
     <span
       className="pill pill--colored"
       style={{
-        '--pill-bg': `${color}14`,
-        '--pill-border': `${color}30`,
-        '--pill-fg': color,
+        '--pill-bg': compact ? 'transparent' : undefined,
+        '--pill-border': 'transparent',
+        '--pill-fg': compact ? 'var(--muted)' : 'inherit',
+        background: compact ? 'transparent' : undefined,
+        borderColor: 'transparent',
+        padding: compact ? '1px 6px' : undefined,
+        fontSize: compact ? 'var(--text-xs)' : undefined,
         fontWeight: 500,
         textDecoration: 'none',
         maxWidth: 160,
@@ -31,11 +38,6 @@ export function ProjectBadge({ project }: ProjectBadgeProps) {
         cursor: 'default',
       } as React.CSSProperties}
     >
-      <span
-        aria-hidden
-        className="dot dot--xs"
-        style={{ background: color }}
-      />
       <span aria-hidden style={{ flexShrink: 0, fontSize: '0.85em' }}>
         📁
       </span>
@@ -47,7 +49,7 @@ export function ProjectBadge({ project }: ProjectBadgeProps) {
           minWidth: 0,
         }}
       >
-        {project.title}
+        {title}
       </span>
     </span>
   );

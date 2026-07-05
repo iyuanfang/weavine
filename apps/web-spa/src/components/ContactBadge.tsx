@@ -1,24 +1,34 @@
-import { avatarBg } from '../lib/contactColor';
 import type { Contact } from '../lib/adapter/types';
 
+type ContactBadgeInput =
+  | string
+  | (Pick<Contact, 'nickname' | 'name'> & { id?: string })
+  | null
+  | undefined;
+
 interface ContactBadgeProps {
-  /** Any contact-like object with at least id + nickname + name. Accepts
-   *  the full Contact or narrow subsets loaded for inline display. */
-  contact: Pick<Contact, 'id' | 'nickname' | 'name'> | null | undefined;
+  contact: ContactBadgeInput;
+  compact?: boolean;
 }
 
-export function ContactBadge({ contact }: ContactBadgeProps) {
+export function ContactBadge({ contact, compact = false }: ContactBadgeProps) {
   if (!contact) return null;
 
-  const name = contact.nickname ?? contact.name ?? '?';
+  const name =
+    typeof contact === 'string'
+      ? contact.trim()
+      : (contact.nickname ?? contact.name ?? '').trim();
+  if (!name) return null;
 
   return (
-    <span className="contact-badge">
-      <span
-        aria-hidden
-        className="contact-badge__marker"
-        style={{ background: avatarBg(name) }}
-      />
+    <span
+      className="contact-badge"
+      style={
+        compact
+          ? { padding: '1px 6px', fontSize: 'var(--text-xs)' }
+          : undefined
+      }
+    >
       <span aria-hidden style={{ flexShrink: 0, fontSize: '0.85em' }}>
         👤
       </span>
