@@ -103,7 +103,7 @@ pub async fn add(
 
     sqlx::query(
         "INSERT INTO project_contact (user_id, project_id, contact_id, role, added_at) \
-         VALUES ($1,$2,$3,$4,$5) ON CONFLICT (project_id, contact_id) DO NOTHING",
+         VALUES ($1,$2,$3,$4,$5) ON CONFLICT (project_id, contact_id) DO UPDATE SET role = EXCLUDED.role",
     )
     .bind(&auth)
     .bind(&project_id)
