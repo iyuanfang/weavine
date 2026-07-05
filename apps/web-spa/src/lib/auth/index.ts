@@ -16,11 +16,9 @@ export function useLocalUser() {
   return useQuery({
     queryKey: localUserQueryKey,
     queryFn: () => adapter.getLocalUser(),
-    // The local user is essentially static for the lifetime
-    // of the app; cache it for the whole session.
-    staleTime: Infinity,
-    gcTime: Infinity,
-    retry: 3,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
   });
 }
 

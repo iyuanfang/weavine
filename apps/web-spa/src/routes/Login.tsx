@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { login, register, saveSession } from '../lib/auth/storage';
+import { localUserQueryKey } from '../lib/auth';
 
 function viteApiBase(): string {
   if (typeof import.meta === 'undefined') return '';
@@ -25,8 +27,8 @@ function nextPath(search: string): string {
 }
 
 export function LoginPage() {
-  const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +55,12 @@ export function LoginPage() {
           ? await login(trimmedEmail, password, base)
           : await register(trimmedEmail, password, base);
       saveSession(sess);
-      navigate(nextPath(location.search), { replace: true });
+      queryClient.setQueryData(localUserQueryKey, {
+        id: sess.user_id,
+        name: null,
+        email: sess.email ?? null,
+      });
+      window.location.href = nextPath(location.search);
     } catch (err) {
       setError(err instanceof Error ? err.message : '请求失败');
     } finally {

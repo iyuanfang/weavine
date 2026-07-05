@@ -9,6 +9,7 @@ export interface AuthSession {
   user_id: string;
   access_token: string;
   refresh_token: string;
+  email?: string;
 }
 
 function ls(): Storage | null {
@@ -30,12 +31,19 @@ export function loadSession(): AuthSession | null {
   return { user_id, access_token, refresh_token };
 }
 
+const EMAIL_KEY = 'weavine.email';
+
 export function saveSession(s: AuthSession): void {
   const ls_ = ls();
   if (!ls_) return;
   ls_.setItem(ACCESS_KEY, s.access_token);
   ls_.setItem(REFRESH_KEY, s.refresh_token);
   ls_.setItem(USER_KEY, s.user_id);
+  if (s.email) ls_.setItem(EMAIL_KEY, s.email);
+}
+
+export function getStoredEmail(): string | null {
+  return ls()?.getItem(EMAIL_KEY) ?? null;
 }
 
 export function clearSession(): void {
@@ -70,12 +78,17 @@ export async function login(
     if (resp.status === 429) throw new Error('尝试次数过多，请稍后再试');
     throw new Error(text || `登录失败: HTTP ${resp.status}`);
   }
-  const data: { user_id: string; access_token: string; refresh_token: string } =
-    await resp.json();
+  const data: {
+    user_id: string;
+    access_token: string;
+    refresh_token: string;
+    email?: string;
+  } = await resp.json();
   return {
     user_id: data.user_id,
     access_token: data.access_token,
     refresh_token: data.refresh_token,
+    email: data.email,
   };
 }
 

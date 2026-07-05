@@ -134,14 +134,14 @@ export class HttpAdapter implements PRMAdapter {
   constructor(public baseUrl: string = VITE_API_BASE) {}
 
   getLocalUser(): Promise<LocalUser> {
-    return request<{ user_id: string; email: string }>(
+    return request<Record<string, unknown>>(
       this.baseUrl,
       'GET',
       '/api/auth/me',
     ).then((r) => ({
-      id: r.user_id,
+      id: (r.id ?? r.user_id ?? '') as string,
       name: null,
-      email: r.email,
+      email: (r.email as string | null) ?? null,
     }));
   }
 

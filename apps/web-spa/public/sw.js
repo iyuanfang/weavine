@@ -1,4 +1,4 @@
-const CACHE = 'prm-v5';
+const CACHE = 'prm-v7';
 
 const PRECACHE_URLS = [
   '/',
