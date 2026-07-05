@@ -104,3 +104,33 @@ async fn cloud_logout_clears_state() {
     assert!(!post, "should be unlinked after clear_all");
     println!("✓ cloud_logout_clears_state passed");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn push_with_boolean_columns_succeeds() {
+    let conn = setup();
+    sync::link(&conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
+        .await
+        .expect("initial link");
+
+    let contact_id: String = format!("test-bool-{}", uuid::Uuid::new_v4());
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO \"Contact\" (id, user_id, nickname, importance, reminder_enabled, \
+                                reminder_interval_days, created_at, updated_at) \
+         VALUES (?1, 'local-default', ?2, 'normal', 1, 7, ?3, ?3)",
+        rusqlite::params![&contact_id, "Bool Test", &now],
+    )
+    .expect("insert contact");
+
+    let sync_result = sync::sync_once(&conn).await.expect("sync_once must not fail on boolean columns");
+    println!(
+        "push-with-bool: pushed={}, pulled={}, conflicts={}",
+        sync_result.pushed, sync_result.pulled, sync_result.conflicts
+    );
+    assert!(sync_result.pushed >= 1, "expected to push at least the new contact");
+
+    let still_linked = sync::config::is_linked(&conn).expect("is_linked");
+    assert!(still_linked, "should still be linked after sync_once");
+
+    println!("✓ push_with_boolean_columns_succeeds passed");
+}

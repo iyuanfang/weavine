@@ -168,10 +168,27 @@ async fn push_all(
 
         let rows: Vec<Value> = match stmt.query_map([local_owner_id], |row| {
             let mut map = Map::new();
+            let bool_cols = boolean_columns(kind);
+            let int_cols = integer_columns(kind);
             for (i, col) in cols.iter().enumerate() {
-                let val: Option<String> = row.get(i).ok();
-                if let Some(v) = val {
-                    map.insert(col.to_string(), Value::String(v));
+                if bool_cols.contains(col) {
+                    let v: Option<i64> = row.get(i).ok();
+                    if let Some(n) = v {
+                        map.insert(col.to_string(), Value::Bool(n != 0));
+                    }
+                } else if int_cols.contains(col) {
+                    let v: Option<i64> = row.get(i).ok();
+                    if let Some(n) = v {
+                        map.insert(
+                            col.to_string(),
+                            Value::Number(serde_json::Number::from(n)),
+                        );
+                    }
+                } else {
+                    let val: Option<String> = row.get(i).ok();
+                    if let Some(v) = val {
+                        map.insert(col.to_string(), Value::String(v));
+                    }
                 }
             }
             Ok(Value::Object(map))
@@ -309,12 +326,26 @@ fn apply_change(
 
             let mut stmt = conn.prepare(&sql)?;
 
+            let bool_cols = boolean_columns(&change.kind);
+            let null_int_cols = nullable_integer_columns(&change.kind);
+            let zero_int_cols = default_zero_integer_columns(&change.kind);
+
             let params: Vec<Box<dyn rusqlite::types::ToSql>> = cols
                 .iter()
                 .map(|col| {
                     if *col == "user_id" {
-                        // Always use local owner id
                         Box::new(local_owner_id.to_string()) as Box<dyn rusqlite::types::ToSql>
+                    } else if bool_cols.contains(col) {
+                        let v = obj.get(*col).and_then(|x| x.as_bool()).unwrap_or(false);
+                        Box::new(if v { 1i64 } else { 0i64 }) as Box<dyn rusqlite::types::ToSql>
+                    } else if null_int_cols.contains(col) {
+                        match obj.get(*col).and_then(|x| x.as_i64()) {
+                            Some(n) => Box::new(n) as Box<dyn rusqlite::types::ToSql>,
+                            None => Box::new(rusqlite::types::Null) as Box<dyn rusqlite::types::ToSql>,
+                        }
+                    } else if zero_int_cols.contains(col) {
+                        let n = obj.get(*col).and_then(|x| x.as_i64()).unwrap_or(0);
+                        Box::new(n) as Box<dyn rusqlite::types::ToSql>
                     } else {
                         let val = obj
                             .get(*col)

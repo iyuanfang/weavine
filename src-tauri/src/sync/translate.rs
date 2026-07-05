@@ -71,6 +71,57 @@ pub fn kind_to_sqlite_table(kind: &str) -> Option<&'static str> {
     }
 }
 
+/// Columns that are INTEGER in SQLite but represent booleans.
+/// Push must emit `Value::Bool`, not `Value::String("1"/"0")` —
+/// otherwise the server's `jsonb_populate_record` rejects with
+/// `invalid input syntax for type boolean: "1"`.
+pub fn boolean_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "contact" => &["reminder_enabled"],
+        "reminder" => &["dispatched", "dismissed"],
+        "event" => &["reminder_enabled"],
+        _ => &[],
+    }
+}
+
+/// Plain INTEGER columns (not booleans, not TEXT) that exist in
+/// `push_columns(...)`. Push must emit `Value::Number(n)`, not
+/// `Value::String(n.to_string())` — otherwise the server's
+/// `jsonb_populate_record` rejects with
+/// `invalid input syntax for type integer: "1"`.
+pub fn integer_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "contact" => &["reminder_interval_days"],
+        "action" => &["priority"],
+        "reminder" => &["reminder_lead_minutes"],
+        "event" => &["reminder_lead_minutes"],
+        _ => &[],
+    }
+}
+
+/// Plain INTEGER columns on PULL (not boolean, not TEXT).
+/// Pull must write NULL (not "") for missing values, otherwise the next
+/// push round-trips the empty string to the server, which rejects
+/// `invalid input syntax for type integer: ""`.
+pub fn nullable_integer_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "contact" => &["reminder_interval_days"],
+        "reminder" => &["reminder_lead_minutes"],
+        "event" => &["reminder_lead_minutes"],
+        _ => &[],
+    }
+}
+
+/// INTEGER columns that are NOT NULL on the server. Missing values
+/// become 0 (the server's DEFAULT) instead of NULL, otherwise the upsert
+/// fails the not-null constraint.
+pub fn default_zero_integer_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "action" => &["priority"],
+        _ => &[],
+    }
+}
+
 pub fn push_columns(kind: &str) -> &'static [&'static str] {
     match kind {
         "contact" => &["id","user_id","nickname","name","company","title","city","email","phone","wechat","notes","importance","reminder_enabled","reminder_interval_days","last_contacted_at","created_at","updated_at"],
