@@ -14,6 +14,7 @@ const navItems = [
   { to: '/reminders', label: '提醒', icon: '🔔' },
   { to: '/tags', label: '标签', icon: '🏷️' },
   { to: '/archive', label: '归档', icon: '📦' },
+  { to: '/settings', label: '设置', icon: '⚙️' },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

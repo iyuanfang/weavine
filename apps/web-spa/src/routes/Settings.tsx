@@ -91,6 +91,7 @@ export function SettingsPage() {
         }
       />
 
+      <CloudSyncPanel />
       <ArchivePanel />
 
       {showAdd && (
@@ -334,6 +335,223 @@ function ArchivePanel() {
       <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '12px 0 0' }}>
         合计 {totalAll} 项归档，最近 30 天 {totalRecent} 项。
       </p>
+    </div>
+  );
+}
+
+function CloudSyncPanel() {
+  const adapter = useAdapter();
+  const queryClient = useQueryClient();
+  const isTauriRuntime = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+  const statusQuery = useQuery({
+    queryKey: ['cloud-status'],
+    queryFn: () => adapter.cloud.status(),
+    enabled: isTauriRuntime,
+    refetchInterval: 10_000,
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: (input: { serverUrl: string; email: string; password: string }) =>
+      adapter.cloud.login({
+        server_url: input.serverUrl,
+        email: input.email,
+        password: input.password,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cloud-status'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['actions'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: () => adapter.cloud.logout(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cloud-status'] });
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () => adapter.cloud.syncNow(),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['cloud-status'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['actions'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      console.log('[cloud sync] result:', result);
+    },
+  });
+
+  const [serverUrl, setServerUrl] = useState('https://weavine.financialagent.cc');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  if (!isTauriRuntime) {
+    return (
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+          ☁️ 云同步
+        </h3>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+          仅在桌面端可用 — Web 版直接使用服务端数据。
+        </p>
+      </div>
+    );
+  }
+
+  const status = statusQuery.data;
+  const linked = status?.linked ?? false;
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          marginBottom: 8,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+          ☁️ 云同步
+        </h3>
+        <span
+          className="badge"
+          style={{
+            background: linked ? 'var(--accent-soft, #d1fae5)' : '#f3f4f6',
+            color: linked ? 'var(--accent, #059669)' : 'var(--text-muted)',
+            fontSize: 'var(--text-xs)',
+          }}
+        >
+          {linked ? '● 已连接' : '○ 未连接'}
+        </span>
+      </div>
+
+      {statusQuery.isError && (
+        <div className="error-banner" style={{ fontSize: 'var(--text-sm)' }}>
+          查询云状态失败: {String(statusQuery.error)}
+        </div>
+      )}
+
+      {linked && status ? (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ fontSize: 'var(--text-sm)', lineHeight: 1.7 }}>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>账号:</span>{' '}
+              <strong>{status.user_email ?? '(未知)'}</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>服务器:</span>{' '}
+              <code style={{ fontSize: 'var(--text-xs)' }}>{status.server_url}</code>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-muted)' }}>上次拉取:</span> rev {status.last_pulled_revision} ·{' '}
+              <span style={{ color: 'var(--text-muted)' }}>上次推送:</span> rev {status.last_pushed_revision}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              style={{ opacity: syncMutation.isPending ? 0.6 : 1 }}
+            >
+              {syncMutation.isPending ? '同步中…' : '🔄 立即同步'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                if (confirm('确定要断开云连接？本地数据保留，不会删除。')) {
+                  logoutMutation.mutate();
+                }
+              }}
+              disabled={logoutMutation.isPending}
+              style={{ opacity: logoutMutation.isPending ? 0.6 : 1 }}
+            >
+              断开连接
+            </button>
+          </div>
+
+          {syncMutation.data && (
+            <div
+              className="card"
+              style={{
+                padding: 10,
+                fontSize: 'var(--text-sm)',
+                background: 'var(--accent-soft, #ecfdf5)',
+              }}
+            >
+              ✓ 同步完成 — 推送 {syncMutation.data.pushed} · 拉取 {syncMutation.data.pulled} · 冲突{' '}
+              {syncMutation.data.conflicts}
+            </div>
+          )}
+          {syncMutation.isError && (
+            <div className="error-banner" style={{ fontSize: 'var(--text-sm)' }}>
+              同步失败: {String(syncMutation.error)}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
+            连接云账号，同步数据到 https://weavine.financialagent.cc。第一次连接会从云端拉取所有数据到本地。
+          </p>
+          <div>
+            <label className="input-label">服务器地址</label>
+            <input
+              className="input-base"
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+              placeholder="https://weavine.financialagent.cc"
+            />
+          </div>
+          <div>
+            <label className="input-label">邮箱</label>
+            <input
+              className="input-base"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+            />
+          </div>
+          <div>
+            <label className="input-label">密码</label>
+            <input
+              className="input-base"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+          {loginMutation.isError && (
+            <div className="error-banner" style={{ fontSize: 'var(--text-sm)' }}>
+              登录失败: {String(loginMutation.error)}
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() =>
+                loginMutation.mutate({ serverUrl: serverUrl.trim(), email: email.trim(), password })
+              }
+              disabled={loginMutation.isPending || !email.trim() || !password || !serverUrl.trim()}
+            >
+              {loginMutation.isPending ? '连接中…' : '连接云账号'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
