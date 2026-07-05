@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { ProjectBadge } from '../components/ProjectBadge';
+import { ContactBadge } from '../components/ContactBadge';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
@@ -431,6 +432,27 @@ export function Calendar() {
                               style={{ minWidth: 0 }}
                             >
                               <span className="row-card__meta">{subtitle}</span>
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 2,
+                                  color,
+                                  fontWeight: 500,
+                                }}
+                              >
+                                <span style={{ fontSize: 'var(--text-xs)' }}>{icon}</span>
+                                {meta.label}
+                              </span>
+                              {event.contact_id && event.contact_nickname && (
+                                <ContactBadge
+                                  contact={{
+                                    id: event.contact_id,
+                                    nickname: event.contact_nickname,
+                                    name: null,
+                                  }}
+                                />
+                              )}
                               {event.project_id && event.project_title && (
                                 <ProjectBadge
                                   project={{
