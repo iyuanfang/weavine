@@ -280,18 +280,17 @@ function ProjectCard({ project: p }: { project: Project }) {
           >
             {templateLabel}
           </span>
-          {p.completed_at && (
-            <span
-              className="badge"
-              style={{
-                background: '#dcfce7',
-                color: '#15803d',
-                fontSize: 'var(--text-xs)',
-              }}
-            >
-              ✅ 已完成
-            </span>
-          )}
+          <span
+            className="badge"
+            style={{
+              background: '#dcfce7',
+              color: '#15803d',
+              fontSize: 'var(--text-xs)',
+              visibility: p.completed_at ? 'visible' : 'hidden',
+            }}
+          >
+            ✅ 已完成
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
           <span
