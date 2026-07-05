@@ -11,7 +11,7 @@ fn build_test_db() -> Database {
         let conn = db.conn.lock().expect("lock");
         conn.execute_batch(SCHEMA_SQL).expect("apply schema");
         conn.execute(
-            "INSERT INTO \"User\" (id, name, email, isLocal, createdAt, updatedAt) \
+            "INSERT INTO \"User\" (id, name, email, is_local, created_at, updated_at) \
              VALUES ('user-local-1', 'Local User', 'local@prm.local', 1, \
                      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             [],
@@ -39,7 +39,7 @@ fn contact_crud_roundtrip() {
     let initial = commands::contact::list_contacts(
         db_state(&db),
         commands::params::ListContactsParams {
-            owner_id: "user-local-1".to_string(),
+            user_id: "user-local-1".to_string(),
             search: None,
             importance: None,
             tag_id: None,
@@ -51,7 +51,7 @@ fn contact_crud_roundtrip() {
     let created = commands::contact::create_contact(
         db_state(&db),
         commands::params::CreateContactInput {
-            owner_id: "user-local-1".to_string(),
+            user_id: "user-local-1".to_string(),
             nickname: "张三".to_string(),
             name: Some("Zhang San".to_string()),
             company: Some("ACME".to_string()),
@@ -95,7 +95,7 @@ fn contact_crud_roundtrip() {
     let after = commands::contact::list_contacts(
         db_state(&db),
         commands::params::ListContactsParams {
-            owner_id: "user-local-1".to_string(),
+            user_id: "user-local-1".to_string(),
             search: None,
             importance: None,
             tag_id: None,
@@ -110,7 +110,7 @@ fn contact_crud_roundtrip() {
     let final_state = commands::contact::list_contacts(
         db_state(&db),
         commands::params::ListContactsParams {
-            owner_id: "user-local-1".to_string(),
+            user_id: "user-local-1".to_string(),
             search: None,
             importance: None,
             tag_id: None,
@@ -128,7 +128,7 @@ fn contact_crud_roundtrip() {
 fn serde_shape_matches_invoke_payload() {
     let payload = json!({
         "p": {
-            "owner_id": "user-local-1",
+            "user_id": "user-local-1",
             "search": null,
             "importance": null,
             "tag_id": null,
@@ -137,11 +137,11 @@ fn serde_shape_matches_invoke_payload() {
 
     let p: commands::params::ListContactsParams =
         serde_json::from_value(payload["p"].clone()).expect("snake_case deser");
-    assert_eq!(p.owner_id, "user-local-1");
+    assert_eq!(p.user_id, "user-local-1");
 
     let create_payload = json!({
         "input": {
-            "owner_id": "user-local-1",
+            "user_id": "user-local-1",
             "nickname": "李四",
             "importance": "normal",
         }
@@ -157,7 +157,7 @@ fn serde_shape_matches_invoke_payload() {
 fn parameter_inspection() {
     use weavine_lib::models as m;
     let _: m::ListContactsParams = serde_json::from_value(json!({
-        "owner_id": "x",
+        "user_id": "x",
         "tag_id": "t1",
         "search": "abc",
         "importance": "important",
@@ -165,7 +165,7 @@ fn parameter_inspection() {
     .expect("ListContactsParams deser");
 
     let _: m::CreateContactInput = serde_json::from_value(json!({
-        "owner_id": "x",
+        "user_id": "x",
         "nickname": "n",
     }))
     .expect("CreateContactInput deser");
@@ -195,7 +195,7 @@ fn tag_list_works() {
 #[test]
 fn _params_smoke_test() {
     let _: commands::params::ListContactsParams = serde_json::from_str(
-        r#"{"owner_id":"o","tag_id":null,"search":null,"importance":null}"#,
+        r#"{"user_id":"o","tag_id":null,"search":null,"importance":null}"#,
     )
     .expect("params round-trip");
 }
@@ -207,6 +207,7 @@ fn search_invocation_shape() {
         db_state(&db),
         "user-local-1".to_string(),
         "".to_string(),
+        None,
         None,
     );
     assert!(r.is_ok(), "search call shape compiles + runs against empty db");

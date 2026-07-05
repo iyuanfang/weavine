@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const PROJECT_COLS: &str =
-    "id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, archivedAt, createdAt, updatedAt";
+    "id, user_id, title, description, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at";
 
 pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -34,7 +34,7 @@ pub fn list(
     let limit = limit.unwrap_or(100);
 
     let mut sql = format!(
-        "SELECT {PROJECT_COLS} FROM \"Project\" WHERE ownerId = ?1"
+        "SELECT {PROJECT_COLS} FROM \"Project\" WHERE user_id = ?1"
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
         vec![Box::new(user_id.to_string())];
@@ -52,15 +52,15 @@ pub fn list(
     }
     match archived {
         Some(v) if v == "true" || v == "1" => {
-            sql.push_str(" AND archivedAt IS NOT NULL");
+            sql.push_str(" AND archived_at IS NOT NULL");
         }
         Some(v) if v == "all" => {}
         _ => {
-            sql.push_str(" AND archivedAt IS NULL");
+            sql.push_str(" AND archived_at IS NULL");
         }
     }
 
-    sql.push_str(&format!(" ORDER BY updatedAt DESC LIMIT ?{}", idx));
+    sql.push_str(&format!(" ORDER BY updated_at DESC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
 
     let mut stmt = conn.prepare(&sql)?;
@@ -88,7 +88,7 @@ pub fn create(conn: &Connection, input: &CreateProjectInput) -> rusqlite::Result
 
     conn.execute(
         "INSERT INTO \"Project\" \
-         (id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, archivedAt, createdAt, updatedAt) \
+         (id, user_id, title, description, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             &id,
@@ -154,12 +154,12 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
         param_idx += 1;
     }
     if let Some(ref s) = input.start_at {
-        set_clauses.push(format!("startAt = ?{}", param_idx));
+        set_clauses.push(format!("start_at = ?{}", param_idx));
         params.push(Box::new(s.clone()));
         param_idx += 1;
     }
     if let Some(ref d) = input.due_at {
-        set_clauses.push(format!("dueAt = ?{}", param_idx));
+        set_clauses.push(format!("due_at = ?{}", param_idx));
         params.push(Box::new(d.clone()));
         param_idx += 1;
     }
@@ -174,26 +174,26 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
         .unwrap_or(false);
 
     if let Some(ref ca) = input.completed_at {
-        set_clauses.push(format!("completedAt = ?{}", param_idx));
+        set_clauses.push(format!("completed_at = ?{}", param_idx));
         params.push(Box::new(ca.clone()));
         param_idx += 1;
     } else if stage_updated && now_terminal && !was_terminal {
-        set_clauses.push(format!("completedAt = ?{}", param_idx));
+        set_clauses.push(format!("completed_at = ?{}", param_idx));
         params.push(Box::new(now.clone()));
         param_idx += 1;
     } else if stage_updated && !now_terminal && was_terminal {
-        set_clauses.push(format!("completedAt = ?{}", param_idx));
+        set_clauses.push(format!("completed_at = ?{}", param_idx));
         params.push(Box::new(None::<String>));
         param_idx += 1;
     }
 
     if let Some(ref aa) = input.archived_at {
-        set_clauses.push(format!("archivedAt = ?{}", param_idx));
+        set_clauses.push(format!("archived_at = ?{}", param_idx));
         params.push(Box::new(aa.clone()));
         param_idx += 1;
     }
 
-    set_clauses.push(format!("updatedAt = ?{}", param_idx));
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
     params.push(Box::new(now));
     param_idx += 1;
 

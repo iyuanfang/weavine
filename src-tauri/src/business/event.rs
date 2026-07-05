@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const EVENT_COLS: &str =
-    "id, ownerId, title, type, startAt, endAt, location, notes, contactId, projectId, reminderLeadMinutes, archivedAt, createdAt, updatedAt";
+    "id, user_id, title, event_type, start_at, end_at, location, notes, contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at";
 
 pub(crate) fn row_to_event(row: &rusqlite::Row) -> rusqlite::Result<Event> {
     Ok(Event {
@@ -37,41 +37,41 @@ pub fn list(
 ) -> rusqlite::Result<Vec<Event>> {
     let limit = limit.unwrap_or(100);
 
-    let mut sql = format!("SELECT {EVENT_COLS} FROM Event WHERE ownerId = ?1");
+    let mut sql = format!("SELECT {EVENT_COLS} FROM Event WHERE user_id = ?1");
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
     if let Some(cid) = contact_id {
-        sql.push_str(&format!(" AND contactId = ?{}", idx));
+        sql.push_str(&format!(" AND contact_id = ?{}", idx));
         param_values.push(Box::new(cid.to_string()));
         idx += 1;
     }
     if let Some(pid) = project_id {
-        sql.push_str(&format!(" AND projectId = ?{}", idx));
+        sql.push_str(&format!(" AND project_id = ?{}", idx));
         param_values.push(Box::new(pid.to_string()));
         idx += 1;
     }
     if let Some(after) = start_after {
-        sql.push_str(&format!(" AND startAt >= ?{}", idx));
+        sql.push_str(&format!(" AND start_at >= ?{}", idx));
         param_values.push(Box::new(after.to_string()));
         idx += 1;
     }
     if let Some(before) = start_before {
-        sql.push_str(&format!(" AND startAt <= ?{}", idx));
+        sql.push_str(&format!(" AND start_at <= ?{}", idx));
         param_values.push(Box::new(before.to_string()));
         idx += 1;
     }
     match archived {
         Some(v) if v == "true" || v == "1" => {
-            sql.push_str(" AND archivedAt IS NOT NULL");
+            sql.push_str(" AND archived_at IS NOT NULL");
         }
         Some(v) if v == "all" => {}
         _ => {
-            sql.push_str(" AND archivedAt IS NULL");
+            sql.push_str(" AND archived_at IS NULL");
         }
     }
 
-    sql.push_str(&format!(" ORDER BY startAt ASC LIMIT ?{}", idx));
+    sql.push_str(&format!(" ORDER BY start_at ASC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
 
     let mut stmt = conn.prepare(&sql)?;
@@ -94,7 +94,7 @@ pub fn create(conn: &Connection, input: &CreateEventInput) -> rusqlite::Result<E
 
     conn.execute(
         "INSERT INTO Event \
-         (id, ownerId, title, type, startAt, endAt, location, notes, contactId, projectId, reminderLeadMinutes, archivedAt, createdAt, updatedAt) \
+         (id, user_id, title, event_type, start_at, end_at, location, notes, contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         rusqlite::params![
             &id,
@@ -143,17 +143,17 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
         param_idx += 1;
     }
     if let Some(ref et) = input.event_type {
-        set_clauses.push(format!("type = ?{}", param_idx));
+        set_clauses.push(format!("event_type = ?{}", param_idx));
         params.push(Box::new(et.clone()));
         param_idx += 1;
     }
     if let Some(ref sa) = input.start_at {
-        set_clauses.push(format!("startAt = ?{}", param_idx));
+        set_clauses.push(format!("start_at = ?{}", param_idx));
         params.push(Box::new(sa.clone()));
         param_idx += 1;
     }
     if let Some(ref ea) = input.end_at {
-        set_clauses.push(format!("endAt = ?{}", param_idx));
+        set_clauses.push(format!("end_at = ?{}", param_idx));
         params.push(Box::new(ea.clone()));
         param_idx += 1;
     }
@@ -168,27 +168,27 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
         param_idx += 1;
     }
     if let Some(ref cid) = input.contact_id {
-        set_clauses.push(format!("contactId = ?{}", param_idx));
+        set_clauses.push(format!("contact_id = ?{}", param_idx));
         params.push(Box::new(cid.clone()));
         param_idx += 1;
     }
     if let Some(ref pid) = input.project_id {
-        set_clauses.push(format!("projectId = ?{}", param_idx));
+        set_clauses.push(format!("project_id = ?{}", param_idx));
         params.push(Box::new(pid.clone()));
         param_idx += 1;
     }
     if let Some(rlm) = input.reminder_lead_minutes {
-        set_clauses.push(format!("reminderLeadMinutes = ?{}", param_idx));
+        set_clauses.push(format!("reminder_lead_minutes = ?{}", param_idx));
         params.push(Box::new(rlm));
         param_idx += 1;
     }
     if let Some(ref aa) = input.archived_at {
-        set_clauses.push(format!("archivedAt = ?{}", param_idx));
+        set_clauses.push(format!("archived_at = ?{}", param_idx));
         params.push(Box::new(aa.clone()));
         param_idx += 1;
     }
 
-    set_clauses.push(format!("updatedAt = ?{}", param_idx));
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
     params.push(Box::new(now));
     param_idx += 1;
 
@@ -216,7 +216,7 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM Reminder WHERE eventId = ?1", rusqlite::params![id])?;
+    conn.execute("DELETE FROM Reminder WHERE event_id = ?1", rusqlite::params![id])?;
     conn.execute("DELETE FROM Event WHERE id = ?1", rusqlite::params![id])?;
     Ok(())
 }
@@ -237,8 +237,8 @@ pub fn get_upcoming(conn: &Connection, user_id: &str, limit: Option<i64>) -> rus
 
     let mut stmt = conn.prepare(
         &format!(
-            "SELECT {EVENT_COLS} FROM Event WHERE ownerId = ?1 AND startAt >= ?2 AND archivedAt IS NULL \
-             ORDER BY startAt ASC LIMIT ?3"
+            "SELECT {EVENT_COLS} FROM Event WHERE user_id = ?1 AND start_at >= ?2 AND archived_at IS NULL \
+             ORDER BY start_at ASC LIMIT ?3"
         ),
     )?;
 

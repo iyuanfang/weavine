@@ -29,7 +29,7 @@ fn fresh_db() -> Database {
         // would expect in production).
         conn.execute(
             "INSERT OR IGNORE INTO \"User\" \
-             (id, name, email, isLocal, createdAt, updatedAt) \
+             (id, name, email, is_local, created_at, updated_at) \
              VALUES ('local-default', '本地用户', 'local@weavine.app', 1, \
                      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             [],
@@ -113,7 +113,7 @@ fn list_tags_accepts_snake_case_owner_id() {
     assert_snake_case_accepted(
         &app,
         "list_tags",
-        json!({ "owner_id": "local-default" }),
+        json!({ "user_id": "local-default" }),
     );
 }
 
@@ -142,7 +142,7 @@ fn list_actions_accepts_snake_case_filter_args() {
         &app,
         "list_actions",
         json!({
-            "owner_id": "local-default",
+            "user_id": "local-default",
             "status": null,
             "priority": null,
             "category": null,
@@ -177,13 +177,13 @@ fn list_settings_upsert_delete_accept_snake_case() {
     assert_snake_case_accepted(
         &app,
         "list_settings",
-        json!({ "owner_id": "local-default" }),
+        json!({ "user_id": "local-default" }),
     );
     assert_snake_case_accepted(
         &app,
         "upsert_setting",
         json!({
-            "owner_id": "local-default",
+            "user_id": "local-default",
             "key": "theme",
             "value": "dark",
         }),
@@ -192,7 +192,7 @@ fn list_settings_upsert_delete_accept_snake_case() {
         &app,
         "delete_setting",
         json!({
-            "owner_id": "local-default",
+            "user_id": "local-default",
             "key": "theme",
         }),
     );
@@ -221,9 +221,10 @@ fn search_accepts_snake_case() {
         &app,
         "search",
         json!({
-            "owner_id": "local-default",
+            "user_id": "local-default",
             "query": "",
             "limit": null,
+            "include_archived": null,
         }),
     );
 }
@@ -253,21 +254,21 @@ fn list_events_list_interactions_list_reminders_accept_snake_case() {
     assert_snake_case_accepted(
         &app,
         "list_events",
-        json!({ "owner_id": "local-default", "from": null, "to": null }),
+        json!({ "user_id": "local-default", "from": null, "to": null }),
     );
     assert_snake_case_accepted(
         &app,
         "get_upcoming_events",
-        json!({ "owner_id": "local-default", "days": 7 }),
+        json!({ "user_id": "local-default", "days": 7 }),
     );
     assert_snake_case_accepted(
         &app,
         "list_interactions",
-        json!({ "owner_id": "local-default", "contact_id": null }),
+        json!({ "user_id": "local-default", "contact_id": null }),
     );
     assert_snake_case_accepted(
         &app,
         "list_reminders",
-        json!({ "owner_id": "local-default", "include_dismissed": null }),
+        json!({ "user_id": "local-default", "include_dismissed": null }),
     );
 }

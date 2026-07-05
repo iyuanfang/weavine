@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const ACTION_COLS: &str =
-    "id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, archivedAt, createdAt, updatedAt";
+    "id, user_id, title, description, status, priority, category, due_at, contact_id, project_id, completed_at, archived_at, created_at, updated_at";
 
 pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
     Ok(Action {
@@ -36,7 +36,7 @@ pub fn list(
     let limit = limit.unwrap_or(100);
 
     let mut sql = format!(
-        "SELECT {ACTION_COLS} FROM Action WHERE ownerId = ?1"
+        "SELECT {ACTION_COLS} FROM Action WHERE user_id = ?1"
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
@@ -47,26 +47,26 @@ pub fn list(
         idx += 1;
     }
     if let Some(cid) = contact_id {
-        sql.push_str(&format!(" AND contactId = ?{}", idx));
+        sql.push_str(&format!(" AND contact_id = ?{}", idx));
         param_values.push(Box::new(cid.to_string()));
         idx += 1;
     }
     if let Some(pid) = project_id {
-        sql.push_str(&format!(" AND projectId = ?{}", idx));
+        sql.push_str(&format!(" AND project_id = ?{}", idx));
         param_values.push(Box::new(pid.to_string()));
         idx += 1;
     }
     match archived {
         Some(v) if v == "true" || v == "1" => {
-            sql.push_str(" AND archivedAt IS NOT NULL");
+            sql.push_str(" AND archived_at IS NOT NULL");
         }
         Some(v) if v == "all" => {}
         _ => {
-            sql.push_str(" AND archivedAt IS NULL");
+            sql.push_str(" AND archived_at IS NULL");
         }
     }
 
-    sql.push_str(&format!(" ORDER BY dueAt ASC, priority DESC LIMIT ?{}", idx));
+    sql.push_str(&format!(" ORDER BY due_at ASC, priority DESC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
 
     let mut stmt = conn.prepare(&sql)?;
@@ -91,7 +91,7 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
 
     conn.execute(
         "INSERT INTO Action \
-         (id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, archivedAt, createdAt, updatedAt) \
+         (id, user_id, title, description, status, priority, category, due_at, contact_id, project_id, completed_at, archived_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         rusqlite::params![
             &id,
@@ -154,32 +154,32 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         param_idx += 1;
     }
     if let Some(ref da) = input.due_at {
-        set_clauses.push(format!("dueAt = ?{}", param_idx));
+        set_clauses.push(format!("due_at = ?{}", param_idx));
         params.push(Box::new(da.clone()));
         param_idx += 1;
     }
     if let Some(ref cid) = input.contact_id {
-        set_clauses.push(format!("contactId = ?{}", param_idx));
+        set_clauses.push(format!("contact_id = ?{}", param_idx));
         params.push(Box::new(cid.clone()));
         param_idx += 1;
     }
     if let Some(ref pid) = input.project_id {
-        set_clauses.push(format!("projectId = ?{}", param_idx));
+        set_clauses.push(format!("project_id = ?{}", param_idx));
         params.push(Box::new(pid.clone()));
         param_idx += 1;
     }
     if let Some(ref ca) = input.completed_at {
-        set_clauses.push(format!("completedAt = ?{}", param_idx));
+        set_clauses.push(format!("completed_at = ?{}", param_idx));
         params.push(Box::new(ca.clone()));
         param_idx += 1;
     }
     if let Some(ref aa) = input.archived_at {
-        set_clauses.push(format!("archivedAt = ?{}", param_idx));
+        set_clauses.push(format!("archived_at = ?{}", param_idx));
         params.push(Box::new(aa.clone()));
         param_idx += 1;
     }
 
-    set_clauses.push(format!("updatedAt = ?{}", param_idx));
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
     params.push(Box::new(now));
     param_idx += 1;
 

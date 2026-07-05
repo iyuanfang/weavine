@@ -55,22 +55,22 @@ pub async fn bulk_unarchive(
     let n = match body.entity.as_str() {
         "action" => conn
             .execute(
-                "UPDATE Action SET archivedAt = NULL, updatedAt = ?1 \
-                 WHERE ownerId = ?2 AND archivedAt IS NOT NULL AND archivedAt >= ?3",
+                "UPDATE Action SET archived_at = NULL, updated_at = ?1 \
+                 WHERE user_id = ?2 AND archived_at IS NOT NULL AND archived_at >= ?3",
                 rusqlite::params![&cutoff, &body.user_id, &cutoff],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "event" => conn
             .execute(
-                "UPDATE Event SET archivedAt = NULL, updatedAt = ?1 \
-                 WHERE ownerId = ?2 AND archivedAt IS NOT NULL AND archivedAt >= ?3",
+                "UPDATE Event SET archived_at = NULL, updated_at = ?1 \
+                 WHERE user_id = ?2 AND archived_at IS NOT NULL AND archived_at >= ?3",
                 rusqlite::params![&cutoff, &body.user_id, &cutoff],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "project" => conn
             .execute(
-                "UPDATE \"Project\" SET archivedAt = NULL, updatedAt = ?1 \
-                 WHERE ownerId = ?2 AND archivedAt IS NOT NULL AND archivedAt >= ?3",
+                "UPDATE \"Project\" SET archived_at = NULL, updated_at = ?1 \
+                 WHERE user_id = ?2 AND archived_at IS NOT NULL AND archived_at >= ?3",
                 rusqlite::params![&cutoff, &body.user_id, &cutoff],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
@@ -100,22 +100,22 @@ pub async fn unarchive_one(
     let n = match body.entity.as_str() {
         "action" => conn
             .execute(
-                "UPDATE Action SET archivedAt = NULL, updatedAt = ?1 \
-                 WHERE id = ?2 AND ownerId = ?3",
+                "UPDATE Action SET archived_at = NULL, updated_at = ?1 \
+                 WHERE id = ?2 AND user_id = ?3",
                 rusqlite::params![&now, &body.id, &body.user_id],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "event" => conn
             .execute(
-                "UPDATE Event SET archivedAt = NULL, updatedAt = ?1 \
-                 WHERE id = ?2 AND ownerId = ?3",
+                "UPDATE Event SET archived_at = NULL, updated_at = ?1 \
+                 WHERE id = ?2 AND user_id = ?3",
                 rusqlite::params![&now, &body.id, &body.user_id],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "project" => conn
             .execute(
-                "UPDATE \"Project\" SET archivedAt = NULL, updatedAt = ?1 \
-                 WHERE id = ?2 AND ownerId = ?3",
+                "UPDATE \"Project\" SET archived_at = NULL, updated_at = ?1 \
+                 WHERE id = ?2 AND user_id = ?3",
                 rusqlite::params![&now, &body.id, &body.user_id],
             )
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
@@ -147,19 +147,19 @@ pub async fn archive_list(
     let limit = p.limit.unwrap_or(500);
     let sql = match p.entity.as_str() {
         "action" => format!(
-            "SELECT id, title, archivedAt FROM Action \
-             WHERE ownerId = ?1 AND archivedAt IS NOT NULL \
-             ORDER BY archivedAt DESC LIMIT {limit}"
+            "SELECT id, title, archived_at FROM Action \
+             WHERE user_id = ?1 AND archived_at IS NOT NULL \
+             ORDER BY archived_at DESC LIMIT {limit}"
         ),
         "event" => format!(
-            "SELECT id, title, archivedAt FROM Event \
-             WHERE ownerId = ?1 AND archivedAt IS NOT NULL \
-             ORDER BY archivedAt DESC LIMIT {limit}"
+            "SELECT id, title, archived_at FROM Event \
+             WHERE user_id = ?1 AND archived_at IS NOT NULL \
+             ORDER BY archived_at DESC LIMIT {limit}"
         ),
         "project" => format!(
-            "SELECT id, title, archivedAt FROM \"Project\" \
-             WHERE ownerId = ?1 AND archivedAt IS NOT NULL \
-             ORDER BY archivedAt DESC LIMIT {limit}"
+            "SELECT id, title, archived_at FROM \"Project\" \
+             WHERE user_id = ?1 AND archived_at IS NOT NULL \
+             ORDER BY archived_at DESC LIMIT {limit}"
         ),
         other => {
             return Err((
@@ -202,21 +202,21 @@ pub async fn archive_counts(
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let action: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM Action WHERE ownerId = ?1 AND archivedAt IS NOT NULL",
+            "SELECT COUNT(*) FROM Action WHERE user_id = ?1 AND archived_at IS NOT NULL",
             rusqlite::params![&p.user_id],
             |r| r.get(0),
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let event: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM Event WHERE ownerId = ?1 AND archivedAt IS NOT NULL",
+            "SELECT COUNT(*) FROM Event WHERE user_id = ?1 AND archived_at IS NOT NULL",
             rusqlite::params![&p.user_id],
             |r| r.get(0),
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let project: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM \"Project\" WHERE ownerId = ?1 AND archivedAt IS NOT NULL",
+            "SELECT COUNT(*) FROM \"Project\" WHERE user_id = ?1 AND archived_at IS NOT NULL",
             rusqlite::params![&p.user_id],
             |r| r.get(0),
         )
@@ -255,11 +255,11 @@ fn count(
     let sql = match since {
         Some(_) => format!(
             "SELECT COUNT(*) FROM {quoted} \
-             WHERE ownerId = ?1 AND archivedAt IS NOT NULL AND archivedAt >= ?2"
+             WHERE user_id = ?1 AND archived_at IS NOT NULL AND archived_at >= ?2"
         ),
         None => format!(
             "SELECT COUNT(*) FROM {quoted} \
-             WHERE ownerId = ?1 AND archivedAt IS NOT NULL"
+             WHERE user_id = ?1 AND archived_at IS NOT NULL"
         ),
     };
     if since.is_some() {

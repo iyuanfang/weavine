@@ -13,7 +13,7 @@ pub(crate) fn row_to_setting(row: &rusqlite::Row) -> rusqlite::Result<Setting> {
 
 pub fn list(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<Setting>> {
     let mut stmt = conn.prepare(
-        "SELECT id, ownerId, key, value, updatedAt FROM Setting WHERE ownerId = ?1 ORDER BY key ASC",
+        "SELECT id, user_id, key, value, updated_at FROM Setting WHERE user_id = ?1 ORDER BY key ASC",
     )?;
 
     let settings = stmt
@@ -30,9 +30,9 @@ pub fn upsert(conn: &Connection, user_id: &str, key: &str, value: &str) -> rusql
         .to_string();
 
     conn.execute(
-        "INSERT INTO Setting (id, ownerId, key, value, updatedAt) \
+        "INSERT INTO Setting (id, user_id, key, value, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5) \
-         ON CONFLICT(ownerId, key) DO UPDATE SET value = ?4, updatedAt = ?5",
+         ON CONFLICT(user_id, key) DO UPDATE SET value = ?4, updated_at = ?5",
         rusqlite::params![
             &uuid::Uuid::new_v4().to_string(),
             user_id,
@@ -43,7 +43,7 @@ pub fn upsert(conn: &Connection, user_id: &str, key: &str, value: &str) -> rusql
     )?;
 
     conn.query_row(
-        "SELECT id, ownerId, key, value, updatedAt FROM Setting WHERE ownerId = ?1 AND key = ?2",
+        "SELECT id, user_id, key, value, updated_at FROM Setting WHERE user_id = ?1 AND key = ?2",
         rusqlite::params![user_id, key],
         row_to_setting,
     )
@@ -51,7 +51,7 @@ pub fn upsert(conn: &Connection, user_id: &str, key: &str, value: &str) -> rusql
 
 pub fn delete(conn: &Connection, user_id: &str, key: &str) -> rusqlite::Result<()> {
     conn.execute(
-        "DELETE FROM Setting WHERE ownerId = ?1 AND key = ?2",
+        "DELETE FROM Setting WHERE user_id = ?1 AND key = ?2",
         rusqlite::params![user_id, key],
     )?;
     Ok(())

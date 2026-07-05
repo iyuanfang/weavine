@@ -31,9 +31,9 @@ pub(crate) fn load_tags_for_contact(
     contact_id: &str,
 ) -> rusqlite::Result<Vec<Tag>> {
     let mut stmt = conn.prepare(
-        "SELECT t.id, t.ownerId, t.name, t.color, t.createdAt \
-         FROM Tag t INNER JOIN ContactTag ct ON ct.tagId = t.id \
-         WHERE ct.contactId = ?1 \
+        "SELECT t.id, t.user_id, t.name, t.color, t.created_at \
+         FROM Tag t INNER JOIN ContactTag ct ON ct.tag_id = t.id \
+         WHERE ct.contact_id = ?1 \
          ORDER BY t.name ASC",
     )?;
     let rows = stmt
@@ -61,7 +61,7 @@ pub(crate) fn hydrate_tags(
 }
 
 pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<Vec<Contact>> {
-    let mut sql = String::from("SELECT * FROM Contact WHERE ownerId = ?1");
+    let mut sql = String::from("SELECT * FROM Contact WHERE user_id = ?1");
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
         vec![Box::new(p.user_id.clone())];
     let mut idx = 2;
@@ -85,13 +85,13 @@ pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<Vec<C
 
     if let Some(ref tag_id) = p.tag_id {
         sql.push_str(&format!(
-            " AND id IN (SELECT contactId FROM ContactTag WHERE tagId = ?{})",
+            " AND id IN (SELECT contact_id FROM ContactTag WHERE tag_id = ?{})",
             idx
         ));
         param_values.push(Box::new(tag_id.clone()));
     }
 
-    sql.push_str(" ORDER BY updatedAt DESC");
+    sql.push_str(" ORDER BY updated_at DESC");
 
     let mut stmt = conn.prepare(&sql)?;
     let params_refs: Vec<&dyn rusqlite::types::ToSql> =
@@ -114,9 +114,9 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
 
     conn.execute(
         "INSERT INTO Contact \
-         (id, ownerId, nickname, name, company, title, city, \
-          email, phone, wechat, notes, importance, reminderEnabled, \
-          reminderIntervalDays, lastContactedAt, createdAt, updatedAt) \
+         (id, user_id, nickname, name, company, title, city, \
+          email, phone, wechat, notes, importance, reminder_enabled, \
+          reminder_interval_days, last_contacted_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
                  ?8, ?9, ?10, ?11, ?12, ?13, \
                  ?14, ?15, ?16, ?17)",
@@ -144,7 +144,7 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
     if let Some(ref tag_ids) = input.tag_ids {
         for tag_id in tag_ids {
             conn.execute(
-                "INSERT INTO ContactTag (ownerId, contactId, tagId) VALUES (?1, ?2, ?3)",
+                "INSERT INTO ContactTag (user_id, contact_id, tag_id) VALUES (?1, ?2, ?3)",
                 rusqlite::params![&input.user_id, &id, tag_id],
             )?;
         }
@@ -220,8 +220,8 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
         param_idx += 1;
     }
 
-    // Always bump updatedAt
-    set_clauses.push(format!("updatedAt = ?{}", param_idx));
+    // Always bump updated_at
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
     params.push(Box::new(now));
     param_idx += 1;
 
@@ -237,19 +237,19 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
 
     if let Some(ref tag_ids) = input.tag_ids {
         let user_id: String = conn.query_row(
-            "SELECT ownerId FROM Contact WHERE id = ?1",
+            "SELECT user_id FROM Contact WHERE id = ?1",
             rusqlite::params![&input.id],
             |row| row.get(0),
         )?;
 
         conn.execute(
-            "DELETE FROM ContactTag WHERE contactId = ?1",
+            "DELETE FROM ContactTag WHERE contact_id = ?1",
             rusqlite::params![&input.id],
         )?;
 
         for tag_id in tag_ids {
             conn.execute(
-                "INSERT INTO ContactTag (ownerId, contactId, tagId) VALUES (?1, ?2, ?3)",
+                "INSERT INTO ContactTag (user_id, contact_id, tag_id) VALUES (?1, ?2, ?3)",
                 rusqlite::params![&user_id, &input.id, tag_id],
             )?;
         }

@@ -15,7 +15,7 @@ pub(crate) fn row_to_tag(row: &rusqlite::Row) -> rusqlite::Result<Tag> {
 
 pub fn list(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<Tag>> {
     let mut stmt = conn.prepare(
-        "SELECT id, ownerId, name, color, createdAt FROM Tag WHERE ownerId = ?1 ORDER BY name ASC",
+        "SELECT id, user_id, name, color, created_at FROM Tag WHERE user_id = ?1 ORDER BY name ASC",
     )?;
 
     let tags = stmt
@@ -31,12 +31,12 @@ pub fn create(conn: &Connection, input: &CreateTagInput) -> rusqlite::Result<Tag
     let color = color_for(&input.name);
 
     conn.execute(
-        "INSERT INTO Tag (id, ownerId, name, color) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO Tag (id, user_id, name, color) VALUES (?1, ?2, ?3, ?4)",
         rusqlite::params![&id, &input.user_id, &input.name, &color],
     )?;
 
     conn.query_row(
-        "SELECT id, ownerId, name, color, createdAt FROM Tag WHERE id = ?1",
+        "SELECT id, user_id, name, color, created_at FROM Tag WHERE id = ?1",
         rusqlite::params![&id],
         row_to_tag,
     )
@@ -60,7 +60,7 @@ pub fn update(conn: &Connection, input: &UpdateTagInput) -> rusqlite::Result<Tag
 
     if set_clauses.is_empty() {
         return conn.query_row(
-            "SELECT id, ownerId, name, color, createdAt FROM Tag WHERE id = ?1",
+            "SELECT id, user_id, name, color, created_at FROM Tag WHERE id = ?1",
             rusqlite::params![&input.id],
             row_to_tag,
         );
@@ -77,7 +77,7 @@ pub fn update(conn: &Connection, input: &UpdateTagInput) -> rusqlite::Result<Tag
     }
 
     conn.query_row(
-        "SELECT id, ownerId, name, color, createdAt FROM Tag WHERE id = ?1",
+        "SELECT id, user_id, name, color, created_at FROM Tag WHERE id = ?1",
         rusqlite::params![&input.id],
         row_to_tag,
     )

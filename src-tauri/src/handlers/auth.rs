@@ -108,7 +108,7 @@ fn issue_refresh_token(conn: &rusqlite::Connection, user_id: &str, device: Optio
     let id = uuid::Uuid::new_v4().to_string();
     let ttl = REFRESH_TOKEN_TTL_SECS as i64;
     conn.execute(
-        "INSERT INTO \"RefreshToken\" (\"id\", \"userId\", \"tokenHash\", \"device\", \"expiresAt\") VALUES (?1, ?2, ?3, ?4, datetime('now', ?5))",
+        "INSERT INTO \"RefreshToken\" (\"id\", \"user_id\", \"token_hash\", \"device\", \"expires_at\") VALUES (?1, ?2, ?3, ?4, datetime('now', ?5))",
         params![id, user_id, token_hash, device, format!("+{} seconds", ttl)],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert refresh: {e}")))?;
@@ -191,13 +191,13 @@ pub async fn register(
     let hash = hash(body.password.as_bytes(), DEFAULT_COST)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("hash: {e}")))?;
     conn.execute(
-        "INSERT INTO \"UserAccount\" (\"id\", \"email\", \"passwordHash\", \"updatedAt\") VALUES (?1, ?2, ?3, datetime('now'))",
+        "INSERT INTO \"UserAccount\" (\"id\", \"email\", \"password_hash\", \"updated_at\") VALUES (?1, ?2, ?3, datetime('now'))",
         params![id, email, hash],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert user: {e}")))?;
-    // Mirror to legacy User table — ownerId FKs everywhere reference User.id.
+    // Mirror to legacy User table — user_id FKs everywhere reference User.id.
     conn.execute(
-        "INSERT INTO \"User\" (\"id\", \"email\", \"passwordHash\", \"isLocal\", \"updatedAt\") VALUES (?1, ?2, ?3, 0, datetime('now'))",
+        "INSERT INTO \"User\" (\"id\", \"email\", \"password_hash\", \"is_local\", \"updated_at\") VALUES (?1, ?2, ?3, 0, datetime('now'))",
         params![id, email, hash],
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert User row: {e}")))?;
@@ -217,7 +217,7 @@ pub async fn login(
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let row: Option<(String, String)> = conn
         .query_row(
-            "SELECT \"id\", \"passwordHash\" FROM \"UserAccount\" WHERE \"email\" = ?1",
+            "SELECT \"id\", \"password_hash\" FROM \"UserAccount\" WHERE \"email\" = ?1",
             params![email],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
@@ -245,7 +245,7 @@ pub async fn refresh(
     let token_hash = blake_hash(&body.refresh_token);
     let row: Option<(String, String)> = conn
         .query_row(
-            "SELECT rt.\"userId\", ua.\"email\" FROM \"RefreshToken\" rt JOIN \"UserAccount\" ua ON ua.\"id\" = rt.\"userId\" WHERE rt.\"tokenHash\" = ?1 AND rt.\"revokedAt\" IS NULL AND rt.\"expiresAt\" > datetime('now')",
+            "SELECT rt.\"user_id\", ua.\"email\" FROM \"RefreshToken\" rt JOIN \"UserAccount\" ua ON ua.\"id\" = rt.\"user_id\" WHERE rt.\"token_hash\" = ?1 AND rt.\"revoked_at\" IS NULL AND rt.\"expires_at\" > datetime('now')",
             params![token_hash],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
@@ -274,7 +274,7 @@ pub async fn logout(
     let token_hash = blake_hash(&body.refresh_token);
     let changed = conn
         .execute(
-            "UPDATE \"RefreshToken\" SET \"revokedAt\" = datetime('now') WHERE \"tokenHash\" = ?1 AND \"revokedAt\" IS NULL",
+            "UPDATE \"RefreshToken\" SET \"revoked_at\" = datetime('now') WHERE \"token_hash\" = ?1 AND \"revoked_at\" IS NULL",
             params![token_hash],
         )
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

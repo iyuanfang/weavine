@@ -15,14 +15,14 @@ pub fn search(
 ) -> rusqlite::Result<SearchResults> {
     let limit = limit.unwrap_or(20);
     let pattern = format!("%{}%", query);
-    let archive_clause = if include_archived { "" } else { " AND archivedAt IS NULL" };
+    let archive_clause = if include_archived { "" } else { " AND archived_at IS NULL" };
 
     let contacts: Vec<Contact> = {
         let mut stmt = conn.prepare(
-            "SELECT id, ownerId, nickname, name, company, title, city, email, phone, wechat, notes, importance, reminderEnabled, reminderIntervalDays, lastContactedAt, createdAt, updatedAt \
-             FROM Contact WHERE ownerId = ?1 \
+            "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, notes, importance, reminder_enabled, reminder_interval_days, last_contacted_at, created_at, updated_at \
+             FROM Contact WHERE user_id = ?1 \
              AND (nickname LIKE ?2 OR name LIKE ?2 OR company LIKE ?2 OR notes LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2) \
-             ORDER BY updatedAt DESC LIMIT ?3",
+             ORDER BY updated_at DESC LIMIT ?3",
         )?;
         let results = stmt
             .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_contact)?
@@ -33,9 +33,9 @@ pub fn search(
 
     let interactions: Vec<Interaction> = {
         let mut stmt = conn.prepare(
-            "SELECT id, ownerId, contactId, actionId, eventId, occurredAt, channel, summary, createdAt \
-             FROM Interaction WHERE ownerId = ?1 AND summary LIKE ?2 \
-             ORDER BY occurredAt DESC LIMIT ?3",
+            "SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at \
+             FROM Interaction WHERE user_id = ?1 AND summary LIKE ?2 \
+             ORDER BY occurred_at DESC LIMIT ?3",
         )?;
         let results = stmt
             .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_interaction)?
@@ -46,10 +46,10 @@ pub fn search(
 
     let events: Vec<Event> = {
         let sql = format!(
-            "SELECT id, ownerId, title, type, startAt, endAt, location, notes, contactId, projectId, reminderLeadMinutes, archivedAt, createdAt, updatedAt \
-             FROM Event WHERE ownerId = ?1 \
+            "SELECT id, user_id, title, event_type, start_at, end_at, location, notes, contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at \
+             FROM Event WHERE user_id = ?1 \
              AND (title LIKE ?2 OR location LIKE ?2 OR notes LIKE ?2){} \
-             ORDER BY startAt ASC LIMIT ?3",
+             ORDER BY start_at ASC LIMIT ?3",
             archive_clause
         );
         let mut stmt = conn.prepare(&sql)?;
@@ -62,10 +62,10 @@ pub fn search(
 
     let actions: Vec<Action> = {
         let sql = format!(
-            "SELECT id, ownerId, title, description, status, priority, category, dueAt, contactId, projectId, completedAt, archivedAt, createdAt, updatedAt \
-             FROM Action WHERE ownerId = ?1 \
+            "SELECT id, user_id, title, description, status, priority, category, due_at, contact_id, project_id, completed_at, archived_at, created_at, updated_at \
+             FROM Action WHERE user_id = ?1 \
              AND (title LIKE ?2 OR description LIKE ?2 OR category LIKE ?2){} \
-             ORDER BY dueAt ASC LIMIT ?3",
+             ORDER BY due_at ASC LIMIT ?3",
             archive_clause
         );
         let mut stmt = conn.prepare(&sql)?;
@@ -78,10 +78,10 @@ pub fn search(
 
     let projects: Vec<Project> = {
         let sql = format!(
-            "SELECT id, ownerId, title, description, template, stage, startAt, dueAt, completedAt, archivedAt, createdAt, updatedAt \
-             FROM \"Project\" WHERE ownerId = ?1 \
+            "SELECT id, user_id, title, description, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at \
+             FROM \"Project\" WHERE user_id = ?1 \
              AND (title LIKE ?2 OR description LIKE ?2){} \
-             ORDER BY updatedAt DESC LIMIT ?3",
+             ORDER BY updated_at DESC LIMIT ?3",
             archive_clause
         );
         let mut stmt = conn.prepare(&sql)?;

@@ -19,7 +19,7 @@ pub fn add(
 ) -> rusqlite::Result<ProjectContact> {
     let user_id: String = conn
         .query_row(
-            "SELECT ownerId FROM Project WHERE id = ?1",
+            "SELECT user_id FROM Project WHERE id = ?1",
             params![project_id],
             |r| r.get(0),
         )
@@ -31,7 +31,7 @@ pub fn add(
 
     let contact_owner: Option<String> = conn
         .query_row(
-            "SELECT ownerId FROM Contact WHERE id = ?1",
+            "SELECT user_id FROM Contact WHERE id = ?1",
             params![contact_id],
             |r| r.get(0),
         )
@@ -51,15 +51,15 @@ pub fn add(
     }
 
     conn.execute(
-        "INSERT INTO ProjectContact (ownerId, projectId, contactId, role) \
+        "INSERT INTO ProjectContact (user_id, project_id, contact_id, role) \
          VALUES (?1, ?2, ?3, ?4) \
-         ON CONFLICT(projectId, contactId) DO UPDATE SET role = excluded.role",
+         ON CONFLICT(project_id, contact_id) DO UPDATE SET role = excluded.role",
         params![user_id, project_id, contact_id, role],
     )?;
 
     let pc: ProjectContact = conn.query_row(
-        "SELECT ownerId, projectId, contactId, role, addedAt FROM ProjectContact \
-         WHERE projectId = ?1 AND contactId = ?2",
+        "SELECT user_id, project_id, contact_id, role, added_at FROM ProjectContact \
+         WHERE project_id = ?1 AND contact_id = ?2",
         params![project_id, contact_id],
         row_to_project_contact,
     )?;
@@ -68,7 +68,7 @@ pub fn add(
 
 pub fn remove(conn: &Connection, project_id: &str, contact_id: &str) -> rusqlite::Result<()> {
     conn.execute(
-        "DELETE FROM ProjectContact WHERE projectId = ?1 AND contactId = ?2",
+        "DELETE FROM ProjectContact WHERE project_id = ?1 AND contact_id = ?2",
         params![project_id, contact_id],
     )?;
     Ok(())
@@ -79,8 +79,8 @@ pub fn list_by_project(
     project_id: &str,
 ) -> rusqlite::Result<Vec<ProjectContact>> {
     let mut stmt = conn.prepare(
-        "SELECT ownerId, projectId, contactId, role, addedAt FROM ProjectContact \
-         WHERE projectId = ?1 ORDER BY addedAt DESC",
+        "SELECT user_id, project_id, contact_id, role, added_at FROM ProjectContact \
+         WHERE project_id = ?1 ORDER BY added_at DESC",
     )?;
     let rows = stmt
         .query_map(params![project_id], row_to_project_contact)?
@@ -95,14 +95,14 @@ pub fn list_contacts_for_project(
 ) -> rusqlite::Result<Vec<ProjectContactWithContact>> {
     use crate::business::contact::hydrate_tags;
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.ownerId, c.nickname, c.name, c.company, c.title, c.city, \
-                c.email, c.phone, c.wechat, c.notes, c.importance, c.reminderEnabled, \
-                c.reminderIntervalDays, c.lastContactedAt, c.createdAt, c.updatedAt, \
-                pc.role, pc.addedAt \
+        "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.city, \
+                c.email, c.phone, c.wechat, c.notes, c.importance, c.reminder_enabled, \
+                c.reminder_interval_days, c.last_contacted_at, c.created_at, c.updated_at, \
+                pc.role, pc.added_at \
          FROM Contact c \
-         INNER JOIN ProjectContact pc ON pc.contactId = c.id \
-         WHERE pc.projectId = ?1 \
-         ORDER BY pc.addedAt DESC",
+         INNER JOIN ProjectContact pc ON pc.contact_id = c.id \
+         WHERE pc.project_id = ?1 \
+         ORDER BY pc.added_at DESC",
     )?;
     let rows: Vec<(Contact, Option<String>, String)> = stmt
         .query_map(params![project_id], |row| {

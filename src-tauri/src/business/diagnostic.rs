@@ -18,7 +18,7 @@ pub fn get_startup_info() -> StartupInfo {
 
 pub fn get_local_user(conn: &Connection) -> rusqlite::Result<LocalUser> {
     conn.query_row(
-        "SELECT id, name, email FROM \"User\" WHERE isLocal = 1 LIMIT 1",
+        "SELECT id, name, email FROM \"User\" WHERE is_local = 1 LIMIT 1",
         [],
         |row| {
             Ok(LocalUser {

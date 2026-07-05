@@ -28,19 +28,19 @@ pub fn list(
     let include_dismissed = include_dismissed.unwrap_or(false);
 
     let mut sql = String::from(
-        "SELECT id, ownerId, contactId, eventId, triggerAt, kind, dispatched, dismissed, createdAt \
-         FROM Reminder WHERE ownerId = ?1",
+        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
+         FROM Reminder WHERE user_id = ?1",
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
     let mut idx = 2;
 
     if let Some(cid) = contact_id {
-        sql.push_str(&format!(" AND contactId = ?{}", idx));
+        sql.push_str(&format!(" AND contact_id = ?{}", idx));
         param_values.push(Box::new(cid.to_string()));
         idx += 1;
     }
     if let Some(eid) = event_id {
-        sql.push_str(&format!(" AND eventId = ?{}", idx));
+        sql.push_str(&format!(" AND event_id = ?{}", idx));
         param_values.push(Box::new(eid.to_string()));
         idx += 1;
     }
@@ -48,7 +48,7 @@ pub fn list(
         sql.push_str(" AND dismissed = 0");
     }
 
-    sql.push_str(&format!(" ORDER BY triggerAt ASC LIMIT ?{}", idx));
+    sql.push_str(&format!(" ORDER BY trigger_at ASC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
 
     let mut stmt = conn.prepare(&sql)?;
@@ -72,7 +72,7 @@ pub fn create(conn: &Connection, input: &CreateReminderInput) -> rusqlite::Resul
 
     conn.execute(
         "INSERT INTO Reminder \
-         (id, ownerId, contactId, eventId, triggerAt, kind, dispatched, dismissed, createdAt) \
+         (id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7)",
         rusqlite::params![
             &id,
@@ -86,7 +86,7 @@ pub fn create(conn: &Connection, input: &CreateReminderInput) -> rusqlite::Resul
     )?;
 
     conn.query_row(
-        "SELECT id, ownerId, contactId, eventId, triggerAt, kind, dispatched, dismissed, createdAt \
+        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
          FROM Reminder WHERE id = ?1",
         rusqlite::params![&id],
         row_to_reminder,
@@ -100,7 +100,7 @@ pub fn update(conn: &Connection, input: &UpdateReminderInput) -> rusqlite::Resul
     let mut param_idx = 1;
 
     if let Some(ref t) = input.trigger_at {
-        set_clauses.push(format!("triggerAt = ?{}", param_idx));
+        set_clauses.push(format!("trigger_at = ?{}", param_idx));
         params.push(Box::new(t.clone()));
         param_idx += 1;
     }
@@ -131,7 +131,7 @@ pub fn update(conn: &Connection, input: &UpdateReminderInput) -> rusqlite::Resul
     }
 
     conn.query_row(
-        "SELECT id, ownerId, contactId, eventId, triggerAt, kind, dispatched, dismissed, createdAt \
+        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
          FROM Reminder WHERE id = ?1",
         rusqlite::params![&input.id],
         row_to_reminder,
@@ -154,8 +154,8 @@ pub fn dismiss(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 pub fn claim_due_reminders(conn: &Connection) -> rusqlite::Result<Vec<Reminder>> {
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     let mut stmt = conn.prepare(
-        "SELECT id, ownerId, contactId, eventId, triggerAt, kind, dispatched, dismissed, createdAt \
-         FROM Reminder WHERE dismissed = 0 AND dispatched = 0 AND triggerAt <= ?1",
+        "SELECT id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at \
+         FROM Reminder WHERE dismissed = 0 AND dispatched = 0 AND trigger_at <= ?1",
     )?;
     let reminders: Vec<Reminder> = stmt
         .query_map([&now], row_to_reminder)?
@@ -183,7 +183,7 @@ impl Reminder {
 
 pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> rusqlite::Result<()> {
     conn.execute(
-        "DELETE FROM Reminder WHERE eventId = ?1 AND kind = 'event'",
+        "DELETE FROM Reminder WHERE event_id = ?1 AND kind = 'event'",
         rusqlite::params![event.id],
     )?;
     if let Some(lead) = event.reminder_lead_minutes {
@@ -195,7 +195,7 @@ pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> r
         let id = format!("auto-rem-{}", event.id);
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         conn.execute(
-            "INSERT INTO Reminder (id, ownerId, eventId, triggerAt, kind, dispatched, dismissed, createdAt) \
+            "INSERT INTO Reminder (id, user_id, event_id, trigger_at, kind, dispatched, dismissed, created_at) \
              VALUES (?1, ?2, ?3, ?4, 'event', 0, 0, ?5)",
             rusqlite::params![id, event.user_id, event.id, trigger_str, now],
         )?;
