@@ -139,7 +139,7 @@ export function ActionDetail() {
             <Link to="/actions" className="btn btn-ghost">
               ← 待办列表
             </Link>
-            <Link to={`/actions/${id}/edit`} className="btn btn-secondary">
+            <Link to={`/actions/${id}/edit?from=/actions/${id}`} className="btn btn-secondary">
               编辑
             </Link>
             <button

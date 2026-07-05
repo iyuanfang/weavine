@@ -445,7 +445,7 @@ export function ActionsList() {
           </>
         }
         actions={
-          <Link to="/actions/new" className="btn btn-primary">
+          <Link to="/actions/new?from=/actions" className="btn btn-primary">
             + 新建待办
           </Link>
         }
@@ -469,7 +469,7 @@ export function ActionsList() {
                     ? '试试切到「全部」优先级。'
                     : '从一件具体的小事开始。'}
               </p>
-              <Link to="/actions/new" className="btn btn-primary">
+              <Link to="/actions/new?from=/actions" className="btn btn-primary">
                 + 新建待办
               </Link>
             </div>
@@ -732,7 +732,7 @@ function ActionRowBody({
           {pri.label}
         </span>
         <Link
-          to={`/actions/${action.id}/edit`}
+          to={`/actions/${action.id}/edit?from=/actions`}
           className="btn btn-sm btn-ghost"
           style={{
             padding: '2px 6px',

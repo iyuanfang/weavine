@@ -31,6 +31,7 @@ export function ActionNew() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const projectIdParam = searchParams.get('projectId');
+  const fromParam = searchParams.get('from');
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -78,10 +79,8 @@ export function ActionNew() {
       queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: ['project-actions', projectId] });
-        navigate(`/projects/${projectId}`);
-      } else {
-        navigate('/actions');
       }
+      navigate(fromParam || '/actions');
     },
   });
 
@@ -251,7 +250,7 @@ export function ActionNew() {
         </section>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate('/actions')}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(fromParam || '/actions')}>
             取消
           </button>
           <button

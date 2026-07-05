@@ -210,7 +210,7 @@ export function Calendar() {
             >
               ›
             </button>
-            <Link to="/events/new" className="btn btn-primary">
+            <Link to="/events/new?from=/calendar" className="btn btn-primary">
               + 新建日程
             </Link>
           </div>
@@ -375,7 +375,7 @@ export function Calendar() {
                   ? `切换到「全部」或选其他类型。`
                   : '加一个会面、纪念日或 deadline。'}
               </p>
-              <Link to="/events/new" className="btn btn-primary">
+              <Link to="/events/new?from=/calendar" className="btn btn-primary">
                 + 创建第一个日程
               </Link>
             </div>
@@ -488,7 +488,7 @@ export function Calendar() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                navigate(`/events/${event.id}/edit`);
+                                navigate(`/events/${event.id}/edit?from=/calendar`);
                               }}
                               className="btn btn-sm btn-ghost"
                               style={{

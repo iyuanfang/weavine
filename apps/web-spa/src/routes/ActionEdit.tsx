@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
@@ -37,6 +37,9 @@ export function ActionEdit() {
   const ownerId = useOwnerId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const [searchParams] = useSearchParams();
+  const fromParam = searchParams.get('from');
 
   const actionQuery = useQuery({
     queryKey: ['action', id],
@@ -90,11 +93,7 @@ export function ActionEdit() {
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: ['project-actions', projectId] });
       }
-      if (projectId) {
-        navigate(`/projects/${projectId}`);
-      } else {
-        navigate('/actions');
-      }
+      navigate(fromParam || '/actions');
     },
   });
 
@@ -279,7 +278,7 @@ export function ActionEdit() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => (projectId ? navigate(`/projects/${projectId}`) : navigate('/actions'))}
+            onClick={() => navigate(fromParam || '/actions')}
           >
             取消
           </button>

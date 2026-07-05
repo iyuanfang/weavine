@@ -814,7 +814,7 @@ export function ProjectDetail() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => navigate(`/actions/new?projectId=${id}`)}
+              onClick={() => navigate(`/actions/new?from=/projects/${id}&projectId=${id}`)}
             >
               + 新建待办
             </button>
@@ -830,7 +830,7 @@ export function ProjectDetail() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => navigate(`/actions/new?projectId=${id}`)}
+                  onClick={() => navigate(`/actions/new?from=/projects/${id}&projectId=${id}`)}
                 >
                   创建第一个待办
                 </button>
@@ -934,7 +934,7 @@ export function ProjectDetail() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => navigate(`/events/new?projectId=${id}`)}
+              onClick={() => navigate(`/events/new?from=/projects/${id}&projectId=${id}`)}
             >
               + 新建日程
             </button>
@@ -950,7 +950,7 @@ export function ProjectDetail() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => navigate(`/events/new?projectId=${id}`)}
+                  onClick={() => navigate(`/events/new?from=/projects/${id}&projectId=${id}`)}
                 >
                   安排第一个日程
                 </button>

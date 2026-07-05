@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
@@ -27,6 +27,9 @@ export function EventEdit() {
   const ownerId = useOwnerId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const [searchParams] = useSearchParams();
+  const fromParam = searchParams.get('from');
 
   const eventQuery = useQuery({
     queryKey: ['event', id],
@@ -95,11 +98,7 @@ export function EventEdit() {
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: ['project-events', projectId] });
       }
-      if (projectId) {
-        navigate(`/projects/${projectId}`);
-      } else {
-        navigate('/calendar');
-      }
+      navigate(fromParam || '/calendar');
     },
   });
 
@@ -293,7 +292,7 @@ export function EventEdit() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => (projectId ? navigate(`/projects/${projectId}`) : navigate('/calendar'))}
+            onClick={() => navigate(fromParam || '/calendar')}
           >
             取消
           </button>

@@ -22,6 +22,7 @@ export function EventNew() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const projectIdParam = searchParams.get('projectId');
+  const fromParam = searchParams.get('from');
 
   const [title, setTitle] = useState('');
   const [type, setType] = useState(EVENT_PRESETS[0].value);
@@ -82,10 +83,8 @@ export function EventNew() {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: ['project-events', projectId] });
-        navigate(`/projects/${projectId}`);
-      } else {
-        navigate('/calendar');
       }
+      navigate(fromParam || '/calendar');
     },
   });
 
@@ -266,7 +265,7 @@ export function EventNew() {
         </section>
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate('/calendar')}>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(fromParam || '/calendar')}>
             取消
           </button>
           <button

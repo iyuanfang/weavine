@@ -68,7 +68,7 @@ export function EventDetail() {
             <Link to="/calendar" className="btn btn-ghost">
               ← 日历
             </Link>
-            <Link to={`/events/${id}/edit`} className="btn btn-secondary">
+            <Link to={`/events/${id}/edit?from=/events/${id}`} className="btn btn-secondary">
               编辑
             </Link>
             <button
