@@ -1,14 +1,15 @@
--- Migration 0003: Sync engine — sync_meta, sync_manifest, sync_change_log, trigger function, 11 triggers.
+-- Migration 0003: Sync engine - sync_meta, sync_manifest, sync_change_log, trigger function, 11 triggers.
+-- TEXT-compatible types only (no UUID casts).
 
 CREATE TABLE IF NOT EXISTS sync_meta (
-    user_id               UUID PRIMARY KEY REFERENCES user_account(id) ON DELETE CASCADE,
+    user_id               TEXT PRIMARY KEY REFERENCES user_account(id) ON DELETE CASCADE,
     last_pulled_revision  BIGINT NOT NULL DEFAULT 0,
     last_pushed_revision  BIGINT NOT NULL DEFAULT 0,
     last_sync_at          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sync_manifest (
-    user_id          UUID PRIMARY KEY REFERENCES user_account(id) ON DELETE CASCADE,
+    user_id          TEXT PRIMARY KEY REFERENCES user_account(id) ON DELETE CASCADE,
     schema_version   INT NOT NULL DEFAULT 1,
     server_revision  BIGINT NOT NULL DEFAULT 0,
     last_updated     TEXT
@@ -16,8 +17,8 @@ CREATE TABLE IF NOT EXISTS sync_manifest (
 
 CREATE TABLE IF NOT EXISTS sync_change_log (
     id               BIGSERIAL PRIMARY KEY,
-    user_id          UUID NOT NULL,
-    device_id        UUID,
+    user_id          TEXT NOT NULL,
+    device_id        TEXT,
     table_name       TEXT NOT NULL,
     row_id           TEXT NOT NULL,
     op               TEXT NOT NULL CHECK (op IN ('INSERT', 'UPDATE', 'DELETE')),
@@ -32,9 +33,9 @@ CREATE INDEX IF NOT EXISTS idx_change_log_user_table_rev ON sync_change_log(user
 -- Trigger function: captures all mutations on domain tables into sync_change_log.
 CREATE OR REPLACE FUNCTION sync_log_change() RETURNS TRIGGER AS $$
 DECLARE
-    v_user_id UUID;
+    v_user_id TEXT;
     v_row_id TEXT;
-    v_device_id UUID;
+    v_device_id TEXT;
     v_data JSONB;
     v_op TEXT;
     v_rev BIGINT;
@@ -54,9 +55,8 @@ BEGIN
         v_data := NULL;
     END IF;
 
-    -- Try to read device_id from session variable (set by application)
     BEGIN
-        v_device_id := current_setting('app.current_device_id')::UUID;
+        v_device_id := current_setting('app.current_device_id');
     EXCEPTION WHEN OTHERS THEN
         v_device_id := NULL;
     END;
@@ -69,13 +69,11 @@ BEGIN
     IF TG_OP = 'DELETE' THEN
         RETURN OLD;
     END IF;
-    -- Overwrite server_revision so the row matches sync_change_log
     NEW.server_revision := v_rev;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- 11 triggers: one per domain table
 CREATE TRIGGER contact_sync
     BEFORE INSERT OR UPDATE OR DELETE ON contact
     FOR EACH ROW EXECUTE FUNCTION sync_log_change();

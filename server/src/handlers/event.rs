@@ -72,7 +72,7 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -150,7 +150,7 @@ pub async fn update(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -207,7 +207,7 @@ pub async fn delete(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

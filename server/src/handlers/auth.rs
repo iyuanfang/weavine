@@ -182,7 +182,7 @@ async fn issue_refresh_token(
     )
     .bind(&id)
     .bind(user_id)
-    .bind(device_id)
+    .bind(&device_id)
     .bind(&token_hash)
     .bind(&expires_at)
     .bind(&now)
@@ -228,7 +228,7 @@ pub async fn register(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -289,13 +289,13 @@ pub async fn register(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let access = issue_access_token(&user_id, &email, &device_id)?;
+    let access = issue_access_token(&user_id.to_string(), &email, &device_id.to_string())?;
     Ok(Json(AuthSession {
-        user_id,
+        user_id: user_id.to_string(),
         email,
         access_token: access,
         refresh_token: raw,
-        device_id,
+        device_id: device_id.to_string(),
         expires_in: ACCESS_TOKEN_TTL_SECS,
     }))
 }
@@ -337,7 +337,7 @@ pub async fn login(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -345,7 +345,7 @@ pub async fn login(
 sqlx::query(
         "INSERT INTO devices (id, user_id, name, os, app_version, last_seen_at, created_at) \
          VALUES ($1, $2, $3, $4, $5, $6, $7) \
-         ON CONFLICT (user_id, name, os) DO UPDATE SET last_seen_at = $6",
+         ON CONFLICT (user_id, name, os) DO NOTHING",
     )
     .bind(&device_id)
     .bind(&user_id)
@@ -356,7 +356,24 @@ sqlx::query(
     .bind(&now)
     .execute(&mut *tx)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("upsert device: {e}")))?;
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert device: {e}")))?;
+
+    let device_id: String = sqlx::query_scalar(
+        "SELECT id FROM devices WHERE user_id = $1 AND name = $2 AND os = $3"
+    )
+    .bind(&user_id)
+    .bind(&body.device.name)
+    .bind(&body.device.os)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("select device: {e}")))?;
+
+    sqlx::query("UPDATE devices SET last_seen_at = $1 WHERE id = $2")
+        .bind(&now)
+        .bind(&device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("touch device: {e}")))?;
 
     let raw: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -386,13 +403,13 @@ sqlx::query(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let access = issue_access_token(&user_id, &email, &device_id)?;
+    let access = issue_access_token(&user_id.to_string(), &email, &device_id.to_string())?;
     Ok(Json(AuthSession {
-        user_id,
+        user_id: user_id.to_string(),
         email,
         access_token: access,
         refresh_token: raw,
-        device_id,
+        device_id: device_id.to_string(),
         expires_in: ACCESS_TOKEN_TTL_SECS,
     }))
 }
@@ -426,10 +443,10 @@ pub async fn refresh(
         return Err((StatusCode::UNAUTHORIZED, "设备已被吊销".into()));
     }
 
-    let access = issue_access_token(&user_id, &email, &device_id)?;
+    let access = issue_access_token(&user_id.to_string(), &email, &device_id.to_string())?;
     let refresh = issue_refresh_token(&pool, &user_id, &device_id).await?;
     Ok(Json(AuthSession {
-        user_id,
+        user_id: user_id.to_string(),
         email,
         access_token: access,
         refresh_token: refresh,

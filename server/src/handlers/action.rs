@@ -59,7 +59,7 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -73,7 +73,7 @@ pub async fn create(
     .bind(body.get("title").and_then(|v| v.as_str()).unwrap_or(""))
     .bind(body.get("description").and_then(|v| v.as_str()))
     .bind(body.get("status").and_then(|v| v.as_str()).unwrap_or("inbox"))
-    .bind(body.get("priority").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0))
+    .bind(body.get("priority").and_then(|v| v.as_i64()).map(|n| n).unwrap_or(0i64))
     .bind(body.get("category").and_then(|v| v.as_str()))
     .bind(body.get("due_at").and_then(|v| v.as_str()))
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
@@ -130,7 +130,7 @@ pub async fn update(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -178,7 +178,7 @@ pub async fn delete(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

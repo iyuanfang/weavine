@@ -96,7 +96,7 @@ pub async fn add(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -107,7 +107,7 @@ pub async fn add(
     )
     .bind(&auth)
     .bind(&project_id)
-    .bind(contact_id)
+    .bind(&contact_id.to_string())
     .bind(role)
     .bind(&now)
     .execute(&mut *tx)
@@ -133,7 +133,7 @@ pub async fn remove(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-        .bind(&device_id)
+        .bind(&device_id.to_string())
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

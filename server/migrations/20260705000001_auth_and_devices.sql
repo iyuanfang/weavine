@@ -1,20 +1,12 @@
--- Migration 0001: Rebuild user_account with UUID PK, add devices table, add FK to refresh_token
--- Drops old TEXT-PK tables and recreates with proper UUID types.
+-- Migration 0001: Add devices table; rebuild refresh_token to add device_id FK. Additive (no destructive drops).
 
-DROP TABLE IF EXISTS refresh_token;
-DROP TABLE IF EXISTS user_account CASCADE;
+-- Add name column to user_account if absent (initial schema may have it already)
+ALTER TABLE user_account ADD COLUMN IF NOT EXISTS name TEXT;
 
-CREATE TABLE user_account (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email         TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
-);
-
-CREATE TABLE devices (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id       UUID NOT NULL REFERENCES user_account(id) ON DELETE CASCADE,
+-- devices table (new)
+CREATE TABLE IF NOT EXISTS devices (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    user_id       TEXT NOT NULL REFERENCES user_account(id) ON DELETE CASCADE,
     name          TEXT NOT NULL,
     os            TEXT NOT NULL,
     app_version   TEXT NOT NULL,
@@ -25,10 +17,12 @@ CREATE TABLE devices (
 
 CREATE INDEX IF NOT EXISTS idx_devices_user_revoked ON devices(user_id, revoked_at);
 
+-- refresh_token: rebuild to add device_id FK
+DROP TABLE IF EXISTS refresh_token;
 CREATE TABLE refresh_token (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL REFERENCES user_account(id) ON DELETE CASCADE,
-    device_id   UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    user_id     TEXT NOT NULL REFERENCES user_account(id) ON DELETE CASCADE,
+    device_id   TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
     token_hash  TEXT UNIQUE NOT NULL,
     expires_at  TEXT NOT NULL,
     revoked_at  TEXT,

@@ -29,13 +29,12 @@ pub async fn manifest(
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<ManifestResp>, (StatusCode, String)> {
     let user_id = extract_auth(&headers)?;
-    let user_uuid = uuid::Uuid::parse_str(&user_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("user_id parse: {e}")))?;
+    let user_uuid_for_log_only: String = user_id.clone();
 
     let row = sqlx::query_as::<_, (i32, i64, Option<String>)>(
         "SELECT schema_version, server_revision, last_updated FROM sync_manifest WHERE user_id = $1",
     )
-    .bind(user_uuid)
+    .bind(&user_id)
     .fetch_optional(&*pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query: {e}")))?;
@@ -54,7 +53,7 @@ pub async fn manifest(
          VALUES ($1, 1, 0, $2)
          ON CONFLICT (user_id) DO NOTHING",
     )
-    .bind(user_uuid)
+    .bind(&user_id)
     .bind(&now)
     .execute(&*pool)
     .await
@@ -103,16 +102,14 @@ pub async fn push(
     Json(req): Json<PushReq>,
 ) -> Result<Json<PushResp>, (StatusCode, String)> {
     let user_id = extract_auth(&headers)?;
-    let user_uuid = uuid::Uuid::parse_str(&user_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("user_id: {e}")))?;
-    let device_uuid = uuid::Uuid::parse_str(&req.device_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("device_id: {e}")))?;
+    let user_uuid_for_log_only: String = user_id.clone();
+    let device_uuid_for_log_only: String = req.device_id.clone();
 
     let device = sqlx::query_as::<_, (Option<String>,)>(
         "SELECT revoked_at FROM devices WHERE id = $1 AND user_id = $2",
     )
-    .bind(device_uuid)
-    .bind(user_uuid)
+    .bind(&req.device_id)
+    .bind(&user_id)
     .fetch_optional(&*pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("device: {e}")))?
@@ -176,7 +173,7 @@ pub async fn push(
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tx: {e}")))?;
 
             sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-                .bind(device_uuid.to_string())
+                .bind(&req.device_id)
                 .execute(&mut *tx)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("set_config: {e}")))?;
@@ -191,7 +188,7 @@ pub async fn push(
                     table
                 ))
                 .bind(&row_id)
-                .bind(user_uuid)
+                .bind(&user_id)
                 .fetch_optional(&mut *tx)
                 .await
                 .map_err(|e| {
@@ -222,7 +219,7 @@ pub async fn push(
                         table
                     ))
                     .bind(&row_id)
-                    .bind(user_uuid)
+                    .bind(&user_id)
                     .execute(&mut *tx)
                     .await
                     .map_err(|e| {
@@ -289,7 +286,7 @@ pub async fn push(
 
     let server_revision: i64 =
         sqlx::query_scalar("SELECT server_revision FROM sync_manifest WHERE user_id = $1")
-            .bind(user_uuid)
+            .bind(&user_id)
             .fetch_optional(&*pool)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("rev query: {e}")))?
@@ -334,8 +331,7 @@ pub async fn pull(
     Json(req): Json<PullReq>,
 ) -> Result<Json<PullResp>, (StatusCode, String)> {
     let user_id = extract_auth(&headers)?;
-    let user_uuid = uuid::Uuid::parse_str(&user_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("user_id: {e}")))?;
+    let user_uuid_for_log_only: String = user_id.clone();
     let limit = req.limit.unwrap_or(500).min(1000);
 
     let rows = sqlx::query_as::<_, (String, String, String, Option<Value>, i64)>(
@@ -345,7 +341,7 @@ pub async fn pull(
          ORDER BY server_revision ASC
          LIMIT $3",
     )
-    .bind(user_uuid)
+    .bind(&user_id)
     .bind(req.since_revision)
     .bind(limit + 1)
     .fetch_all(&*pool)
@@ -368,7 +364,7 @@ pub async fn pull(
          SET last_pulled_revision = EXCLUDED.last_pulled_revision, \
              last_sync_at = EXCLUDED.last_sync_at",
     )
-    .bind(user_uuid)
+    .bind(&user_id)
     .bind(latest_revision)
     .bind(&now)
     .execute(&*pool)
