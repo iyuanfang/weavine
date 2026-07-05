@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Action, Event, Interaction } from '../lib/adapter/types';
+import type { Action, Event, Interaction, UpdateActionInput } from '../lib/adapter/types';
 
 // Window helpers — local time, no UTC confusion.
 function startOfDay(d: Date): Date {
@@ -32,9 +32,24 @@ function formatDate(d: Date): string {
   return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric' });
 }
 
+function relativeDueLabel(dueAt: Date, now: Date): string {
+  const ms = dueAt.getTime() - now.getTime();
+  const hours = Math.round(ms / 3_600_000);
+  const dayDiff = Math.round(ms / 86_400_000);
+  if (ms < 0) {
+    if (hours < -23) return `已过期 ${Math.abs(dayDiff)} 天`;
+    return `已过期 ${Math.abs(hours)} 小时`;
+  }
+  if (dayDiff === 0) return hours <= 1 ? '1 小时内' : `${hours} 小时后`;
+  if (dayDiff === 1) return `明天 ${formatTime(dueAt)}`;
+  if (dayDiff === 2) return `后天 ${formatTime(dueAt)}`;
+  return formatDate(dueAt);
+}
+
 export function TodayPage() {
   const adapter = useAdapter();
   const ownerId = useOwnerId();
+  const queryClient = useQueryClient();
 
   // Fetch the three feeds in parallel. We over-fetch slightly
   // (200 actions, 10 events, 20 interactions) and then filter
@@ -65,6 +80,17 @@ export function TodayPage() {
         limit: 20,
       }),
     enabled: Boolean(ownerId),
+  });
+
+  const toggleDoneMutation = useMutation({
+    mutationFn: (input: { id: string; status: 'done' | 'open' }) =>
+      adapter.actions.update({
+        id: input.id,
+        status: input.status,
+      } as UpdateActionInput),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['actions', ownerId] });
+    },
   });
 
   if (!ownerId) {
@@ -146,7 +172,16 @@ export function TodayPage() {
           marginBottom: 32,
         }}
       >
-        <div className="card card--accent" style={{ padding: '20px 22px' }}>
+        <Link
+          to="/actions?from=/today"
+          className="card card--accent"
+          style={{
+            padding: '20px 22px',
+            textDecoration: 'none',
+            color: 'inherit',
+            display: 'block',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 'var(--text-md)' }}>🎯</span>
             <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
@@ -165,8 +200,17 @@ export function TodayPage() {
               全部按时
             </div>
           )}
-        </div>
-        <div className="card" style={{ padding: '20px 22px' }}>
+        </Link>
+        <Link
+          to="/calendar?from=/today"
+          className="card"
+          style={{
+            padding: '20px 22px',
+            textDecoration: 'none',
+            color: 'inherit',
+            display: 'block',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 'var(--text-md)' }}>📅</span>
             <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
@@ -179,8 +223,17 @@ export function TodayPage() {
           <div className="text-xs text-muted" style={{ marginTop: 4 }}>
             接下来 3 天
           </div>
-        </div>
-        <div className="card" style={{ padding: '20px 22px' }}>
+        </Link>
+        <Link
+          to="/contacts?from=/today"
+          className="card"
+          style={{
+            padding: '20px 22px',
+            textDecoration: 'none',
+            color: 'inherit',
+            display: 'block',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 'var(--text-md)' }}>💬</span>
             <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
@@ -193,7 +246,7 @@ export function TodayPage() {
           <div className="text-xs text-muted" style={{ marginTop: 4 }}>
             最近 7 天
           </div>
-        </div>
+        </Link>
       </div>
 
       <section className="section">
@@ -201,7 +254,16 @@ export function TodayPage() {
         {isLoading ? (
           <Skeleton />
         ) : todayDoActions.length > 0 ? (
-          todayDoActions.map((a) => <ActionCard key={a.id} action={a} now={now} />)
+          todayDoActions.map((a) => (
+            <ActionCard
+              key={a.id}
+              action={a}
+              now={now}
+              onToggleDone={(status) =>
+                toggleDoneMutation.mutate({ id: a.id, status })
+              }
+            />
+          ))
         ) : (
           <div className="empty-state">
             <h3 className="empty-state__title">🎉 今天没有到期的事</h3>
@@ -266,16 +328,104 @@ function Skeleton() {
   return <div className="loading">加载中</div>;
 }
 
-function ActionCard({ action, now }: { action: Action; now: Date }) {
+function ActionCard({
+  action,
+  now,
+  onToggleDone,
+}: {
+  action: Action;
+  now: Date;
+  onToggleDone: (status: 'done' | 'open') => void;
+}) {
   const dueAt = new Date(action.due_at!);
   const isOverdue = dueAt < now;
+  const isDone = action.status === 'done';
   const tone = isOverdue ? 'overdue' : 'today';
-  const subtitle = `${isOverdue ? '已过期 · ' : '今天 '}${formatDate(dueAt)} ${formatTime(dueAt)}`;
+
   return (
-    <div className={`row-card row-card--${tone}`}>
-      <span style={{ fontSize: 'var(--text-lg)' }}>{isOverdue ? '⏰' : '📌'}</span>
-      <span className="row-card__title">{action.title}</span>
-      <span className="row-card__meta">{subtitle}</span>
+    <div
+      className={`row-card row-card--${tone}`}
+      style={{ opacity: isDone ? 0.55 : 1 }}
+    >
+      <button
+        type="button"
+        aria-label={isDone ? '标记未完成' : '标记完成'}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onToggleDone(isDone ? 'open' : 'done');
+        }}
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 5,
+          border: `1.5px solid ${isDone ? 'var(--accent)' : 'var(--border-strong)'}`,
+          background: isDone ? 'var(--accent)' : '#fff',
+          cursor: 'pointer',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontSize: 'var(--text-xs)',
+          fontWeight: 700,
+          transition: 'all var(--transition)',
+        }}
+      >
+        {isDone && '✓'}
+      </button>
+
+      <Link
+        to={`/actions/${action.id}?from=/today`}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          textDecoration: 'none',
+          color: 'inherit',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <span style={{ fontSize: 'var(--text-lg)', flexShrink: 0 }}>
+          {isOverdue ? '⏰' : '📌'}
+        </span>
+        <span
+          className="row-card__title"
+          style={{
+            textDecoration: isDone ? 'line-through' : 'none',
+            color: isDone ? 'var(--muted)' : 'var(--fg)',
+          }}
+        >
+          {action.title}
+        </span>
+        {(action.project_title || action.contact_nickname) && (
+          <span
+            className="text-xs text-muted"
+            style={{
+              flexShrink: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {action.project_title && <>📁 {action.project_title}</>}
+            {action.project_title && action.contact_nickname && <> · </>}
+            {action.contact_nickname && <>👤 {action.contact_nickname}</>}
+          </span>
+        )}
+        <span
+          className="row-card__meta"
+          style={{
+            color: isOverdue ? 'var(--danger)' : 'var(--muted)',
+            fontWeight: isOverdue ? 500 : 400,
+            marginLeft: 'auto',
+          }}
+        >
+          {relativeDueLabel(dueAt, now)}
+        </span>
+      </Link>
     </div>
   );
 }
@@ -288,29 +438,69 @@ function EventCard({
   baseDay: Date;
 }) {
   const startAt = new Date(event.start_at);
-  const dayLabel = formatDayLabel(startAt, baseDay);
-  const subtitle = `${dayLabel} ${formatTime(startAt)}${event.location ? ` · ${event.location}` : ''}`;
   return (
-    <div className="row-card">
+    <Link
+      to={`/events/${event.id}?from=/today`}
+      className="row-card"
+      style={{ textDecoration: 'none', color: 'inherit' }}
+    >
       <span style={{ fontSize: 'var(--text-lg)' }}>📅</span>
       <span className="row-card__title">{event.title}</span>
-      <span className="row-card__meta">{subtitle}</span>
-    </div>
+      {(event.location || event.contact_nickname || event.project_title) && (
+        <span
+          className="text-xs text-muted"
+          style={{
+            flexShrink: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {event.location && <>📍 {event.location}</>}
+          {event.location && (event.contact_nickname || event.project_title) && <> · </>}
+          {event.contact_nickname && <>👤 {event.contact_nickname}</>}
+          {event.contact_nickname && event.project_title && <> · </>}
+          {event.project_title && <>📁 {event.project_title}</>}
+        </span>
+      )}
+      <span className="row-card__meta" style={{ marginLeft: 'auto' }}>
+        {formatDayLabel(startAt, baseDay)} {formatTime(startAt)}
+      </span>
+    </Link>
   );
 }
 
 function InteractionRow({ interaction }: { interaction: Interaction }) {
   const d = new Date(interaction.occurred_at);
   return (
-    <div className="row-card">
+    <Link
+      to={`/interactions/${interaction.id}?from=/today`}
+      className="row-card"
+      style={{ textDecoration: 'none', color: 'inherit' }}
+    >
       <span style={{ fontSize: 'var(--text-lg)' }}>💬</span>
       <span className="row-card__meta">
         {d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
       </span>
       <span className="row-card__title">{interaction.summary}</span>
+      {interaction.contact_nickname && (
+        <span
+          className="text-xs text-muted"
+          style={{
+            flexShrink: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          👤 {interaction.contact_nickname}
+        </span>
+      )}
       {interaction.channel && (
         <span className="badge badge--muted">{interaction.channel}</span>
       )}
-    </div>
+    </Link>
   );
 }
