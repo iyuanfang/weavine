@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom';
-
 import { stageColor } from '../lib/projectStageColor';
 
 export interface ProjectBadgeProject {
@@ -19,10 +17,7 @@ export function ProjectBadge({ project }: ProjectBadgeProps) {
   const color = stageColor(project.template, project.stage);
 
   return (
-    <Link
-      to={`/projects/${project.id}`}
-      onClick={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
+    <span
       className="pill pill--colored"
       style={{
         '--pill-bg': `${color}14`,
@@ -33,6 +28,7 @@ export function ProjectBadge({ project }: ProjectBadgeProps) {
         maxWidth: 160,
         minWidth: 0,
         flexShrink: 1,
+        cursor: 'default',
       } as React.CSSProperties}
     >
       <span
@@ -50,6 +46,6 @@ export function ProjectBadge({ project }: ProjectBadgeProps) {
       >
         {project.title}
       </span>
-    </Link>
+    </span>
   );
 }

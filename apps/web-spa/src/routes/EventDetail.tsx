@@ -163,12 +163,12 @@ export function EventDetail() {
                 联系人
               </div>
               {eventQuery.data?.contact_id ? (
-                <Link
-                  to={`/contacts/${eventQuery.data.contact_id}?from=${encodeURIComponent(fromParam || `/events/${id}`)}`}
+                <span
                   className="tag-chip tag-chip--active"
+                  style={{ cursor: 'default' }}
                 >
                   {eventQuery.data.contact_nickname ?? '?'}
-                </Link>
+                </span>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}
@@ -177,13 +177,13 @@ export function EventDetail() {
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 项目
               </div>
-              {eventQuery.data?.project_id && eventQuery.data.project_title ? (
-                <Link
-                  to={`/projects/${eventQuery.data.project_id}?from=${encodeURIComponent(fromParam || `/events/${id}`)}`}
+{eventQuery.data?.project_id && eventQuery.data.project_title ? (
+                <span
                   className="tag-chip tag-chip--active"
+                  style={{ cursor: 'default' }}
                 >
                   {eventQuery.data.project_title}
-                </Link>
+                </span>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}

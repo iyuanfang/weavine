@@ -208,12 +208,12 @@ export function ActionDetail() {
                 关联联系人
               </div>
               {action.contact_id ? (
-                <Link
-                  to={`/contacts/${action.contact_id}?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
+                <span
                   className="tag-chip tag-chip--active"
+                  style={{ cursor: 'default' }}
                 >
                   {action.contact_nickname ?? '?'}
-                </Link>
+                </span>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}
@@ -223,12 +223,12 @@ export function ActionDetail() {
                 关联项目
               </div>
               {projectQuery.data ? (
-                <Link
-                  to={`/projects/${projectQuery.data.id}?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
+                <span
                   className="tag-chip tag-chip--active"
+                  style={{ cursor: 'default' }}
                 >
                   {projectQuery.data.title}
-                </Link>
+                </span>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}

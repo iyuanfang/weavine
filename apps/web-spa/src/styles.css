@@ -1221,7 +1221,7 @@ textarea.input-base {
   border: 1px solid var(--pill-border, transparent);
 }
 
-/* ── Contact badge (clickable chip with colored dot + name) ───── */
+/* ── Contact badge (display-only chip with colored dot + name) ── */
 
 .contact-badge {
   display: inline-flex;
@@ -1238,11 +1238,7 @@ textarea.input-base {
   max-width: 160px;
   min-width: 0;
   flex-shrink: 1;
-  transition: background var(--transition), border-color var(--transition);
-}
-.contact-badge:hover {
-  background: var(--bg-subtle, #e5e7eb);
-  border-color: var(--border-strong);
+  cursor: default;
 }
 .contact-badge__marker {
   width: 8px;
