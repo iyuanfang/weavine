@@ -665,7 +665,7 @@ export function ProjectDetail() {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                      <Link to={`/contacts/${c.id}`} style={{ flex: 1, minWidth: 0 }}>
+                      <Link to={`/contacts/${c.id}?from=/projects/${id}`} style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--accent)' }}>
                           {c.nickname}
                         </div>

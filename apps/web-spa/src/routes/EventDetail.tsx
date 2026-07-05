@@ -164,7 +164,7 @@ export function EventDetail() {
               </div>
               {eventQuery.data?.contact_id ? (
                 <Link
-                  to={`/contacts/${eventQuery.data.contact_id}`}
+                  to={`/contacts/${eventQuery.data.contact_id}?from=${encodeURIComponent(fromParam || `/events/${id}`)}`}
                   className="tag-chip tag-chip--active"
                 >
                   {eventQuery.data.contact_nickname ?? '?'}
@@ -179,7 +179,7 @@ export function EventDetail() {
               </div>
               {eventQuery.data?.project_id && eventQuery.data.project_title ? (
                 <Link
-                  to={`/projects/${eventQuery.data.project_id}`}
+                  to={`/projects/${eventQuery.data.project_id}?from=${encodeURIComponent(fromParam || `/events/${id}`)}`}
                   className="tag-chip tag-chip--active"
                 >
                   {eventQuery.data.project_title}

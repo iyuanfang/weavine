@@ -209,7 +209,7 @@ export function ActionDetail() {
               </div>
               {action.contact_id ? (
                 <Link
-                  to={`/contacts/${action.contact_id}`}
+                  to={`/contacts/${action.contact_id}?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
                   className="tag-chip tag-chip--active"
                 >
                   {action.contact_nickname ?? '?'}
@@ -224,7 +224,7 @@ export function ActionDetail() {
               </div>
               {projectQuery.data ? (
                 <Link
-                  to={`/projects/${projectQuery.data.id}`}
+                  to={`/projects/${projectQuery.data.id}?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
                   className="tag-chip tag-chip--active"
                 >
                   {projectQuery.data.title}

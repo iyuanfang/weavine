@@ -121,7 +121,7 @@ export function EventNew() {
           <span className="badge" style={{ background: '#eef2ff', color: '#4338ca', marginRight: 8 }}>
             📁 项目
           </span>
-          <Link to={`/projects/${linkedProject.id}`} style={{ fontWeight: 600 }}>
+          <Link to={`/projects/${linkedProject.id}?from=${encodeURIComponent(fromParam || '/events')}`} style={{ fontWeight: 600 }}>
             {linkedProject.title}
           </Link>
           <span style={{ color: 'var(--muted)', marginLeft: 8 }}>· {linkedProject.stage}</span>
