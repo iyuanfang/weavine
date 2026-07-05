@@ -426,44 +426,63 @@ export function Calendar() {
                             >
                               {icon}
                             </span>
-                            <span className="row-card__title">{event.title}</span>
-                            <span
-                              className="cluster"
-                              style={{ minWidth: 0 }}
+                            <div
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                display: 'grid',
+                                gap: 4,
+                              }}
                             >
-                              <span className="row-card__meta">{subtitle}</span>
-                              <span
+                              <div
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 2,
-                                  color,
-                                  fontWeight: 500,
+                                  fontSize: 'var(--text-md)',
+                                  fontWeight: 600,
+                                  letterSpacing: 'var(--tracking-normal)',
+                                  color: 'var(--fg)',
+                                  overflowWrap: 'anywhere',
                                 }}
                               >
-                                <span style={{ fontSize: 'var(--text-xs)' }}>{icon}</span>
-                                {meta.label}
-                              </span>
-                              {event.contact_id && event.contact_nickname && (
-                                <ContactBadge
-                                  contact={{
-                                    id: event.contact_id,
-                                    nickname: event.contact_nickname,
-                                    name: null,
+                                {event.title}
+                              </div>
+                              <div
+                                className="cluster"
+                                style={{ minWidth: 0 }}
+                              >
+                                <span className="row-card__meta">{subtitle}</span>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 2,
+                                    color,
+                                    fontWeight: 500,
                                   }}
-                                />
-                              )}
-                              {event.project_id && event.project_title && (
-                                <ProjectBadge
-                                  project={{
-                                    id: event.project_id,
-                                    title: event.project_title,
-                                    template: 'general',
-                                    stage: 'planning',
-                                  }}
-                                />
-                              )}
-                            </span>
+                                >
+                                  <span style={{ fontSize: 'var(--text-xs)' }}>{icon}</span>
+                                  {meta.label}
+                                </span>
+                                {event.contact_id && event.contact_nickname && (
+                                  <ContactBadge
+                                    contact={{
+                                      id: event.contact_id,
+                                      nickname: event.contact_nickname,
+                                      name: null,
+                                    }}
+                                  />
+                                )}
+                                {event.project_id && event.project_title && (
+                                  <ProjectBadge
+                                    project={{
+                                      id: event.project_id,
+                                      title: event.project_title,
+                                      template: 'general',
+                                      stage: 'planning',
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </div>
                             <button
                               type="button"
                               onClick={(e) => {
