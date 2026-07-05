@@ -266,54 +266,46 @@ function ProjectCard({ project: p }: { project: Project }) {
       >
         📁
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="row-card__title">{p.title}</span>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span className="row-card__title">{p.title}</span>
+        <span
+          className="badge"
+          style={{
+            background: `${templateColor}14`,
+            color: templateColor,
+            border: `1px solid ${templateColor}30`,
+            fontSize: 'var(--text-xs)',
+          }}
+        >
+          {templateLabel}
+        </span>
+        <span
+          className="badge"
+          style={{
+            background: '#dcfce7',
+            color: '#15803d',
+            fontSize: 'var(--text-xs)',
+            visibility: p.completed_at ? 'visible' : 'hidden',
+          }}
+        >
+          ✅ 已完成
+        </span>
+        <span
+          className="row-card__meta"
+          style={{ fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+        >
           <span
-            className="badge"
-            style={{
-              background: `${templateColor}14`,
-              color: templateColor,
-              border: `1px solid ${templateColor}30`,
-              fontSize: 'var(--text-xs)',
-            }}
-          >
-            {templateLabel}
+            aria-hidden
+            className="dot dot--sm"
+            style={{ ...stageDotStyle(p.template, p.stage) }}
+          />
+          {p.stage}
+        </span>
+        {p.due_at && (
+          <span className="row-card__meta" style={{ fontSize: 'var(--text-sm)' }}>
+            截止: {new Date(p.due_at).toLocaleDateString('zh-CN')}
           </span>
-          <span
-            className="badge"
-            style={{
-              background: '#dcfce7',
-              color: '#15803d',
-              fontSize: 'var(--text-xs)',
-              visibility: p.completed_at ? 'visible' : 'hidden',
-            }}
-          >
-            ✅ 已完成
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-          <span
-            className="row-card__meta"
-            style={{ fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-          >
-            阶段:
-            <span
-              aria-hidden
-              className="dot dot--sm"
-              style={{ marginLeft: 2, ...stageDotStyle(p.template, p.stage) }}
-            />
-            {p.stage}
-          </span>
-          {p.due_at && (
-            <>
-              <span className="row-card__meta">·</span>
-              <span className="row-card__meta" style={{ fontSize: 'var(--text-sm)' }}>
-                截止: {new Date(p.due_at).toLocaleDateString('zh-CN')}
-              </span>
-            </>
-          )}
-        </div>
+        )}
       </div>
       <span style={{ fontSize: 'var(--text-base)', color: 'var(--muted)' }}>→</span>
     </Link>
