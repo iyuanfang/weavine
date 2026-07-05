@@ -172,25 +172,13 @@ export function ContactDetail() {
         }}
       >
         <div
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: '50%',
-            background: avatarBg(displayName),
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: 28,
-            flexShrink: 0,
-            boxShadow: 'var(--shadow-sm)',
-          }}
+          className="avatar avatar--lg"
+          style={{ background: avatarBg(displayName) }}
         >
           {displayName.slice(0, 1).toUpperCase()}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div className="cluster cluster--loose">
             <h1 className="page-title" style={{ margin: 0 }}>
               {displayName}
             </h1>
@@ -201,7 +189,7 @@ export function ContactDetail() {
             )}
           </div>
           {contact.tags.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <div className="cluster" style={{ marginTop: 8 }}>
               {contact.tags.map((tag) => (
                 <Link
                   key={tag.id}
@@ -259,7 +247,7 @@ export function ContactDetail() {
                   <div className="text-xs text-muted" style={{ marginBottom: 2 }}>
                     {k}
                   </div>
-                  <div style={{ fontSize: 14 }}>{v}</div>
+                  <div style={{ fontSize: 'var(--text-base)' }}>{v}</div>
                 </div>
               ))}
             </div>
@@ -271,7 +259,7 @@ export function ContactDetail() {
         <section className="section">
           <h2 className="section__title">备注</h2>
           <div className="card" style={{ marginTop: 10 }}>
-            <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+            <p style={{ margin: 0, fontSize: 'var(--text-base)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
               {contact.notes}
             </p>
           </div>
@@ -298,7 +286,7 @@ export function ContactDetail() {
                 className="row-card"
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
-                <span style={{ fontSize: 18 }}>📅</span>
+                <span style={{ fontSize: 'var(--text-lg)' }}>📅</span>
                 <span className="row-card__title">{e.title}</span>
                 <span className="row-card__meta">
                   {new Date(e.start_at).toLocaleDateString('zh-CN', {
@@ -332,7 +320,7 @@ export function ContactDetail() {
                 className="row-card"
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
-                <span style={{ fontSize: 18 }}>{a.status === 'done' ? '✅' : '📌'}</span>
+                <span style={{ fontSize: 'var(--text-lg)' }}>{a.status === 'done' ? '✅' : '📌'}</span>
                 <span
                   className="row-card__title"
                   style={{
@@ -391,7 +379,7 @@ export function ContactDetail() {
           <div style={{ display: 'grid', gap: 6 }}>
             {interactions.map((i) => (
               <div key={i.id} className="row-card">
-                <span style={{ fontSize: 18 }}>💬</span>
+                <span style={{ fontSize: 'var(--text-lg)' }}>💬</span>
                 <span className="row-card__meta">
                   {new Date(i.occurred_at).toLocaleDateString('zh-CN', {
                     month: 'numeric',

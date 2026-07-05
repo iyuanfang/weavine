@@ -129,7 +129,7 @@ export function SearchablePicker({
             style={{
               padding: '14px 12px',
               color: 'var(--muted)',
-              fontSize: 13,
+              fontSize: 'var(--text-base)',
               textAlign: 'center',
             }}
           >
@@ -154,7 +154,7 @@ export function SearchablePicker({
                   borderLeft: isSel
                     ? '3px solid var(--accent)'
                     : '3px solid transparent',
-                  fontSize: 13,
+                  fontSize: 'var(--text-base)',
                 }}
               >
                 <div style={{ fontWeight: isSel ? 600 : 400 }}>
@@ -163,7 +163,7 @@ export function SearchablePicker({
                 {opt.sublabel && (
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 'var(--text-sm)',
                       color: 'var(--muted)',
                       marginTop: 2,
                     }}
@@ -225,14 +225,14 @@ export function SearchablePicker({
               background: 'transparent',
               cursor: 'pointer',
               color: 'var(--muted)',
-              fontSize: 14,
+              fontSize: 'var(--text-base)',
               padding: 4,
             }}
           >
             ✕
           </button>
         )}
-        <span style={{ color: 'var(--muted)', fontSize: 12 }}>▾</span>
+        <span style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>▾</span>
       </div>
 
       {createPortal(dropdown, document.body)}

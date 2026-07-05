@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
+import { stageDotStyle } from '../lib/projectStageColor';
 import type { CreateProjectInput } from '../lib/adapter/types';
 
 const TEMPLATES = [
@@ -21,6 +22,7 @@ export function ProjectNew() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [template, setTemplate] = useState('general');
+  const [stage, setStage] = useState<string>('');
   const [startAt, setStartAt] = useState('');
   const [dueAt, setDueAt] = useState('');
 
@@ -30,6 +32,17 @@ export function ProjectNew() {
     enabled: !!template,
     staleTime: Infinity,
   });
+
+  useEffect(() => {
+    const list = stagesQuery.data;
+    setStage((prev) => {
+      if (list && list.length > 0) {
+        if (prev && list.includes(prev)) return prev;
+        return list[0];
+      }
+      return '';
+    });
+  }, [template, stagesQuery.data]);
 
   const createMutation = useMutation({
     mutationFn: (input: CreateProjectInput) => adapter.projects.create(input),
@@ -47,6 +60,7 @@ export function ProjectNew() {
       title: title.trim(),
       description: description.trim() || null,
       template,
+      stage: stage || null,
       start_at: startAt || null,
       due_at: dueAt || null,
     });
@@ -71,7 +85,7 @@ export function ProjectNew() {
         <div className="error-banner" role="alert">
           <div>
             <strong>保存失败</strong>
-            <div style={{ marginTop: 2, fontSize: 12 }}>
+            <div style={{ marginTop: 2, fontSize: 'var(--text-sm)' }}>
               {String(createMutation.error?.message ?? '未知错误')}
             </div>
           </div>
@@ -117,7 +131,7 @@ export function ProjectNew() {
               {startAt && dueAt && new Date(startAt) > new Date(dueAt) && (
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 'var(--text-sm)',
                     color: 'var(--warn, #b45309)',
                     background: '#fef3c7',
                     border: '1px solid #fde68a',
@@ -144,40 +158,66 @@ export function ProjectNew() {
                 </select>
                 {stages.length > 0 && (
                   <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: 'var(--muted)',
-                      display: 'flex',
-                      gap: 6,
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
+                    className="cluster"
+                    style={{ marginTop: 8, fontSize: 'var(--text-sm)', color: 'var(--muted)' }}
                   >
                     <span>阶段流程：</span>
                     {stages.map((s, i) => (
                       <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span
+                          className="pill pill--colored"
                           style={{
-                            display: 'inline-block',
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            background: 'var(--surface-soft, #f3f4f6)',
-                            color: 'var(--fg)',
-                            fontSize: 11,
+                            '--pill-bg': 'var(--surface-soft, #f3f4f6)',
+                            '--pill-border': 'var(--border)',
+                            '--pill-fg': 'var(--fg)',
                             fontWeight: 500,
-                            border: '1px solid var(--border)',
-                          }}
+                          } as React.CSSProperties}
                         >
                           {s}
                         </span>
                         {i < stages.length - 1 && (
-                          <span style={{ color: 'var(--muted)', fontSize: 10 }}>→</span>
+                          <span style={{ color: 'var(--muted)', fontSize: 'var(--text-xs)' }}>→</span>
                         )}
                       </span>
                     ))}
                   </div>
                 )}
+                <div style={{ marginTop: 12 }}>
+                  <label className="input-label">起始阶段</label>
+                  <select
+                    className="input-base"
+                    style={{ cursor: 'pointer' }}
+                    value={stage}
+                    onChange={(e) => setStage(e.target.value)}
+                    disabled={stagesQuery.isLoading || stages.length === 0}
+                  >
+                    {stages.length === 0 && <option value="">（加载中…）</option>}
+                    {stages.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  {stage && (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontSize: 'var(--text-sm)',
+                        color: 'var(--muted)',
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="dot dot--sm"
+                        style={stageDotStyle(template, stage)}
+                      />
+                      当前选择：{stage}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -139,7 +139,7 @@ export function ActionEdit() {
       <PageHeader title="编辑待办" />
 
       {linkedProject && (
-        <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 13 }}>
+        <div className="card" style={{ padding: 12, marginBottom: 16, fontSize: 'var(--text-base)' }}>
           <span className="badge" style={{ background: '#eef2ff', color: '#4338ca', marginRight: 8 }}>
             📁 项目
           </span>
@@ -154,7 +154,7 @@ export function ActionEdit() {
         <div className="error-banner">
           <div>
             <strong>保存失败</strong>
-            <div style={{ marginTop: 2, fontSize: 12 }}>
+            <div style={{ marginTop: 2, fontSize: 'var(--text-sm)' }}>
               {String(updateMutation.error?.message ?? '未知错误')}
             </div>
           </div>

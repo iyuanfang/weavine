@@ -17,12 +17,13 @@ import {
 } from '@dnd-kit/core';
 
 import { PageHeader } from '../components/PageHeader';
+import { ProjectBadge } from '../components/ProjectBadge';
 import { statusMeta } from '../components/StatusPicker';
 import { priorityMeta } from '../components/PriorityPicker';
 import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Action, UpdateActionInput } from '../lib/adapter/types';
+import type { Action, Project, UpdateActionInput } from '../lib/adapter/types';
 
 const PRIORITY_OPTIONS = [
   { value: 'all', label: '全部' },
@@ -129,6 +130,21 @@ export function ActionsList() {
     acc[c.id] = { id: c.id, nickname: c.nickname, name: c.name };
     return acc;
   }, {});
+
+  const projectsQuery = useQuery({
+    queryKey: ['projects', ownerId],
+    queryFn: () =>
+      adapter.projects.list({ owner_id: ownerId!, archived: 'false', limit: 500 }),
+    enabled: !!ownerId,
+  });
+
+  const projectMap = (projectsQuery.data ?? []).reduce<Record<string, Project>>(
+    (acc, p) => {
+      if (!p.archived_at) acc[p.id] = p;
+      return acc;
+    },
+    {},
+  );
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateActionInput) => adapter.actions.update(input),
@@ -307,7 +323,7 @@ export function ActionsList() {
           className="filter-panel__item"
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 14 }}>●</span>
+            <span style={{ fontSize: 'var(--text-base)' }}>●</span>
             <span>展开全部</span>
           </span>
         </button>
@@ -377,7 +393,7 @@ export function ActionsList() {
         <div
           style={{
             padding: '4px 10px',
-            fontSize: 13,
+            fontSize: 'var(--text-base)',
             color: 'var(--fg-soft)',
           }}
         >
@@ -411,7 +427,7 @@ export function ActionsList() {
             <div
               style={{
                 marginTop: 8,
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 color: 'var(--danger)',
                 fontWeight: 500,
               }}
@@ -521,6 +537,7 @@ export function ActionsList() {
                       onToggle={toggle}
                       overdueInSection={overdueInSection}
                       contactMap={contactMap}
+                      projectMap={projectMap}
                       updateMutation={updateMutation}
                       deleteMutation={deleteMutation}
                       activeDragId={activeDragId}
@@ -547,6 +564,7 @@ export function ActionsList() {
                           ? contactMap[activeDragAction.contact_id] ?? null
                           : null
                       }
+                      projectMap={projectMap}
                       onToggleDone={() => {}}
                       onDelete={() => {}}
                       isUpdating={false}
@@ -567,6 +585,7 @@ export function ActionsList() {
 type ActionRowBodyProps = {
   action: Action;
   contact: { id: string; nickname: string; name: string | null } | null;
+  projectMap: Record<string, Project>;
   onToggleDone: () => void;
   onDelete: () => void;
   isUpdating: boolean;
@@ -577,6 +596,7 @@ type ActionRowBodyProps = {
 function ActionRowBody({
   action,
   contact,
+  projectMap,
   onToggleDone,
   onDelete,
   isUpdating,
@@ -646,7 +666,7 @@ function ActionRowBody({
           alignItems: 'center',
           justifyContent: 'center',
           color: '#fff',
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           fontWeight: 700,
           opacity: isUpdating ? 0.6 : 1,
           transition: `all var(--transition)`,
@@ -670,25 +690,25 @@ function ActionRowBody({
       >
         <div
           style={{
-            fontSize: 13,
-            fontWeight: 500,
+            fontSize: 'var(--text-md)',
+            fontWeight: 600,
             textDecoration: isDone ? 'line-through' : 'none',
             color: isDone ? 'var(--muted)' : 'var(--fg)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            lineHeight: 1.35,
+            letterSpacing: '-0.005em',
           }}
         >
           {action.title}
         </div>
         <div
+          className="cluster"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 11,
+            fontSize: 'var(--text-sm)',
             color: 'var(--muted)',
-            flexWrap: 'wrap',
+            lineHeight: 1.4,
           }}
         >
           {dueLabel && (
@@ -716,41 +736,30 @@ function ActionRowBody({
                 fontWeight: 500,
               }}
             >
-              <span style={{ fontSize: 10 }}>{category.icon}</span>
+              <span style={{ fontSize: 'var(--text-xs)' }}>{category.icon}</span>
               {category.label}
             </span>
           )}
           {displayName && (
             <span style={{ color: 'var(--accent)' }}>{displayName}</span>
           )}
+          {action.project_id && (
+            <ProjectBadge project={projectMap[action.project_id] ?? null} />
+          )}
         </div>
       </Link>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <div className="cluster cluster--row" style={{ flexShrink: 0 }}>
         <span
           title={`优先级: ${pri.label}`}
+          className="pill pill--colored"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 3,
-            padding: '2px 8px',
-            borderRadius: 999,
-            border: `1px solid ${pri.color}40`,
-            background: `${pri.color}14`,
-            fontSize: 10,
-            fontWeight: 600,
-            color: pri.color,
-            whiteSpace: 'nowrap',
-          }}
+            '--pill-bg': `${pri.color}14`,
+            '--pill-border': `${pri.color}40`,
+            '--pill-fg': pri.color,
+          } as React.CSSProperties}
         >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: pri.color,
-            }}
-          />
+          <span className="dot dot--xs" style={{ background: pri.color }} />
           {pri.label}
         </span>
         <Link
@@ -758,7 +767,7 @@ function ActionRowBody({
           className="btn btn-sm btn-ghost"
           style={{
             padding: '2px 6px',
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             opacity: hovered ? 1 : 0.55,
             transition: `opacity var(--transition)`,
           }}
@@ -781,7 +790,7 @@ function ActionRowBody({
           className="btn btn-sm btn-ghost"
           style={{
             padding: '2px 6px',
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             color: 'var(--danger)',
             opacity: hovered ? 1 : 0,
             transition: `opacity var(--transition)`,
@@ -798,12 +807,14 @@ function ActionRowBody({
 function DraggableActionRow({
   action,
   contact,
+  projectMap,
   onToggleDone,
   onDelete,
   isUpdating,
 }: {
   action: Action;
   contact: { id: string; nickname: string; name: string | null } | null;
+  projectMap: Record<string, Project>;
   onToggleDone: () => void;
   onDelete: () => void;
   isUpdating: boolean;
@@ -822,6 +833,7 @@ function DraggableActionRow({
       <ActionRowBody
         action={action}
         contact={contact}
+        projectMap={projectMap}
         onToggleDone={onToggleDone}
         onDelete={onDelete}
         isUpdating={isUpdating}
@@ -840,6 +852,7 @@ type StatusSectionProps = {
   onToggle: () => void;
   overdueInSection: number;
   contactMap: Record<string, { id: string; nickname: string; name: string | null }>;
+  projectMap: Record<string, Project>;
   updateMutation: ReturnType<typeof useMutation<unknown, Error, UpdateActionInput, { prev: Action[] | undefined }>>;
   deleteMutation: ReturnType<typeof useMutation<unknown, Error, string, { prev: Action[] | undefined }>>;
   activeDragId: string | null;
@@ -853,6 +866,7 @@ function StatusSection({
   onToggle,
   overdueInSection,
   contactMap,
+  projectMap,
   updateMutation,
   deleteMutation,
   activeDragId,
@@ -894,7 +908,7 @@ function StatusSection({
               display: 'inline-block',
               transition: 'transform 160ms',
               transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0)',
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
               opacity: 0.6,
             }}
           >
@@ -908,7 +922,7 @@ function StatusSection({
           {items.length === 0 && (
             <span
               style={{
-                fontSize: 11,
+                fontSize: 'var(--text-xs)',
                 color: 'var(--muted)',
                 fontWeight: 400,
                 fontStyle: 'italic',
@@ -918,7 +932,7 @@ function StatusSection({
             </span>
           )}
           {overdueInSection > 0 && (
-            <span className="badge badge--danger" style={{ fontSize: 10, padding: '1px 6px' }}>
+            <span className="badge badge--danger" style={{ fontSize: 'var(--text-xs)', padding: '1px 6px' }}>
               {overdueInSection} 过期
             </span>
           )}
@@ -926,7 +940,7 @@ function StatusSection({
             <span
               style={{
                 marginLeft: 'auto',
-                fontSize: 11,
+                fontSize: 'var(--text-xs)',
                 color: meta.color,
                 fontWeight: 600,
               }}
@@ -944,6 +958,7 @@ function StatusSection({
               key={a.id}
               action={a}
               contact={a.contact_id ? contactMap[a.contact_id] : null}
+              projectMap={projectMap}
               onToggleDone={() =>
                 updateMutation.mutate({
                   id: a.id,
@@ -965,7 +980,7 @@ function StatusSection({
             <div
               style={{
                 padding: '12px 8px',
-                fontSize: 12,
+                fontSize: 'var(--text-sm)',
                 color: 'var(--muted)',
                 textAlign: 'center',
                 border: '1px dashed var(--border)',

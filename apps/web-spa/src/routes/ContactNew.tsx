@@ -79,7 +79,7 @@ export function ContactNew() {
         <div className="error-banner" role="alert">
           <div>
             <strong>保存失败</strong>
-            <div style={{ marginTop: 2, fontSize: 12 }}>
+            <div style={{ marginTop: 2, fontSize: 'var(--text-sm)' }}>
               {String(createMutation.error?.message ?? '未知错误')}
             </div>
           </div>

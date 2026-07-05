@@ -190,7 +190,7 @@ export function TagPicker({ selectedIds, onChange }: Props) {
       </Popover>
 
       {createMut.isError && (
-        <div className="error-banner" style={{ marginTop: 8, fontSize: 12 }}>
+        <div className="error-banner" style={{ marginTop: 8, fontSize: 'var(--text-sm)' }}>
           {String(createMut.error?.message ?? '新建标签失败')}
         </div>
       )}

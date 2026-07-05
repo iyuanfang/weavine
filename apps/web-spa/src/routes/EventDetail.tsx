@@ -67,7 +67,7 @@ export function EventDetail() {
       <PageHeader
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 24 }}>📅</span>
+            <span style={{ fontSize: 'var(--text-xl)' }}>📅</span>
             {event.title}
           </span>
         }
@@ -112,20 +112,20 @@ export function EventDetail() {
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 类型
               </div>
-              <div style={{ fontSize: 14 }}>{formatEventType(event.type) || '—'}</div>
+              <div style={{ fontSize: 'var(--text-base)' }}>{formatEventType(event.type) || '—'}</div>
             </div>
             <div>
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 开始时间
               </div>
-              <div style={{ fontSize: 14 }}>{start.toLocaleString('zh-CN')}</div>
+              <div style={{ fontSize: 'var(--text-base)' }}>{start.toLocaleString('zh-CN')}</div>
             </div>
             <div>
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 结束时间
               </div>
               {end ? (
-                <div style={{ fontSize: 14 }}>{end.toLocaleString('zh-CN')}</div>
+                <div style={{ fontSize: 'var(--text-base)' }}>{end.toLocaleString('zh-CN')}</div>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}
@@ -135,7 +135,7 @@ export function EventDetail() {
                 提前提醒
               </div>
               {event.reminder_lead_minutes != null ? (
-                <div style={{ fontSize: 14 }}>⏰ {event.reminder_lead_minutes} 分钟</div>
+                <div style={{ fontSize: 'var(--text-base)' }}>⏰ {event.reminder_lead_minutes} 分钟</div>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}
@@ -145,7 +145,7 @@ export function EventDetail() {
                 地点
               </div>
               {event.location ? (
-                <div style={{ fontSize: 14 }}>📍 {event.location}</div>
+                <div style={{ fontSize: 'var(--text-base)' }}>📍 {event.location}</div>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}
@@ -202,7 +202,7 @@ export function EventDetail() {
         <h2 className="section__title">备注</h2>
         <div className="card" style={{ marginTop: 10, padding: 16, minHeight: 60 }}>
           {event.notes ? (
-            <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+            <p style={{ margin: 0, fontSize: 'var(--text-base)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
               {event.notes}
             </p>
           ) : (

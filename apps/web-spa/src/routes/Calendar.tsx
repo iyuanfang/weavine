@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { ProjectBadge } from '../components/ProjectBadge';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
-import type { Event } from '../lib/adapter/types';
+import type { Event, Project } from '../lib/adapter/types';
 
 const TYPE_OPTIONS = [
   { value: 'all', label: '全部', icon: '●', color: '#6b7280' },
@@ -119,6 +120,21 @@ export function Calendar() {
     refetchOnMount: 'always',
   });
 
+  const projectsQuery = useQuery({
+    queryKey: ['projects', ownerId],
+    queryFn: () =>
+      adapter.projects.list({ owner_id: ownerId!, archived: 'false', limit: 500 }),
+    enabled: !!ownerId,
+  });
+
+  const projectMap = (projectsQuery.data ?? []).reduce<Record<string, Project>>(
+    (acc, p) => {
+      if (!p.archived_at) acc[p.id] = p;
+      return acc;
+    },
+    {},
+  );
+
   const deleteMutation = useMutation({
     mutationFn: (eventId: string) => adapter.events.delete(eventId),
     onSuccess: () => {
@@ -183,7 +199,7 @@ export function Calendar() {
                 type="button"
                 onClick={() => setMonthOffset(0)}
                 className="btn-ghost"
-                style={{ fontSize: 12, padding: '0 4px', color: 'var(--accent)' }}
+                style={{ fontSize: 'var(--text-sm)', padding: '0 4px', color: 'var(--accent)' }}
               >
                 回到本月
               </button>
@@ -235,7 +251,7 @@ export function Calendar() {
               >
                 ‹
               </button>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>
+              <span style={{ fontSize: 'var(--text-base)', fontWeight: 500 }}>
                 {formatMonthLabel(monthStart)}
               </span>
               <button
@@ -274,7 +290,7 @@ export function Calendar() {
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {t.value === 'all' ? (
-                      <span style={{ fontSize: 14 }}>●</span>
+                      <span style={{ fontSize: 'var(--text-base)' }}>●</span>
                     ) : (
                       <span
                         className="filter-panel__item-dot"
@@ -314,7 +330,7 @@ export function Calendar() {
                         />
                         <span
                           style={{
-                            fontSize: 13,
+                            fontSize: 'var(--text-base)',
                             fontWeight: 500,
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
@@ -328,7 +344,7 @@ export function Calendar() {
                       </span>
                       <span
                         style={{
-                          fontSize: 11,
+                          fontSize: 'var(--text-xs)',
                           color: isToday ? 'var(--warn)' : 'var(--muted)',
                           fontWeight: isToday ? 500 : 400,
                         }}
@@ -418,14 +434,24 @@ export function Calendar() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: 14,
+                                fontSize: 'var(--text-base)',
                                 flexShrink: 0,
                               }}
                             >
                               {icon}
                             </span>
                             <span className="row-card__title">{event.title}</span>
-                            <span className="row-card__meta">{subtitle}</span>
+                            <span
+                              className="cluster"
+                              style={{ minWidth: 0 }}
+                            >
+                              <span className="row-card__meta">{subtitle}</span>
+                              {event.project_id && (
+                                <ProjectBadge
+                                  project={projectMap[event.project_id] ?? null}
+                                />
+                              )}
+                            </span>
                             <button
                               type="button"
                               onClick={(e) => {
@@ -436,7 +462,7 @@ export function Calendar() {
                               className="btn btn-sm btn-ghost"
                               style={{
                                 padding: '2px 6px',
-                                fontSize: 12,
+                                fontSize: 'var(--text-sm)',
                                 opacity: hoveredId === event.id ? 1 : 0.55,
                                 transition: `opacity var(--transition)`,
                               }}
@@ -454,7 +480,7 @@ export function Calendar() {
                               className="btn btn-sm btn-ghost"
                               style={{
                                 padding: '2px 6px',
-                                fontSize: 12,
+                                fontSize: 'var(--text-sm)',
                                 color: 'var(--danger)',
                                 opacity: hoveredId === event.id ? 1 : 0,
                                 transition: `opacity var(--transition)`,

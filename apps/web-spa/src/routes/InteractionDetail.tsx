@@ -91,7 +91,7 @@ export function InteractionDetail() {
       <PageHeader
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 24 }}>💬</span>
+            <span style={{ fontSize: 'var(--text-xl)' }}>💬</span>
             互动记录
           </span>
         }
@@ -128,7 +128,7 @@ export function InteractionDetail() {
       <section className="section">
         <h2 className="section__title">摘要</h2>
         <div className="card" style={{ marginTop: 10 }}>
-          <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+          <p style={{ margin: 0, fontSize: 'var(--text-base)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
             {interaction.summary}
           </p>
         </div>

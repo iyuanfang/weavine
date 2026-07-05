@@ -57,7 +57,7 @@ export function StatusPicker({
       >
         <span style={{ marginRight: 4 }}>{meta.icon}</span>
         {meta.label}
-        <span style={{ marginLeft: 4, opacity: 0.6, fontSize: 10 }}>▾</span>
+        <span style={{ marginLeft: 4, opacity: 0.6, fontSize: 'var(--text-xs)' }}>▾</span>
       </button>
 
       <Popover
@@ -86,9 +86,9 @@ export function StatusPicker({
                 fontWeight: active ? 600 : 400,
               }}
             >
-              <span style={{ fontSize: 14 }}>{opt.icon}</span>
+              <span style={{ fontSize: 'var(--text-base)' }}>{opt.icon}</span>
               <span style={{ flex: 1 }}>{opt.label}</span>
-              {active && <span style={{ fontSize: 12 }}>✓</span>}
+              {active && <span style={{ fontSize: 'var(--text-sm)' }}>✓</span>}
             </button>
           );
         })}

@@ -148,12 +148,12 @@ export function TodayPage() {
       >
         <div className="card card--accent" style={{ padding: '20px 22px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>🎯</span>
+            <span style={{ fontSize: 'var(--text-md)' }}>🎯</span>
             <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
               待办
             </div>
           </div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
+          <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
             {todayDoActions.length}
           </div>
           {overdueCount > 0 ? (
@@ -168,12 +168,12 @@ export function TodayPage() {
         </div>
         <div className="card" style={{ padding: '20px 22px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>📅</span>
+            <span style={{ fontSize: 'var(--text-md)' }}>📅</span>
             <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
               日程
             </div>
           </div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
+          <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
             {upcomingEvents.length}
           </div>
           <div className="text-xs text-muted" style={{ marginTop: 4 }}>
@@ -182,12 +182,12 @@ export function TodayPage() {
         </div>
         <div className="card" style={{ padding: '20px 22px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>💬</span>
+            <span style={{ fontSize: 'var(--text-md)' }}>💬</span>
             <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
               互动
             </div>
           </div>
-          <div style={{ fontSize: 32, fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
+          <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
             {recentInteractions.length}
           </div>
           <div className="text-xs text-muted" style={{ marginTop: 4 }}>
@@ -273,7 +273,7 @@ function ActionCard({ action, now }: { action: Action; now: Date }) {
   const subtitle = `${isOverdue ? '已过期 · ' : '今天 '}${formatDate(dueAt)} ${formatTime(dueAt)}`;
   return (
     <div className={`row-card row-card--${tone}`}>
-      <span style={{ fontSize: 18 }}>{isOverdue ? '⏰' : '📌'}</span>
+      <span style={{ fontSize: 'var(--text-lg)' }}>{isOverdue ? '⏰' : '📌'}</span>
       <span className="row-card__title">{action.title}</span>
       <span className="row-card__meta">{subtitle}</span>
     </div>
@@ -292,7 +292,7 @@ function EventCard({
   const subtitle = `${dayLabel} ${formatTime(startAt)}${event.location ? ` · ${event.location}` : ''}`;
   return (
     <div className="row-card">
-      <span style={{ fontSize: 18 }}>📅</span>
+      <span style={{ fontSize: 'var(--text-lg)' }}>📅</span>
       <span className="row-card__title">{event.title}</span>
       <span className="row-card__meta">{subtitle}</span>
     </div>
@@ -303,7 +303,7 @@ function InteractionRow({ interaction }: { interaction: Interaction }) {
   const d = new Date(interaction.occurred_at);
   return (
     <div className="row-card">
-      <span style={{ fontSize: 18 }}>💬</span>
+      <span style={{ fontSize: 'var(--text-lg)' }}>💬</span>
       <span className="row-card__meta">
         {d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
       </span>

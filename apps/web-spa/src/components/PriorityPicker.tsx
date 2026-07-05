@@ -46,20 +46,13 @@ export function PriorityPicker({
           background: 'transparent',
           border: `1px solid ${open ? meta.color : 'transparent'}`,
           color: meta.color,
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           fontWeight: 600,
           cursor: 'pointer',
           transition: `all var(--transition)`,
         }}
       >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: meta.color,
-          }}
-        />
+        <span className="dot dot--sm" style={{ background: meta.color }} />
         {meta.label}
       </button>
 
@@ -89,16 +82,9 @@ export function PriorityPicker({
                 fontWeight: active ? 600 : 400,
               }}
             >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: opt.color,
-                }}
-              />
+              <span className="dot dot--sm" style={{ background: opt.color }} />
               <span style={{ flex: 1 }}>{opt.label}</span>
-              {active && <span style={{ fontSize: 12 }}>✓</span>}
+              {active && <span style={{ fontSize: 'var(--text-sm)' }}>✓</span>}
             </button>
           );
         })}

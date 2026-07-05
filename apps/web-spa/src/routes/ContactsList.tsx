@@ -138,7 +138,7 @@ export function ContactsList() {
                 style={{
                   background: 'transparent',
                   border: 0,
-                  fontSize: 12,
+                  fontSize: 'var(--text-sm)',
                   padding: '0 4px',
                   color: 'var(--accent)',
                   cursor: 'pointer',
@@ -183,7 +183,7 @@ export function ContactsList() {
               }`}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 14 }}>●</span>
+                <span style={{ fontSize: 'var(--text-base)' }}>●</span>
                 <span>全部</span>
               </span>
               <span className="filter-panel__count">{contacts.length}</span>
@@ -224,7 +224,7 @@ export function ContactsList() {
                   }`}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14 }}>●</span>
+                    <span style={{ fontSize: 'var(--text-base)' }}>●</span>
                     <span>全部</span>
                   </span>
                   <span className="filter-panel__count">{contacts.length}</span>
@@ -332,28 +332,15 @@ function ContactRow({
         style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}
       >
         <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: '50%',
-            background: avatarBg(displayName),
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 600,
-            fontSize: 15,
-            flexShrink: 0,
-          }}
+          className="avatar avatar--sm"
+          style={{ background: avatarBg(displayName) }}
         >
           {initials}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span className="row-card__title" style={{ fontSize: 14 }}>
-              {displayName}
-            </span>
+            <span className="row-card__title">{displayName}</span>
             {c.name && c.name !== c.nickname && (
               <span className="row-card__meta">{c.name}</span>
             )}
@@ -365,7 +352,7 @@ function ContactRow({
             )}
           </div>
           {c.tags.length > 0 && (
-            <div style={{ display: 'flex', gap: 4, marginTop: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="cluster cluster--tight" style={{ marginTop: 5 }}>
               {c.tags.slice(0, 4).map((tag) => (
                 <span
                   key={tag.id}
@@ -375,7 +362,7 @@ function ContactRow({
                     borderColor: `${tagColor(tag)}40`,
                     color: tagColor(tag),
                     padding: '1px 8px',
-                    fontSize: 11,
+                    fontSize: 'var(--text-xs)',
                   }}
                 >
                   {tag.name}
@@ -396,7 +383,7 @@ function ContactRow({
 
       <Link
         to={`/contacts/${c.id}`}
-        style={{ fontSize: 13, color: 'var(--muted)', textDecoration: 'none' }}
+        style={{ fontSize: 'var(--text-base)', color: 'var(--muted)', textDecoration: 'none' }}
       >
         →
       </Link>

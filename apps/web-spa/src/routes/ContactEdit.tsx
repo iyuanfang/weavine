@@ -109,7 +109,7 @@ export function ContactEdit() {
         <div className="error-banner">
           <div>
             <strong>保存失败</strong>
-            <div style={{ marginTop: 2, fontSize: 12 }}>
+            <div style={{ marginTop: 2, fontSize: 'var(--text-sm)' }}>
               {String(updateMutation.error?.message ?? '未知错误')}
             </div>
           </div>

@@ -70,7 +70,7 @@ export function CategoryPicker({
       >
         <span style={{ marginRight: 4 }}>{current.icon}</span>
         {current.label}
-        <span style={{ marginLeft: 4, opacity: 0.6, fontSize: 10 }}>▾</span>
+        <span style={{ marginLeft: 4, opacity: 0.6, fontSize: 'var(--text-xs)' }}>▾</span>
       </button>
 
       <Popover
@@ -97,9 +97,9 @@ export function CategoryPicker({
                 fontWeight: active ? 600 : 400,
               }}
             >
-              <span style={{ fontSize: 14 }}>{opt.icon}</span>
+              <span style={{ fontSize: 'var(--text-base)' }}>{opt.icon}</span>
               <span style={{ flex: 1 }}>{opt.label}</span>
-              {active && <span style={{ fontSize: 12 }}>✓</span>}
+              {active && <span style={{ fontSize: 'var(--text-sm)' }}>✓</span>}
             </button>
           );
         })}
@@ -119,14 +119,14 @@ export function CategoryPicker({
                 alignItems: 'center',
                 gap: 8,
                 padding: '7px 10px',
-                fontSize: 13,
+                fontSize: 'var(--text-base)',
                 color: 'var(--fg)',
                 fontWeight: 600,
               }}
             >
-              <span style={{ fontSize: 14 }}>⚪</span>
+              <span style={{ fontSize: 'var(--text-base)' }}>⚪</span>
               <span style={{ flex: 1 }}>{value}</span>
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>自定义</span>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--muted)' }}>自定义</span>
             </div>
           </>
         )}
@@ -182,7 +182,7 @@ export function CategoryPicker({
               fontWeight: 400,
             }}
           >
-            <span style={{ fontSize: 14, fontWeight: 600 }}>+</span>
+            <span style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>+</span>
             <span style={{ flex: 1 }}>自定义</span>
           </button>
         )}

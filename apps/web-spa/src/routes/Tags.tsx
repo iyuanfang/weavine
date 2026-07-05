@@ -83,7 +83,7 @@ export function Tags() {
         <div
           style={{
             padding: '4px 10px',
-            fontSize: 13,
+            fontSize: 'var(--text-base)',
             color: 'var(--fg-soft)',
             lineHeight: 1.6,
           }}
@@ -136,7 +136,7 @@ export function Tags() {
         <div
           style={{
             padding: '4px 10px',
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             color: 'var(--muted)',
             lineHeight: 1.6,
           }}
@@ -240,15 +240,7 @@ export function Tags() {
             <div style={{ display: 'grid', gap: 6 }}>
               {tags.map((tag) => (
                 <div key={tag.id} className="row-card" style={{ padding: '12px 16px' }}>
-                  <span
-                    style={{
-                      width: 14,
-                      height: 14,
-                      borderRadius: '50%',
-                      background: tagColor(tag),
-                      flexShrink: 0,
-                    }}
-                  />
+                  <span className="dot dot--xl" style={{ background: tagColor(tag) }} />
                   <span className="row-card__title" style={{ flex: 1, minWidth: 0 }}>
                     {tag.name}
                   </span>

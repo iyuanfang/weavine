@@ -85,7 +85,7 @@ export function SearchPage() {
             alignItems: 'center',
             gap: 6,
             marginTop: 10,
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             color: 'var(--text-muted)',
             cursor: 'pointer',
             userSelect: 'none',

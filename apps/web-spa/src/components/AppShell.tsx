@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             style={{
               margin: '12px 16px 0',
               padding: '10px 14px',
-              fontSize: 13,
+              fontSize: 'var(--text-base)',
               lineHeight: 1.6,
               display: 'flex',
               alignItems: 'flex-start',

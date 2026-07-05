@@ -250,14 +250,14 @@ function ReminderRow({
       className="row-card"
       style={{ opacity: reminder.dismissed ? 0.6 : 1 }}
     >
-      <span style={{ fontSize: 18, flexShrink: 0 }}>{kindIcon}</span>
+      <span style={{ fontSize: 'var(--text-lg)', flexShrink: 0 }}>{kindIcon}</span>
       <span className="row-card__meta">{triggerTime}</span>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="row-card__title">
           {kindLabel}
           {displayName && (
-            <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 6 }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', marginLeft: 6 }}>
               · {displayName}
             </span>
           )}

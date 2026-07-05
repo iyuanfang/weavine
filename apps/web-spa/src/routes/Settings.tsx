@@ -195,7 +195,7 @@ function SettingRow({
   return (
     <div className="row-card" style={{ padding: '12px 16px' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="row-card__title" style={{ fontFamily: 'monospace', fontSize: 13 }}>
+        <div className="row-card__title" style={{ fontFamily: 'monospace', fontSize: 'var(--text-base)' }}>
           {setting.key}
         </div>
         {isEditing ? (
@@ -289,15 +289,15 @@ function ArchivePanel() {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>📦 数据整理 — 自动归档</h3>
-        <Link to="/archive" style={{ fontSize: 12 }}>查看所有归档 →</Link>
+        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>📦 数据整理 — 自动归档</h3>
+        <Link to="/archive" style={{ fontSize: 'var(--text-sm)' }}>查看所有归档 →</Link>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 12px', lineHeight: 1.6 }}>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '4px 0 12px', lineHeight: 1.6 }}>
         应用每次启动时会扫描一次。命中的条目会在列表中隐藏，集中到 <Link to="/archive">归档页</Link>，不会丢失 — 取消归档即可恢复。
       </p>
-      <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+      <table style={{ width: '100%', fontSize: 'var(--text-base)', borderCollapse: 'collapse' }}>
         <thead>
-          <tr style={{ color: 'var(--text-muted)', fontSize: 11, textAlign: 'left' }}>
+          <tr style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', textAlign: 'left' }}>
             <th style={{ padding: '6px 8px' }}>类型</th>
             <th style={{ padding: '6px 8px' }}>规则</th>
             <th style={{ padding: '6px 8px', textAlign: 'right' }}>累计</th>
@@ -322,7 +322,7 @@ function ArchivePanel() {
                       bulkUnarchiveMutation.mutate(row.key);
                     }
                   }}
-                  style={{ fontSize: 11, padding: '3px 8px' }}
+                  style={{ fontSize: 'var(--text-xs)', padding: '3px 8px' }}
                 >
                   全部恢复
                 </button>
@@ -331,7 +331,7 @@ function ArchivePanel() {
           ))}
         </tbody>
       </table>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 0' }}>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '12px 0 0' }}>
         合计 {totalAll} 项归档，最近 30 天 {totalRecent} 项。
       </p>
     </div>

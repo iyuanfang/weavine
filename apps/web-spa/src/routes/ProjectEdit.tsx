@@ -90,7 +90,7 @@ export function ProjectEdit() {
         <div className="error-banner">
           <div>
             <strong>保存失败</strong>
-            <div style={{ marginTop: 2, fontSize: 12 }}>
+            <div style={{ marginTop: 2, fontSize: 'var(--text-sm)' }}>
               {String(updateMutation.error?.message ?? '未知错误')}
             </div>
           </div>
@@ -135,7 +135,7 @@ export function ProjectEdit() {
               {startAt && dueAt && new Date(startAt) > new Date(dueAt) && (
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 'var(--text-sm)',
                     color: 'var(--warn, #b45309)',
                     background: '#fef3c7',
                     border: '1px solid #fde68a',
@@ -169,19 +169,14 @@ export function ProjectEdit() {
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 6,
-                      fontSize: 12,
+                      fontSize: 'var(--text-sm)',
                       color: 'var(--muted)',
                     }}
                   >
                     <span
                       aria-hidden
-                      style={{
-                        display: 'inline-block',
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        ...stageDotStyle(projectQuery.data.template, stage),
-                      }}
+                      className="dot dot--sm"
+                      style={stageDotStyle(projectQuery.data.template, stage)}
                     />
                     当前选择：{stage}
                   </div>

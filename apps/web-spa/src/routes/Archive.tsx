@@ -142,7 +142,7 @@ export default function ArchivePage() {
         </div>
       )}
 
-      <div className="card" style={{ marginTop: 24, padding: 16, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+      <div className="card" style={{ marginTop: 24, padding: 16, fontSize: 'var(--text-base)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
         <strong>归档规则</strong>
         <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
           <li>待办：状态"已完成"且完成超过 1 天</li>
@@ -187,7 +187,7 @@ function ArchiveSection({
           marginBottom: 8,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
+        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
           {ENTITY_LABEL[entity]} <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>· {list.length}</span>
         </h3>
         {list.length > 0 && (
@@ -196,7 +196,7 @@ function ArchiveSection({
             onClick={onBulkUnarchive}
             disabled={isMutating}
             className="btn btn-secondary"
-            style={{ fontSize: 12, padding: '4px 10px' }}
+            style={{ fontSize: 'var(--text-sm)', padding: '4px 10px' }}
           >
             全部取消归档
           </button>
@@ -205,7 +205,7 @@ function ArchiveSection({
       {isLoading ? (
         <div className="loading">加载中…</div>
       ) : list.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 4px' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '12px 4px' }}>
           没有已归档的 {ENTITY_LABEL[entity]}
         </div>
       ) : (
@@ -241,7 +241,7 @@ function ArchiveSection({
                 >
                   📦 {it.title}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>
                   归档于 {formatArchived(it.archived_at)}
                 </div>
               </Link>
@@ -250,7 +250,7 @@ function ArchiveSection({
                 onClick={() => onUnarchiveOne(it.id)}
                 disabled={isMutating}
                 className="btn btn-secondary"
-                style={{ fontSize: 12, padding: '4px 10px', marginLeft: 12, flexShrink: 0 }}
+                style={{ fontSize: 'var(--text-sm)', padding: '4px 10px', marginLeft: 12, flexShrink: 0 }}
               >
                 取消归档
               </button>

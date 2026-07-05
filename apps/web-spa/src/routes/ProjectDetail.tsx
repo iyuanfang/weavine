@@ -50,14 +50,14 @@ function SummaryCard(props: {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 18 }}>{props.icon}</span>
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{props.label}</span>
+        <span style={{ fontSize: 'var(--text-lg)' }}>{props.icon}</span>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>{props.label}</span>
       </div>
-      <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>{props.value}</div>
+      <div style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: 4 }}>{props.value}</div>
       {props.sub && (
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>{props.sub}</div>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', marginBottom: 8 }}>{props.sub}</div>
       )}
-      <div style={{ fontSize: 12, color: 'var(--accent, #6366f1)', fontWeight: 500 }}>
+      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--accent, #6366f1)', fontWeight: 500 }}>
         {props.cta} →
       </div>
     </button>
@@ -268,27 +268,20 @@ export function ProjectDetail() {
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className="cluster cluster--loose">
               <h1 className="page-title" style={{ margin: 0 }}>
                 {project.title}
               </h1>
               <span
                 className="badge"
-                style={{ background: '#f3f4f6', color: '#374151', fontSize: 11 }}
+                style={{ background: '#f3f4f6', color: '#374151', fontSize: 'var(--text-xs)' }}
               >
                 {templateLabel}
               </span>
               {isCompleted && (
                 <span
                   className="badge"
-                  style={{ background: '#dcfce7', color: '#15803d', fontSize: 11 }}
+                  style={{ background: '#dcfce7', color: '#15803d', fontSize: 'var(--text-xs)' }}
                 >
                   ✅ 已完成
                 </span>
@@ -298,7 +291,7 @@ export function ProjectDetail() {
               <p
                 style={{
                   margin: '8px 0 0',
-                  fontSize: 14,
+                  fontSize: 'var(--text-base)',
                   color: 'var(--muted)',
                   whiteSpace: 'pre-wrap',
                   lineHeight: 1.6,
@@ -307,7 +300,7 @@ export function ProjectDetail() {
                 {project.description}
               </p>
             )}
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+            <div style={{ marginTop: 8, fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
               开始: {formatDate(project.start_at)}
               {project.due_at && <> · 截止: {formatDate(project.due_at)}</>}
               {project.completed_at && (
@@ -354,7 +347,7 @@ export function ProjectDetail() {
                     style={{
                       padding: '6px 14px',
                       borderRadius: 20,
-                      fontSize: 13,
+                      fontSize: 'var(--text-base)',
                       fontWeight: isCurrent ? 600 : 400,
                       background: isCurrent
                         ? stageColor(project.template, s)
@@ -420,7 +413,7 @@ export function ProjectDetail() {
               onClick={() => setTab(t.key)}
               style={{
                 padding: '8px 16px',
-                fontSize: 14,
+                fontSize: 'var(--text-base)',
                 fontWeight: active ? 600 : 400,
                 color: active ? 'var(--accent, #6366f1)' : 'var(--muted)',
                 background: 'transparent',
@@ -438,7 +431,7 @@ export function ProjectDetail() {
                   style={{
                     marginLeft: 6,
                     padding: '1px 6px',
-                    fontSize: 11,
+                    fontSize: 'var(--text-xs)',
                     background: active ? '#eef2ff' : '#f3f4f6',
                     color: active ? 'var(--accent)' : 'var(--muted)',
                     borderRadius: 10,
@@ -530,7 +523,7 @@ export function ProjectDetail() {
                 style={{ marginBottom: 10 }}
               />
               {candidateContacts.length === 0 ? (
-                <div className="empty-state" style={{ padding: 16, fontSize: 13 }}>
+                <div className="empty-state" style={{ padding: 16, fontSize: 'var(--text-base)' }}>
                   {contactSearch.trim()
                     ? searchQuery.isLoading
                       ? '搜索中…'
@@ -567,23 +560,23 @@ export function ProjectDetail() {
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 500 }}>
+                          <div style={{ fontSize: 'var(--text-base)', fontWeight: 500 }}>
                             {c.nickname}
                           </div>
                           {c.company && (
-                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
                               {c.company}
                             </div>
                           )}
                           {!already && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                            <div className="cluster cluster--tight" style={{ marginTop: 6 }}>
                               {ROLE_PRESETS.map((r) => (
                                 <button
                                   key={r}
                                   type="button"
                                   onClick={() => setDraftRoles({ ...draftRoles, [c.id]: r })}
                                   style={{
-                                    fontSize: 10,
+                                    fontSize: 'var(--text-xs)',
                                     padding: '2px 8px',
                                     borderRadius: 999,
                                     border: `1px solid ${draftRole === r ? 'var(--accent)' : 'var(--border)'}`,
@@ -599,14 +592,14 @@ export function ProjectDetail() {
                           )}
                         </div>
                         {already ? (
-                          <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
                             已添加
                           </span>
                         ) : (
                           <button
                             type="button"
                             className="btn btn-secondary"
-                            style={{ padding: '4px 10px', fontSize: 12, flexShrink: 0 }}
+                            style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', flexShrink: 0 }}
                             onClick={() => {
                               addContactMutation.mutate({
                                 contact_id: c.id,
@@ -632,7 +625,7 @@ export function ProjectDetail() {
           ) : people.length === 0 ? (
             <div className="card">
               <div className="empty-state" style={{ padding: 32 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
+                <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 8 }}>👥</div>
                 <div style={{ marginBottom: 12 }}>还没有联系人</div>
                 <button
                   type="button"
@@ -659,12 +652,12 @@ export function ProjectDetail() {
                   >
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                       <Link to={`/contacts/${c.id}`} style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)' }}>
+                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--accent)' }}>
                           {c.nickname}
                         </div>
                         <div
                           style={{
-                            fontSize: 12,
+                            fontSize: 'var(--text-sm)',
                             color: 'var(--muted)',
                             marginTop: 2,
                           }}
@@ -675,7 +668,7 @@ export function ProjectDetail() {
                         {c.tags && c.tags.length > 0 && (
                           <div
                             style={{
-                              fontSize: 11,
+                              fontSize: 'var(--text-xs)',
                               color: 'var(--muted)',
                               marginTop: 4,
                             }}
@@ -685,7 +678,7 @@ export function ProjectDetail() {
                         )}
                       </Link>
                       {editingRoleFor === c.id ? (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 220 }}>
+                        <div className="cluster cluster--tight" style={{ maxWidth: 220 }}>
                           {ROLE_PRESETS.map((r) => (
                             <button
                               key={r}
@@ -697,7 +690,7 @@ export function ProjectDetail() {
                                 setEditingRoleFor(null);
                               }}
                               style={{
-                                fontSize: 10,
+                                fontSize: 'var(--text-xs)',
                                 padding: '2px 8px',
                                 borderRadius: 999,
                                 border: `1px solid ${entry.role === r ? 'var(--accent)' : 'var(--border)'}`,
@@ -717,7 +710,7 @@ export function ProjectDetail() {
                               setEditingRoleFor(null);
                             }}
                             style={{
-                              fontSize: 10,
+                              fontSize: 'var(--text-xs)',
                               padding: '2px 8px',
                               borderRadius: 999,
                               border: '1px solid var(--border)',
@@ -740,7 +733,7 @@ export function ProjectDetail() {
                           style={{
                             background: '#eef2ff',
                             color: '#4338ca',
-                            fontSize: 10,
+                            fontSize: 'var(--text-xs)',
                             cursor: 'pointer',
                             border: '1px solid #e0e7ff',
                             padding: '2px 8px',
@@ -760,7 +753,7 @@ export function ProjectDetail() {
                             setEditingRoleFor(c.id);
                           }}
                           style={{
-                            fontSize: 10,
+                            fontSize: 'var(--text-xs)',
                             padding: '2px 8px',
                             borderRadius: 999,
                             border: '1px dashed var(--border)',
@@ -786,7 +779,7 @@ export function ProjectDetail() {
                       }}
                       disabled={removeContactMutation.isPending}
                       className="btn btn-ghost"
-                      style={{ padding: '4px 8px', fontSize: 12 }}
+                      style={{ padding: '4px 8px', fontSize: 'var(--text-sm)' }}
                     >
                       移除
                     </button>
@@ -826,7 +819,7 @@ export function ProjectDetail() {
           ) : tasks.length === 0 ? (
             <div className="card">
               <div className="empty-state" style={{ padding: 32 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+                <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 8 }}>✅</div>
                 <div style={{ marginBottom: 12 }}>还没有待办</div>
                 <button
                   type="button"
@@ -862,7 +855,7 @@ export function ProjectDetail() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          fontSize: 14,
+                          fontSize: 'var(--text-base)',
                           fontWeight: 500,
                           textDecoration:
                             t.status === 'done' ? 'line-through' : 'none',
@@ -875,7 +868,7 @@ export function ProjectDetail() {
                       {t.due_at && (
                         <div
                           style={{
-                            fontSize: 12,
+                            fontSize: 'var(--text-sm)',
                             color: 'var(--muted)',
                             marginTop: 2,
                           }}
@@ -894,14 +887,14 @@ export function ProjectDetail() {
                     >
                       <span
                         className="badge"
-                        style={{ fontSize: 10, background: '#f3f4f6' }}
+                        style={{ fontSize: 'var(--text-xs)', background: '#f3f4f6' }}
                       >
                         优先级: {priorityLabel(t.priority)}
                       </span>
                       <span
                         className="badge"
                         style={{
-                          fontSize: 10,
+                          fontSize: 'var(--text-xs)',
                           background:
                             t.status === 'done' ? '#dcfce7' : '#eef2ff',
                           color:
@@ -946,7 +939,7 @@ export function ProjectDetail() {
           ) : events.length === 0 ? (
             <div className="card">
               <div className="empty-state" style={{ padding: 32 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
+                <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 8 }}>📅</div>
                 <div style={{ marginBottom: 12 }}>还没有日程</div>
                 <button
                   type="button"
@@ -987,12 +980,12 @@ export function ProjectDetail() {
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>
+                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 500 }}>
                           {e.title}
                         </div>
                         <div
                           style={{
-                            fontSize: 12,
+                            fontSize: 'var(--text-sm)',
                             color: 'var(--muted)',
                             marginTop: 2,
                           }}
@@ -1004,7 +997,7 @@ export function ProjectDetail() {
                       </div>
                       <span
                         className="badge"
-                        style={{ fontSize: 10, background: '#f3f4f6' }}
+                        style={{ fontSize: 'var(--text-xs)', background: '#f3f4f6' }}
                       >
                         {e.type}
                       </span>

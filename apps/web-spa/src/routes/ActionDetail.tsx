@@ -119,7 +119,7 @@ export function ActionDetail() {
       <PageHeader
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 24 }}>{isDone ? '✅' : '📌'}</span>
+            <span style={{ fontSize: 'var(--text-xl)' }}>{isDone ? '✅' : '📌'}</span>
             <span
               style={{
                 textDecoration: isDone ? 'line-through' : 'none',
@@ -187,7 +187,7 @@ export function ActionDetail() {
                 (() => {
                   const m = categoryMeta(action.category, ACTION_PRESETS);
                   return (
-                    <span style={{ fontSize: 14 }}>
+                    <span style={{ fontSize: 'var(--text-base)' }}>
                       <span style={{ marginRight: 4 }}>{m.icon}</span>
                       {m.label}
                     </span>
@@ -202,7 +202,7 @@ export function ActionDetail() {
                 截止时间
               </div>
               {action.due_at ? (
-                <span style={{ fontSize: 14 }}>
+                <span style={{ fontSize: 'var(--text-base)' }}>
                   📅 {new Date(action.due_at).toLocaleString('zh-CN')}
                 </span>
               ) : (
@@ -244,7 +244,7 @@ export function ActionDetail() {
                 <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                   完成时间
                 </div>
-                <div style={{ fontSize: 14 }}>
+                <div style={{ fontSize: 'var(--text-base)' }}>
                   ✅ {new Date(action.completed_at).toLocaleString('zh-CN')}
                 </div>
               </div>
@@ -265,7 +265,7 @@ export function ActionDetail() {
         <h2 className="section__title">备注</h2>
         <div className="card" style={{ marginTop: 10, padding: 16, minHeight: 60 }}>
           {action.description ? (
-            <p style={{ margin: 0, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+            <p style={{ margin: 0, fontSize: 'var(--text-base)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
               {action.description}
             </p>
           ) : (
@@ -275,7 +275,7 @@ export function ActionDetail() {
       </section>
 
       {!isDone && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+        <div className="cluster cluster--loose" style={{ marginTop: 16 }}>
           <button
             type="button"
             onClick={handleComplete}
@@ -292,7 +292,7 @@ export function ActionDetail() {
       )}
 
       {isDone && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+        <div className="cluster cluster--loose" style={{ marginTop: 16 }}>
           <button
             type="button"
             onClick={handleReopen}

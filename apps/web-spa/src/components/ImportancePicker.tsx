@@ -72,9 +72,9 @@ export function ImportancePicker({
                 fontWeight: active ? 600 : 400,
               }}
             >
-              <span style={{ fontSize: 14 }}>{opt.icon}</span>
+              <span style={{ fontSize: 'var(--text-base)' }}>{opt.icon}</span>
               <span style={{ flex: 1 }}>{opt.label}</span>
-              {active && <span style={{ fontSize: 12 }}>✓</span>}
+              {active && <span style={{ fontSize: 'var(--text-sm)' }}>✓</span>}
             </button>
           );
         })}

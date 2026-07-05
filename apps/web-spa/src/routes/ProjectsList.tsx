@@ -260,7 +260,7 @@ function ProjectCard({ project: p }: { project: Project }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 20,
+          fontSize: 'var(--text-lg)',
           flexShrink: 0,
         }}
       >
@@ -268,16 +268,14 @@ function ProjectCard({ project: p }: { project: Project }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="row-card__title" style={{ fontSize: 14 }}>
-            {p.title}
-          </span>
+          <span className="row-card__title">{p.title}</span>
           <span
             className="badge"
             style={{
               background: `${templateColor}14`,
               color: templateColor,
               border: `1px solid ${templateColor}30`,
-              fontSize: 11,
+              fontSize: 'var(--text-xs)',
             }}
           >
             {templateLabel}
@@ -288,7 +286,7 @@ function ProjectCard({ project: p }: { project: Project }) {
               style={{
                 background: '#dcfce7',
                 color: '#15803d',
-                fontSize: 11,
+                fontSize: 'var(--text-xs)',
               }}
             >
               ✅ 已完成
@@ -298,33 +296,27 @@ function ProjectCard({ project: p }: { project: Project }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
           <span
             className="row-card__meta"
-            style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            style={{ fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
             阶段:
             <span
               aria-hidden
-              style={{
-                display: 'inline-block',
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                marginLeft: 2,
-                ...stageDotStyle(p.template, p.stage),
-              }}
+              className="dot dot--sm"
+              style={{ marginLeft: 2, ...stageDotStyle(p.template, p.stage) }}
             />
             {p.stage}
           </span>
           {p.due_at && (
             <>
               <span className="row-card__meta">·</span>
-              <span className="row-card__meta" style={{ fontSize: 12 }}>
+              <span className="row-card__meta" style={{ fontSize: 'var(--text-sm)' }}>
                 截止: {new Date(p.due_at).toLocaleDateString('zh-CN')}
               </span>
             </>
           )}
         </div>
       </div>
-      <span style={{ fontSize: 13, color: 'var(--muted)' }}>→</span>
+      <span style={{ fontSize: 'var(--text-base)', color: 'var(--muted)' }}>→</span>
     </Link>
   );
 }

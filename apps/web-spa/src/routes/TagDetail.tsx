@@ -94,15 +94,8 @@ export function TagDetail() {
     <div className="page">
       <PageHeader
         title={
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: '50%',
-                background: color,
-              }}
-            />
+          <span className="cluster cluster--loose">
+            <span className="dot dot--xl" style={{ background: color }} />
             {currentTag.name}
           </span>
         }
@@ -147,19 +140,8 @@ function ContactRow({ contact: c }: { contact: Contact }) {
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       <div
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: '50%',
-          background: avatarBg(displayName),
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 600,
-          fontSize: 15,
-          flexShrink: 0,
-        }}
+        className="avatar avatar--sm"
+        style={{ background: avatarBg(displayName) }}
       >
         {displayName.slice(0, 1).toUpperCase()}
       </div>
@@ -189,7 +171,7 @@ function ContactRow({ contact: c }: { contact: Contact }) {
         </span>
       )}
 
-      <span style={{ fontSize: 13, color: 'var(--muted)' }}>→</span>
+      <span style={{ fontSize: 'var(--text-base)', color: 'var(--muted)' }}>→</span>
     </Link>
   );
 }
