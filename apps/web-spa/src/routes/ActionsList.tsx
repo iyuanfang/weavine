@@ -649,7 +649,7 @@ function ActionRowBody({
       </button>
 
       <Link
-        to={`/actions/${action.id}`}
+        to={`/actions/${action.id}?from=/actions`}
         style={{
           flex: 1,
           minWidth: 0,

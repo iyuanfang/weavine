@@ -14,9 +14,9 @@ const ENTITY_LABEL: Record<'action' | 'event' | 'project', string> = {
 };
 
 const ENTITY_PATH: Record<'action' | 'event' | 'project', (id: string) => string> = {
-  action: (id) => `/actions/${id}`,
-  event: (id) => `/events/${id}`,
-  project: (id) => `/projects/${id}`,
+  action: (id) => `/actions/${id}?from=/archive`,
+  event: (id) => `/events/${id}?from=/archive`,
+  project: (id) => `/projects/${id}?from=/archive`,
 };
 
 function formatArchived(iso: string): string {

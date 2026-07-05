@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
@@ -11,10 +11,29 @@ function formatEventType(type: string | null | undefined): string {
   return `${meta.icon} ${meta.label}`;
 }
 
+function backTarget(from: string | null, fallback: string): { href: string; label: string } {
+  if (!from) return { href: fallback, label: '← 返回' };
+  if (from === '/actions') return { href: '/actions', label: '← 待办列表' };
+  if (from === '/calendar') return { href: '/calendar', label: '← 日历' };
+  if (from === '/reminders') return { href: '/reminders', label: '← 提醒' };
+  if (from === '/archive') return { href: '/archive', label: '← 归档' };
+  if (from === '/search') return { href: '/search', label: '← 搜索' };
+  if (from.startsWith('/contacts/')) return { href: from, label: '← 联系人' };
+  if (from.startsWith('/projects/')) return { href: from, label: '← 项目' };
+  if (from.startsWith('/interactions/')) return { href: from, label: '← 互动' };
+  if (from.startsWith('/actions/')) return { href: from, label: '← 待办' };
+  if (from.startsWith('/events/')) return { href: from, label: '← 日程' };
+  return { href: from, label: '← 返回' };
+}
+
 export function EventDetail() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromParam = searchParams.get('from');
+
+  const back = backTarget(fromParam, '/calendar');
 
   const eventQuery = useQuery({
     queryKey: ['event', id],
@@ -23,7 +42,7 @@ export function EventDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: (eventId: string) => adapter.events.delete(eventId),
-    onSuccess: () => navigate('/calendar'),
+    onSuccess: () => navigate(fromParam || '/calendar'),
   });
 
   const handleDelete = () => {
@@ -65,10 +84,13 @@ export function EventDetail() {
         }
         actions={
           <>
-            <Link to="/calendar" className="btn btn-ghost">
-              ← 日历
+            <Link to={back.href} className="btn btn-ghost">
+              {back.label}
             </Link>
-            <Link to={`/events/${id}/edit?from=/events/${id}`} className="btn btn-secondary">
+            <Link
+              to={`/events/${id}/edit?from=${encodeURIComponent(fromParam || `/events/${id}`)}`}
+              className="btn btn-secondary"
+            >
               编辑
             </Link>
             <button

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
@@ -28,12 +28,31 @@ const PRIORITY_BADGE: Record<number, { bg: string; fg: string }> = {
   3: { bg: '#fef2f2', fg: '#dc2626' },
 };
 
+function backTarget(from: string | null, fallback: string): { href: string; label: string } {
+  if (!from) return { href: fallback, label: '← 返回' };
+  if (from === '/actions') return { href: '/actions', label: '← 待办列表' };
+  if (from === '/calendar') return { href: '/calendar', label: '← 日历' };
+  if (from === '/reminders') return { href: '/reminders', label: '← 提醒' };
+  if (from === '/archive') return { href: '/archive', label: '← 归档' };
+  if (from === '/search') return { href: '/search', label: '← 搜索' };
+  if (from.startsWith('/contacts/')) return { href: from, label: '← 联系人' };
+  if (from.startsWith('/projects/')) return { href: from, label: '← 项目' };
+  if (from.startsWith('/interactions/')) return { href: from, label: '← 互动' };
+  if (from.startsWith('/actions/')) return { href: from, label: '← 待办' };
+  if (from.startsWith('/events/')) return { href: from, label: '← 日程' };
+  return { href: from, label: '← 返回' };
+}
+
 export function ActionDetail() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
   const ownerId = useOwnerId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const fromParam = searchParams.get('from');
+
+  const back = backTarget(fromParam, '/actions');
 
   const actionQuery = useQuery({
     queryKey: ['action', id],
@@ -57,7 +76,7 @@ export function ActionDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: (actionId: string) => adapter.actions.delete(actionId),
-    onSuccess: () => navigate('/actions'),
+    onSuccess: () => navigate(fromParam || '/actions'),
   });
 
   const handleDelete = () => {
@@ -136,10 +155,13 @@ export function ActionDetail() {
         }
         actions={
           <>
-            <Link to="/actions" className="btn btn-ghost">
-              ← 待办列表
+            <Link to={back.href} className="btn btn-ghost">
+              {back.label}
             </Link>
-            <Link to={`/actions/${id}/edit?from=/actions/${id}`} className="btn btn-secondary">
+            <Link
+              to={`/actions/${id}/edit?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
+              className="btn btn-secondary"
+            >
               编辑
             </Link>
             <button

@@ -251,7 +251,7 @@ function ReminderRow({
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         {event && (
           <Link
-            to={`/events/${event.id}`}
+            to={`/events/${event.id}?from=/reminders`}
             className="badge badge--muted"
             style={{ textDecoration: 'none' }}
           >

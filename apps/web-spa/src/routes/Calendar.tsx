@@ -302,7 +302,7 @@ export function Calendar() {
                   return (
                     <Link
                       key={e.id}
-                      to={`/events/${e.id}`}
+                      to={`/events/${e.id}?from=/calendar`}
                       className="filter-panel__item"
                       style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '8px 10px' }}
                     >
@@ -404,7 +404,7 @@ export function Calendar() {
                         return (
                           <Link
                             key={event.id}
-                            to={`/events/${event.id}`}
+                            to={`/events/${event.id}?from=/calendar`}
                             className="row-card"
                             onMouseEnter={() => setHoveredId(event.id)}
                             onMouseLeave={() => setHoveredId(null)}

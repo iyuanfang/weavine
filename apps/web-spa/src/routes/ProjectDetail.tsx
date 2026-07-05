@@ -841,7 +841,7 @@ export function ProjectDetail() {
               {tasks.map((t) => (
                 <Link
                   key={t.id}
-                  to={`/actions/${t.id}`}
+                  to={`/actions/${t.id}?from=/projects/${id}`}
                   className="card"
                   style={{
                     padding: 12,
@@ -968,7 +968,7 @@ export function ProjectDetail() {
                 .map((e) => (
                   <Link
                     key={e.id}
-                    to={`/events/${e.id}`}
+                    to={`/events/${e.id}?from=/projects/${id}`}
                     className="card"
                     style={{
                       padding: 12,

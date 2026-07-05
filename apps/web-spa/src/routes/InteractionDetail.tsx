@@ -150,7 +150,7 @@ export function InteractionDetail() {
               )}
               {event && (
                 <Link
-                  to={`/events/${event.id}`}
+                  to={`/events/${event.id}?from=/interactions/${id}`}
                   className="tag-chip tag-chip--active"
                   style={{ alignSelf: 'flex-start', textDecoration: 'none' }}
                 >
@@ -159,7 +159,7 @@ export function InteractionDetail() {
               )}
               {action && (
                 <Link
-                  to={`/actions/${action.id}`}
+                  to={`/actions/${action.id}?from=/interactions/${id}`}
                   className="tag-chip tag-chip--active"
                   style={{ alignSelf: 'flex-start', textDecoration: 'none' }}
                 >

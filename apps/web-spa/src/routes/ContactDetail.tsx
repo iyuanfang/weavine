@@ -266,7 +266,7 @@ export function ContactDetail() {
             {events.map((e) => (
               <Link
                 key={e.id}
-                to={`/events/${e.id}`}
+                to={`/events/${e.id}?from=/contacts/${id}`}
                 className="row-card"
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
@@ -300,7 +300,7 @@ export function ContactDetail() {
             {actions.map((a) => (
               <Link
                 key={a.id}
-                to={`/actions/${a.id}`}
+                to={`/actions/${a.id}?from=/contacts/${id}`}
                 className="row-card"
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >

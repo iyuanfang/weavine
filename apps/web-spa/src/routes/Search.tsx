@@ -143,7 +143,7 @@ export function SearchPage() {
               viewAllHref="/calendar"
               items={events.map((e) => ({
                 key: e.id,
-                href: `/events/${e.id}`,
+                href: `/events/${e.id}?from=/search`,
                 title: e.title,
                 meta: new Date(e.start_at).toLocaleString('zh-CN', {
                   month: 'numeric',
@@ -162,7 +162,7 @@ export function SearchPage() {
               viewAllHref="/actions"
               items={actions.map((a) => ({
                 key: a.id,
-                href: `/actions/${a.id}`,
+                href: `/actions/${a.id}?from=/search`,
                 title: a.title,
                 meta: a.due_at
                   ? new Date(a.due_at).toLocaleDateString('zh-CN', {
