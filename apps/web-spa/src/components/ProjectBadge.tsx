@@ -17,7 +17,6 @@ export function ProjectBadge({ project }: ProjectBadgeProps) {
       to={`/projects/${project.id}`}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
-      title={project.title}
       className="pill pill--colored"
       style={{
         '--pill-bg': `${color}14`,

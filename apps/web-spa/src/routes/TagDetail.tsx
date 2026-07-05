@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useOwnerId } from '../lib/auth';
+import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import type { Contact } from '../lib/adapter/types';
 
@@ -19,23 +20,6 @@ const IMPORTANCE_BADGE: Record<string, { bg: string; fg: string }> = {
   medium: { bg: '#fffbeb', fg: '#d97706' },
   low: { bg: '#f3f4f6', fg: '#6b7280' },
 };
-
-function avatarBg(name: string): string {
-  const palettes = [
-    'linear-gradient(135deg, #6366f1, #3b82f6)',
-    'linear-gradient(135deg, #ec4899, #f43f5e)',
-    'linear-gradient(135deg, #10b981, #14b8a6)',
-    'linear-gradient(135deg, #f59e0b, #ef4444)',
-    'linear-gradient(135deg, #8b5cf6, #6366f1)',
-    'linear-gradient(135deg, #06b6d4, #3b82f6)',
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash << 5) - hash + name.charCodeAt(i);
-    hash |= 0;
-  }
-  return palettes[Math.abs(hash) % palettes.length];
-}
 
 export function TagDetail() {
   const { tagId } = useParams() as { tagId: string };

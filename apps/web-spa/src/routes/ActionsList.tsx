@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { ContactBadge } from '../components/ContactBadge';
 import {
   DndContext,
   DragOverlay,
@@ -740,9 +741,7 @@ function ActionRowBody({
               {category.label}
             </span>
           )}
-          {displayName && (
-            <span style={{ color: 'var(--accent)' }}>{displayName}</span>
-          )}
+          {displayName && contact && <ContactBadge contact={contact} />}
           {action.project_id && (
             <ProjectBadge project={projectMap[action.project_id] ?? null} />
           )}
