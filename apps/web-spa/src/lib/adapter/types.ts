@@ -175,6 +175,7 @@ export interface CreateProjectInput {
   title: string;
   description?: string | null;
   template: string;
+  stage?: string | null;
   start_at?: string | null;
   due_at?: string | null;
 }

@@ -87,7 +87,13 @@ pub async fn create(
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
     let template = body.get("template").and_then(|v| v.as_str()).unwrap_or("general");
-    let stage = body.get("stage").and_then(|v| v.as_str()).unwrap_or("待启动");
+    let default_stage = weavine_lib::project_template::Template::from_str_opt(template)
+        .and_then(|t| t.stages().first().map(|s| s.to_string()))
+        .unwrap_or_else(|| "待启动".to_string());
+    let stage = body
+        .get("stage")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&default_stage);
 
     let mut tx = pool
         .begin()
