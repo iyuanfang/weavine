@@ -275,9 +275,27 @@ jobs:
         if: always() && steps.build.outcome == 'success'
         run: |
           mkdir -p android-out
-          find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' -o -name 'app-universal-release.apk' 2>/dev/null \
-            | xargs -r -I {} cp -v {} android-out/
-          find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \; 2>/dev/null
+          # Tauri produces *-release-unsigned.apk (no signing config) — modern
+          # Android refuses to install unsigned APKs, so sign with the debug
+          # keystore that Gradle auto-generated during the build. Replace
+          # the unsigned APK in-place.
+          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' | head -1)
+          if [ -n "$UNSIGNED" ]; then
+            echo "Signing $UNSIGNED with debug keystore"
+            "$ANDROID_HOME/build-tools/34.0.0/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+              --ks ~/.android/debug.keystore \
+              --ks-pass pass:android \
+              --ks-key-alias androiddebugkey \
+              --key-pass pass:android \
+              --out android-out/Weavine_universal-release.apk \
+              android-out/app-unsigned-aligned.apk
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify android-out/Weavine_universal-release.apk
+            rm android-out/app-unsigned-aligned.apk
+          else
+            echo "No unsigned release APK found, copying all APKs as-is"
+            find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \;
+          fi
           echo "Staged APKs:"
           ls -la android-out/
 
