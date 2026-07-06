@@ -285,23 +285,34 @@ jobs:
       - name: Stage Android APK
         if: always() && steps.build.outcome == 'success'
         run: |
-          mkdir -p android-out
+          mkdir -p android-out ~/.android
+          # Ensure debug keystore exists (Gradle auto-creates it during build
+          # on local machines but CI runners may not have one yet)
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "Generating debug.keystore"
+            keytool -genkey -v \
+              -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+          fi
           # Tauri produces *-release-unsigned.apk (no signing config) — modern
           # Android refuses to install unsigned APKs, so sign with the debug
-          # keystore that Gradle auto-generated during the build. Replace
-          # the unsigned APK in-place.
+          # keystore.
           UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' | head -1)
           if [ -n "$UNSIGNED" ]; then
             echo "Signing $UNSIGNED with debug keystore"
-            "$ANDROID_HOME/build-tools/34.0.0/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
-            "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+            BT="$ANDROID_HOME/build-tools/34.0.0"
+            "$BT/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
+            "$BT/apksigner" sign \
               --ks ~/.android/debug.keystore \
               --ks-pass pass:android \
               --ks-key-alias androiddebugkey \
               --key-pass pass:android \
               --out android-out/Weavine_universal-release.apk \
               android-out/app-unsigned-aligned.apk
-            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify android-out/Weavine_universal-release.apk
+            "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
             rm android-out/app-unsigned-aligned.apk
           else
             echo "No unsigned release APK found, copying all APKs as-is"
