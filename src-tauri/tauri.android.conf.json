@@ -10,12 +10,7 @@
   },
   "bundle": {
     "icon": [
-      "icons/android-icon-36-ldpi.png",
-      "icons/android-icon-48-mdpi.png",
-      "icons/android-icon-72-hdpi.png",
-      "icons/android-icon-96-xhdpi.png",
-      "icons/android-icon-144-xxhdpi.png",
-      "icons/android-icon-192-xxxhdpi.png"
+      "icons/icon.png"
     ],
     "android": {
       "minSdkVersion": 24
