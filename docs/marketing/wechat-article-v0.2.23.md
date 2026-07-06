@@ -9,72 +9,39 @@
 
 你手机里存着 800 个微信好友，Excel 里有 600 个客户跟进记录，备忘录里零星记着和某某总吃饭的时间。LinkedIn 改了 API，那些靠抓数据做 CRM 的 SaaS 工具瞬间贬值；Salesforce 一年几万块，但你只想要一个不会跑路、能离线打开、能把数据握在自己手里的工具。
 
-这正是 Weavine 在做的事：**本地优先 (local-first) + 多端同步 + 完全开源** 的人脉管理工具。今天这篇推文，把新版 v0.2.23 的架构选择、sync 引擎、核心功能、适用场景一次性讲透。
+这正是 Weavine 在做的事：**本地优先 (local-first) + 多端同步 + 完全开源** 的人脉管理工具。今天这篇推文，把新版 v0.2.23 的核心功能、适用场景、和当下可用情况一次性讲透。
 
 ---
 
-## 一、为什么是 Tauri + Rust，而不是 Electron 或纯 Web？
+## 为什么本地优先：你的联系人数据，必须握在你手里
 
-市面上的桌面应用，99% 是 Electron 写的：VSCode、Slack、Notion、本地版 Figma 都是。Electron 的优势是开发快，代价是——
+很多人装联系人管理工具，第一个担心就是：**我的客户数据会不会被厂商拿走？会不会被拿去训练 AI？会不会有一天 SaaS 跑路我找不到备份？**
 
-| 维度 | Electron | Tauri + Rust |
+Weavine 的答案很简单：你的数据从一开始就在你电脑上，不在任何人的服务器上。
+
+- **桌面端**：联系人数据存在一个 SQLite 文件（`weavine.db`），就在你电脑的用户目录里。你可以 `cp` 它、`rsync` 它、塞进 U 盘带走、丢进 Time Machine / 坚果云备份——任何时候都看得见，能直接用 SQLite 工具打开看。
+- **云端同步是可选的**：不跑 `weavine-server`，数据完全不出本机。装哪个端都不会自动上传任何东西。我们不会因为"Web 版方便"就把你的数据偷偷同步到我们控制的服务器。
+- **真要同步**：你自己跑 `weavine-server`（Docker / VPS / NAS 都行），数据走的是**你自己的基础设施**，不经过任何第三方。
+- **代码全开源**（AGPL-3.0）：如果某个 build 偷偷做了什么你看不出来的事，自己 build 一份二进制解包验证。Tauri 的 IPC 桥、SQLite 的写入路径、所有 Rust 业务代码都在 `src-tauri/src/business/` 下，欢迎审计。
+- **AGPL 的网络条款**：就算有人 fork 出 Weavine 改一改当 SaaS 卖，他必须把改动开源——确保你的隐私工具不会突然变成别人的"数据收集器"。
+
+我们不是反对云服务——很多人需要多端协同，Weavine 提供 sync 方案。但 sync 服务**由你自己掌控**，不是默认开启、不是后台静默跑、是显式的 opt-in。
+
+---
+
+## 当前可用状态（2026-07-06）
+
+| 平台 | 状态 | 说明 |
 | --- | --- | --- |
-| 安装包体积 | 150-300 MB | **30-65 MB**（Weavine 65MB） |
-| 内存占用 | 一个 tab 200MB+ | 同等场景 80MB |
-| 后端能力 | Node.js（要装运行时） | **Rust 编译进二进制，零依赖** |
-| 跨平台 UI | Chromium | 系统原生 WebView |
-| 安全模型 | 进程隔离 | Rust 内存安全 + Tauri allowlist |
+| **Windows** | ✅ 可用 | 下载 v0.2.24 MSI 直接装，所有功能正常 |
+| **Linux** | ✅ 可用 | 下载 v0.2.24 DEB 直接装，所有功能正常 |
+| **Web** | ✅ 可用 | 直接访问 [weavine.financialagent.cc](https://weavine.financialagent.cc/) 即可用 |
+| **macOS** | ⚠️ 暂未确认 | v0.2.24 DMG 还没在 macOS 实机上完整跑过，建议先在 Web / Windows / Linux 端用 |
+| **Android** | ⚠️ 安装后白屏 | 已知 bug，WebView 加载 APK assets 时 `assetProtocol` 没启用，所有静态资源 404。修复方案已定位，等打完包验证就 tag v0.2.25 |
 
-Weavine v0.2.23 的桌面包体积：
+**实用建议**：如果你急着要用，先在 Windows / Linux / Web 任何一个端开始存联系人——多端同步（`weavine-server`，可选）会让数据跨端打通。也可以先把要联系的客户 / 项目录到 Web 端，等 Android 修好了再装回来，所有数据会自动 sync 过去。
 
-- macOS：6.9 MB DMG
-- Windows：7.9 MB MSI
-- Linux：6.9 MB DEB
-- Android：64.6 MB APK（含 4 个 ABI 的原生库）
-
-**一个 SQLite 文件 (`weavine.db`)，一份 Rust 业务逻辑 (`src-tauri/src/business/`)，一套 React 组件 (`apps/web-spa/`)，三端共用。** 这就是 Tauri 的魅力：Rust 干 Rust 该干的事（数据库、文件、HTTP、同步引擎），Web 干 Web 该干的事（界面、交互、可视化），中间用 Tauri 的 IPC 桥接，性能和体验双赢。
-
-更关键的是**安全模型**：Tauri 默认开启 `withGlobalTauri: false`、能力白名单、严格的 CSP。我们的 sync 引擎不会因为网页里的某段 JS 误调用就往文件系统写垃圾——所有 `INSERT / UPDATE / DELETE` 只能从 Rust 侧发起。
-
----
-
-## 二、多端同步：像 Git 一样可靠的 revision 模型
-
-新版最大的工程量，都在 sync v0.2.0b。
-
-### 2.1 双栈架构
-
-- **桌面端** (`src-tauri/`)：单用户，本地 SQLite，rusqlite 直接查询 `business/` 模块
-- **云端** (`server/`)：多用户，PostgreSQL + sqlx 0.8，handlers 直接拼 `sqlx::query`
-- **共享层**：只有 `weavine_lib::models` 的结构体和 `#[derive(sqlx::FromRow)]` 标注
-
-为什么不抽象一个 `trait Repo`？因为 sync v0.2 的 schema 还在演化——列重命名、新增 `server_revision`、新增 `deleted_at`、给 `contact_tag` 加 `id` PK。提前抽象意味着反复重写。等 schema 稳定到 v0.2.0c 再统一。
-
-### 2.2 server_revision 序列号
-
-每张业务表多了一列：
-
-```sql
-server_revision BIGINT NOT NULL DEFAULT nextval('server_revision_seq')
-deleted_at      TEXT    -- 软删除标记
-```
-
-每次 `INSERT / UPDATE / DELETE`，PostgreSQL 的 11 个 trigger 自动往 `sync_change_log` 表里塞一条记录：
-
-```text
-{ table: 'contact', row_id: '...', op: 'update',
-  rev: 12345, payload: {...}, device_id: '...' }
-```
-
-桌面端启动时拉 `WHERE rev > last_seen_rev` 的差量，离线期间所有改动暂存本地队列，重连后批量上传。
-
-### 2.3 冲突解决
-
-桌面端每条记录带 `local_modified_at` + `last_synced_rev`；服务端是 source of truth，采用 **last-write-wins on server_revision**。这个策略对人脉场景足够：联系人资料的"最后修改"通常就是最新事实，不存在多人协同编辑同一字段的并发问题。
-
-### 2.4 真正的离线优先
-
-关掉网络，打开 Weavine，所有功能照常用：搜索、添加联系人、记日程、设提醒。WebView + SQLite + Rust 都在本地。网络只是 sync 的副产物，**不是功能的前提**。
+**多端同步是可选的**。单端完全够用：你只是想要一个能离线打开、数据在自己手里的工具，Weavine 就是。
 
 ---
 
@@ -111,7 +78,7 @@ deleted_at      TEXT    -- 软删除标记
 
 **典型场景**：你手头 200 个客户，分布在 30 个项目里，每周一开例会要复盘跟进节奏。
 
-Weavine 给你的：联系人 + 项目 + 互动时间线 三表联动，看一眼就知道"张总已经 23 天没联系了"。在桌面录完，手机端打开就是最新数据（v0.2.23 已支持 Android，下载在文末）。
+Weavine 给你的：联系人 + 项目 + 互动时间线 三表联动，看一眼就知道"张总已经 23 天没联系了"。在桌面录完，手机端打开就是最新数据（多端同步打开后自动 sync）。
 
 ### 4.2 OPC / 一人公司 / 独立创业者
 
@@ -150,7 +117,7 @@ Weavine 给你的：自定义标签 + 搜索 + 时间线，比 ReadCube / EndNot
 | 月费 | $10-40 | 免费（自托管） | **免费 + 可自托管** |
 | 数据所有权 | 厂商服务器 | 自托管 | **本地优先，可选云同步** |
 | LinkedIn 依赖 | 强（API 收紧后崩） | 无 | **无** |
-| 多端同步 | ✅ 闭源 | ⚠️ 仅 Web | **桌面 + Android + Web** |
+| 多端 | ✅ 闭源 | ⚠️ 仅 Web | **桌面 + Web（Android 修复中）** |
 | 中文本地化 | ❌ | ❌ | **✅** |
 | 包体积 | N/A | Docker 部署 | **65 MB 单文件** |
 | 技术栈 | 闭源 | PHP / Python | **Rust + React，开源可审计** |
@@ -159,7 +126,94 @@ Weavine 给你的：自定义标签 + 搜索 + 时间线，比 ReadCube / EndNot
 
 ---
 
-## 六、技术栈速览
+## 七、如何开始
+
+### Windows / Linux（推荐先体验）
+
+下载 [GitHub Releases v0.2.24](https://github.com/iyuanfang/weavine/releases/tag/v0.2.24) 的 MSI / DEB 直接装。首次启动会在用户目录建一个 SQLite 文件（`weavine.db`），所有数据落在本地。
+
+### Web
+
+直接访问 [https://weavine.financialagent.cc/](https://weavine.financialagent.cc/) 即可使用——浏览器里跑的是和桌面端同一份 `apps/web-spa` 代码，数据走同一套 `weavine-server` 同步引擎。无需安装。
+
+### Android / macOS
+
+⚠️ 这两个端的 v0.2.24 还有白屏 bug（详见上文「当前可用状态」）。如果你急着要，建议先在 Web / Windows / Linux 用；修复 PR 已就绪，预计 v0.2.25 上线。
+
+### 多端同步（可选）
+
+不需要 sync server 也能用——单端本地完全够用。
+
+想多端 sync 的话：跑一个 `weavine-server`（单二进制 + Postgres），把所有端指向同一个账号即可。Dockerfile 在 `server/Dockerfile`。
+
+### 开发者：从源码跑
+
+```bash
+git clone https://github.com/iyuanfang/weavine
+cd weavine
+pnpm install
+pnpm tauri dev          # 全栈开发模式（桌面）
+pnpm --dir apps/web-spa dev   # 仅 Web（前端 Vite dev server）
+```
+
+---
+
+## 八、Roadmap（v0.3+）
+
+近期待做（已排期）：
+
+- [ ] **Android 白屏修复** → v0.2.25（`assetProtocol` enable + 重新打 universal APK）
+- [ ] **macOS 真机验证** → v0.2.25（在用户的 Mac 上完整跑一遍）
+- [ ] **关系图谱可视化**（D3 force-directed graph）——"我的合作者网络长啥样"
+- [ ] **AI 自然语言录入**（"我昨天和张三吃饭，他换了新工作" → 自动拆出 Contact + Event + Interaction）
+
+更长远的想法：
+
+- 关系健康评分（基于最近互动频次/历史活跃度）
+- iOS build（Tauri 2 已支持 iOS，CI 适配进行中）
+
+明确不做：
+
+- 团队多用户版 / 共享 workspace——Weavine 定位是 **PRM**（个人人脉管理），不是 CRM。一个人的工具，不是给团队用的 SaaS。
+
+---
+
+## 九、写在最后
+
+人脉管理这件事的本质，不是工具，是**习惯**。任何 CRM 用不起来，都是因为"录入成本 > 回顾收益"。
+
+Weavine 想做的是那个**录入成本足够低、离线可用、数据永远属于你**的底座。剩下的，是每周 10 分钟的"关系维护时间"。
+
+如果你也是：
+
+- 被 Excel / 微信 / 备忘录搞烦了的人
+- 对 SaaS 数据安全和厂商绑定敏感的人
+- 想找一个能跑 5-10 年的开源工具的人
+
+欢迎 Star、Fork、提 Issue、PR。
+
+🔗 **GitHub**: https://github.com/iyuanfang/weavine
+📦 **下载**: https://github.com/iyuanfang/weavine/releases
+💬 **社区**: 微信群（文末二维码）/ GitHub Discussions
+📖 **文档**: 仓库 `docs/` + `同类产品深度调研报告.md`
+
+---
+
+如果你这篇文章对你有帮助，请点个**在看**、**转发**给身边那个"联系人管理一团糟"的朋友。
+
+你的支持，是开源项目最大的燃料。🪴
+
+---
+
+*本文基于 Weavine v0.2.23 (2026-07-06)，所有功能以仓库 main 分支为准。*
+
+---
+
+## 附录：技术细节（可选阅读）
+
+> 下面这几节是给开发者 / 想了解架构的读者准备的。如果你只是想用 Weavine，看完前面就够了。
+
+### 六、技术栈速览
 
 ```
 src-tauri/          Rust 后端 + Tauri 桌面运行时
@@ -182,73 +236,3 @@ server/             weavine-server (云端同步)
 ```
 
 **完全开源，AGPL-3.0**（确保改进回馈社区）。Rust 写后端 + 同步引擎，TypeScript 写前端——两种语言各管一段，没有共享运行时拖累。
-
----
-
-## 七、如何开始
-
-### 桌面（推荐先体验）
-
-```bash
-git clone https://github.com/iyuanfang/weavine
-cd weavine
-pnpm install
-pnpm tauri dev          # 全栈开发模式
-```
-
-或直接下载 Release：
-
-- macOS：`Weavine_0.1.8_aarch64.dmg` (6.9 MB)
-- Windows：`Weavine_0.1.8_x64_en-US.msi` (7.9 MB)
-- Linux：`Weavine_0.1.8_amd64.deb` (6.9 MB)
-
-### Android
-
-[GitHub Releases](https://github.com/iyuanfang/weavine/releases/tag/v0.2.23) 下载 `Weavine_universal-release.apk` (64.6 MB)，覆盖 4 个 ABI（arm64-v8a / armeabi-v7a / x86 / x86_64）。需开启"未知来源安装"。
-
-### Web
-
-直接访问 [https://weavine.financialagent.cc/](https://weavine.financialagent.cc/) 即可使用——浏览器里跑的是和桌面端同一份 `apps/web-spa` 代码，数据走同一套 `weavine-server` 同步引擎。无需安装，但需要注册账号。
-
-### 即将支持
-
-- **iOS**：Tauri v2 已支持 iOS，CI 适配进行中
-
----
-
-## 八、Roadmap（v0.3+）
-
-- [ ] 关系图谱可视化（D3 force-directed graph）——"我的合作者网络长啥样"
-- [ ] AI 自然语言录入（"我昨天和张三吃饭，他换了新工作" → 自动拆出 Contact + Event + Interaction）
-- [ ] 关系健康评分（基于最近互动频次/历史活跃度）
-- [ ] 团队多用户版（基于云端 sync，多人协作编辑同一联系人）
-
----
-
-## 九、写在最后
-
-人脉管理这件事的本质，不是工具，是**习惯**。任何 CRM 用不起来，都是因为"录入成本 > 回顾收益"。
-
-Weavine 想做的是那个**录入成本足够低、离线可用、数据永远属于你**的底座。剩下的，是每周 10 分钟的"关系维护时间"。
-
-如果你也是：
-- 被 Excel / 微信 / 备忘录搞烦了的人
-- 对 SaaS 数据安全和厂商绑定敏感的人
-- 想找一个能跑 5-10 年的开源工具的人
-
-欢迎 Star、Fork、提 Issue、PR。
-
-🔗 **GitHub**: https://github.com/iyuanfang/weavine
-📦 **下载**: https://github.com/iyuanfang/weavine/releases
-💬 **社区**: 微信群（文末二维码）/ GitHub Discussions
-📖 **文档**: 仓库 `docs/` + `同类产品深度调研报告.md`
-
----
-
-如果这篇文章对你有帮助，请点个**在看**、**转发**给身边那个"联系人管理一团糟"的朋友。
-
-你的支持，是开源项目最大的燃料。🪴
-
----
-
-*本文基于 Weavine v0.2.23 (2026-07-06)，所有功能以仓库 main 分支为准。*

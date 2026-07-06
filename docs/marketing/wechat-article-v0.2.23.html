@@ -216,61 +216,17 @@
       <p style="margin: 8px 0 0;">这正是 Weavine 在做的事：<strong>本地优先 (local-first) + 多端同步 + 完全开源</strong> 的人脉管理工具。今天这篇推文，把新版 v0.2.23 的架构选择、sync 引擎、核心功能、适用场景一次性讲透。</p>
     </div>
 
-    <h2>一、为什么是 Tauri + Rust，而不是 Electron 或纯 Web？</h2>
-    <p>市面上的桌面应用，99% 是 Electron 写的：VSCode、Slack、Notion、本地版 Figma 都是。Electron 的优势是开发快，代价是——</p>
-
-    <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>维度</th><th>Electron</th><th>Tauri + Rust</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>安装包体积</td><td>150-300 MB</td><td><strong>30-65 MB</strong>（Weavine 65MB）</td></tr>
-        <tr><td>内存占用</td><td>一个 tab 200MB+</td><td>同等场景 80MB</td></tr>
-        <tr><td>后端能力</td><td>Node.js（要装运行时）</td><td><strong>Rust 编译进二进制，零依赖</strong></td></tr>
-        <tr><td>跨平台 UI</td><td>Chromium</td><td>系统原生 WebView</td></tr>
-        <tr><td>安全模型</td><td>进程隔离</td><td>Rust 内存安全 + Tauri allowlist</td></tr>
-      </tbody>
-    </table>
-    </div>
-
-    <p>Weavine v0.2.23 的桌面包体积：</p>
+    <h2>为什么本地优先：你的联系人数据，必须握在你手里</h2>
+    <p>很多人装联系人管理工具，第一个担心就是：<strong>我的客户数据会不会被厂商拿走？会不会被拿去训练 AI？会不会有一天 SaaS 跑路我找不到备份？</strong></p>
+    <p>Weavine 的答案很简单：你的数据从一开始就在你电脑上，不在任何人的服务器上。</p>
     <ul>
-      <li>macOS：6.9 MB DMG</li>
-      <li>Windows：7.9 MB MSI</li>
-      <li>Linux：6.9 MB DEB</li>
-      <li>Android：64.6 MB APK（含 4 个 ABI 的原生库）</li>
+      <li><strong>桌面端</strong>：联系人数据存在一个 SQLite 文件（<code>weavine.db</code>），就在你电脑的用户目录里。你可以 <code>cp</code> 它、<code>rsync</code> 它、塞进 U 盘带走、丢进 Time Machine / 坚果云备份——任何时候都看得见，能直接用 SQLite 工具打开看。</li>
+      <li><strong>云端同步是可选的</strong>：不跑 <code>weavine-server</code>，数据完全不出本机。装哪个端都不会自动上传任何东西。我们不会因为"Web 版方便"就把你的数据偷偷同步到我们控制的服务器。</li>
+      <li><strong>真要同步</strong>：你自己跑 <code>weavine-server</code>（Docker / VPS / NAS 都行），数据走的是<strong>你自己的基础设施</strong>，不经过任何第三方。</li>
+      <li><strong>代码全开源</strong>（AGPL-3.0）：如果某个 build 偷偷做了什么你看不出来的事，自己 build 一份二进制解包验证。Tauri 的 IPC 桥、SQLite 的写入路径、所有 Rust 业务代码都在 <code>src-tauri/src/business/</code> 下，欢迎审计。</li>
+      <li><strong>AGPL 的网络条款</strong>：就算有人 fork 出 Weavine 改一改当 SaaS 卖，他必须把改动开源——确保你的隐私工具不会突然变成别人的"数据收集器"。</li>
     </ul>
-
-    <p><strong>一个 SQLite 文件 (<code>weavine.db</code>)，一份 Rust 业务逻辑 (<code>src-tauri/src/business/</code>)，一套 React 组件 (<code>apps/web-spa/</code>)，三端共用。</strong>这就是 Tauri 的魅力：Rust 干 Rust 该干的事（数据库、文件、HTTP、同步引擎），Web 干 Web 该干的事（界面、交互、可视化），中间用 Tauri 的 IPC 桥接，性能和体验双赢。</p>
-
-    <p>更关键的是<strong>安全模型</strong>：Tauri 默认开启 <code>withGlobalTauri: false</code>、能力白名单、严格的 CSP。我们的 sync 引擎不会因为网页里的某段 JS 误调用就往文件系统写垃圾——所有 <code>INSERT / UPDATE / DELETE</code> 只能从 Rust 侧发起。</p>
-
-    <h2>二、多端同步：像 Git 一样可靠的 revision 模型</h2>
-    <p>新版最大的工程量，都在 sync v0.2.0b。</p>
-
-    <h3>2.1 双栈架构</h3>
-    <ul>
-      <li><strong>桌面端</strong> (<code>src-tauri/</code>)：单用户，本地 SQLite，rusqlite 直接查询 <code>business/</code> 模块</li>
-      <li><strong>云端</strong> (<code>server/</code>)：多用户，PostgreSQL + sqlx 0.8，handlers 直接拼 <code>sqlx::query</code></li>
-      <li><strong>共享层</strong>：只有 <code>weavine_lib::models</code> 的结构体和 <code>#[derive(sqlx::FromRow)]</code> 标注</li>
-    </ul>
-    <p>为什么不抽象一个 <code>trait Repo</code>？因为 sync v0.2 的 schema 还在演化——列重命名、新增 <code>server_revision</code>、新增 <code>deleted_at</code>、给 <code>contact_tag</code> 加 <code>id</code> PK。提前抽象意味着反复重写。等 schema 稳定到 v0.2.0c 再统一。</p>
-
-    <h3>2.2 server_revision 序列号</h3>
-    <p>每张业务表多了一列：</p>
-<pre><code>server_revision BIGINT NOT NULL DEFAULT nextval('server_revision_seq')
-deleted_at      TEXT    -- 软删除标记</code></pre>
-    <p>每次 <code>INSERT / UPDATE / DELETE</code>，PostgreSQL 的 <strong>11 个 trigger</strong> 自动往 <code>sync_change_log</code> 表里塞一条记录：</p>
-<pre><code>{ table: 'contact', row_id: '...', op: 'update',
-  rev: 12345, payload: {...}, device_id: '...' }</code></pre>
-    <p>桌面端启动时拉 <code>WHERE rev &gt; last_seen_rev</code> 的差量，离线期间所有改动暂存本地队列，重连后批量上传。</p>
-
-    <h3>2.3 冲突解决</h3>
-    <p>桌面端每条记录带 <code>local_modified_at</code> + <code>last_synced_rev</code>；服务端是 source of truth，采用 <strong>last-write-wins on server_revision</strong>。这个策略对人脉场景足够：联系人资料的"最后修改"通常就是最新事实，不存在多人协同编辑同一字段的并发问题。</p>
-
-    <h3>2.4 真正的离线优先</h3>
-    <p>关掉网络，打开 Weavine，所有功能照常用：搜索、添加联系人、记日程、设提醒。WebView + SQLite + Rust 都在本地。网络只是 sync 的副产物，<strong>不是功能的前提</strong>。</p>
+    <p>我们不是反对云服务——很多人需要多端协同，Weavine 提供 sync 方案。但 sync 服务<strong>由你自己掌控</strong>，不是默认开启、不是后台静默跑、是显式的 opt-in。</p>
 
     <h2>三、核心功能：覆盖一个销售的全部日常</h2>
 
