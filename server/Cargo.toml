@@ -2,6 +2,7 @@
 name = "weavine-server"
 version = "0.2.0"
 edition = "2021"
+license = "AGPL-3.0"
 
 [dependencies]
 weavine = { path = "../src-tauri", default-features = false, features = ["sqlx"] }

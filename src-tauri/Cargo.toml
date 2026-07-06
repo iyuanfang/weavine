@@ -3,6 +3,7 @@ name = "weavine"
 version = "0.1.8"
 edition = "2021"
 default-run = "weavine"
+license = "AGPL-3.0"
 
 [lib]
 name = "weavine_lib"
