@@ -234,7 +234,7 @@
     </table>
     </div>
 
-    <p>Weavine v0.2.23 的桌面包：</p>
+    <p>Weavine v0.2.23 的桌面包体积：</p>
     <ul>
       <li>macOS：6.9 MB DMG</li>
       <li>Windows：7.9 MB MSI</li>
@@ -281,7 +281,7 @@ deleted_at      TEXT    -- 软删除标记</code></pre>
       <li><strong>标签系统</strong> (Tag)：可任意组合，例如「VIP」「决策人」「上海」「2024 展会」</li>
       <li><strong>关联项目</strong> (ProjectContact)：一个联系人可参与多个项目，反向追溯</li>
       <li><strong>互动时间线</strong> (Interaction)：每次见面的纪要自动归档</li>
-      <li><strong>全文搜索</strong>：姓名 / 公司 / 标签 / 备注，全文索引秒级返回</li>
+      <li><strong>搜索</strong>：姓名 / 公司 / 标签 / 备注，SQL <code>LIKE</code> 查询秒级返回（小数据量够用，大数据量将升级到 SQLite FTS5）</li>
     </ul>
 
     <h3>3.2 项目 (Project)</h3>
@@ -298,21 +298,6 @@ deleted_at      TEXT    -- 软删除标记</code></pre>
       <li><strong>自动归档</strong>：完成超过 1 天的待办 / 已结束的日程，自动进 Archive，不打扰主视图</li>
       <li>Archive 页可一键恢复最近 30 天的全部归档</li>
     </ul>
-
-    <h3>3.4 提醒 (Reminder) + Web Push</h3>
-    <ul>
-      <li>基于事件的本地通知</li>
-      <li>可选 VAPID 推送，关掉浏览器也能收到（用 <code>npx web-push generate-vapid-keys</code> 生成密钥）</li>
-    </ul>
-
-    <h3>3.5 统计 + 导入导出</h3>
-    <ul>
-      <li>联系人增长曲线、互动频次热力图</li>
-      <li>Excel / CSV 导入，备份即"复制一份 <code>weavine.db</code>"</li>
-    </ul>
-
-    <h3>3.6 设置 (Settings)</h3>
-    <p>Archive 规则、提醒频率、主题、深色模式、桌面快捷键。</p>
 
     <h2>四、谁应该用 Weavine？</h2>
 
@@ -402,10 +387,11 @@ pnpm tauri dev          # 全栈开发模式</code></pre>
     </ul>
     <h3>Android</h3>
     <p><a href="https://github.com/iyuanfang/weavine/releases/tag/v0.2.23">GitHub Releases</a> 下载 <code>Weavine_universal-release.apk</code> (64.6 MB)，覆盖 4 个 ABI（arm64-v8a / armeabi-v7a / x86 / x86_64）。需开启"未知来源安装"。</p>
+    <h3>Web</h3>
+    <p>直接访问 <a href="https://weavine.financialagent.cc/">https://weavine.financialagent.cc/</a> 即可使用——浏览器里跑的是和桌面端同一份 <code>apps/web-spa</code> 代码，数据走同一套 <code>weavine-server</code> 同步引擎。无需安装，但需要注册账号。</p>
     <h3>即将支持</h3>
     <ul>
       <li><strong>iOS</strong>：Tauri v2 已支持 iOS，CI 适配进行中</li>
-      <li><strong>Web 端</strong>：<code>apps/web-spa</code> 单独部署 + 接入 <code>weavine-server</code> PostgreSQL 后端</li>
     </ul>
 
     <h2>八、Roadmap（v0.3+）</h2>
@@ -413,9 +399,7 @@ pnpm tauri dev          # 全栈开发模式</code></pre>
       <li>关系图谱可视化（D3 force-directed graph）——"我的合作者网络长啥样"</li>
       <li>AI 自然语言录入（"我昨天和张三吃饭，他换了新工作" → 自动拆出 Contact + Event + Interaction）</li>
       <li>关系健康评分（基于最近互动频次 / 历史活跃度）</li>
-      <li>卡片视图 + Kanban 拖拽</li>
-      <li>Web Clipper 浏览器插件（一键把 LinkedIn 主页录入）</li>
-      <li>团队多用户版（基于云端 sync）</li>
+      <li>团队多用户版（基于云端 sync，多人协作编辑同一联系人）</li>
     </ul>
 
     <h2>九、写在最后</h2>

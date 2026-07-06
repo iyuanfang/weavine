@@ -25,7 +25,7 @@
 | 跨平台 UI | Chromium | 系统原生 WebView |
 | 安全模型 | 进程隔离 | Rust 内存安全 + Tauri allowlist |
 
-Weavine v0.2.23 的桌面包：
+Weavine v0.2.23 的桌面包体积：
 
 - macOS：6.9 MB DMG
 - Windows：7.9 MB MSI
@@ -88,7 +88,7 @@ deleted_at      TEXT    -- 软删除标记
 - **标签系统** (Tag)：可任意组合，例如「VIP」「决策人」「上海」「2024 展会」
 - **关联项目** (ProjectContact)：一个联系人可参与多个项目，反向追溯
 - **互动时间线** (Interaction)：每次见面的纪要自动归档
-- **全文搜索**：姓名 / 公司 / 标签 / 备注，全文索引秒级返回
+- **搜索**：姓名 / 公司 / 标签 / 备注，SQL `LIKE` 查询秒级返回（小数据量够用，大数据量将升级到 SQLite FTS5）
 
 ### 3.2 项目 (Project)
 
@@ -102,20 +102,6 @@ deleted_at      TEXT    -- 软删除标记
 - 日程：起止时间必填（end 默认 start + 1h，避免出现"无时长"的日程）
 - **自动归档**：完成超过 1 天的待办 / 已结束的日程，自动进 Archive，不打扰主视图
 - Archive 页可一键恢复最近 30 天的全部归档
-
-### 3.4 提醒 (Reminder) + Web Push
-
-- 基于事件的本地通知
-- 可选 VAPID 推送，关掉浏览器也能收到（用 `npx web-push generate-vapid-keys` 生成密钥）
-
-### 3.5 统计 + 导入导出
-
-- 联系人增长曲线、互动频次热力图
-- Excel / CSV 导入，备份即"复制一份 `weavine.db`"
-
-### 3.6 设置 (Settings)
-
-- Archive 规则、提醒频率、主题、深色模式、桌面快捷键
 
 ---
 
@@ -149,7 +135,7 @@ Weavine 给你的：项目维度组织联系人，比通用 CRM 轻 10 倍，比
 
 **典型场景**：合作者网络 200-500 人，需要按"研究方向 / 合作阶段 / 最近互动"分类。
 
-Weavine 给你的：自定义标签 + 全文搜索 + 时间线，比 ReadCube / EndNote 联系人模块更自由。
+Weavine 给你的：自定义标签 + 搜索 + 时间线，比 ReadCube / EndNote 联系人模块更自由。
 
 ### 4.6 任何"微信好友爆炸"的人
 
@@ -164,7 +150,7 @@ Weavine 给你的：自定义标签 + 全文搜索 + 时间线，比 ReadCube / 
 | 月费 | $10-40 | 免费（自托管） | **免费 + 可自托管** |
 | 数据所有权 | 厂商服务器 | 自托管 | **本地优先，可选云同步** |
 | LinkedIn 依赖 | 强（API 收紧后崩） | 无 | **无** |
-| 多端同步 | ✅ 闭源 | ⚠️ 仅 Web | **桌面 + Android + Web（路线图）** |
+| 多端同步 | ✅ 闭源 | ⚠️ 仅 Web | **桌面 + Android + Web** |
 | 中文本地化 | ❌ | ❌ | **✅** |
 | 包体积 | N/A | Docker 部署 | **65 MB 单文件** |
 | 技术栈 | 闭源 | PHP / Python | **Rust + React，开源可审计** |
@@ -220,10 +206,13 @@ pnpm tauri dev          # 全栈开发模式
 
 [GitHub Releases](https://github.com/iyuanfang/weavine/releases/tag/v0.2.23) 下载 `Weavine_universal-release.apk` (64.6 MB)，覆盖 4 个 ABI（arm64-v8a / armeabi-v7a / x86 / x86_64）。需开启"未知来源安装"。
 
+### Web
+
+直接访问 [https://weavine.financialagent.cc/](https://weavine.financialagent.cc/) 即可使用——浏览器里跑的是和桌面端同一份 `apps/web-spa` 代码，数据走同一套 `weavine-server` 同步引擎。无需安装，但需要注册账号。
+
 ### 即将支持
 
 - **iOS**：Tauri v2 已支持 iOS，CI 适配进行中
-- **Web 端**：`apps/web-spa` 单独部署 + 接入 `weavine-server` PostgreSQL 后端
 
 ---
 
@@ -232,9 +221,7 @@ pnpm tauri dev          # 全栈开发模式
 - [ ] 关系图谱可视化（D3 force-directed graph）——"我的合作者网络长啥样"
 - [ ] AI 自然语言录入（"我昨天和张三吃饭，他换了新工作" → 自动拆出 Contact + Event + Interaction）
 - [ ] 关系健康评分（基于最近互动频次/历史活跃度）
-- [ ] 卡片视图 + Kanban 拖拽
-- [ ] Web Clipper 浏览器插件（一键把 LinkedIn 主页录入）
-- [ ] 团队多用户版（基于云端 sync）
+- [ ] 团队多用户版（基于云端 sync，多人协作编辑同一联系人）
 
 ---
 
