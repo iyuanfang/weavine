@@ -7,7 +7,7 @@ Weavine is a desktop (and Android) app for keeping track of people you actually 
 It is **not** a Salesforce replacement. It is intentionally small. See [Design philosophy](#design-philosophy) below.
 
 - **GitHub**: https://github.com/iyuanfang/weavine
-- **Latest release**: [v0.2.23](https://github.com/iyuanfang/weavine/releases/tag/v0.2.23) — desktop (macOS / Windows / Linux) + Android (signed APK)
+- **Latest release**: [v0.2.23](https://github.com/iyuanfang/weavine/releases/tag/v0.2.23) — desktop (macOS / Windows / Linux) + Android (signed APK) + Web at [weavine.financialagent.cc](https://weavine.financialagent.cc/)
 - **License**: [AGPL-3.0](LICENSE)
 
 ---
@@ -133,6 +133,7 @@ Pre-built binaries (signed with the project's debug keystore; for production you
 | Windows (x64) | MSI | 7.9 MB |
 | Linux (amd64) | DEB | 6.9 MB |
 | Android (universal, 4 ABIs) | APK | 64.6 MB |
+| Web (PWA) | [weavine.financialagent.cc](https://weavine.financialagent.cc/) | n/a |
 
 All binaries are attached to [GitHub Releases](https://github.com/iyuanfang/weavine/releases). iOS and web versions are on the roadmap but not yet available.
 
@@ -213,7 +214,6 @@ cargo run --example smoke --manifest-path src-tauri/Cargo.toml
   - macOS: `~/Library/Application Support/com.weavine.prm/weavine.db`
   - Linux: `~/.local/share/com.weavine.prm/weavine.db`
 - **Local HTTP port** for the in-app Tauri webview bridge: default `3299` (overridable in `src-tauri/tauri.conf.json`).
-- **Web Push** (optional reminders): generate VAPID keys with `npx web-push generate-vapid-keys` and set the env vars.
 - **Sync server**: copy `.env.example` to `.env`, set `DATABASE_URL`, `JWT_SECRET`, `BIND_ADDR`.
 
 ## Roadmap
@@ -221,7 +221,6 @@ cargo run --example smoke --manifest-path src-tauri/Cargo.toml
 Near-term:
 
 - **iOS** — Tauri 2 has experimental iOS support; aiming for v0.3.
-- **Web version** — Tauri 2 mobile-style web build, intended for "occasional desktop" users.
 - **Relationship graph** — visual graph view of contacts ↔ projects ↔ tags, click to navigate.
 - **AI-assisted entry** — paste a paragraph of meeting notes, get a draft contact + suggested tags. Local model preferred; cloud model as fallback.
 
