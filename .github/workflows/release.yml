@@ -260,13 +260,12 @@ jobs:
         # src-tauri/gen/android/ is gitignored, so we patch build.gradle.kts
         # on every CI run. Without this, the web-spa dist/ never gets
         # bundled into the APK and the WebView opens to a blank white screen.
+        # base64 payload decodes to the sourceSets override line below.
         run: |
-          cat >> src-tauri/gen/android/app/build.gradle.kts <<'EOF'
-
-// Patched by CI: include web-spa dist/ as Android assets
-android.sourceSets["main"].assets.srcDirs("src/main/assets", "../../../../apps/web-spa/dist")
-EOF
-          cat src-tauri/gen/android/app/build.gradle.kts | tail -10
+          echo CmFuZHJvaWQuc291cmNlU2V0c1sibWFpbiJdLmFzc2V0cy5zcmNEaXJzKCJzcmMvbWFpbi9hc3NldHMiLCAiLi4vLi4vLi4vLi4vYXBwcy93ZWItc3BhL2Rpc3QiKQo= \
+            | base64 -d >> src-tauri/gen/android/app/build.gradle.kts
+          echo "=== last 5 lines of patched build.gradle.kts ==="
+          tail -5 src-tauri/gen/android/app/build.gradle.kts
 
       - name: Build Tauri Android APK
         id: build
