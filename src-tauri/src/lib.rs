@@ -55,7 +55,10 @@ pub fn run() {
             STARTUP_ERROR.set(msg.clone()).ok();
             let _ = fs::create_dir_all(&initial_data_dir);
             let _ = fs::write(initial_data_dir.join("startup-error.log"), &msg);
-            return;
+            boot_log::log("Falling back to in-memory database");
+            // Keep the webview alive so the user sees an error, not a blank page;
+            // desktop never hits this branch (dirs::data_dir always resolves).
+            Database::open_memory().expect("open_in_memory must succeed")
         }
     };
 

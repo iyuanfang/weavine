@@ -36,9 +36,27 @@ impl Database {
 }
 
 pub(crate) fn get_db_path() -> PathBuf {
-    let data_dir = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("com.weavine.prm");
-    std::fs::create_dir_all(&data_dir).ok();
-    data_dir.join("dev.db")
+    #[cfg(target_os = "android")]
+    {
+        let path = std::env::var("HOME")
+            .ok()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/data/user/0"))
+            .join("com.weavine.prm")
+            .join("files")
+            .join("dev.db");
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        return path;
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let data_dir = dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("com.weavine.prm");
+        std::fs::create_dir_all(&data_dir).ok();
+        data_dir.join("dev.db")
+    }
 }
