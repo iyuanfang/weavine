@@ -227,7 +227,8 @@ Near-term:
 Longer-term:
 
 - **Health score** — per-contact "engagement health" based on cadence, last interaction, and explicit priority.
-- **Team / shared workspaces** — multi-user editing of the *same* contact (currently each user has their own copy of a contact synced to the server).
+
+Weavine is intentionally a single-user personal relationship manager, not a CRM. Team / shared workspaces (multi-user editing of the same contact) are explicitly out of scope.
 
 ## Contributing
 
