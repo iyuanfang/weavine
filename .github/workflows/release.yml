@@ -256,6 +256,18 @@ jobs:
       - name: Generate Android project
         run: cargo tauri android init
 
+      - name: Inject frontendDist assets into Gradle config
+        # src-tauri/gen/android/ is gitignored, so we patch build.gradle.kts
+        # on every CI run. Without this, the web-spa dist/ never gets
+        # bundled into the APK and the WebView opens to a blank white screen.
+        run: |
+          cat >> src-tauri/gen/android/app/build.gradle.kts <<'EOF'
+
+// Patched by CI: include web-spa dist/ as Android assets
+android.sourceSets["main"].assets.srcDirs("src/main/assets", "../../../../apps/web-spa/dist")
+EOF
+          cat src-tauri/gen/android/app/build.gradle.kts | tail -10
+
       - name: Build Tauri Android APK
         id: build
         run: |
