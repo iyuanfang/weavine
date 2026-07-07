@@ -23,6 +23,7 @@ export default defineConfig({
   clearScreen: false,
   build: {
     outDir: 'dist',
+    assetsDir: 'spa',
     sourcemap: true,
     target: 'es2020',
   },
