@@ -8,6 +8,8 @@
     "build:web": "pnpm --dir apps/web-spa run build",
     "typecheck:web": "pnpm --dir apps/web-spa run typecheck",
     "preview:web": "pnpm --dir apps/web-spa run preview",
+    "dev:landing": "pnpm --dir apps/landing run dev",
+    "build:landing": "pnpm --dir apps/landing run build",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
