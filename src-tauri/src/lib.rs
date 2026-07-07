@@ -39,7 +39,10 @@ pub fn run() {
     use db::Database;
     use std::fs;
 
-    let initial_data_dir = dirs_data_dir_fallback();
+    let initial_data_dir = db::get_db_path()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(dirs_data_dir_fallback);
     boot_log::init(&initial_data_dir);
     boot_log::log("Tauri run() invoked");
 
