@@ -1,6 +1,6 @@
 {
   "name": "weavine",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "description": "Weavine · Personal Relationship Manager — 人脉管理桌面应用 (Tauri + web-spa + Rust)",
   "private": true,
   "scripts": {
