@@ -3,6 +3,7 @@ import '../styles/global.css';
 
 const release = 'v0.2.25';
 const repo = 'iyuanfang/weavine';
+const releaseUrl = `https://github.com/${repo}/releases/tag/${release}`;
 
 const platforms = [
   { name: 'macOS',     href: `#download-macos`,   file: '.dmg' },
@@ -35,28 +36,28 @@ const downloads = [
     id: 'download-macos',
     name: 'macOS',
     desc: 'Universal · 适用于 Apple Silicon 和 Intel',
-    href: `https://github.com/${repo}/releases/download/${release}/Weavine_universal.dmg`,
+    href: releaseUrl,
     file: '.dmg',
   },
   {
     id: 'download-windows',
     name: 'Windows',
     desc: 'Windows 10 / 11 · 64-bit',
-    href: `https://github.com/${repo}/releases/download/${release}/Weavine_x64_en-US.msi`,
+    href: releaseUrl,
     file: '.msi',
   },
   {
     id: 'download-linux',
     name: 'Linux',
     desc: 'Debian / Ubuntu · 其他发行版可选 .AppImage',
-    href: `https://github.com/${repo}/releases/download/${release}/Weavine_amd64.deb`,
+    href: releaseUrl,
     file: '.deb',
   },
   {
     id: 'download-android',
     name: 'Android',
     desc: 'Android 8+ · 通用 APK，启用"未知来源"安装',
-    href: `https://github.com/${repo}/releases/download/${release}/Weavine_universal-release.apk`,
+    href: releaseUrl,
     file: '.apk',
   },
   {
