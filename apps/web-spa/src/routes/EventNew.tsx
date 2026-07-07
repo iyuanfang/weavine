@@ -63,7 +63,7 @@ export function EventNew() {
 
   const projectsQuery = useQuery({
     queryKey: ['projects', userId],
-    queryFn: () => adapter.projects.list({ user_id: userId! }),
+    queryFn: () => adapter.projects.list({ user_id: userId!, archived: 'false', limit: 500 }),
     enabled: !!userId,
   });
   const projects = projectsQuery.data ?? [];
