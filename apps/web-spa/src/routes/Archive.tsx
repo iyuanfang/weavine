@@ -5,7 +5,38 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import type { ArchivedItem } from '../lib/adapter/types';
+import type { Action, ArchivedItem, Event, Project } from '../lib/adapter/types';
+
+type Entity = 'action' | 'event' | 'project';
+type Row = Pick<Action | Event | Project, 'id' | 'title' | 'archived_at'>;
+
+async function fetchArchived(
+  adapter: ReturnType<typeof useAdapter>,
+  userId: string,
+  entity: Entity,
+): Promise<ArchivedItem[]> {
+  const list =
+    entity === 'action' ? adapter.actions.list
+    : entity === 'event' ? adapter.events.list
+    : adapter.projects.list;
+  const rows = await list({ user_id: userId, archived: 'true', limit: 500 });
+  return (rows as Row[])
+    .filter((r): r is Row & { archived_at: string } => !!r.archived_at)
+    .map((r) => ({ id: r.id, title: r.title ?? '', archived_at: r.archived_at }));
+}
+
+async function callUnarchiveOne(
+  adapter: ReturnType<typeof useAdapter>,
+  _userId: string,
+  entity: Entity,
+  id: string,
+): Promise<void> {
+  const fn =
+    entity === 'action' ? adapter.actions.update
+    : entity === 'event' ? adapter.events.update
+    : adapter.projects.update;
+  await fn({ id, archived_at: null } as never);
+}
 
 const ENTITY_LABEL: Record<'action' | 'event' | 'project', string> = {
   action: '待办',
@@ -45,21 +76,21 @@ export default function ArchivePage() {
 
   const actionListQuery = useQuery({
     queryKey: ['archive', 'list', userId, 'action'],
-    queryFn: () => adapter.archive.list(userId!, 'action'),
+    queryFn: () => fetchArchived(adapter, userId!, 'action'),
     enabled: !!userId,
     refetchOnMount: 'always',
   });
 
   const eventListQuery = useQuery({
     queryKey: ['archive', 'list', userId, 'event'],
-    queryFn: () => adapter.archive.list(userId!, 'event'),
+    queryFn: () => fetchArchived(adapter, userId!, 'event'),
     enabled: !!userId,
     refetchOnMount: 'always',
   });
 
   const projectListQuery = useQuery({
     queryKey: ['archive', 'list', userId, 'project'],
-    queryFn: () => adapter.archive.list(userId!, 'project'),
+    queryFn: () => fetchArchived(adapter, userId!, 'project'),
     enabled: !!userId,
     refetchOnMount: 'always',
   });
@@ -76,13 +107,18 @@ export default function ArchivePage() {
 
   const unarchiveOne = useMutation({
     mutationFn: async ({ entity, id }: { entity: 'action' | 'event' | 'project'; id: string }) =>
-      adapter.archive.unarchiveOne(userId!, entity, id),
+      callUnarchiveOne(adapter, userId!, entity, id),
     onSuccess: invalidateAll,
   });
 
   const bulkUnarchive = useMutation({
-    mutationFn: async (entity: 'action' | 'event' | 'project') =>
-      adapter.archive.bulkUnarchive(userId!, entity),
+    mutationFn: async (entity: 'action' | 'event' | 'project') => {
+      const items = await fetchArchived(adapter, userId!, entity);
+      for (const it of items) {
+        await callUnarchiveOne(adapter, userId!, entity, it.id);
+      }
+      return { unarchived: items.length };
+    },
     onSuccess: invalidateAll,
   });
 
