@@ -3,7 +3,6 @@
     "beforeBuildCommand": "pnpm --dir apps/web-spa run build:tauri"
   },
   "app": {
-    "windows": [],
     "security": {
       "csp": null
     }
