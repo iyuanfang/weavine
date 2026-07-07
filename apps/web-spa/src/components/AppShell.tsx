@@ -6,7 +6,7 @@ import { useLocalUser } from '../lib/auth';
 import { clearSession } from '../lib/auth/storage';
 
 const navItems = [
-  { to: '/', label: '今天', icon: '🎯', end: true },
+  { to: '/today', label: '今天', icon: '🎯', end: true },
   { to: '/contacts', label: '联系人', icon: '👥' },
   { to: '/actions', label: '待办', icon: '✅' },
   { to: '/calendar', label: '日程', icon: '📅' },

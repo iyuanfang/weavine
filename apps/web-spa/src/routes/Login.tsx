@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { login, register, saveSession } from '../lib/auth/storage';
+import { loadSession, login, register, saveSession } from '../lib/auth/storage';
 import { localUserQueryKey } from '../lib/auth';
 
 function viteApiBase(): string {
@@ -16,14 +16,14 @@ function viteApiBase(): string {
 function nextPath(search: string): string {
   const params = new URLSearchParams(search);
   const next = params.get('next');
-  if (!next) return '/';
+  if (!next) return '/today';
   try {
     const decoded = decodeURIComponent(next);
     if (decoded.startsWith('/') && !decoded.startsWith('//')) return decoded;
   } catch {
-    return '/';
+    return '/today';
   }
-  return '/';
+  return '/today';
 }
 
 export function LoginPage() {
@@ -34,6 +34,30 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authed, setAuthed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const session = loadSession();
+    if (!session) {
+      setAuthed(false);
+      return;
+    }
+    fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+      .then((r) => {
+        if (cancelled) return;
+        setAuthed(r.ok);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAuthed(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -66,6 +90,17 @@ export function LoginPage() {
     } finally {
       setPending(false);
     }
+  }
+
+  if (authed === true) {
+    return <Navigate to={nextPath(location.search)} replace />;
+  }
+  if (authed === null) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center', color: '#888' }}>
+        加载中…
+      </div>
+    );
   }
 
   return (
