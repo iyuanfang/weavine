@@ -12,6 +12,7 @@ use tower_http::{
 };
 
 mod auth_keys;
+mod business;
 mod handlers;
 
 #[tokio::main]
@@ -83,6 +84,7 @@ async fn main() {
         .route("/api/archive/list", get(handlers::archive::archive_list))
         .route("/api/archive/unarchive-one", post(handlers::archive::unarchive_one))
         .route("/api/archive/bulk-unarchive", post(handlers::archive::bulk_unarchive))
+        .route("/api/archive/sweep", post(handlers::archive::sweep))
         // Settings
         .route("/api/settings/upsert", post(handlers::setting::upsert))
         .route("/api/settings", get(handlers::setting::list).delete(handlers::setting::delete))

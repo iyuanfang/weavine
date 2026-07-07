@@ -323,6 +323,10 @@ export class TauriAdapter implements PRMAdapter {
         entity,
       });
     },
+    sweep: async (_user_id: string): Promise<{ archived: number }> => {
+      const user_id = await this.userIdReady;
+      return invoke<{ archived: number }>('archive_sweep', { user_id });
+    },
   };
 
   cloud = {

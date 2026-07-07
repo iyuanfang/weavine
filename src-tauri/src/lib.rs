@@ -159,6 +159,7 @@ pub fn run() {
             commands::sync::cloud_logout,
             commands::sync::cloud_sync_now,
             commands::sync::cloud_status,
+            commands::archive::archive_sweep,
         ])
         .setup(|_app| Ok(()))
         .run(tauri::generate_context!())

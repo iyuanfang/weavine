@@ -271,3 +271,24 @@ fn count(
 
 #[allow(dead_code)]
 fn _signature_check(_t: DateTime<Utc>) {}
+
+#[derive(Deserialize)]
+pub struct ArchiveSweepBody {
+    pub user_id: String,
+}
+
+#[derive(Serialize)]
+pub struct ArchiveSweepResult {
+    pub archived: usize,
+}
+
+pub async fn archive_sweep(
+    State(s): State<AppState>,
+    Json(body): Json<ArchiveSweepBody>,
+) -> Result<Json<ArchiveSweepResult>, (StatusCode, String)> {
+    let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let now = Utc::now();
+    let archived = crate::business::archive_sweep::sweep_archives(&conn, now)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(ArchiveSweepResult { archived }))
+}

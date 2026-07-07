@@ -473,6 +473,7 @@ export interface PRMAdapter {
     list(user_id: string, entity: 'action' | 'event' | 'project'): Promise<ArchivedItem[]>;
     unarchiveOne(user_id: string, entity: 'action' | 'event' | 'project', id: string): Promise<void>;
     bulkUnarchive(user_id: string, entity: 'action' | 'event' | 'project'): Promise<{ unarchived: number }>;
+    sweep(user_id: string): Promise<{ archived: number }>;
   };
 
   cloud: {

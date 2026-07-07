@@ -18,6 +18,29 @@ pub struct ListParams {
 
 const MAX_LIMIT: i64 = 500;
 
+async fn lazy_sweep(pool: &PgPool, user_id: &str) {
+    let res = crate::business::archive_sweep::sweep_user_if_stale(
+        pool,
+        user_id,
+        chrono::Utc::now(),
+    )
+    .await;
+    if let Err(e) = res {
+        eprintln!("[archive] lazy sweep failed for user {user_id}: {e}");
+    }
+}
+
+pub async fn sweep(
+    headers: HeaderMap,
+    State(pool): State<Arc<PgPool>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let auth = extract_auth(&headers)?;
+    let archived = crate::business::archive_sweep::sweep_user(&pool, &auth, chrono::Utc::now())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(serde_json::json!({ "archived": archived })))
+}
+
 async fn count_table(
     pool: &PgPool,
     user_id: &str,
@@ -49,6 +72,7 @@ pub async fn archive_summary(
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
+    lazy_sweep(&pool, &auth).await;
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(30))
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
@@ -75,6 +99,7 @@ pub async fn archive_counts(
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
+    lazy_sweep(&pool, &auth).await;
     let action = count_table(&pool, &auth, "action", None).await?;
     let event = count_table(&pool, &auth, "event", None).await?;
     let project = count_table(&pool, &auth, "project", None).await?;
@@ -91,6 +116,7 @@ pub async fn archive_list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
+    lazy_sweep(&pool, &auth).await;
     let entity = p.entity.as_deref().unwrap_or("");
     let limit = p.limit.unwrap_or(50).min(MAX_LIMIT);
 

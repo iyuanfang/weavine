@@ -398,6 +398,14 @@ export class HttpAdapter implements PRMAdapter {
         '/api/archive/bulk-unarchive',
         { user_id, entity },
       ),
+
+    sweep: (user_id: string): Promise<{ archived: number }> =>
+      request<{ archived: number }>(
+        this.baseUrl,
+        'POST',
+        '/api/archive/sweep',
+        { user_id },
+      ),
   };
 
   cloud = {

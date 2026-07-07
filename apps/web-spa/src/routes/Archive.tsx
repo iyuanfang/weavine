@@ -122,6 +122,11 @@ export default function ArchivePage() {
     onSuccess: invalidateAll,
   });
 
+  const sweep = useMutation({
+    mutationFn: async () => adapter.archive.sweep(userId!),
+    onSuccess: invalidateAll,
+  });
+
   const sections: {
     entity: 'action' | 'event' | 'project';
     items: ArchivedItem[] | undefined;
@@ -154,6 +159,33 @@ export default function ArchivePage() {
             : '加载中…'
         }
       />
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <button
+          type="button"
+          onClick={() => sweep.mutate()}
+          disabled={sweep.isPending}
+          className="btn btn-primary"
+          style={{ fontSize: 'var(--text-sm)', padding: '6px 14px' }}
+        >
+          {sweep.isPending ? '归档中…' : '立即归档'}
+        </button>
+      </div>
+
+      {sweep.isSuccess && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            padding: '10px 14px',
+            fontSize: 'var(--text-sm)',
+            background: 'var(--success-bg, #ecfdf5)',
+            color: 'var(--success-text, #065f46)',
+          }}
+        >
+          ✓ 已归档 {sweep.data.archived} 项
+        </div>
+      )}
 
       {totals.total === 0 ? (
         <div className="empty-state">
