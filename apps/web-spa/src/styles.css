@@ -1405,6 +1405,20 @@ textarea.input-base {
 @media (max-width: 640px) {
   .grid-2 { grid-template-columns: 1fr; }
   .kpi-row { grid-template-columns: 1fr !important; }
+  .page-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .page-header > div:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .page-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 @keyframes backdrop-fade-in {
