@@ -551,8 +551,12 @@ button:focus-visible {
   }
   .row-card--mobile-stacked .row-card__title {
     order: 2;
-    flex: 1 1 auto;
+    flex: 1 1 100%;
+    width: 100%;
     min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .row-card--mobile-stacked .row-card__badges {
     order: 3;
