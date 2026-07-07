@@ -248,7 +248,7 @@ export function EventEdit() {
                   <SearchablePicker
                     value={projectId}
                     onChange={setProjectId}
-                    options={projects.map((p: Project) => ({
+                    options={projects.filter((p: Project) => !p.archived_at).map((p: Project) => ({
                       id: p.id,
                       label: p.title,
                       sublabel: p.stage,
