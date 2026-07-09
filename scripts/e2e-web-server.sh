@@ -5,7 +5,7 @@
 # Run from anywhere; the script does not need to be in the repo.
 set -u
 
-REPO=/home/yf/workspace/opencode/prm
+REPO=/home/yf/workspace/opencode/weavine
 cd "$REPO/src-tauri"
 
 # Pick binary: prefer in-tree debug build (freshest), fall back to installed.

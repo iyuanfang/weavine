@@ -190,6 +190,30 @@ pub struct ListContactsParams {
     pub tag_id: Option<String>,
     pub search: Option<String>,
     pub importance: Option<String>,
+    #[serde(default = "default_contact_sort")]
+    pub sort_by: String,
+    #[serde(default = "default_contact_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+pub const CONTACT_SORT_WHITELIST: &[(&str, &str)] = &[
+    ("last_contacted_at", "last_contacted_at DESC NULLS LAST, created_at DESC, id ASC"),
+    ("created_at",       "created_at DESC, id ASC"),
+    ("nickname",         "nickname COLLATE NOCASE ASC, id ASC"),
+];
+
+pub const DEFAULT_CONTACT_SORT: &str = "last_contacted_at";
+pub const DEFAULT_CONTACT_LIMIT: i64 = 20;
+pub const MAX_CONTACT_LIMIT: i64 = 200;
+
+fn default_contact_sort() -> String {
+    DEFAULT_CONTACT_SORT.to_string()
+}
+
+fn default_contact_limit() -> i64 {
+    DEFAULT_CONTACT_LIMIT
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

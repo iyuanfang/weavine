@@ -132,7 +132,7 @@ export function EventEdit() {
     );
   }
 
-  const contacts = contactsQuery.data ?? [];
+  const contacts = contactsQuery.data?.items ?? [];
   const projects = projectsQuery.data ?? [];
   const linkedProject = projectId
     ? projects.find((p: Project) => p.id === projectId)

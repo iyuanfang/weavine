@@ -124,8 +124,8 @@ pub fn list_contacts_for_project(
     let contacts = hydrate_tags(conn, contacts)?;
     Ok(contacts
         .into_iter()
-        .zip(roles.into_iter())
-        .zip(added_ats.into_iter())
+        .zip(roles)
+        .zip(added_ats)
         .map(|((c, r), a)| ProjectContactWithContact {
             contact: c,
             role: r,

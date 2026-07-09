@@ -37,7 +37,7 @@ fn setup() -> Connection {
              DELETE FROM Setting;
              DELETE FROM \"User\" WHERE is_local = 1;
              INSERT INTO \"User\" (id, name, email, is_local, created_at, updated_at)
-               VALUES ('local-default', 'Local', 'local@prm.local', 1,
+               VALUES ('local-default', 'Local', 'local@weavine.local', 1,
                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);",
         );
         return conn;
@@ -165,21 +165,21 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
     // since local is empty, push is a no-op so revision must not move.
     let token_before = {
         // Need a token to call manifest. Re-login cheaply to get one.
-        let login_resp = sync::api::login(&server_url, TEST_EMAIL, TEST_PASSWORD)
+        let login_resp = sync::api::login(server_url, TEST_EMAIL, TEST_PASSWORD)
             .await
             .expect("login for manifest probe");
         sync::config::set(&conn, sync::config::KEY_ACCESS_TOKEN, &login_resp.access_token)
             .expect("persist token");
         login_resp.access_token
     };
-    let manifest_before = sync::api::manifest(&server_url, &token_before)
+    let manifest_before = sync::api::manifest(server_url, &token_before)
         .await
         .expect("manifest before");
     let rev_before = manifest_before.server_revision;
     println!("case A: server revision before = {rev_before}");
 
     // Run initial sync — should pull all server rows.
-    let link_result = sync::link(&conn, &server_url, TEST_EMAIL, TEST_PASSWORD)
+    let link_result = sync::link(&conn, server_url, TEST_EMAIL, TEST_PASSWORD)
         .await
         .expect("link should succeed");
     println!(
@@ -200,7 +200,7 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
     let token_after = sync::config::get(&conn, sync::config::KEY_ACCESS_TOKEN)
         .expect("token set")
         .unwrap();
-    let manifest_after = sync::api::manifest(&server_url, &token_after)
+    let manifest_after = sync::api::manifest(server_url, &token_after)
         .await
         .expect("manifest after");
     let rev_after = manifest_after.server_revision;

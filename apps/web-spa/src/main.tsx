@@ -16,6 +16,8 @@ import { buildRouterObjects } from './routes-config';
 if (
   typeof window !== 'undefined' &&
   (window.location.hostname === 'tauri.localhost' ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
     window.location.protocol === 'tauri:') &&
   window.location.pathname === '/'
 ) {

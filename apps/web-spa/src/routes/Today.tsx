@@ -158,7 +158,9 @@ export function TodayPage() {
     eventsQuery.isLoading ||
     interactionsQuery.isLoading;
 
-  const overdueCount = todayDoActions.filter((a) => new Date(a.due_at!) < now).length;
+  const overdueCount = todayDoActions.filter(
+    (a) => a.status !== 'done' && new Date(a.due_at!) < now,
+  ).length;
 
   const activeProjects = (projectsQuery.data ?? []).filter(
     (p) => !p.completed_at,
@@ -356,8 +358,8 @@ function ActionCard({
   onToggleDone: (status: 'done' | 'open') => void;
 }) {
   const dueAt = new Date(action.due_at!);
-  const isOverdue = dueAt < now;
   const isDone = action.status === 'done';
+  const isOverdue = !isDone && dueAt < now;
   const tone = isOverdue ? 'overdue' : 'today';
 
   return (

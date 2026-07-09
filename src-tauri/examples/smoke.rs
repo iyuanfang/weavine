@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n--- Step 3: Seed local user ---");
     conn.execute(
         "INSERT INTO \"User\" (id, name, email, isLocal, createdAt, updatedAt) \
-         VALUES ('user-local-1', 'Local User', 'local@prm.local', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+         VALUES ('user-local-1', 'Local User', 'local@weavine.local', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
         [],
     )?;
     let user_count: i64 = conn.query_row("SELECT COUNT(*) FROM User", [], |r| r.get(0))?;

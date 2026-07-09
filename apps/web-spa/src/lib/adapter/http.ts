@@ -26,6 +26,7 @@ import type {
   CreateTagInput,
   Event,
   Interaction,
+  ListContactsResult,
   LocalUser,
   PRMAdapter,
   Project,
@@ -156,8 +157,12 @@ export class HttpAdapter implements PRMAdapter {
       tag_id?: string | null;
       search?: string | null;
       importance?: string | null;
-    }): Promise<Contact[]> =>
-      request<Contact[]>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })),
+      sort_by?: string;
+      sort_dir?: string;
+      limit?: number;
+      offset?: number;
+    }): Promise<ListContactsResult> =>
+      request<Contact[]>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })).then((items) => ({ items, total: items.length })),
 
     get: (id: string): Promise<Contact> =>
       request<Contact>(this.baseUrl, 'GET', `/api/contacts/${id}`),

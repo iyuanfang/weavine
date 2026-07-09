@@ -1,4 +1,4 @@
-const CACHE = 'prm-v12';
+const CACHE = 'weavine-v1';
 
 const PRECACHE_URLS = [
   '/',

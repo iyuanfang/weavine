@@ -233,7 +233,7 @@ export function ProjectDetail() {
         nickname: c.nickname,
         company: c.company,
       }))
-    : (contactsQuery.data ?? []).slice(0, 50).map((c) => ({
+    : (contactsQuery.data?.items ?? []).slice(0, 50).map((c) => ({
         id: c.id,
         nickname: c.nickname,
         company: c.company,

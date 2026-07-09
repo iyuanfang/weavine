@@ -67,7 +67,7 @@ pub fn list(
         Some(v) if v == "true" || v == "1" => {
             sql.push_str(" AND Action.archived_at IS NOT NULL");
         }
-        Some(v) if v == "all" => {}
+        Some("all") => {}
         _ => {
             sql.push_str(" AND Action.archived_at IS NULL");
         }

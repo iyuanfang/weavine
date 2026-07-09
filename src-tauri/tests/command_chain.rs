@@ -2,6 +2,7 @@ use serde_json::json;
 use weavine_lib::commands;
 use weavine_lib::db::Database;
 use weavine_lib::models::LocalUser;
+use weavine_lib::models::{DEFAULT_CONTACT_SORT, DEFAULT_CONTACT_LIMIT};
 
 const SCHEMA_SQL: &str = include_str!("../examples/schema_smoke.sql");
 
@@ -12,7 +13,7 @@ fn build_test_db() -> Database {
         conn.execute_batch(SCHEMA_SQL).expect("apply schema");
         conn.execute(
             "INSERT INTO \"User\" (id, name, email, is_local, created_at, updated_at) \
-             VALUES ('user-local-1', 'Local User', 'local@prm.local', 1, \
+             VALUES ('user-local-1', 'Local User', 'local@weavine.local', 1, \
                      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             [],
         )
@@ -36,17 +37,21 @@ fn db_state<'a>(db: &'a Database) -> tauri::State<'a, Database> {
 fn contact_crud_roundtrip() {
     let db = build_test_db();
 
-    let initial = commands::contact::list_contacts(
+    let (initial, initial_total) = commands::contact::list_contacts(
         db_state(&db),
         commands::params::ListContactsParams {
             user_id: "user-local-1".to_string(),
             search: None,
             importance: None,
             tag_id: None,
+            sort_by: DEFAULT_CONTACT_SORT.to_string(),
+            limit: DEFAULT_CONTACT_LIMIT,
+            offset: 0,
         },
     )
     .expect("list initial");
     assert_eq!(initial.len(), 0, "no contacts yet");
+    assert_eq!(initial_total, 0, "total should be 0");
 
     let created = commands::contact::create_contact(
         db_state(&db),
@@ -92,32 +97,40 @@ fn contact_crud_roundtrip() {
     .expect("update");
     assert_eq!(updated.nickname, "张三丰");
 
-    let after = commands::contact::list_contacts(
+    let (after, after_total) = commands::contact::list_contacts(
         db_state(&db),
         commands::params::ListContactsParams {
             user_id: "user-local-1".to_string(),
             search: None,
             importance: None,
             tag_id: None,
+            sort_by: DEFAULT_CONTACT_SORT.to_string(),
+            limit: DEFAULT_CONTACT_LIMIT,
+            offset: 0,
         },
     )
     .expect("list after");
     assert_eq!(after.len(), 1);
     assert_eq!(after[0].nickname, "张三丰");
+    assert_eq!(after_total, 1);
 
     commands::contact::delete_contact(db_state(&db), created.id.clone()).expect("delete");
 
-    let final_state = commands::contact::list_contacts(
+    let (final_state, final_total) = commands::contact::list_contacts(
         db_state(&db),
         commands::params::ListContactsParams {
             user_id: "user-local-1".to_string(),
             search: None,
             importance: None,
             tag_id: None,
+            sort_by: DEFAULT_CONTACT_SORT.to_string(),
+            limit: DEFAULT_CONTACT_LIMIT,
+            offset: 0,
         },
     )
     .expect("list final");
     assert_eq!(final_state.len(), 0);
+    assert_eq!(final_total, 0);
 
     println!("✅ contact_crud_roundtrip passed");
 }
@@ -220,6 +233,6 @@ fn get_local_user_returns_seeded_local_user() {
         commands::diagnostic::get_local_user(db_state(&db)).expect("get_local_user");
     assert_eq!(user.id, "user-local-1");
     assert_eq!(user.name, Some("Local User".to_string()));
-    assert_eq!(user.email, Some("local@prm.local".to_string()));
+    assert_eq!(user.email, Some("local@weavine.local".to_string()));
     println!("✅ get_local_user_returns_seeded_local_user passed");
 }

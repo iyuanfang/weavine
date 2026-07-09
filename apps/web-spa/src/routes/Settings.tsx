@@ -1,11 +1,25 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import type { ArchiveSummary, Setting } from '../lib/adapter/types';
+import type {
+  ArchiveSummary,
+  Setting,
+  CreateContactInput,
+  CreateEventInput,
+  CreateActionInput,
+  CreateInteractionInput,
+  CreateReminderInput,
+  Contact,
+  Tag,
+  Event,
+  Action,
+  Interaction,
+  Reminder,
+} from '../lib/adapter/types';
 
 export function SettingsPage() {
   const adapter = useAdapter();
@@ -93,6 +107,7 @@ export function SettingsPage() {
 
       <CloudSyncPanel />
       <ArchivePanel />
+      <BackupRestorePanel />
 
       {showAdd && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -552,6 +567,429 @@ function CloudSyncPanel() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Backup / Restore — full-data JSON export and import.
+//
+// File shape matches the legacy Next.js export endpoint (see
+// `c60084e:src/app/api/export/route.ts`) so users migrating from
+// the old web stack can drop their existing `prm-export-*.json`
+// straight into this dialog. Projects are intentionally NOT
+// exported — they aren't in the legacy schema either, and
+// downstream event/action refs to projects are reset on import.
+// ──────────────────────────────────────────────
+
+interface ExportPayload {
+  exportedAt: string;
+  counts: {
+    contacts: number;
+    tags: number;
+    events: number;
+    interactions: number;
+    actions: number;
+    reminders: number;
+  };
+  settings: Record<string, string>;
+  contacts: Contact[];
+  tags: Tag[];
+  events: Event[];
+  interactions: Interaction[];
+  actions: Action[];
+  reminders: Reminder[];
+}
+
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<unknown>,
+): Promise<PromiseSettledResult<unknown>[]> {
+  const results: PromiseSettledResult<unknown>[] = new Array(items.length);
+  let cursor = 0;
+  const take = async () => {
+    while (true) {
+      const idx = cursor;
+      cursor += 1;
+      if (idx >= items.length) return;
+      try {
+        const value = await worker(items[idx]);
+        results[idx] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[idx] = { status: 'rejected', reason };
+      }
+    }
+  };
+  const lanes = Array.from(
+    { length: Math.min(limit, items.length) },
+    () => take(),
+  );
+  await Promise.all(lanes);
+  return results;
+}
+
+function BackupRestorePanel() {
+  const adapter = useAdapter();
+  const userId = useUserId();
+  const queryClient = useQueryClient();
+
+  const exportInputRef = useRef<HTMLAnchorElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<'export' | 'import' | null>(null);
+  const [progress, setProgress] = useState<{
+    phase: string;
+    done: number;
+    total: number;
+  } | null>(null);
+
+  if (!userId) return null;
+  // Capture the narrowed id into a const so closures (async
+  // functions, callbacks) see it as `string` rather than the
+  // `string | null` returned by useUserId() — TS doesn't propagate
+  // narrowing across function boundaries.
+  const uid: string = userId;
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    queryClient.invalidateQueries({ queryKey: ['tags'] });
+    queryClient.invalidateQueries({ queryKey: ['events'] });
+    queryClient.invalidateQueries({ queryKey: ['interactions'] });
+    queryClient.invalidateQueries({ queryKey: ['actions'] });
+    queryClient.invalidateQueries({ queryKey: ['reminders'] });
+    queryClient.invalidateQueries({ queryKey: ['settings', uid] });
+  };
+
+  // Export a limit well beyond realistic data sizes so export captures
+  // every contact, event, interaction, action, and reminder in one call.
+  const ALL_LIMIT = 1_000_000;
+
+  async function handleExport() {
+    setBusy('export');
+    try {
+      const [
+        contacts,
+        tags,
+        events,
+        interactions,
+        actions,
+        reminders,
+        settingsArr,
+      ] = await Promise.all([
+        adapter.contacts.list({
+          user_id: uid,
+          search: null,
+          tag_id: null,
+          importance: null,
+          limit: ALL_LIMIT,
+        }),
+        adapter.tags.list(uid),
+        adapter.events.list({ user_id: uid, limit: ALL_LIMIT }),
+        adapter.interactions.list({ user_id: uid, limit: ALL_LIMIT }),
+        adapter.actions.list({ user_id: uid, limit: ALL_LIMIT }),
+        adapter.reminders.list({ user_id: uid, limit: ALL_LIMIT }),
+        adapter.settings.list(uid),
+      ]);
+
+      const settings: Record<string, string> = {};
+      for (const s of settingsArr) settings[s.key] = s.value;
+
+       const payload: ExportPayload = {
+        exportedAt: new Date().toISOString(),
+        counts: {
+          contacts: contacts.items.length,
+          tags: tags.length,
+          events: events.length,
+          interactions: interactions.length,
+          actions: actions.length,
+          reminders: reminders.length,
+        },
+        settings,
+        contacts: contacts.items,
+        tags,
+        events,
+        interactions,
+        actions,
+        reminders,
+      };
+
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = exportInputRef.current ?? document.createElement('a');
+      a.href = url;
+      a.download = `prm-export-${payload.exportedAt.slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`导出失败: ${String(err)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setBusy('import');
+    try {
+      const text = await file.text();
+      const raw = JSON.parse(text) as Partial<ExportPayload>;
+
+      // Minimal schema validation — accept either the full legacy
+      // shape or just the entity arrays we actually consume.
+      const ok =
+        raw &&
+        Array.isArray(raw.contacts) &&
+        Array.isArray(raw.tags) &&
+        Array.isArray(raw.events) &&
+        Array.isArray(raw.interactions) &&
+        Array.isArray(raw.actions) &&
+        Array.isArray(raw.reminders);
+      if (!ok) {
+        alert(
+          '文件格式不正确 — 必须包含 contacts / tags / events / interactions / actions / reminders 数组。',
+        );
+        return;
+      }
+
+      const counts = {
+        contacts: raw.contacts!.length,
+        tags: raw.tags!.length,
+        events: raw.events!.length,
+        interactions: raw.interactions!.length,
+        actions: raw.actions!.length,
+        reminders: raw.reminders!.length,
+      };
+      const settingsCount = raw.settings ? Object.keys(raw.settings).length : 0;
+      const summary = `将导入 ${counts.contacts} 个联系人, ${counts.tags} 个标签, ${counts.events} 个日程, ${counts.interactions} 条互动, ${counts.actions} 个待办, ${counts.reminders} 个提醒, ${settingsCount} 项设置。是否继续？`;
+      if (!confirm(summary)) return;
+
+      // Phase 1 — tags first; build a name → new-id map so contacts
+      // can reference them. Tauri regenerates IDs on create, so the
+      // legacy IDs in the export file cannot be preserved.
+      setProgress({ phase: '标签', done: 0, total: counts.tags });
+      const tagNameToId = new Map<string, string>();
+      const tagResults = await runWithConcurrency(raw.tags!, 5, async (t) => {
+        const created = await adapter.tags.create({ user_id: uid, name: t.name });
+        tagNameToId.set(t.name, created.id);
+        return created;
+      });
+      const tagsFailed = tagResults.filter((r) => r.status === 'rejected').length;
+
+      // Phase 2 — contacts. The legacy Next.js export nests tags as
+      // `[{ tag: { id, name } }]`; the Tauri export emits a flat
+      // `[{ id, name }]` array. Accept either.
+      setProgress({ phase: '联系人', done: 0, total: counts.contacts });
+      const contactNicknameToId = new Map<string, string>();
+      const contactResults = await runWithConcurrency(raw.contacts!, 5, async (c) => {
+        const input: CreateContactInput = {
+          user_id: uid,
+          nickname: c.nickname,
+          name: c.name ?? null,
+          company: c.company ?? null,
+          title: c.title ?? null,
+          city: c.city ?? null,
+          email: c.email ?? null,
+          phone: c.phone ?? null,
+          wechat: c.wechat ?? null,
+          notes: c.notes ?? null,
+          importance: c.importance ?? null,
+        };
+        const tagIds: string[] = [];
+        if (Array.isArray(c.tags)) {
+          for (const entry of c.tags) {
+            const name =
+              (entry as { name?: string }).name ??
+              (entry as { tag?: { name?: string } }).tag?.name;
+            if (name && tagNameToId.has(name)) {
+              tagIds.push(tagNameToId.get(name)!);
+            }
+          }
+        }
+        if (tagIds.length > 0) input.tag_ids = tagIds;
+        const created = await adapter.contacts.create(input);
+        contactNicknameToId.set(created.nickname, created.id);
+        return created;
+      });
+      const contactsFailed = contactResults.filter((r) => r.status === 'rejected').length;
+      setProgress({ phase: '联系人', done: counts.contacts, total: counts.contacts });
+
+      // Phase 3 — events, interactions, actions, reminders. These
+      // reference contacts by nickname (the only stable cross-table
+      // key in the export). Project refs are dropped because
+      // projects aren't part of the legacy export payload.
+      setProgress({ phase: '日程', done: 0, total: counts.events });
+      const eventResults = await runWithConcurrency(raw.events!, 5, async (e) => {
+        const input: CreateEventInput = {
+          user_id: uid,
+          title: e.title,
+          type: e.type,
+          start_at: e.start_at,
+          end_at: e.end_at ?? null,
+          location: e.location ?? null,
+          notes: e.notes ?? null,
+          contact_id: e.contact_nickname
+            ? contactNicknameToId.get(e.contact_nickname) ?? null
+            : null,
+          project_id: null,
+          reminder_lead_minutes: e.reminder_lead_minutes ?? null,
+        };
+        return adapter.events.create(input);
+      });
+      const eventsFailed = eventResults.filter((r) => r.status === 'rejected').length;
+
+      setProgress({ phase: '互动', done: 0, total: counts.interactions });
+      const interactionResults = await runWithConcurrency(
+        raw.interactions!,
+        5,
+        async (i) => {
+          const input: CreateInteractionInput = {
+            user_id: uid,
+            occurred_at: i.occurred_at,
+            channel: i.channel ?? null,
+            summary: i.summary,
+            contact_id: i.contact_nickname
+              ? contactNicknameToId.get(i.contact_nickname) ?? null
+              : null,
+            action_id: null,
+            event_id: null,
+          };
+          return adapter.interactions.create(input);
+        },
+      );
+      const interactionsFailed = interactionResults.filter(
+        (r) => r.status === 'rejected',
+      ).length;
+
+      setProgress({ phase: '待办', done: 0, total: counts.actions });
+      const actionResults = await runWithConcurrency(raw.actions!, 5, async (a) => {
+        const input: CreateActionInput = {
+          user_id: uid,
+          title: a.title,
+          description: a.description ?? null,
+          status: a.status ?? null,
+          priority: a.priority ?? null,
+          category: a.category ?? null,
+          due_at: a.due_at ?? null,
+          contact_id: a.contact_nickname
+            ? contactNicknameToId.get(a.contact_nickname) ?? null
+            : null,
+          project_id: null,
+        };
+        return adapter.actions.create(input);
+      });
+      const actionsFailed = actionResults.filter((r) => r.status === 'rejected').length;
+
+      setProgress({ phase: '提醒', done: 0, total: counts.reminders });
+      const reminderResults = await runWithConcurrency(raw.reminders!, 5, async (r) => {
+        const input: CreateReminderInput = {
+          user_id: uid,
+          contact_id: r.contact_nickname
+            ? contactNicknameToId.get(r.contact_nickname) ?? null
+            : null,
+          event_id: null,
+          trigger_at: r.trigger_at,
+          kind: r.kind ?? null,
+        };
+        return adapter.reminders.create(input);
+      });
+      const remindersFailed = reminderResults.filter((r) => r.status === 'rejected').length;
+
+      // Phase 4 — settings (key/value upsert).
+      let settingsFailed = 0;
+      if (raw.settings && typeof raw.settings === 'object') {
+        const entries = Object.entries(raw.settings as Record<string, string>);
+        setProgress({ phase: '设置', done: 0, total: entries.length });
+        const settingsResults = await runWithConcurrency(entries, 5, async ([key, value]) => {
+          return adapter.settings.upsert(uid, key, String(value));
+        });
+        settingsFailed = settingsResults.filter((r) => r.status === 'rejected').length;
+      }
+
+      setProgress(null);
+      setBusy(null);
+      invalidateAll();
+
+      const failed =
+        tagsFailed +
+        contactsFailed +
+        eventsFailed +
+        interactionsFailed +
+        actionsFailed +
+        remindersFailed +
+        settingsFailed;
+      const succeeded =
+        counts.tags +
+        counts.contacts +
+        counts.events +
+        counts.interactions +
+        counts.actions +
+        counts.reminders +
+        settingsCount;
+      if (failed > 0) {
+        alert(
+          `导入完成: 成功 ${succeeded - failed}, 失败 ${failed}。失败可能由重名或约束冲突导致, 请查看控制台日志。`,
+        );
+      } else {
+        alert(`导入完成: 成功 ${succeeded} 条记录。`);
+      }
+    } catch (err) {
+      setBusy(null);
+      setProgress(null);
+      alert(`导入失败: ${String(err)}`);
+    }
+  }
+
+  const isBusy = busy !== null;
+  const total = progress?.total ?? 0;
+  const done = progress?.done ?? 0;
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+        💾 备份 / 恢复
+      </h3>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 12px', lineHeight: 1.6 }}>
+        导出全部数据为 JSON 文件, 可用于备份或迁移。文件格式与旧版 Web 导出 (<code>prm-export-*.json</code>) 兼容, 可直接导入恢复。
+      </p>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleExport}
+          disabled={isBusy}
+          style={{ opacity: isBusy ? 0.6 : 1 }}
+        >
+          {busy === 'export' ? '导出中…' : '导出全部数据'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => importInputRef.current?.click()}
+          disabled={isBusy}
+          style={{ opacity: isBusy ? 0.6 : 1 }}
+        >
+          {busy === 'import' ? '导入中…' : '导入备份'}
+        </button>
+        {progress && total > 0 && (
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+            {progress.phase} {done}/{total}
+          </span>
+        )}
+      </div>
+
+      <a ref={exportInputRef} style={{ display: 'none' }} aria-hidden="true" />
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImportFile(file);
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }

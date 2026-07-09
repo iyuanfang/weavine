@@ -1,10 +1,10 @@
 use crate::business;
 use crate::db::Database;
 use crate::models::*;
-use serde::Deserialize;
 use tauri::State;
 
 #[tauri::command(rename_all = "snake_case")]
+#[allow(clippy::too_many_arguments)]
 pub fn list_events(
     db: State<Database>,
     user_id: String,

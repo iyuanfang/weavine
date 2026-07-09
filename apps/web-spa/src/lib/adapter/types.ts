@@ -160,11 +160,23 @@ export interface StartupInfo {
 // in src-tauri/src/commands/*
 // ──────────────────────────────────────────────
 
+export type ContactSortBy = 'last_contacted_at' | 'created_at' | 'nickname';
+export type ContactSortDir = 'desc' | 'asc';
+
 export interface ListContactsParams {
   user_id: string;
   tag_id?: string | null;
   search?: string | null;
   importance?: string | null;
+  sort_by?: ContactSortBy;
+  sort_dir?: ContactSortDir;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListContactsResult {
+  items: Contact[];
+  total: number;
 }
 
 export interface CreateContactInput {
@@ -357,7 +369,7 @@ export interface PRMAdapter {
   getStartupInfo(): Promise<StartupInfo>;
 
   contacts: {
-    list(params: ListContactsParams): Promise<Contact[]>;
+    list(params: ListContactsParams): Promise<ListContactsResult>;
     get(id: string): Promise<Contact>;
     create(input: CreateContactInput): Promise<Contact>;
     update(input: UpdateContactInput): Promise<Contact>;

@@ -70,7 +70,7 @@ export function TagDetail() {
     );
   }
 
-  const contacts = contactsQuery.data ?? [];
+  const contacts = contactsQuery.data?.items ?? [];
   const isLoading = contactsQuery.isLoading || tagsQuery.isLoading;
   const color = tagColor(currentTag);
 
@@ -103,7 +103,7 @@ export function TagDetail() {
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 6 }}>
-          {contacts.map((c) => (
+          {contacts.map((c: Contact) => (
             <ContactRow key={c.id} contact={c} tagId={tagId} />
           ))}
         </div>

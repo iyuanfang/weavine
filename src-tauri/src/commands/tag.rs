@@ -1,7 +1,6 @@
 use crate::business;
 use crate::db::Database;
 use crate::models::*;
-use serde::Deserialize;
 use tauri::State;
 
 #[tauri::command(rename_all = "snake_case")]

@@ -210,9 +210,9 @@ cargo run --example smoke --manifest-path src-tauri/Cargo.toml
 ## Configuration
 
 - **Database path** (per platform):
-  - Windows: `%APPDATA%\com.weavine.prm\weavine.db`
-  - macOS: `~/Library/Application Support/com.weavine.prm/weavine.db`
-  - Linux: `~/.local/share/com.weavine.prm/weavine.db`
+  - Windows: `%APPDATA%\com.weavine.desktop\weavine.db`
+  - macOS: `~/Library/Application Support/com.weavine.desktop/weavine.db`
+  - Linux: `~/.local/share/com.weavine.desktop/weavine.db`
 - **Local HTTP port** for the in-app Tauri webview bridge: default `3299` (overridable in `src-tauri/tauri.conf.json`).
 - **Sync server**: copy `.env.example` to `.env`, set `DATABASE_URL`, `JWT_SECRET`, `BIND_ADDR`.
 

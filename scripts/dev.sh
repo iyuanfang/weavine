@@ -59,13 +59,13 @@ case "$CMD" in
       exit 1
     fi
     WORK="/tmp/weavine-verify-$$"
-    rm -rf "$WORK" && mkdir -p "$WORK/data/com.weavine.prm"
+    rm -rf "$WORK" && mkdir -p "$WORK/data/com.weavine.desktop"
     dpkg-deb -x "$DEB" "$WORK/extract/"
     BUNDLED_DB="$WORK/extract/usr/lib/Weavine/_up_/standalone-bundle/dev.db"
     log "Bundled DB tables: $(python3 -c "import sqlite3; c=sqlite3.connect('$BUNDLED_DB'); print([r[0] for r in c.execute(\"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name\").fetchall()])")"
 
     log "Stage 1: Database::new() creates empty dev.db (post-Fix-A migrate() is no-op)"
-    python3 -c "import sqlite3; c=sqlite3.connect('$WORK/data/com.weavine.prm/dev.db'); c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA foreign_keys=ON'); c.close()"
+    python3 -c "import sqlite3; c=sqlite3.connect('$WORK/data/com.weavine.desktop/dev.db'); c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA foreign_keys=ON'); c.close()"
 
     log "Stage 2: spawner detects incomplete schema and copies bundled DB"
     python3 << PYEOF
@@ -76,7 +76,7 @@ def is_db_fully_initialized(p):
         if not c.execute('SELECT 1 FROM sqlite_master WHERE type=? AND name=?',('table',t)).fetchone():
             return False
     return True
-db='$WORK/data/com.weavine.prm/dev.db'
+db='$WORK/data/com.weavine.desktop/dev.db'
 if not is_db_fully_initialized(db):
     shutil.copy('$BUNDLED_DB', db)
     print('  → schema was incomplete, copied bundled DB')
@@ -86,11 +86,11 @@ PYEOF
 
     log "Stage 3: spawn standalone-bundle server and hit /contacts"
     PORT=3299
-    cd standalone-bundle && DATABASE_URL="file:$WORK/data/com.weavine.prm/dev.db" IS_DESKTOP=true PORT=$PORT HOSTNAME=127.0.0.1 NODE_ENV=production setsid node server.js > "$WORK/server.log" 2>&1 < /dev/null &
+    cd standalone-bundle && DATABASE_URL="file:$WORK/data/com.weavine.desktop/dev.db" IS_DESKTOP=true PORT=$PORT HOSTNAME=127.0.0.1 NODE_ENV=production setsid node server.js > "$WORK/server.log" 2>&1 < /dev/null &
     SERVER_PID=$!; disown
     sleep 4
     HTTP=$(curl -s -m 8 -o "$WORK/contacts.html" -w "%{http_code}" -H "Cache-Control: no-cache" "http://127.0.0.1:$PORT/contacts?t=$(date +%s%N)")
-    DIAG_LINES=$(wc -l < "$WORK/data/com.weavine.prm/diag.log" 2>/dev/null || echo 0)
+    DIAG_LINES=$(wc -l < "$WORK/data/com.weavine.desktop/diag.log" 2>/dev/null || echo 0)
     ERRORS=$(grep -cE 'Error:' "$WORK/server.log" || echo 0)
     cd "$PROJECT_ROOT"
     pkill -9 -f "standalone-bundle/server.js" 2>/dev/null || true

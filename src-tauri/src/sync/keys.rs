@@ -5,6 +5,7 @@
 //
 // Generated: 2026-07-05, server /www/weavine/jwt-public.pem
 
+#[allow(dead_code)]
 pub const JWT_RSA_PUBLIC_KEY_PEM: &str = r#"-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4LeheY3YR88H1AO2eWEO
 VHknUVZAaoD6Xd9X5xEyO4DoZ51mbvtIN+PLlhwL5ZS+oFNjnIKmSarQ928W+77i
@@ -16,6 +17,7 @@ UQIDAQAB
 -----END PUBLIC KEY-----"#;
 
 /// PEM-encoded RSA public key as bytes (for jsonwebtoken crate).
+#[allow(dead_code)]
 pub fn decoding_key() -> jsonwebtoken::DecodingKey {
     jsonwebtoken::DecodingKey::from_rsa_pem(JWT_RSA_PUBLIC_KEY_PEM.as_bytes())
         .expect("embedded public key is valid PEM")

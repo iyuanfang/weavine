@@ -230,6 +230,9 @@ CREATE INDEX IF NOT EXISTS "Action_user_id_project_id_idx" ON "Action"("user_id"
 CREATE INDEX IF NOT EXISTS "Event_user_id_project_id_idx" ON "Event"("user_id", "project_id");
 CREATE INDEX IF NOT EXISTS "ProjectContact_user_id_idx" ON "ProjectContact"("user_id");
 CREATE INDEX IF NOT EXISTS "ProjectContact_contact_id_idx" ON "ProjectContact"("contact_id");
+CREATE INDEX IF NOT EXISTS "Contact_user_id_last_contacted_at_idx" ON "Contact"("user_id", "last_contacted_at DESC");
+CREATE INDEX IF NOT EXISTS "Contact_user_id_created_at_idx" ON "Contact"("user_id", "created_at DESC");
+CREATE INDEX IF NOT EXISTS "Contact_user_id_nickname_idx" ON "Contact"("user_id", "nickname COLLATE NOCASE ASC");
 CREATE TABLE IF NOT EXISTS "UserAccount" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,

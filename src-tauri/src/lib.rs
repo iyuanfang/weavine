@@ -17,7 +17,7 @@ static STARTUP_ERROR: OnceLock<String> = OnceLock::new();
 
 #[cfg(feature = "tauri")]
 pub(crate) fn startup_error() -> Option<String> {
-    STARTUP_ERROR.get().map(|s| s.clone())
+    STARTUP_ERROR.get().cloned()
 }
 
 #[cfg(not(feature = "tauri"))]
@@ -29,7 +29,7 @@ pub(crate) fn startup_error() -> Option<String> {
 fn dirs_data_dir_fallback() -> std::path::PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("com.weavine.prm")
+        .join("com.weavine.desktop")
 }
 
 #[cfg(feature = "tauri")]

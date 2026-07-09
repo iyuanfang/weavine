@@ -66,7 +66,7 @@ export function Tags() {
   }
 
   const tags = tagsQuery.data ?? [];
-  const contacts = contactsQuery.data ?? [];
+  const contacts = contactsQuery.data?.items ?? [];
 
   const taggedContactIds = new Set<string>();
   for (const c of contacts) {

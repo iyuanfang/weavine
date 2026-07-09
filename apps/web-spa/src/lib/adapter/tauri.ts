@@ -38,6 +38,7 @@ import type {
   CreateTagInput,
   Event,
   Interaction,
+  ListContactsResult,
   LocalUser,
   PRMAdapter,
   Project,
@@ -92,9 +93,21 @@ export class TauriAdapter implements PRMAdapter {
       tag_id?: string | null;
       search?: string | null;
       importance?: string | null;
-    }): Promise<Contact[]> => {
+      sort_by?: string;
+      sort_dir?: string;
+      limit?: number;
+      offset?: number;
+    }): Promise<ListContactsResult> => {
       const inner = await this.withUserId(p);
-      return invoke<Contact[]>('list_contacts', { p: inner });
+      // Apply defaults so callers can omit sort/ pagination fields.
+      const paramsWithDefaults = {
+        sort_by: 'last_contacted_at',
+        limit: 20,
+        offset: 0,
+        ...inner,
+      };
+      const [items, total] = await invoke<[Contact[], number]>('list_contacts', { p: paramsWithDefaults });
+      return { items, total };
     },
     get: (id: string): Promise<Contact> =>
       invoke<Contact>('get_contact', { id }),

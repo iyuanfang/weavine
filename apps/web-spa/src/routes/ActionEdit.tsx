@@ -51,7 +51,7 @@ export function ActionEdit() {
     queryFn: () => adapter.contacts.list({ user_id: userId! }),
     enabled: !!userId,
   });
-  const contacts = contactsQuery.data ?? [];
+  const contacts = contactsQuery.data?.items ?? [];
 
   const projectsQuery = useQuery({
     queryKey: ['projects', userId],

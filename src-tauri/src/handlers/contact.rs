@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::AppState;
 use weavine_lib::{
     business,
-    models::{Contact, CreateContactInput, ListContactsParams, UpdateContactInput},
+    models::{Contact, CreateContactInput, ListContactsParams, UpdateContactInput, DEFAULT_CONTACT_LIMIT, DEFAULT_CONTACT_SORT},
 };
 
 #[derive(Deserialize)]
@@ -16,17 +16,23 @@ pub struct ListParams {
     pub tag_id: Option<String>,
     pub search: Option<String>,
     pub importance: Option<String>,
+    pub sort_by: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 pub async fn list(
     State(s): State<AppState>,
     Query(p): Query<ListParams>,
-) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
+) -> Result<Json<(Vec<Contact>, i64)>, (StatusCode, String)> {
     let params = ListContactsParams {
         user_id: p.user_id,
         tag_id: p.tag_id,
         search: p.search,
         importance: p.importance,
+        sort_by: p.sort_by.unwrap_or_else(|| DEFAULT_CONTACT_SORT.to_string()),
+        limit: p.limit.unwrap_or(DEFAULT_CONTACT_LIMIT),
+        offset: p.offset.unwrap_or(0),
     };
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     business::contact::list(&conn, &params)

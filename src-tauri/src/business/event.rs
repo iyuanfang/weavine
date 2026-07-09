@@ -32,6 +32,7 @@ pub(crate) fn row_to_event(row: &rusqlite::Row) -> rusqlite::Result<Event> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn list(
     conn: &Connection,
     user_id: &str,
@@ -72,7 +73,7 @@ pub fn list(
         Some(v) if v == "true" || v == "1" => {
             sql.push_str(" AND Event.archived_at IS NOT NULL");
         }
-        Some(v) if v == "all" => {}
+        Some("all") => {}
         _ => {
             sql.push_str(" AND Event.archived_at IS NULL");
         }

@@ -67,7 +67,7 @@ export function ActionsList() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [collapsed, setCollapsed] = useLocalStorageSet('prm:actions:collapsed');
+  const [collapsed, setCollapsed] = useLocalStorageSet('weavine:actions:collapsed');
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -495,6 +495,7 @@ export function ActionsList() {
                     });
                   };
                   const overdueInSection = items.filter((a) => {
+                    if (a.status === 'done') return false;
                     if (!a.due_at) return false;
                     return new Date(a.due_at) < new Date();
                   }).length;
@@ -587,7 +588,7 @@ function ActionRowBody({
   let dueLabel: string | null = null;
   let dueTone = '';
   if (dueDate) {
-    if (dueDate < todayStart) {
+    if (dueDate < todayStart && !isDone) {
       dueTone = 'overdue';
       dueLabel = `${dueDate.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })} 已过期`;
     } else if (dueDate < tomorrowEnd) {

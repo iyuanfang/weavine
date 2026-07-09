@@ -1,5 +1,5 @@
 use crate::models::*;
-use rusqlite::Connection;
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 use uuid::Uuid;
 
 pub(crate) fn row_to_interaction(row: &rusqlite::Row) -> rusqlite::Result<Interaction> {
@@ -76,7 +76,11 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
-    conn.execute(
+    // Use a transaction so the Interaction INSERT and Contact bump are atomic.
+    // new_unchecked is required because create() receives &Connection, not &mut.
+    let tx = Transaction::new_unchecked(conn, TransactionBehavior::Deferred)?;
+
+    tx.execute(
         "INSERT INTO Interaction \
          (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -93,11 +97,30 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
         ],
     )?;
 
-    conn.query_row(
+    // Bump the contact's last_contacted_at when linked to a contact.
+    // Use the interaction's occurred_at so the sort reflects when the
+    // interaction happened, not when it was entered.
+    if let Some(contact_id) = &input.contact_id {
+        let rows = tx.execute(
+            "UPDATE Contact SET last_contacted_at = ?1 WHERE id = ?2",
+            rusqlite::params![&input.occurred_at, contact_id],
+        )?;
+        if rows == 0 {
+            eprintln!(
+                "[interaction::create] contact {} not found for last_contacted_at bump",
+                contact_id
+            );
+        }
+    }
+
+    let interaction = tx.query_row(
         &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
         rusqlite::params![&id],
         row_to_interaction,
-    )
+    )?;
+
+    tx.commit()?;
+    Ok(interaction)
 }
 
 pub fn update(conn: &Connection, input: &UpdateInteractionInput) -> rusqlite::Result<Interaction> {
@@ -165,4 +188,108 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Interaction> {
         rusqlite::params![id],
         row_to_interaction,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::migration;
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        migration::run(&conn).unwrap();
+        conn
+    }
+
+    fn insert_test_contact(conn: &Connection, id: &str, nickname: &str) {
+        conn.execute(
+            "INSERT INTO Contact (id, user_id, nickname, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
+            rusqlite::params![id, "local-default", nickname, "2026-01-01T00:00:00.000Z"],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn create_bumps_contact_last_contacted_at() {
+        let conn = setup_db();
+        insert_test_contact(&conn, "c1", "Alice");
+
+        let input = CreateInteractionInput {
+            user_id: "local-default".to_string(),
+            contact_id: Some("c1".to_string()),
+            action_id: None,
+            event_id: None,
+            occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
+            channel: Some("phone".to_string()),
+            summary: "Test call".to_string(),
+        };
+
+        let interaction = create(&conn, &input).unwrap();
+        assert_eq!(interaction.contact_nickname, Some("Alice".to_string()));
+
+        let bumped: Option<String> = conn
+            .query_row(
+                "SELECT last_contacted_at FROM Contact WHERE id = ?1",
+                rusqlite::params!["c1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(bumped, Some("2026-06-15T10:30:00.000Z".to_string()));
+    }
+
+    #[test]
+    fn create_with_none_contact_id_skips_bump() {
+        let conn = setup_db();
+        insert_test_contact(&conn, "c1", "Alice");
+
+        let input = CreateInteractionInput {
+            user_id: "local-default".to_string(),
+            contact_id: None,
+            action_id: None,
+            event_id: None,
+            occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
+            channel: None,
+            summary: "Standalone note".to_string(),
+        };
+
+        let interaction = create(&conn, &input).unwrap();
+        assert!(interaction.contact_nickname.is_none());
+
+        let bumped: Option<String> = conn
+            .query_row(
+                "SELECT last_contacted_at FROM Contact WHERE id = ?1",
+                rusqlite::params!["c1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(bumped, None);
+    }
+
+    #[test]
+    fn create_with_missing_contact_still_succeeds() {
+        let conn = setup_db();
+
+        // Disable FK enforcement for this test — we're testing the bump-logic
+        // path (UPDATE returns 0 rows, log a warning, don't fail), not FK
+        // behavior. Production FK constraint prevents INSERT with a bogus
+        // contact_id; the "missing contact" scenario happens only as a
+        // concurrent-delete race, which we cannot reproduce in a single-
+        // threaded test without disabling FK checks.
+        conn.execute_batch("PRAGMA foreign_keys=OFF;").unwrap();
+
+        let input = CreateInteractionInput {
+            user_id: "local-default".to_string(),
+            contact_id: Some("nonexistent".to_string()),
+            action_id: None,
+            event_id: None,
+            occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
+            channel: None,
+            summary: "Orphan interaction".to_string(),
+        };
+
+        let interaction = create(&conn, &input).unwrap();
+        assert_eq!(interaction.summary, "Orphan interaction");
+        assert!(interaction.contact_nickname.is_none());
+    }
 }

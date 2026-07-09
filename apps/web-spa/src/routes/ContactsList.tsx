@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -7,7 +7,13 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
-import type { Contact, UpdateContactInput } from '../lib/adapter/types';
+import { parseCsv, parseVCard } from '../lib/import/parseContacts';
+import type {
+  CreateContactInput,
+  Contact,
+  ContactSortBy,
+  UpdateContactInput,
+} from '../lib/adapter/types';
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -16,6 +22,37 @@ function useDebouncedValue<T>(value: T, delay: number): T {
     return () => clearTimeout(id);
   }, [value, delay]);
   return debounced;
+}
+
+// Run an array of async tasks with a fixed concurrency cap.
+// Used by the CSV/vCard importer so a 1000-row sheet doesn't fire
+// 1000 simultaneous Tauri invokes (the rusqlite connection lock
+// would serialise them anyway, but each round-trip costs ~1ms).
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<unknown>,
+): Promise<PromiseSettledResult<unknown>[]> {
+  const results: PromiseSettledResult<unknown>[] = new Array(items.length);
+  let cursor = 0;
+
+  const take = async () => {
+    while (true) {
+      const idx = cursor;
+      cursor += 1;
+      if (idx >= items.length) return;
+      try {
+        const value = await worker(items[idx]);
+        results[idx] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[idx] = { status: 'rejected', reason };
+      }
+    }
+  };
+
+  const lanes = Array.from({ length: Math.min(limit, items.length) }, () => take());
+  await Promise.all(lanes);
+  return results;
 }
 
 const IMPORTANCE_LABELS: Record<string, string> = {
@@ -33,6 +70,14 @@ const IMPORTANCE_DOT: Record<string, string> = {
   low: '#9ca3af',
 };
 
+const PAGE_SIZE = 20;
+
+const SORT_OPTIONS: { value: ContactSortBy; label: string }[] = [
+  { value: 'last_contacted_at', label: '最近联系' },
+  { value: 'created_at', label: '最近添加' },
+  { value: 'nickname', label: '姓名 A-Z' },
+];
+
 export function ContactsList() {
   const adapter = useAdapter();
   const userId = useUserId();
@@ -42,6 +87,11 @@ export function ContactsList() {
   const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [selectedImportance, setSelectedImportance] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<ContactSortBy>('last_contacted_at');
+  const [page, setPage] = useState(0);
+
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
 
   const updateMutation = useMutation({
     mutationFn: (input: UpdateContactInput) => adapter.contacts.update(input),
@@ -60,7 +110,13 @@ export function ContactsList() {
     queryKey: [
       'contacts',
       userId,
-      { search: debouncedSearch, tag_id: selectedTagId, importance: selectedImportance },
+      {
+        search: debouncedSearch,
+        tag_id: selectedTagId,
+        importance: selectedImportance,
+        sortBy,
+        page,
+      },
     ],
     queryFn: () =>
       adapter.contacts.list({
@@ -68,6 +124,9 @@ export function ContactsList() {
         tag_id: selectedTagId,
         search: debouncedSearch || null,
         importance: selectedImportance,
+        sort_by: sortBy,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
       }),
     enabled: !!userId,
   });
@@ -84,7 +143,8 @@ export function ContactsList() {
     );
   }
 
-  const contacts = contactsQuery.data ?? [];
+  const contacts = contactsQuery.data?.items ?? [];
+  const total = contactsQuery.data?.total ?? 0;
   const tags = tagsQuery.data ?? [];
   const isLoading = contactsQuery.isLoading;
   const hasActiveFilter = Boolean(debouncedSearch || selectedTagId || selectedImportance);
@@ -106,6 +166,58 @@ export function ContactsList() {
     setSearch('');
     setSelectedTagId(null);
     setSelectedImportance(null);
+    setPage(0);
+  };
+
+  const handleImportFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const text = String(reader.result ?? '');
+      const lower = file.name.toLowerCase();
+      const parsed =
+        lower.endsWith('.vcf') || lower.endsWith('.vcard')
+          ? parseVCard(text)
+          : parseCsv(text);
+      if (parsed.length === 0) {
+        alert('未解析到任何联系人。请检查文件格式（CSV / vCard）或确认表头包含「昵称」列。');
+        return;
+      }
+      if (!confirm(`将导入 ${parsed.length} 个联系人，是否继续？`)) return;
+      if (!userId) return;
+
+      const inputs: CreateContactInput[] = parsed.map((p) => ({
+        user_id: userId,
+        nickname: p.nickname,
+        name: p.name ?? null,
+        company: p.company ?? null,
+        title: p.title ?? null,
+        city: p.city ?? null,
+        email: p.email ?? null,
+        phone: p.phone ?? null,
+        wechat: p.wechat ?? null,
+        notes: p.notes ?? null,
+      }));
+
+      setImporting({ done: 0, total: inputs.length });
+      let done = 0;
+      const results = await runWithConcurrency(inputs, 5, async (input) => {
+        const contact = await adapter.contacts.create(input);
+        done += 1;
+        setImporting({ done, total: inputs.length });
+        return contact;
+      });
+
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      setImporting(null);
+      queryClient.invalidateQueries({ queryKey: ['contacts', userId] });
+      if (failed > 0) {
+        alert(`导入完成：成功 ${results.length - failed} / 失败 ${failed}。请检查控制台日志。`);
+      } else {
+        alert(`导入完成：成功 ${results.length} 个联系人。`);
+      }
+    };
+    reader.onerror = () => alert('读取文件失败');
+    reader.readAsText(file, 'utf-8');
   };
 
   return (
@@ -114,7 +226,7 @@ export function ContactsList() {
         <div>
           <h1 className="page-title">联系人</h1>
           <p className="page-subtitle">
-            {contacts.length} 个人 ·{' '}
+            {total} 个人 ·{' '}
             {hasActiveFilter ? (
               <button
                 type="button"
@@ -136,9 +248,33 @@ export function ContactsList() {
             )}
           </p>
         </div>
-        <Link to="/contacts/new" className="btn btn-primary">
-          + 新建联系人
-        </Link>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => importFileRef.current?.click()}
+            disabled={importing !== null}
+            style={{ opacity: importing !== null ? 0.6 : 1 }}
+          >
+            {importing
+              ? `导入中… ${importing.done}/${importing.total}`
+              : '导入 CSV / vCard'}
+          </button>
+          <Link to="/contacts/new" className="btn btn-primary">
+            + 新建联系人
+          </Link>
+        </div>
+        <input
+          ref={importFileRef}
+          type="file"
+          accept=".csv,.vcf,.vcard,text/csv"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImportFile(file);
+            e.target.value = '';
+          }}
+        />
       </div>
 
       <div className="layout-split">
@@ -150,9 +286,33 @@ export function ContactsList() {
               className="input-base"
               placeholder="姓名、公司…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
               autoComplete="off"
             />
+          </div>
+
+          <div className="filter-panel__divider" />
+
+          <div className="filter-panel__section">
+            <div className="filter-panel__title">排序</div>
+            {SORT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  setSortBy(opt.value);
+                  setPage(0);
+                }}
+                className={`filter-panel__item ${
+                  sortBy === opt.value ? 'filter-panel__item--active' : ''
+                }`}
+              >
+                <span>{opt.label}</span>
+              </button>
+            ))}
           </div>
 
           <div className="filter-panel__divider" />
@@ -161,7 +321,10 @@ export function ContactsList() {
             <div className="filter-panel__title">重要性</div>
             <button
               type="button"
-              onClick={() => setSelectedImportance(null)}
+              onClick={() => {
+                setSelectedImportance(null);
+                setPage(0);
+              }}
               className={`filter-panel__item ${
                 selectedImportance === null ? 'filter-panel__item--active' : ''
               }`}
@@ -178,7 +341,10 @@ export function ContactsList() {
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setSelectedImportance(value)}
+                  onClick={() => {
+                    setSelectedImportance(value);
+                    setPage(0);
+                  }}
                   className={`filter-panel__item ${
                     selectedImportance === value ? 'filter-panel__item--active' : ''
                   }`}
@@ -202,7 +368,10 @@ export function ContactsList() {
                 <div className="filter-panel__title">标签</div>
                 <button
                   type="button"
-                  onClick={() => setSelectedTagId(null)}
+                  onClick={() => {
+                    setSelectedTagId(null);
+                    setPage(0);
+                  }}
                   className={`filter-panel__item ${
                     selectedTagId === null ? 'filter-panel__item--active' : ''
                   }`}
@@ -219,7 +388,10 @@ export function ContactsList() {
                     <button
                       key={tag.id}
                       type="button"
-                      onClick={() => setSelectedTagId(tag.id)}
+                      onClick={() => {
+                        setSelectedTagId(tag.id);
+                        setPage(0);
+                      }}
                       className={`filter-panel__item ${
                         selectedTagId === tag.id ? 'filter-panel__item--active' : ''
                       }`}
@@ -278,16 +450,58 @@ export function ContactsList() {
               </Link>
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: 6 }}>
-              {contacts.map((c) => (
-                <ContactRow
-                  key={c.id}
-                  contact={c}
-                  onChangeImportance={(newImp) =>
-                    updateMutation.mutate({ id: c.id, importance: newImp })
-                  }
-                />
-              ))}
+            <div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {contacts.map((c) => (
+                  <ContactRow
+                    key={c.id}
+                    contact={c}
+                    onChangeImportance={(newImp) =>
+                      updateMutation.mutate({ id: c.id, importance: newImp })
+                    }
+                  />
+                ))}
+              </div>
+              {total > PAGE_SIZE && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    padding: '16px 0 4px',
+                    marginTop: 12,
+                    borderTop: '1px solid var(--border)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                  >
+                    ← 上一页
+                  </button>
+                  <span
+                    style={{
+                      fontSize: 'var(--text-sm)',
+                      color: 'var(--muted)',
+                      minWidth: 160,
+                      textAlign: 'center',
+                    }}
+                  >
+                    第 {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))} 页 · 共 {total} 人
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page >= Math.ceil(total / PAGE_SIZE) - 1}
+                  >
+                    下一页 →
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
