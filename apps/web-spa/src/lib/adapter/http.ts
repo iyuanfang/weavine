@@ -162,7 +162,7 @@ export class HttpAdapter implements PRMAdapter {
       limit?: number;
       offset?: number;
     }): Promise<ListContactsResult> =>
-      request<Contact[]>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })).then((items) => ({ items, total: items.length })),
+      request<{ items: Contact[]; total: number }>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })),
 
     get: (id: string): Promise<Contact> =>
       request<Contact>(this.baseUrl, 'GET', `/api/contacts/${id}`),
