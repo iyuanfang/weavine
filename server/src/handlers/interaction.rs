@@ -79,6 +79,18 @@ pub async fn create(
     .execute(&mut *tx).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // A-path: bump contact.last_contacted_at
+    if let Some(contact_id) = body.get("contact_id").and_then(|v| v.as_str()) {
+        let occurred_at = body.get("occurred_at").and_then(|v| v.as_str()).unwrap_or(&now);
+        sqlx::query("UPDATE contact SET last_contacted_at = $1 WHERE id = $2 AND user_id = $3")
+            .bind(occurred_at)
+            .bind(contact_id)
+            .bind(&auth)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

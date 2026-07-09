@@ -4,11 +4,14 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Contact;
+
+const MAX_PAGE_SIZE: i64 = 200;
+const DEFAULT_PAGE_SIZE: i64 = 20;
 
 #[derive(Deserialize)]
 pub struct ListParams {
@@ -16,15 +19,45 @@ pub struct ListParams {
     pub tag_id: Option<String>,
     pub search: Option<String>,
     pub importance: Option<String>,
+    pub sort_by: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+fn validate_sort_by(sort_by: &str) -> &'static str {
+    match sort_by {
+        "last_contacted_at" => "last_contacted_at DESC NULLS LAST",
+        "created_at" => "created_at DESC",
+        "nickname" => "nickname ASC",
+        _ => "last_contacted_at DESC NULLS LAST",
+    }
 }
 
 pub async fn list(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
-) -> Result<Json<Vec<Contact>>, (StatusCode, String)> {
+) -> Result<Json<Value>, (StatusCode, String)> {
     let auth = extract_auth(&headers)?;
-    let rows = sqlx::query_as::<_, Contact>(
+    let sort_col = validate_sort_by(p.sort_by.as_deref().unwrap_or("last_contacted_at"));
+    let limit = p.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+    let offset = p.offset.unwrap_or(0).max(0);
+
+    let count_sql = "SELECT COUNT(*) FROM contact \
+        WHERE user_id = $1 \
+        AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR company ILIKE '%' || $2 || '%') \
+        AND ($3::text IS NULL OR importance = $3) \
+        AND ($4::text IS NULL OR EXISTS (SELECT 1 FROM contact_tag ct WHERE ct.contact_id = contact.id AND ct.tag_id = $4))";
+    let total: (i64,) = sqlx::query_as(count_sql)
+        .bind(&auth)
+        .bind(&p.search)
+        .bind(&p.importance)
+        .bind(&p.tag_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let query_sql = format!(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
          notes, importance, reminder_enabled, reminder_interval_days::BIGINT AS reminder_interval_days, last_contacted_at, \
          created_at, updated_at \
@@ -33,17 +66,22 @@ pub async fn list(
          AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR company ILIKE '%' || $2 || '%') \
          AND ($3::text IS NULL OR importance = $3) \
          AND ($4::text IS NULL OR EXISTS (SELECT 1 FROM contact_tag ct WHERE ct.contact_id = contact.id AND ct.tag_id = $4)) \
-         ORDER BY created_at DESC",
-    )
-    .bind(&auth)
-    .bind(&p.search)
-    .bind(&p.importance)
-    .bind(&p.tag_id)
-    .fetch_all(&*pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+         ORDER BY {} LIMIT ${} OFFSET ${}",
+        sort_col, 5, 6
+    );
 
-    let mut result = Vec::with_capacity(rows.len());
+    let rows = sqlx::query_as::<_, Contact>(&query_sql)
+        .bind(&auth)
+        .bind(&p.search)
+        .bind(&p.importance)
+        .bind(&p.tag_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut items: Vec<Contact> = Vec::with_capacity(rows.len());
     for contact in rows {
         let tags = sqlx::query_as::<_, weavine_lib::models::Tag>(
             "SELECT t.id, t.user_id, t.name, t.color, t.created_at \
@@ -53,9 +91,9 @@ pub async fn list(
         .fetch_all(&*pool)
         .await
         .unwrap_or_default();
-        result.push(Contact { tags, ..contact });
+        items.push(Contact { tags, ..contact });
     }
-    Ok(Json(result))
+    Ok(Json(json!({ "items": items, "total": total.0 })))
 }
 
 pub async fn get(
