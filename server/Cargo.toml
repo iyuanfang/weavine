@@ -6,6 +6,7 @@ license = "AGPL-3.0"
 
 [dependencies]
 weavine = { path = "../src-tauri", default-features = false, features = ["sqlx"] }
+argon2 = "0.5"
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
