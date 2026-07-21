@@ -34,7 +34,7 @@ pub async fn sweep(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let archived = crate::business::archive_sweep::sweep_user(&pool, &auth, chrono::Utc::now())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -71,7 +71,7 @@ pub async fn archive_summary(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     lazy_sweep(&pool, &auth).await;
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(30))
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
@@ -98,7 +98,7 @@ pub async fn archive_counts(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     lazy_sweep(&pool, &auth).await;
     let action = count_table(&pool, &auth, "action", None).await?;
     let event = count_table(&pool, &auth, "event", None).await?;
@@ -115,7 +115,7 @@ pub async fn archive_list(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     lazy_sweep(&pool, &auth).await;
     let entity = p.entity.as_deref().unwrap_or("");
     let limit = p.limit.unwrap_or(50).min(MAX_LIMIT);

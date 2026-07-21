@@ -32,7 +32,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Action>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Action>(&format!(
         "{ACTION_SELECT} WHERE a.user_id = $1 \
          AND ($2::text IS NULL OR a.status = $2) \
@@ -105,7 +105,7 @@ pub async fn get(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<Action>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let action = sqlx::query_as::<_, Action>(&format!(
         "{ACTION_SELECT} WHERE a.id = $1 AND a.user_id = $2",
     ))

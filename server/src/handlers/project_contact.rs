@@ -37,7 +37,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     Path(project_id): Path<String>,
 ) -> Result<Json<Vec<ProjectContactWithContact>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, ContactWithRole>(
         "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.city, c.email, c.phone, c.wechat, \
                 c.notes, c.importance, c.reminder_enabled, c.reminder_interval_days::BIGINT AS reminder_interval_days, c.last_contacted_at, \

@@ -150,6 +150,24 @@ export interface Setting {
   updated_at: string;
 }
 
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  prefix: string;
+  last4: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface ApiKeyRevealed {
+  id: string;
+  key: string;
+}
+
+export interface CreateApiKeyInput {
+  name: string;
+}
+
 export interface StartupInfo {
   server_ready: boolean;
   error: string | null;
@@ -493,6 +511,13 @@ export interface PRMAdapter {
     login(input: CloudLoginInput): Promise<CloudStatus>;
     logout(): Promise<void>;
     syncNow(): Promise<CloudSyncResult>;
+  };
+
+  apiKeys: {
+    list(user_id: string): Promise<ApiKeySummary[]>;
+    create(user_id: string, input: CreateApiKeyInput): Promise<ApiKeyRevealed & { name: string; prefix: string; last4: string; created_at: string }>;
+    reveal(user_id: string, id: string): Promise<ApiKeyRevealed>;
+    revoke(user_id: string, id: string): Promise<void>;
   };
 }
 

@@ -33,6 +33,7 @@ import { TagDetail } from './routes/TagDetail';
 import { InteractionDetail } from './routes/InteractionDetail';
 import { SearchPage } from './routes/Search';
 import { SettingsPage } from './routes/Settings';
+import { ApiKeysPage } from './routes/ApiKeys';
 import ArchivePage from './routes/Archive';
 
 export interface AppRoute {
@@ -83,6 +84,7 @@ export const routes: AppRoute[] = [
   { path: '/tags/:tagId', Component: TagDetail, label: 'TagDetail' },
   { path: '/search', Component: SearchPage, label: 'Search' },
   { path: '/settings', Component: SettingsPage, label: 'Settings' },
+  { path: '/settings/api-keys', Component: ApiKeysPage, label: 'API 密钥' },
   { path: '/archive', Component: ArchivePage, label: 'Archive' },
 ];
 

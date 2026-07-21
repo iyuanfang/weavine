@@ -20,7 +20,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     _q: Query<ListParams>,
 ) -> Result<Json<Vec<Setting>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Setting>(
         "SELECT id, user_id, key, value, updated_at FROM setting WHERE user_id = $1",
     )
