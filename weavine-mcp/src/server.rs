@@ -86,6 +86,37 @@ fn tier1_tools() -> Vec<Tool> {
     t
 }
 
+fn tier2_tools() -> Vec<Tool> {
+    let mut t = Vec::with_capacity(28);
+    t.push(tool("auth_register", "Register a new account. Input: {email, password}. No API key needed."));
+    t.push(tool("auth_login", "Login by email + password. Input: {email, password}. No API key needed."));
+    t.push(tool("auth_logout", "Logout the current session. No API key needed."));
+    t.push(tool("diagnostic_user", "Server-side diagnostic of the current user."));
+    t.push(tool("diagnostic_startup", "Server startup diagnostic — db connectivity, sync status, counts."));
+    t.push(tool("list_tags", "List tags. Input (optional): {q, limit}."));
+    t.push(tool("create_tag", "Create a tag. Input body: {name, color?, parent_id?}."));
+    t.push(tool("update_tag", "Update a tag. Input: {id, ...fields}."));
+    t.push(tool("delete_tag", "Delete a tag. Input: {id}."));
+    t.push(tool("list_interactions", "List interactions. Input (optional): {contact_id, event_id, kind, limit, offset}."));
+    t.push(tool("get_interaction", "Get interaction by id. Input: {id}."));
+    t.push(tool("create_interaction", "Create an interaction. Input body: {contact_id?, event_id?, kind, ...}."));
+    t.push(tool("update_interaction", "Update an interaction. Input: {id, ...fields}."));
+    t.push(tool("delete_interaction", "Delete an interaction. Input: {id}."));
+    t.push(tool("archive_summary", "Archive summary across entities."));
+    t.push(tool("archive_counts", "Per-entity archive counts."));
+    t.push(tool("archive_list", "List archived items. Input (optional): {entity, limit}."));
+    t.push(tool("archive_unarchive_one", "Unarchive one item. Input: {entity, id}."));
+    t.push(tool("archive_bulk_unarchive", "Bulk unarchive. Input: {entity, ids}."));
+    t.push(tool("list_settings", "List current-user settings."));
+    t.push(tool("upsert_setting", "Upsert a setting. Input: {key, value}."));
+    t.push(tool("delete_setting", "Delete a setting. Input: {key}."));
+    t.push(tool("search", "Cross-entity search. Input: {q, entities?, limit?}."));
+    t.push(tool("sync_manifest", "Get sync manifest. Input (optional): {device_id}."));
+    t.push(tool("sync_push", "Push sync changes. Input: {device_id, changes}."));
+    t.push(tool("sync_pull", "Pull sync changes since cursor. Input: {device_id, since?}."));
+    t
+}
+
 impl ServerHandler for WeavineMcpServer {
     async fn call_tool(
         &self,
@@ -187,6 +218,83 @@ impl ServerHandler for WeavineMcpServer {
                 let input: crate::tools::reminder::ReminderId = Self::parse(args)?;
                 self.delete_reminder(input).await?
             }
+            "auth_register" => {
+                let input: crate::tools::auth_jwt::AuthRegisterInput = Self::parse(args)?;
+                self.auth_register(input).await?
+            }
+            "auth_login" => {
+                let input: crate::tools::auth_jwt::AuthLoginInput = Self::parse(args)?;
+                self.auth_login(input).await?
+            }
+            "auth_logout" => self.auth_logout().await?,
+            "diagnostic_user" => {
+                let input: crate::tools::diagnostic::DiagnosticUserInput = Self::parse(args)?;
+                self.diagnostic_user(input).await?
+            }
+            "diagnostic_startup" => self.diagnostic_startup().await?,
+            "list_tags" => {
+                let input: crate::tools::tag::ListTagsQuery = Self::parse(args)?;
+                self.list_tags(input).await?
+            }
+            "create_tag" => self.create_tag(Self::to_value(args)).await?,
+            "update_tag" => self.update_tag(Self::to_value(args)).await?,
+            "delete_tag" => {
+                let input: crate::tools::tag::TagId = Self::parse(args)?;
+                self.delete_tag(input).await?
+            }
+            "list_interactions" => {
+                let input: crate::tools::interaction::ListInteractionsQuery = Self::parse(args)?;
+                self.list_interactions(input).await?
+            }
+            "get_interaction" => {
+                let input: crate::tools::interaction::InteractionId = Self::parse(args)?;
+                self.get_interaction(input).await?
+            }
+            "create_interaction" => self.create_interaction(Self::to_value(args)).await?,
+            "update_interaction" => self.update_interaction(Self::to_value(args)).await?,
+            "delete_interaction" => {
+                let input: crate::tools::interaction::InteractionId = Self::parse(args)?;
+                self.delete_interaction(input).await?
+            }
+            "archive_summary" => self.archive_summary().await?,
+            "archive_counts" => self.archive_counts().await?,
+            "archive_list" => {
+                let input: crate::tools::archive::ArchiveListQuery = Self::parse(args)?;
+                self.archive_list(input).await?
+            }
+            "archive_unarchive_one" => {
+                let input: crate::tools::archive::ArchiveUnarchiveInput = Self::parse(args)?;
+                self.archive_unarchive_one(input).await?
+            }
+            "archive_bulk_unarchive" => {
+                let input: crate::tools::archive::ArchiveBulkUnarchiveInput = Self::parse(args)?;
+                self.archive_bulk_unarchive(input).await?
+            }
+            "list_settings" => self.list_settings().await?,
+            "upsert_setting" => {
+                let input: crate::tools::setting::SettingUpsertInput = Self::parse(args)?;
+                self.upsert_setting(input).await?
+            }
+            "delete_setting" => {
+                let input: crate::tools::setting::SettingDeleteInput = Self::parse(args)?;
+                self.delete_setting(input).await?
+            }
+            "search" => {
+                let input: crate::tools::search::SearchQuery = Self::parse(args)?;
+                self.search(input).await?
+            }
+            "sync_manifest" => {
+                let input: crate::tools::sync::SyncManifestInput = Self::parse(args)?;
+                self.sync_manifest(input).await?
+            }
+            "sync_push" => {
+                let input: crate::tools::sync::SyncPushInput = Self::parse(args)?;
+                self.sync_push(input).await?
+            }
+            "sync_pull" => {
+                let input: crate::tools::sync::SyncPullInput = Self::parse(args)?;
+                self.sync_pull(input).await?
+            }
             other => {
                 return Err(RmcpError::invalid_request(
                     format!("unknown tool: {other}"),
@@ -203,11 +311,14 @@ impl ServerHandler for WeavineMcpServer {
         _request: PaginatedRequestParam,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, RmcpError> {
-        let tools = tier1_tools();
+        let mut tools = tier1_tools();
+        if matches!(self.cfg.tier, Tier::Full) {
+            tools.extend(tier2_tools());
+        }
         Ok(ListToolsResult {
             tools,
             next_cursor: None,
-            
+
         })
     }
 

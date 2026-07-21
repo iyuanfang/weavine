@@ -80,6 +80,49 @@ impl WeavineClient {
         self.send_with_body(reqwest::Method::PUT, path, body).await
     }
 
+    pub async fn post_public(&self, path: &str, body: &Value) -> McpResult<Value> {
+        let url = self.url(path);
+        let resp = self
+            .http
+            .post(&url)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| McpError::Request(e.to_string()))?;
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        if status.is_success() {
+            if text.is_empty() {
+                return Ok(Value::Null);
+            }
+            return serde_json::from_str(&text)
+                .map_err(|e| McpError::Serde(format!("{e}: {text}")));
+        }
+        Err(McpError::http(status.as_u16(), text))
+    }
+
+    pub async fn delete_with_body(&self, path: &str, body: &Value) -> McpResult<Value> {
+        let url = self.url(path);
+        let resp = self
+            .http
+            .delete(&url)
+            .headers(self.auth_headers())
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| McpError::Request(e.to_string()))?;
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        if status == StatusCode::NO_CONTENT || text.is_empty() {
+            return Ok(Value::Null);
+        }
+        if status.is_success() {
+            return serde_json::from_str(&text)
+                .map_err(|e| McpError::Serde(format!("{e}: {text}")));
+        }
+        Err(McpError::http(status.as_u16(), text))
+    }
+
     pub async fn delete(&self, path: &str) -> McpResult<Value> {
         let mut attempts = 0u8;
         loop {
