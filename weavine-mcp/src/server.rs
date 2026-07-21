@@ -106,11 +106,8 @@ fn tool(name: &'static str, description: &'static str, schema: Arc<JsonObject>) 
 }
 
 fn tier1_tools() -> Vec<Tool> {
-    use crate::tools::{action, api_key, contact, event, project, reminder};
+    use crate::tools::{action, contact, event, project, reminder};
     let mut t = Vec::with_capacity(32);
-    t.push(tool("list_api_keys", "List active (non-revoked) API keys for the current user.", empty_schema()));
-    t.push(tool("create_api_key", "Create a new API key. Returns plaintext key exactly once.", schema_of::<api_key::CreateApiKeyInput>()));
-    t.push(tool("revoke_api_key", "Revoke an API key by id.", schema_of::<api_key::ApiKeyId>()));
     t.push(tool("list_contacts", "List contacts with optional filters.", schema_of::<contact::ListContactsQuery>()));
     t.push(tool("get_contact", "Get contact by id.", schema_of::<contact::ContactId>()));
     t.push(tool("create_contact", "Create a contact. Body: contact fields.", schema_of::<GenericBody>()));
@@ -201,15 +198,6 @@ impl WeavineMcpServer {
         args: Option<JsonObject>,
     ) -> McpResult<serde_json::Value> {
         Ok(match name {
-            "list_api_keys" => self.list_api_keys().await?,
-            "create_api_key" => {
-                let input: crate::tools::api_key::CreateApiKeyInput = Self::parse(args)?;
-                self.create_api_key(input).await?
-            }
-            "revoke_api_key" => {
-                let input: crate::tools::api_key::ApiKeyId = Self::parse(args)?;
-                self.revoke_api_key(input).await?
-            }
             "list_contacts" => {
                 let input: crate::tools::contact::ListContactsQuery = Self::parse(args)?;
                 self.list_contacts(input).await?
@@ -401,7 +389,7 @@ impl WeavineMcpServer {
                 env!("CARGO_PKG_VERSION"),
             ))
             .with_instructions(match tier {
-                Tier::Default => "weavine-mcp (Tier 1): contacts, events, actions, projects, reminders + your api_key. Set WEAVINE_MCP_TIER=full for additional resources.".to_string(),
+                Tier::Default => "weavine-mcp (Tier 1): contacts, events, actions, projects, reminders. Set WEAVINE_MCP_TIER=full for additional resources.".to_string(),
                 Tier::Full => "weavine-mcp (Tier 2 / full): full access.".to_string(),
             })
     }
