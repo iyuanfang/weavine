@@ -14,6 +14,8 @@ pub struct EventId {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 pub struct ListEventsQuery {
     #[serde(default)]
+    pub include_archived: Option<bool>,
+    #[serde(default)]
     pub from: Option<String>,
     #[serde(default)]
     pub to: Option<String>,
@@ -37,6 +39,7 @@ impl WeavineMcpServer {
         q: ListEventsQuery,
     ) -> McpResult<serde_json::Value> {
         let mut pairs: Vec<(&str, String)> = Vec::new();
+        pairs.push(("archived", if q.include_archived.unwrap_or(false) { "true".to_string() } else { "false".to_string() }));
         if let Some(v) = &q.from { pairs.push(("from", v.clone())); }
         if let Some(v) = &q.to { pairs.push(("to", v.clone())); }
         if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }

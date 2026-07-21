@@ -14,6 +14,8 @@ pub struct ActionId {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 pub struct ListActionsQuery {
     #[serde(default)]
+    pub include_archived: Option<bool>,
+    #[serde(default)]
     pub contact_id: Option<String>,
     #[serde(default)]
     pub project_id: Option<String>,
@@ -30,6 +32,7 @@ impl WeavineMcpServer {
         q: ListActionsQuery,
     ) -> McpResult<serde_json::Value> {
         let mut pairs: Vec<(&str, String)> = Vec::new();
+        pairs.push(("archived", if q.include_archived.unwrap_or(false) { "true".to_string() } else { "false".to_string() }));
         if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
         if let Some(v) = &q.project_id { pairs.push(("project_id", v.clone())); }
         if let Some(v) = &q.status { pairs.push(("status", v.clone())); }
