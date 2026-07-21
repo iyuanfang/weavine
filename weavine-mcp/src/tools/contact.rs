@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::McpResult;
 use crate::error::McpError;
 use crate::server::WeavineMcpServer;
+use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ContactId {
@@ -35,7 +36,7 @@ impl WeavineMcpServer {
         if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
         if let Some(v) = &q.sort { pairs.push(("sort", v.clone())); }
         let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let v = self.client.get("/api/contacts", &refs).await?;
+        let v = self.client.get("/api/contacts", &refs, api!()).await?;
         Ok(v)
     }
 
@@ -45,7 +46,7 @@ impl WeavineMcpServer {
     ) -> McpResult<serde_json::Value> {
         let v = self
             .client
-            .get(&format!("/api/contacts/{}", input.id), &[])
+            .get(&format!("/api/contacts/{}", input.id), &[], api!())
             .await?;
         Ok(v)
     }
@@ -54,7 +55,7 @@ impl WeavineMcpServer {
         &self,
         body: serde_json::Value,
     ) -> McpResult<serde_json::Value> {
-        let v = self.client.post("/api/contacts", &body).await?;
+        let v = self.client.post("/api/contacts", &body, api!()).await?;
         Ok(v)
     }
 
@@ -69,7 +70,7 @@ impl WeavineMcpServer {
         let body = input.get("fields").cloned().unwrap_or(serde_json::json!({}));
         let v = self
             .client
-            .put(&format!("/api/contacts/{id}"), &body)
+            .put(&format!("/api/contacts/{id}"), &body, api!())
             .await?;
         Ok(v)
     }
@@ -79,7 +80,7 @@ impl WeavineMcpServer {
         input: ContactId,
     ) -> McpResult<serde_json::Value> {
         self.client
-            .delete(&format!("/api/contacts/{}", input.id))
+            .delete(&format!("/api/contacts/{}", input.id), api!())
             .await?;
         Ok(serde_json::json!({ "ok": true }))
     }

@@ -41,7 +41,6 @@ impl Transport {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub base_url: String,
-    pub api_key: String,
     pub tier: Tier,
     pub transport: Transport,
     pub http_bind: String,
@@ -51,24 +50,12 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let base_url = std::env::var("WEAVINE_MCP_BASE_URL")
             .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
-        let api_key = std::env::var("WEAVINE_MCP_API_KEY").map_err(|_| {
-            anyhow::anyhow!(
-                "WEAVINE_MCP_API_KEY 未设置 — 生成一个: `curl -X POST $WEAVINE_MCP_BASE_URL/api/api_keys -H 'Authorization: Bearer <jwt>' -H 'Content-Type: application/json' -d '{{\"name\":\"claude\"}}'`"
-            )
-        })?;
-        if api_key.trim().is_empty() {
-            anyhow::bail!("WEAVINE_MCP_API_KEY 不能为空");
-        }
-        if !api_key.starts_with("wvk_") {
-            anyhow::bail!("WEAVINE_MCP_API_KEY 必须以 wvk_ 开头");
-        }
         let tier = Tier::from_env();
         let transport = Transport::from_env();
         let http_bind = std::env::var("WEAVINE_MCP_HTTP_BIND")
             .unwrap_or_else(|_| "127.0.0.1:3001".to_string());
         Ok(Config {
             base_url: base_url.trim_end_matches('/').to_string(),
-            api_key,
             tier,
             transport,
             http_bind,

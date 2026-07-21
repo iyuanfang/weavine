@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
+use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SearchQuery {
@@ -23,6 +24,6 @@ impl WeavineMcpServer {
             for e in ents { pairs.push(("entities", e)); }
         }
         let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        Ok(self.client.get("/api/search", &refs).await?)
+        Ok(self.client.get("/api/search", &refs, api!()).await?)
     }
 }

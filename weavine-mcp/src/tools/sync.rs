@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
+use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SyncManifestInput {
@@ -26,7 +27,7 @@ impl WeavineMcpServer {
         &self,
         _input: SyncManifestInput,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/sync/manifest", &serde_json::Value::Null).await?)
+        Ok(self.client.post("/api/sync/manifest", &serde_json::Value::Null, api!()).await?)
     }
 
     pub async fn sync_push(
@@ -36,7 +37,7 @@ impl WeavineMcpServer {
         Ok(self.client.post("/api/sync/push", &serde_json::json!({
             "device_id": input.device_id,
             "changes": input.changes,
-        })).await?)
+        }), api!()).await?)
     }
 
     pub async fn sync_pull(
@@ -47,6 +48,6 @@ impl WeavineMcpServer {
         if let Some(s) = input.since {
             body["since"] = serde_json::Value::String(s);
         }
-        Ok(self.client.post("/api/sync/pull", &body).await?)
+        Ok(self.client.post("/api/sync/pull", &body, api!()).await?)
     }
 }

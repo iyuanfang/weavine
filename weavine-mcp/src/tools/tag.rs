@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
+use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ListTagsQuery {
@@ -24,14 +25,14 @@ impl WeavineMcpServer {
         if let Some(v) = q.q { pairs.push(("q", v)); }
         if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
         let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        Ok(self.client.get("/api/tags", &refs).await?)
+        Ok(self.client.get("/api/tags", &refs, api!()).await?)
     }
 
     pub async fn create_tag(
         &self,
         input: serde_json::Value,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/tags", &input).await?)
+        Ok(self.client.post("/api/tags", &input, api!()).await?)
     }
 
     pub async fn update_tag(
@@ -39,14 +40,14 @@ impl WeavineMcpServer {
         input: serde_json::Value,
     ) -> McpResult<serde_json::Value> {
         let id = input.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        Ok(self.client.put(&format!("/api/tags/{}", id), &input).await?)
+        Ok(self.client.put(&format!("/api/tags/{}", id), &input, api!()).await?)
     }
 
     pub async fn delete_tag(
         &self,
         input: TagId,
     ) -> McpResult<serde_json::Value> {
-        let v = self.client.delete(&format!("/api/tags/{}", input.id)).await?;
+        let v = self.client.delete(&format!("/api/tags/{}", input.id), api!()).await?;
         Ok(v)
     }
 }

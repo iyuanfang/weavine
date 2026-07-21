@@ -29,15 +29,20 @@ impl WeavineClient {
         format!("{}{}", self.cfg.base_url, path)
     }
 
-    fn auth_headers(&self) -> reqwest::header::HeaderMap {
+    fn auth_headers(api_key: &str) -> reqwest::header::HeaderMap {
         let mut h = reqwest::header::HeaderMap::new();
-        if let Ok(v) = reqwest::header::HeaderValue::from_str(&self.cfg.api_key) {
+        if let Ok(v) = reqwest::header::HeaderValue::from_str(api_key) {
             h.insert("X-API-Key", v);
         }
         h
     }
 
-    pub async fn get(&self, path: &str, query: &[(&str, &str)]) -> McpResult<Value> {
+    pub async fn get(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+        api_key: &str,
+    ) -> McpResult<Value> {
         let mut attempts = 0u8;
         loop {
             attempts += 1;
@@ -45,7 +50,7 @@ impl WeavineClient {
             let req = self
                 .http
                 .get(&url)
-                .headers(self.auth_headers())
+                .headers(Self::auth_headers(api_key))
                 .query(query);
             match req.send().await {
                 Ok(resp) => {
@@ -72,12 +77,14 @@ impl WeavineClient {
         }
     }
 
-    pub async fn post(&self, path: &str, body: &Value) -> McpResult<Value> {
-        self.send_with_body(reqwest::Method::POST, path, body).await
+    pub async fn post(&self, path: &str, body: &Value, api_key: &str) -> McpResult<Value> {
+        self.send_with_body(reqwest::Method::POST, path, body, api_key)
+            .await
     }
 
-    pub async fn put(&self, path: &str, body: &Value) -> McpResult<Value> {
-        self.send_with_body(reqwest::Method::PUT, path, body).await
+    pub async fn put(&self, path: &str, body: &Value, api_key: &str) -> McpResult<Value> {
+        self.send_with_body(reqwest::Method::PUT, path, body, api_key)
+            .await
     }
 
     pub async fn post_public(&self, path: &str, body: &Value) -> McpResult<Value> {
@@ -101,12 +108,17 @@ impl WeavineClient {
         Err(McpError::http(status.as_u16(), text))
     }
 
-    pub async fn delete_with_body(&self, path: &str, body: &Value) -> McpResult<Value> {
+    pub async fn delete_with_body(
+        &self,
+        path: &str,
+        body: &Value,
+        api_key: &str,
+    ) -> McpResult<Value> {
         let url = self.url(path);
         let resp = self
             .http
             .delete(&url)
-            .headers(self.auth_headers())
+            .headers(Self::auth_headers(api_key))
             .json(body)
             .send()
             .await
@@ -123,7 +135,7 @@ impl WeavineClient {
         Err(McpError::http(status.as_u16(), text))
     }
 
-    pub async fn delete(&self, path: &str) -> McpResult<Value> {
+    pub async fn delete(&self, path: &str, api_key: &str) -> McpResult<Value> {
         let mut attempts = 0u8;
         loop {
             attempts += 1;
@@ -131,7 +143,7 @@ impl WeavineClient {
             let req = self
                 .http
                 .delete(&url)
-                .headers(self.auth_headers());
+                .headers(Self::auth_headers(api_key));
             match req.send().await {
                 Ok(resp) => {
                     let status = resp.status();
@@ -158,7 +170,13 @@ impl WeavineClient {
         }
     }
 
-    async fn send_with_body(&self, method: reqwest::Method, path: &str, body: &Value) -> McpResult<Value> {
+    async fn send_with_body(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: &Value,
+        api_key: &str,
+    ) -> McpResult<Value> {
         let mut attempts = 0u8;
         loop {
             attempts += 1;
@@ -166,7 +184,7 @@ impl WeavineClient {
             let req = self
                 .http
                 .request(method.clone(), &url)
-                .headers(self.auth_headers())
+                .headers(Self::auth_headers(api_key))
                 .json(body);
             match req.send().await {
                 Ok(resp) => {

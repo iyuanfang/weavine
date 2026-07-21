@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
+use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthLoginInput {

@@ -5436,6 +5436,7 @@ dependencies = [
  "anyhow",
  "axum",
  "futures",
+ "http",
  "reqwest 0.12.28",
  "rmcp",
  "schemars 0.8.22",

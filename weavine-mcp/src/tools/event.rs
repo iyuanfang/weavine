@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::McpResult;
 use crate::error::McpError;
 use crate::server::WeavineMcpServer;
+use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct EventId {
@@ -27,7 +28,7 @@ pub struct ListEventsQuery {
 }
 impl WeavineMcpServer {
     pub async fn upcoming_events(&self) -> McpResult<serde_json::Value> {
-        let v = self.client.get("/api/events/upcoming", &[]).await?;
+        let v = self.client.get("/api/events/upcoming", &[], api!()).await?;
         Ok(v)
     }
 
@@ -43,7 +44,7 @@ impl WeavineMcpServer {
         if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
         if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
         let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let v = self.client.get("/api/events", &refs).await?;
+        let v = self.client.get("/api/events", &refs, api!()).await?;
         Ok(v)
     }
 
@@ -51,7 +52,7 @@ impl WeavineMcpServer {
         &self,
         input: EventId,
     ) -> McpResult<serde_json::Value> {
-        let v = self.client.get(&format!("/api/events/{}", input.id), &[]).await?;
+        let v = self.client.get(&format!("/api/events/{}", input.id), &[], api!()).await?;
         Ok(v)
     }
 
@@ -59,7 +60,7 @@ impl WeavineMcpServer {
         &self,
         body: serde_json::Value,
     ) -> McpResult<serde_json::Value> {
-        let v = self.client.post("/api/events", &body).await?;
+        let v = self.client.post("/api/events", &body, api!()).await?;
         Ok(v)
     }
 
@@ -72,7 +73,7 @@ impl WeavineMcpServer {
             .ok_or_else(|| McpError::BadInput("缺少 id 字段".into()))?
             .to_string();
         let body = input.get("fields").cloned().unwrap_or(serde_json::json!({}));
-        let v = self.client.put(&format!("/api/events/{id}"), &body).await?;
+        let v = self.client.put(&format!("/api/events/{id}"), &body, api!()).await?;
         Ok(v)
     }
 
@@ -80,7 +81,7 @@ impl WeavineMcpServer {
         &self,
         input: EventId,
     ) -> McpResult<serde_json::Value> {
-        self.client.delete(&format!("/api/events/{}", input.id)).await?;
+        self.client.delete(&format!("/api/events/{}", input.id), api!()).await?;
         Ok(serde_json::json!({ "ok": true }))
     }
 }

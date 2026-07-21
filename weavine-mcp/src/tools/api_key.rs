@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
+use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ApiKeyId {
@@ -15,7 +16,7 @@ pub struct CreateApiKeyInput {
 }
 impl WeavineMcpServer {
     pub async fn list_api_keys(&self) -> McpResult<serde_json::Value> {
-        let v = self.client.get("/api/api_keys", &[]).await?;
+        let v = self.client.get("/api/api_keys", &[], api!()).await?;
         Ok(v)
     }
 
@@ -25,7 +26,7 @@ impl WeavineMcpServer {
     ) -> McpResult<serde_json::Value> {
         let v = self
             .client
-            .post("/api/api_keys", &serde_json::json!({ "name": input.name }))
+            .post("/api/api_keys", &serde_json::json!({ "name": input.name }), api!())
             .await?;
         Ok(v)
     }
@@ -35,7 +36,7 @@ impl WeavineMcpServer {
         input: ApiKeyId,
     ) -> McpResult<serde_json::Value> {
         self.client
-            .delete(&format!("/api/api_keys/{}", input.id))
+            .delete(&format!("/api/api_keys/{}", input.id), api!())
             .await?;
         Ok(serde_json::json!({ "ok": true }))
     }

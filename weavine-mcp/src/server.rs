@@ -56,6 +56,42 @@ fn empty_schema() -> Arc<JsonObject> {
     Arc::new(JsonObject::new())
 }
 
+tokio::task_local! {
+    pub static API_KEY: String;
+}
+
+#[macro_export]
+macro_rules! api {
+    () => {
+        $crate::server::API_KEY.get().as_str()
+    };
+}
+
+fn extract_api_key(context: &RequestContext<RoleServer>) -> McpResult<String> {
+    let parts = context
+        .extensions
+        .get::<http::request::Parts>()
+        .ok_or_else(|| McpError::Auth("no http request parts in extensions".into()))?;
+    let auth = parts
+        .headers
+        .get(http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| McpError::Auth("missing Authorization header".into()))?;
+    let key = auth
+        .strip_prefix("Bearer ")
+        .or_else(|| auth.strip_prefix("bearer "))
+        .unwrap_or(auth)
+        .trim()
+        .to_string();
+    if key.is_empty() {
+        return Err(McpError::Auth("empty api key".into()));
+    }
+    if !key.starts_with("wvk_") {
+        return Err(McpError::Auth("api key must start with wvk_".into()));
+    }
+    Ok(key)
+}
+
 fn schema_of<T: schemars::JsonSchema>() -> Arc<JsonObject> {
     let mut generator = schemars::r#gen::SchemaGenerator::default();
     let schema = T::json_schema(&mut generator);
@@ -143,11 +179,28 @@ impl ServerHandler for WeavineMcpServer {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, RmcpError> {
         let args = request.arguments;
         let name = request.name.as_ref();
-        let v: serde_json::Value = match name {
+        let api_key = extract_api_key(&context)?;
+        let v: serde_json::Value = API_KEY
+            .scope(api_key, async move {
+                self.dispatch_tool(name, args).await
+            })
+            .await?;
+        let content = ContentBlock::json(v).map_err(|e| RmcpError::internal_error(e.to_string(), None))?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+}
+
+impl WeavineMcpServer {
+    async fn dispatch_tool(
+        &self,
+        name: &str,
+        args: Option<JsonObject>,
+    ) -> McpResult<serde_json::Value> {
+        Ok(match name {
             "list_api_keys" => self.list_api_keys().await?,
             "create_api_key" => {
                 let input: crate::tools::api_key::CreateApiKeyInput = Self::parse(args)?;
@@ -318,14 +371,9 @@ impl ServerHandler for WeavineMcpServer {
                 self.sync_pull(input).await?
             }
             other => {
-                return Err(RmcpError::invalid_request(
-                    format!("unknown tool: {other}"),
-                    None,
-                ));
+                return Err(McpError::BadInput(format!("unknown tool: {other}")));
             }
-        };
-        let content = ContentBlock::json(v).map_err(|e| RmcpError::internal_error(e.to_string(), None))?;
-        Ok(CallToolResult::success(vec![content]))
+        })
     }
 
     async fn list_tools(
