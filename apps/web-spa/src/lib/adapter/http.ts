@@ -13,11 +13,14 @@
 
 import type {
   Action,
+  ApiKeyRevealed,
+  ApiKeySummary,
   ArchivedItem,
   ArchiveCounts,
   ArchiveSummary,
   Contact,
   CreateActionInput,
+  CreateApiKeyInput,
   CreateContactInput,
   CreateEventInput,
   CreateInteractionInput,
@@ -418,5 +421,32 @@ export class HttpAdapter implements PRMAdapter {
     login: () => Promise.reject(new Error('cloud sync is desktop-only')),
     logout: () => Promise.reject(new Error('cloud sync is desktop-only')),
     syncNow: () => Promise.reject(new Error('cloud sync is desktop-only')),
+  };
+
+  apiKeys = {
+    list: (user_id: string): Promise<ApiKeySummary[]> =>
+      request<ApiKeySummary[]>(this.baseUrl, 'GET', `/api/api_keys${qs({ user_id })}`),
+    create: (
+      user_id: string,
+      input: CreateApiKeyInput,
+    ): Promise<ApiKeyRevealed & { name: string; prefix: string; last4: string; created_at: string }> =>
+      request<ApiKeyRevealed & { name: string; prefix: string; last4: string; created_at: string }>(
+        this.baseUrl,
+        'POST',
+        '/api/api_keys',
+        { user_id, ...input },
+      ),
+    reveal: (user_id: string, id: string): Promise<ApiKeyRevealed> =>
+      request<ApiKeyRevealed>(
+        this.baseUrl,
+        'GET',
+        `/api/api_keys/${encodeURIComponent(id)}/plaintext${qs({ user_id })}`,
+      ),
+    revoke: (user_id: string, id: string): Promise<void> =>
+      request<void>(
+        this.baseUrl,
+        'DELETE',
+        `/api/api_keys/${encodeURIComponent(id)}${qs({ user_id })}`,
+      ),
   };
 }

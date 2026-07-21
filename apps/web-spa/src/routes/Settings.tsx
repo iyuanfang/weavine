@@ -95,13 +95,18 @@ export function SettingsPage() {
         title="设置"
         subtitle={`${settings.length} 项 · 键值对存储`}
         actions={
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowAdd(!showAdd)}
-          >
-            {showAdd ? '取消' : '+ 新建设置'}
-          </button>
+          <>
+            <Link to="/settings/api-keys" className="btn">
+              API 密钥
+            </Link>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowAdd(!showAdd)}
+            >
+              {showAdd ? '取消' : '+ 新建设置'}
+            </button>
+          </>
         }
       />
 

@@ -22,6 +22,8 @@ import { invoke } from '@tauri-apps/api/core';
 
 import type {
   Action,
+  ApiKeyRevealed,
+  ApiKeySummary,
   ArchivedItem,
   ArchiveCounts,
   ArchiveSummary,
@@ -353,6 +355,17 @@ export class TauriAdapter implements PRMAdapter {
     logout: (): Promise<void> => invoke<void>('cloud_logout'),
     syncNow: (): Promise<CloudSyncResult> =>
       invoke<CloudSyncResult>('cloud_sync_now'),
+  };
+
+  apiKeys = {
+    list: (): Promise<ApiKeySummary[]> =>
+      Promise.reject(new Error('api_keys are cloud-only — sign in via the cloud path')),
+    create: (): Promise<ApiKeyRevealed & { name: string; prefix: string; last4: string; created_at: string }> =>
+      Promise.reject(new Error('api_keys are cloud-only — sign in via the cloud path')),
+    reveal: (): Promise<ApiKeyRevealed> =>
+      Promise.reject(new Error('api_keys are cloud-only — sign in via the cloud path')),
+    revoke: (): Promise<void> =>
+      Promise.reject(new Error('api_keys are cloud-only — sign in via the cloud path')),
   };
 }
 
