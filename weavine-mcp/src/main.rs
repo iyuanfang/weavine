@@ -58,15 +58,21 @@ async fn run_http(cfg: Arc<Config>) -> anyhow::Result<()> {
         .with_context(|| format!("WEAVINE_MCP_HTTP_BIND 无效: {}", cfg.http_bind))?;
 
     let cfg_for_factory = cfg.clone();
+    let mut svc_config = StreamableHttpServerConfig::default();
+    if let Ok(extra) = std::env::var("WEAVINE_MCP_ALLOWED_HOSTS") {
+        svc_config.allowed_hosts = extra.split(',').map(|s| s.trim().to_string()).collect();
+    }
+    svc_config.stateful_mode = false;
+    svc_config.json_response = true;
     let svc = StreamableHttpService::new(
         move || {
             Ok(WeavineMcpServer::new(cfg_for_factory.clone())
                 .expect("weavine-mcp init"))
         },
         Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig::default(),
+        svc_config,
     );
-    let router = axum::Router::new().nest_service("/mcp", svc);
+    let router: axum::Router = axum::Router::new().fallback_service(svc);
     let listener = tokio::net::TcpListener::bind(bind)
         .await
         .with_context(|| format!("无法 bind {bind}"))?;
