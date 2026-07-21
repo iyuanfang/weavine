@@ -35,7 +35,7 @@ curl -s -X POST http://127.0.0.1:8080/api/api_keys \
 | Tier     | Trigger env                  | Tools |
 |----------|------------------------------|-------|
 | Default  | (unset) or `WEAVINE_MCP_TIER=default` | 32 (api_key, contact, event, action, project, reminder) |
-| Full     | `WEAVINE_MCP_TIER=full`      | 60 (adds auth_jwt, diagnostic, tag, interaction, archive, setting, search, sync) |
+| Full     | `WEAVINE_MCP_TIER=full`      | 58 (adds auth_jwt, diagnostic, tag, interaction, archive, setting, search, sync) |
 
 Tier selection is per-process: change the env var and restart the MCP
 server.

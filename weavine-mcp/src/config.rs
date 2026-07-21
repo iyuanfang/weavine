@@ -30,7 +30,7 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let base_url = std::env::var("WEAVINE_MCP_BASE_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:3300".to_string());
+            .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
         let api_key = std::env::var("WEAVINE_MCP_API_KEY").map_err(|_| {
             anyhow::anyhow!(
                 "WEAVINE_MCP_API_KEY 未设置 — 生成一个: `curl -X POST $WEAVINE_MCP_BASE_URL/api/api_keys -H 'Authorization: Bearer <jwt>' -H 'Content-Type: application/json' -d '{{\"name\":\"claude\"}}'`"
