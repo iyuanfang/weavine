@@ -90,6 +90,8 @@ async fn main() {
         .route("/api/settings", get(handlers::setting::list).delete(handlers::setting::delete))
         // Search
         .route("/api/search", get(handlers::search::query))
+        .route("/api/api_keys", get(handlers::api_key::list).post(handlers::api_key::create))
+        .route("/api/api_keys/:id", delete(handlers::api_key::revoke))
         // Sync
         .route("/api/sync/manifest", post(handlers::sync::manifest))
         .route("/api/sync/push", post(handlers::sync::push))

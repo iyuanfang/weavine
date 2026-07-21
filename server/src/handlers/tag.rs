@@ -19,7 +19,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     _q: Query<ListParams>,
 ) -> Result<Json<Vec<Tag>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Tag>(
         "SELECT id, user_id, name, color, created_at FROM tag WHERE user_id = $1 ORDER BY name",
     )

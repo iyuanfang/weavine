@@ -29,7 +29,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Interaction>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Interaction>(&format!(
         "{INTERACTION_SELECT} WHERE i.user_id = $1 \
          AND ($2::text IS NULL OR i.contact_id = $2) \
@@ -109,7 +109,7 @@ pub async fn get(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<Interaction>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let interaction = sqlx::query_as::<_, Interaction>(&format!(
         "{INTERACTION_SELECT} WHERE i.id = $1 AND i.user_id = $2",
     ))

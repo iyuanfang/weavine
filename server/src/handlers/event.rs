@@ -39,7 +39,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Event>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Event>(&format!(
         "{EVENT_SELECT} WHERE e.user_id = $1 \
          AND ($2::text IS NULL OR e.contact_id = $2) \
@@ -123,7 +123,7 @@ pub async fn get(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let event = sqlx::query_as::<_, Event>(&format!(
         "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2",
     ))
@@ -240,7 +240,7 @@ pub async fn upcoming(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<UpcomingParams>,
 ) -> Result<Json<Vec<Event>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let now = super::now_str();
     let rows = sqlx::query_as::<_, Event>(&format!(
         "{EVENT_SELECT} WHERE e.user_id = $1 AND e.start_at >= $2 AND e.archived_at IS NULL \

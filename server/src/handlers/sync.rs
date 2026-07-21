@@ -36,7 +36,7 @@ pub async fn manifest(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<ManifestResp>, (StatusCode, String)> {
-    let user_id = extract_auth(&headers)?;
+    let user_id = extract_auth(&headers, pool.as_ref()).await?;
     let user_uuid_for_log_only: String = user_id.clone();
 
     let row = sqlx::query_as::<_, (i32, i64, Option<String>)>(
@@ -109,7 +109,7 @@ pub async fn push(
     State(pool): State<Arc<PgPool>>,
     Json(req): Json<PushReq>,
 ) -> Result<Json<PushResp>, (StatusCode, String)> {
-    let user_id = extract_auth(&headers)?;
+    let user_id = extract_auth(&headers, pool.as_ref()).await?;
     let user_uuid_for_log_only: String = user_id.clone();
     let device_uuid_for_log_only: String = req.device_id.clone();
 
@@ -363,7 +363,7 @@ pub async fn pull(
     State(pool): State<Arc<PgPool>>,
     Json(req): Json<PullReq>,
 ) -> Result<Json<PullResp>, (StatusCode, String)> {
-    let user_id = extract_auth(&headers)?;
+    let user_id = extract_auth(&headers, pool.as_ref()).await?;
     let user_uuid_for_log_only: String = user_id.clone();
     let limit = req.limit.unwrap_or(500).min(1000);
 

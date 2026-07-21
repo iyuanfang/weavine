@@ -20,7 +20,7 @@ pub async fn query(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<QueryParams>,
 ) -> Result<Json<SearchResults>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let pattern = format!("%{}%", p.q);
 
     let contacts = sqlx::query_as::<_, Contact>(

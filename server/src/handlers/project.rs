@@ -24,7 +24,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Project>>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut sql = "SELECT id, user_id, title, description, template, stage, \
                     start_at, due_at, completed_at, archived_at, created_at, updated_at \
                     FROM project WHERE user_id = $1".to_string();
@@ -63,7 +63,7 @@ pub async fn get(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<Project>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let project: Project = sqlx::query_as(
         "SELECT id, user_id, title, description, template, stage, \
          start_at, due_at, completed_at, archived_at, created_at, updated_at \

@@ -3,6 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, Header, Validation};
@@ -112,7 +113,47 @@ fn blake_hash(s: &str) -> String {
     format!("{:016x}", h.finish())
 }
 
-pub fn extract_auth(headers: &HeaderMap) -> Result<String, (StatusCode, String)> {
+pub async fn extract_auth(
+    headers: &HeaderMap,
+    pool: &PgPool,
+) -> Result<String, (StatusCode, String)> {
+    if let Some(raw_key) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+        let rows: Vec<(String, String)> =
+            sqlx::query_as("SELECT user_id, key_hash FROM api_key WHERE revoked_at IS NULL")
+                .fetch_all(pool)
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("api_key lookup: {e}"),
+                    )
+                })?;
+        for (user_id, hash) in rows {
+            let matches = PasswordHash::new(&hash)
+                .ok()
+                .and_then(|ph| {
+                    Argon2::default()
+                        .verify_password(raw_key.as_bytes(), &ph)
+                        .ok()
+                })
+                .is_some();
+            if matches {
+                let _ = sqlx::query(
+                    "UPDATE api_key SET last_used_at = $1 WHERE user_id = $2 AND key_hash = $3",
+                )
+                .bind(crate::handlers::now_str())
+                .bind(&user_id)
+                .bind(&hash)
+                .execute(pool)
+                .await;
+                return Ok(user_id);
+            }
+        }
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "API key 无效或已撤销".to_string(),
+        ));
+    }
     let token =
         extract_bearer(headers).ok_or((StatusCode::UNAUTHORIZED, "未登录".to_string()))?;
     let claims = verify_access(&token)
@@ -481,7 +522,7 @@ pub async fn me(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<MeResponse>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
 
     let email: Option<String> =
         sqlx::query_scalar("SELECT email FROM user_account WHERE id = $1")

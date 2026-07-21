@@ -38,7 +38,7 @@ pub async fn list(
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let sort_col = validate_sort_by(p.sort_by.as_deref().unwrap_or("last_contacted_at"));
     let limit = p.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = p.offset.unwrap_or(0).max(0);
@@ -101,7 +101,7 @@ pub async fn get(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<Contact>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut contact: Contact = sqlx::query_as(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
          notes, importance, reminder_enabled, reminder_interval_days::BIGINT AS reminder_interval_days, last_contacted_at, \

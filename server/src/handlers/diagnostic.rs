@@ -9,9 +9,10 @@ use std::sync::Arc;
 use super::auth::extract_auth;
 
 pub async fn user(
+    State(pool): State<Arc<PgPool>>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let auth = extract_auth(&headers)?;
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
     Ok(Json(json!({
         "id": auth,
         "provider": "jwt"
