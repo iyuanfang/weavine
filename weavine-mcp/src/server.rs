@@ -14,6 +14,17 @@ use crate::client::WeavineClient;
 use crate::config::{Config, Tier};
 use crate::error::{McpError, McpResult};
 
+#[derive(schemars::JsonSchema, serde::Deserialize, Default)]
+#[schemars(description = "Open JSON object body. Pass fields matching the entity contract.")]
+pub struct GenericBody(pub serde_json::Map<String, serde_json::Value>);
+
+#[derive(schemars::JsonSchema, serde::Deserialize, Default)]
+pub struct UpdateBody {
+    pub id: String,
+    #[serde(default)]
+    pub fields: serde_json::Map<String, serde_json::Value>,
+}
+
 #[derive(Clone)]
 pub struct WeavineMcpServer {
     pub(crate) client: WeavineClient,
@@ -45,75 +56,86 @@ fn empty_schema() -> Arc<JsonObject> {
     Arc::new(JsonObject::new())
 }
 
-fn tool(name: &'static str, description: &'static str) -> Tool {
-    Tool::new(name, description, empty_schema())
+fn schema_of<T: schemars::JsonSchema>() -> Arc<JsonObject> {
+    let mut generator = schemars::r#gen::SchemaGenerator::default();
+    let schema = T::json_schema(&mut generator);
+    match serde_json::to_value(schema).ok() {
+        Some(serde_json::Value::Object(m)) => Arc::new(m),
+        _ => empty_schema(),
+    }
+}
+
+fn tool(name: &'static str, description: &'static str, schema: Arc<JsonObject>) -> Tool {
+    Tool::new(name, description, schema)
 }
 
 fn tier1_tools() -> Vec<Tool> {
+    use crate::tools::{action, api_key, contact, event, project, reminder};
     let mut t = Vec::with_capacity(32);
-    t.push(tool("list_api_keys", "List active (non-revoked) API keys for the current user."));
-    t.push(tool("create_api_key", "Create a new API key. Input: {name}. Returns plaintext key exactly once."));
-    t.push(tool("revoke_api_key", "Revoke an API key. Input: {id}."));
-    t.push(tool("list_contacts", "List contacts. Input (all optional): {q, tag, limit, offset, sort}."));
-    t.push(tool("get_contact", "Get contact by id. Input: {id}."));
-    t.push(tool("create_contact", "Create a contact. Input body: contact fields."));
-    t.push(tool("update_contact", "Update a contact. Input: {id, ...fields}."));
-    t.push(tool("delete_contact", "Delete a contact. Input: {id}."));
-    t.push(tool("upcoming_events", "List upcoming events. Input (optional): {days}."));
-    t.push(tool("list_events", "List events. Input (optional): {contact_id, project_id, limit, offset}."));
-    t.push(tool("get_event", "Get event by id. Input: {id}."));
-    t.push(tool("create_event", "Create an event. Input body: event fields."));
-    t.push(tool("update_event", "Update an event. Input: {id, ...fields}."));
-    t.push(tool("delete_event", "Delete an event. Input: {id}."));
-    t.push(tool("list_actions", "List actions. Input (optional): {status, contact_id, project_id, limit, offset}."));
-    t.push(tool("get_action", "Get action by id. Input: {id}."));
-    t.push(tool("create_action", "Create an action. Input: {title, due?, contact_id?, project_id?}."));
-    t.push(tool("update_action", "Update an action. Input: {id, ...fields}."));
-    t.push(tool("delete_action", "Delete an action. Input: {id}."));
-    t.push(tool("list_projects", "List projects. Input (optional): {limit, offset}."));
-    t.push(tool("get_project", "Get project by id. Input: {id}."));
-    t.push(tool("create_project", "Create a project. Input body: project fields."));
-    t.push(tool("update_project", "Update a project. Input: {id, ...fields}."));
-    t.push(tool("delete_project", "Delete a project. Input: {id}."));
-    t.push(tool("list_project_contacts", "List contacts on a project. Input: {id}."));
-    t.push(tool("add_project_contact", "Add a contact to a project. Input: {project_id, contact_id}."));
-    t.push(tool("remove_project_contact", "Remove a contact from a project. Input: {project_id, contact_id}."));
-    t.push(tool("list_reminders", "List reminders. Input (optional): {contact_id, event_id, include_dismissed, limit}."));
-    t.push(tool("get_reminder", "Get reminder by id. Input: {id}."));
-    t.push(tool("create_reminder", "Create a reminder. Input: {contact_id or event_id, trigger_at (RFC3339), kind}."));
-    t.push(tool("update_reminder", "Update a reminder. Input: {id, ...fields}."));
-    t.push(tool("delete_reminder", "Delete a reminder. Input: {id}."));
+    t.push(tool("list_api_keys", "List active (non-revoked) API keys for the current user.", empty_schema()));
+    t.push(tool("create_api_key", "Create a new API key. Returns plaintext key exactly once.", schema_of::<api_key::CreateApiKeyInput>()));
+    t.push(tool("revoke_api_key", "Revoke an API key by id.", schema_of::<api_key::ApiKeyId>()));
+    t.push(tool("list_contacts", "List contacts with optional filters.", schema_of::<contact::ListContactsQuery>()));
+    t.push(tool("get_contact", "Get contact by id.", schema_of::<contact::ContactId>()));
+    t.push(tool("create_contact", "Create a contact. Body: contact fields.", schema_of::<GenericBody>()));
+    t.push(tool("update_contact", "Update a contact. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("delete_contact", "Delete a contact by id.", schema_of::<contact::ContactId>()));
+    t.push(tool("upcoming_events", "List upcoming events within the next N days.", empty_schema()));
+    t.push(tool("list_events", "List events with filters.", schema_of::<event::ListEventsQuery>()));
+    t.push(tool("get_event", "Get event by id.", schema_of::<event::EventId>()));
+    t.push(tool("create_event", "Create an event. Body: event fields.", schema_of::<GenericBody>()));
+    t.push(tool("update_event", "Update an event. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("delete_event", "Delete an event by id.", schema_of::<event::EventId>()));
+    t.push(tool("list_actions", "List action items with optional filters.", schema_of::<action::ListActionsQuery>()));
+    t.push(tool("get_action", "Get an action by id.", schema_of::<action::ActionId>()));
+    t.push(tool("create_action", "Create an action item.", schema_of::<GenericBody>()));
+    t.push(tool("update_action", "Update an action. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("delete_action", "Delete an action by id.", schema_of::<action::ActionId>()));
+    t.push(tool("list_projects", "List projects.", schema_of::<project::ListProjectsQuery>()));
+    t.push(tool("get_project", "Get project by id.", schema_of::<project::ProjectId>()));
+    t.push(tool("create_project", "Create a project. Body: project fields.", schema_of::<GenericBody>()));
+    t.push(tool("update_project", "Update a project. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("delete_project", "Delete a project by id.", schema_of::<project::ProjectId>()));
+    t.push(tool("list_project_contacts", "List contacts on a project. Input: {id}.", schema_of::<project::ProjectId>()));
+    t.push(tool("add_project_contact", "Add a contact to a project.", schema_of::<project::ProjectContactIds>()));
+    t.push(tool("remove_project_contact", "Remove a contact from a project.", schema_of::<project::ProjectContactIds>()));
+    t.push(tool("list_reminders", "List reminders with optional filters.", schema_of::<reminder::ListRemindersQuery>()));
+    t.push(tool("get_reminder", "Get reminder by id.", schema_of::<reminder::ReminderId>()));
+    t.push(tool("create_reminder", "Create a reminder.", schema_of::<GenericBody>()));
+    t.push(tool("update_reminder", "Update a reminder. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("delete_reminder", "Delete a reminder by id.", schema_of::<reminder::ReminderId>()));
     t
 }
 
 fn tier2_tools() -> Vec<Tool> {
+    use crate::tools::{archive, auth_jwt, diagnostic, interaction, search, setting, sync, tag};
     let mut t = Vec::with_capacity(28);
-    t.push(tool("auth_register", "Register a new account. Input: {email, password}. No API key needed."));
-    t.push(tool("auth_login", "Login by email + password. Input: {email, password}. No API key needed."));
-    t.push(tool("auth_logout", "Logout the current session. No API key needed."));
-    t.push(tool("diagnostic_user", "Server-side diagnostic of the current user."));
-    t.push(tool("diagnostic_startup", "Server startup diagnostic — db connectivity, sync status, counts."));
-    t.push(tool("list_tags", "List tags. Input (optional): {q, limit}."));
-    t.push(tool("create_tag", "Create a tag. Input body: {name, color?, parent_id?}."));
-    t.push(tool("update_tag", "Update a tag. Input: {id, ...fields}."));
-    t.push(tool("delete_tag", "Delete a tag. Input: {id}."));
-    t.push(tool("list_interactions", "List interactions. Input (optional): {contact_id, event_id, kind, limit, offset}."));
-    t.push(tool("get_interaction", "Get interaction by id. Input: {id}."));
-    t.push(tool("create_interaction", "Create an interaction. Input body: {contact_id?, event_id?, kind, ...}."));
-    t.push(tool("update_interaction", "Update an interaction. Input: {id, ...fields}."));
-    t.push(tool("delete_interaction", "Delete an interaction. Input: {id}."));
-    t.push(tool("archive_summary", "Archive summary across entities."));
-    t.push(tool("archive_counts", "Per-entity archive counts."));
-    t.push(tool("archive_list", "List archived items. Input (optional): {entity, limit}."));
-    t.push(tool("archive_unarchive_one", "Unarchive one item. Input: {entity, id}."));
-    t.push(tool("archive_bulk_unarchive", "Bulk unarchive. Input: {entity, ids}."));
-    t.push(tool("list_settings", "List current-user settings."));
-    t.push(tool("upsert_setting", "Upsert a setting. Input: {key, value}."));
-    t.push(tool("delete_setting", "Delete a setting. Input: {key}."));
-    t.push(tool("search", "Cross-entity search. Input: {q, entities?, limit?}."));
-    t.push(tool("sync_manifest", "Get sync manifest. Input (optional): {device_id}."));
-    t.push(tool("sync_push", "Push sync changes. Input: {device_id, changes}."));
-    t.push(tool("sync_pull", "Pull sync changes since cursor. Input: {device_id, since?}."));
+    t.push(tool("auth_register", "Register a new account. No API key needed.", schema_of::<auth_jwt::AuthRegisterInput>()));
+    t.push(tool("auth_login", "Login by email + password. No API key needed.", schema_of::<auth_jwt::AuthLoginInput>()));
+    t.push(tool("auth_logout", "Logout the current session.", empty_schema()));
+    t.push(tool("diagnostic_user", "Server-side diagnostic of the current user.", schema_of::<diagnostic::DiagnosticUserInput>()));
+    t.push(tool("diagnostic_startup", "Server startup diagnostic — db connectivity, sync status, counts.", empty_schema()));
+    t.push(tool("list_tags", "List tags with optional filter.", schema_of::<tag::ListTagsQuery>()));
+    t.push(tool("create_tag", "Create a tag.", schema_of::<GenericBody>()));
+    t.push(tool("update_tag", "Update a tag. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("delete_tag", "Delete a tag by id.", schema_of::<tag::TagId>()));
+    t.push(tool("list_interactions", "List interactions with filters.", schema_of::<interaction::ListInteractionsQuery>()));
+    t.push(tool("get_interaction", "Get interaction by id.", schema_of::<interaction::InteractionId>()));
+    t.push(tool("create_interaction", "Create an interaction.", schema_of::<GenericBody>()));
+    t.push(tool("update_interaction", "Update an interaction. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("delete_interaction", "Delete an interaction by id.", schema_of::<interaction::InteractionId>()));
+    t.push(tool("archive_summary", "Archive summary across entities.", empty_schema()));
+    t.push(tool("archive_counts", "Per-entity archive counts.", empty_schema()));
+    t.push(tool("archive_list", "List archived items.", schema_of::<archive::ArchiveListQuery>()));
+    t.push(tool("archive_unarchive_one", "Unarchive one item.", schema_of::<archive::ArchiveUnarchiveInput>()));
+    t.push(tool("archive_bulk_unarchive", "Bulk unarchive.", schema_of::<archive::ArchiveBulkUnarchiveInput>()));
+    t.push(tool("list_settings", "List current-user settings.", empty_schema()));
+    t.push(tool("upsert_setting", "Upsert a setting.", schema_of::<setting::SettingUpsertInput>()));
+    t.push(tool("delete_setting", "Delete a setting by key.", schema_of::<setting::SettingDeleteInput>()));
+    t.push(tool("search", "Cross-entity search.", schema_of::<search::SearchQuery>()));
+    t.push(tool("sync_manifest", "Get sync manifest.", schema_of::<sync::SyncManifestInput>()));
+    t.push(tool("sync_push", "Push sync changes.", schema_of::<sync::SyncPushInput>()));
+    t.push(tool("sync_pull", "Pull sync changes since cursor.", schema_of::<sync::SyncPullInput>()));
     t
 }
 
