@@ -1,0 +1,54 @@
+use std::sync::Arc;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Tier {
+    #[default]
+    Default,
+    Full,
+}
+
+impl Tier {
+    pub fn from_env() -> Self {
+        match std::env::var("WEAVINE_MCP_TIER").as_deref() {
+            Ok("full") | Ok("FULL") | Ok("tier2") => Tier::Full,
+            _ => Tier::Default,
+        }
+    }
+
+    pub fn is_full(&self) -> bool {
+        matches!(self, Tier::Full)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub base_url: String,
+    pub api_key: String,
+    pub tier: Tier,
+}
+
+impl Config {
+    pub fn from_env() -> anyhow::Result<Self> {
+        let base_url = std::env::var("WEAVINE_MCP_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:3300".to_string());
+        let api_key = std::env::var("WEAVINE_MCP_API_KEY").map_err(|_| {
+            anyhow::anyhow!(
+                "WEAVINE_MCP_API_KEY 未设置 — 生成一个: `curl -X POST $WEAVINE_MCP_BASE_URL/api/api_keys -H 'Authorization: Bearer <jwt>' -H 'Content-Type: application/json' -d '{{\"name\":\"claude\"}}'`"
+            )
+        })?;
+        if api_key.trim().is_empty() {
+            anyhow::bail!("WEAVINE_MCP_API_KEY 不能为空");
+        }
+        if !api_key.starts_with("wvk_") {
+            anyhow::bail!("WEAVINE_MCP_API_KEY 必须以 wvk_ 开头");
+        }
+        let tier = Tier::from_env();
+        Ok(Config {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            api_key,
+            tier,
+        })
+    }
+}
+
+pub type SharedConfig = Arc<Config>;
