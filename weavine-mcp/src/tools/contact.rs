@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
+use crate::error::McpError;
 use crate::server::WeavineMcpServer;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
