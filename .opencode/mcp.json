@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "weavine": {
+      "type": "stdio",
+      "command": "./target/release/weavine-mcp",
+      "env": {
+        "WEAVINE_BASE_URL": "http://127.0.0.1:8080",
+        "WEAVINE_API_KEY": "REPLACE_ME_WITH_wvk_..."
+      }
+    }
+  }
+}
