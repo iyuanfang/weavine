@@ -189,6 +189,36 @@ impl ServerHandler for WeavineMcpServer {
         let content = ContentBlock::json(v).map_err(|e| RmcpError::internal_error(e.to_string(), None))?;
         Ok(CallToolResult::success(vec![content]))
     }
+
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, RmcpError> {
+        let mut tools = tier1_tools();
+        if matches!(self.cfg.tier, Tier::Full) {
+            tools.extend(tier2_tools());
+        }
+        Ok(ListToolsResult {
+            meta: None,
+            next_cursor: None,
+            tools,
+        })
+    }
+
+    fn get_info(&self) -> ServerInfo {
+        let tier = self.cfg.tier.clone();
+        let caps = ServerCapabilities::builder().enable_tools().build();
+        ServerInfo::new(caps)
+            .with_server_info(Implementation::new(
+                "weavine-mcp",
+                env!("CARGO_PKG_VERSION"),
+            ))
+            .with_instructions(match tier {
+                Tier::Default => "weavine-mcp (Tier 1): contacts, events, actions, projects, reminders. Set WEAVINE_MCP_TIER=full for additional resources.".to_string(),
+                Tier::Full => "weavine-mcp (Tier 2 / full): full access.".to_string(),
+            })
+    }
 }
 
 impl WeavineMcpServer {
@@ -362,35 +392,5 @@ impl WeavineMcpServer {
                 return Err(McpError::BadInput(format!("unknown tool: {other}")));
             }
         })
-    }
-
-    async fn list_tools(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, RmcpError> {
-        let mut tools = tier1_tools();
-        if matches!(self.cfg.tier, Tier::Full) {
-            tools.extend(tier2_tools());
-        }
-        Ok(ListToolsResult {
-            meta: None,
-            next_cursor: None,
-            tools,
-        })
-    }
-
-    fn get_info(&self) -> ServerInfo {
-        let tier = self.cfg.tier.clone();
-        let caps = ServerCapabilities::builder().enable_tools().build();
-        ServerInfo::new(caps)
-            .with_server_info(Implementation::new(
-                "weavine-mcp",
-                env!("CARGO_PKG_VERSION"),
-            ))
-            .with_instructions(match tier {
-                Tier::Default => "weavine-mcp (Tier 1): contacts, events, actions, projects, reminders. Set WEAVINE_MCP_TIER=full for additional resources.".to_string(),
-                Tier::Full => "weavine-mcp (Tier 2 / full): full access.".to_string(),
-            })
     }
 }
