@@ -47,6 +47,10 @@
       "icons/icon.png"
     ],
     "windows": {
+      "wix": {
+        "fragmentPaths": ["wix/preserve-data.wxs"],
+        "componentRefs": ["AppDataDir"]
+      },
       "webviewInstallMode": {
         "type": "embedBootstrapper",
         "silent": true

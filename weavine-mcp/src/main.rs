@@ -7,7 +7,10 @@ pub mod tools;
 use std::sync::Arc;
 
 use anyhow::Context;
-use rmcp::transport::sse_server::SseServer;
+use rmcp::transport::streamable_http_server::{
+    session::local::LocalSessionManager,
+    tower::{StreamableHttpServerConfig, StreamableHttpService},
+};
 use rmcp::ServiceExt;
 
 use crate::config::{Config, Transport};
@@ -53,23 +56,28 @@ async fn run_http(cfg: Arc<Config>) -> anyhow::Result<()> {
         .http_bind
         .parse()
         .with_context(|| format!("WEAVINE_MCP_HTTP_BIND 无效: {}", cfg.http_bind))?;
-    let sse = SseServer::serve(bind)
+
+    let cfg_for_factory = cfg.clone();
+    let svc = StreamableHttpService::new(
+        move || {
+            Ok(WeavineMcpServer::new(cfg_for_factory.clone())
+                .expect("weavine-mcp init"))
+        },
+        Arc::new(LocalSessionManager::default()),
+        StreamableHttpServerConfig::default(),
+    );
+    let router = axum::Router::new().nest_service("/mcp", svc);
+    let listener = tokio::net::TcpListener::bind(bind)
         .await
-        .with_context(|| format!("SseServer::serve({bind}) failed"))?;
-    tracing::info!(%bind, "weavine-mcp HTTP 上线 (GET /sse, POST /message)");
+        .with_context(|| format!("无法 bind {bind}"))?;
+    tracing::info!(%bind, "weavine-mcp streamable-http 上线 (POST/GET /mcp)");
 
-    let cfg_for_provider = cfg.clone();
-    let ct = sse.with_service(move || {
-        WeavineMcpServer::new(cfg_for_provider.clone())
-            .expect("weavine-mcp init")
-    });
-
+    let server = axum::serve(listener, router);
     tokio::select! {
+        _ = server => {},
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Ctrl-C 收到，关闭...");
         }
-        _ = ct.cancelled() => {}
     }
-    ct.cancel();
     Ok(())
 }

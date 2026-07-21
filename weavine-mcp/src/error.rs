@@ -56,9 +56,9 @@ impl McpError {
     }
 }
 
-impl From<McpError> for rmcp::Error {
+impl From<McpError> for rmcp::ErrorData {
     fn from(e: McpError) -> Self {
-        rmcp::Error::new(e.code(), e.message(), None)
+        rmcp::ErrorData::new(e.code(), e.message(), None)
     }
 }
 

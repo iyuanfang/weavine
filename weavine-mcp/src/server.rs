@@ -3,11 +3,11 @@ use std::sync::Arc;
 use rmcp::{
     handler::server::ServerHandler,
     model::{
-        CallToolRequestParam, CallToolResult, Content, Implementation, JsonObject, ListToolsResult,
-        PaginatedRequestParam, ServerCapabilities, ServerInfo, Tool,
+        CallToolRequestParams, CallToolResult, ContentBlock, Implementation, JsonObject,
+        ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
     },
     service::RequestContext,
-    Error as RmcpError, RoleServer,
+    ErrorData as RmcpError, RoleServer,
 };
 
 use crate::client::WeavineClient;
@@ -142,7 +142,7 @@ fn tier2_tools() -> Vec<Tool> {
 impl ServerHandler for WeavineMcpServer {
     async fn call_tool(
         &self,
-        request: CallToolRequestParam,
+        request: CallToolRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, RmcpError> {
         let args = request.arguments;
@@ -324,13 +324,13 @@ impl ServerHandler for WeavineMcpServer {
                 ));
             }
         };
-        let content = Content::json(v).map_err(|e| RmcpError::internal_error(e.to_string(), None))?;
+        let content = ContentBlock::json(v).map_err(|e| RmcpError::internal_error(e.to_string(), None))?;
         Ok(CallToolResult::success(vec![content]))
     }
 
     async fn list_tools(
         &self,
-        _request: PaginatedRequestParam,
+        _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, RmcpError> {
         let mut tools = tier1_tools();
@@ -338,27 +338,23 @@ impl ServerHandler for WeavineMcpServer {
             tools.extend(tier2_tools());
         }
         Ok(ListToolsResult {
-            tools,
+            meta: None,
             next_cursor: None,
-
+            tools,
         })
     }
 
     fn get_info(&self) -> ServerInfo {
         let tier = self.cfg.tier.clone();
-        ServerInfo {
-            protocol_version: Default::default(),
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            server_info: Implementation {
-                name: "weavine-mcp".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                ..Default::default()
-            },
-            instructions: Some(match tier {
+        let caps = ServerCapabilities::builder().enable_tools().build();
+        ServerInfo::new(caps)
+            .with_server_info(Implementation::new(
+                "weavine-mcp",
+                env!("CARGO_PKG_VERSION"),
+            ))
+            .with_instructions(match tier {
                 Tier::Default => "weavine-mcp (Tier 1): contacts, events, actions, projects, reminders + your api_key. Set WEAVINE_MCP_TIER=full for additional resources.".to_string(),
                 Tier::Full => "weavine-mcp (Tier 2 / full): full access.".to_string(),
-            }),
-            ..Default::default()
-        }
+            })
     }
 }
