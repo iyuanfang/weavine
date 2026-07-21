@@ -7,9 +7,10 @@ pub mod tools;
 use std::sync::Arc;
 
 use anyhow::Context;
-use rmcp::{ServiceExt, transport::stdio};
+use rmcp::transport::sse_server::SseServer;
+use rmcp::ServiceExt;
 
-use crate::config::Config;
+use crate::config::{Config, Transport};
 use crate::server::WeavineMcpServer;
 
 #[tokio::main]
@@ -26,11 +27,49 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         base_url = %cfg.base_url,
         tier = ?cfg.tier,
+        transport = ?cfg.transport,
+        http_bind = %cfg.http_bind,
         "weavine-mcp starting"
     );
 
+    match cfg.transport {
+        Transport::Stdio => run_stdio(cfg).await,
+        Transport::Http => run_http(cfg).await,
+    }
+}
+
+async fn run_stdio(cfg: Arc<Config>) -> anyhow::Result<()> {
     let server = WeavineMcpServer::new(cfg)?;
-    let service = server.serve(stdio()).await.context("stdio serve")?;
+    let service = server
+        .serve(rmcp::transport::stdio())
+        .await
+        .context("stdio serve")?;
     service.waiting().await.context("stdio wait")?;
+    Ok(())
+}
+
+async fn run_http(cfg: Arc<Config>) -> anyhow::Result<()> {
+    let bind: std::net::SocketAddr = cfg
+        .http_bind
+        .parse()
+        .with_context(|| format!("WEAVINE_MCP_HTTP_BIND 无效: {}", cfg.http_bind))?;
+    let sse = SseServer::serve(bind)
+        .await
+        .with_context(|| format!("SseServer::serve({bind}) failed"))?;
+    tracing::info!(%bind, "weavine-mcp HTTP 上线 (GET /sse, POST /message)");
+
+    let cfg_for_provider = cfg.clone();
+    let ct = sse.with_service(move || {
+        WeavineMcpServer::new(cfg_for_provider.clone())
+            .expect("weavine-mcp init")
+    });
+
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("Ctrl-C 收到，关闭...");
+        }
+        _ = ct.cancelled() => {}
+    }
+    ct.cancel();
     Ok(())
 }
