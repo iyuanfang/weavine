@@ -85,7 +85,7 @@ pub async fn add(
     Path(project_id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let contact_id = body.get("contact_id").and_then(|v| v.as_str()).unwrap_or("");
     let role = body.get("role").and_then(|v| v.as_str());
     let now = super::now_str();
@@ -125,7 +125,7 @@ pub async fn remove(
     State(pool): State<Arc<PgPool>>,
     Path((project_id, contact_id)): Path<(String, String)>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
 
     let mut tx = pool
         .begin()

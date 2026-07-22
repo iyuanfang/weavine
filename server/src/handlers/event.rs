@@ -67,7 +67,7 @@ pub async fn create(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
 
@@ -142,7 +142,7 @@ pub async fn update(
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Event>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let now = super::now_str();
 
     let mut tx = pool
@@ -210,7 +210,7 @@ pub async fn delete(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
 
     let mut tx = pool
         .begin()

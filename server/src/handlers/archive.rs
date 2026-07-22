@@ -160,7 +160,7 @@ pub async fn unarchive_one(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let (auth, device_id) = super::auth::extract_auth_with_device(&headers)?;
+    let (auth, device_id) = super::auth::extract_auth_with_device(&headers, pool.as_ref()).await?;
     let id = body.get("id").and_then(|v| v.as_str()).unwrap_or("");
     let entity = body.get("entity").and_then(|v| v.as_str()).unwrap_or("");
     let table = match entity {
@@ -205,7 +205,7 @@ pub async fn bulk_unarchive(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let (auth, device_id) = super::auth::extract_auth_with_device(&headers)?;
+    let (auth, device_id) = super::auth::extract_auth_with_device(&headers, pool.as_ref()).await?;
     let entity = body.get("entity").and_then(|v| v.as_str()).unwrap_or("");
     let table = match entity {
         "action" => "action",

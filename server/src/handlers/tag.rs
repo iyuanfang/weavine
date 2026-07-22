@@ -35,7 +35,7 @@ pub async fn create(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<Tag>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
     let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("");
@@ -89,7 +89,7 @@ pub async fn update(
     Path(id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<Tag>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let now = super::now_str();
     let name = body.get("name").and_then(|v| v.as_str());
     let color = body.get("color").and_then(|v| v.as_str());
@@ -135,7 +135,7 @@ pub async fn delete(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
 
     let mut tx = pool
         .begin()

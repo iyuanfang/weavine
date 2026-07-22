@@ -36,7 +36,7 @@ pub async fn upsert(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
 ) -> Result<Json<Setting>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
     let key = body.get("key").and_then(|v| v.as_str()).unwrap_or("");
@@ -86,7 +86,7 @@ pub async fn delete(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let (auth, device_id) = extract_auth_with_device(&headers)?;
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
 
     let mut tx = pool
         .begin()

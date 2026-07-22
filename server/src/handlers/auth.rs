@@ -113,62 +113,83 @@ fn blake_hash(s: &str) -> String {
     format!("{:016x}", h.finish())
 }
 
+async fn lookup_api_key(
+    raw_key: &str,
+    pool: &PgPool,
+) -> Result<String, (StatusCode, String)> {
+    let rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT user_id, key_hash FROM api_key WHERE revoked_at IS NULL")
+            .fetch_all(pool)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("api_key lookup: {e}"),
+                )
+            })?;
+    for (user_id, hash) in rows {
+        let matches = PasswordHash::new(&hash)
+            .ok()
+            .and_then(|ph| {
+                Argon2::default()
+                    .verify_password(raw_key.as_bytes(), &ph)
+                    .ok()
+            })
+            .is_some();
+        if matches {
+            let _ = sqlx::query(
+                "UPDATE api_key SET last_used_at = $1 WHERE user_id = $2 AND key_hash = $3",
+            )
+            .bind(crate::handlers::now_str())
+            .bind(&user_id)
+            .bind(&hash)
+            .execute(pool)
+            .await;
+            return Ok(user_id);
+        }
+    }
+    Err((
+        StatusCode::UNAUTHORIZED,
+        "API key 无效或已撤销".to_string(),
+    ))
+}
+
 pub async fn extract_auth(
     headers: &HeaderMap,
     pool: &PgPool,
 ) -> Result<String, (StatusCode, String)> {
     if let Some(raw_key) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
-        let rows: Vec<(String, String)> =
-            sqlx::query_as("SELECT user_id, key_hash FROM api_key WHERE revoked_at IS NULL")
-                .fetch_all(pool)
-                .await
-                .map_err(|e| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("api_key lookup: {e}"),
-                    )
-                })?;
-        for (user_id, hash) in rows {
-            let matches = PasswordHash::new(&hash)
-                .ok()
-                .and_then(|ph| {
-                    Argon2::default()
-                        .verify_password(raw_key.as_bytes(), &ph)
-                        .ok()
-                })
-                .is_some();
-            if matches {
-                let _ = sqlx::query(
-                    "UPDATE api_key SET last_used_at = $1 WHERE user_id = $2 AND key_hash = $3",
-                )
-                .bind(crate::handlers::now_str())
-                .bind(&user_id)
-                .bind(&hash)
-                .execute(pool)
-                .await;
-                return Ok(user_id);
-            }
-        }
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            "API key 无效或已撤销".to_string(),
-        ));
+        return lookup_api_key(raw_key, pool).await;
     }
     let token =
         extract_bearer(headers).ok_or((StatusCode::UNAUTHORIZED, "未登录".to_string()))?;
+    // Additive: `Authorization: Bearer wvk_*` was previously JWT-only. Treat
+    // `wvk_` as API key (same path as `X-API-Key`) for read AND write tools.
+    if token.starts_with("wvk_") {
+        return lookup_api_key(&token, pool).await;
+    }
     let claims = verify_access(&token)
         .map_err(|_| (StatusCode::UNAUTHORIZED, "token 无效或已过期".to_string()))?;
     Ok(claims.sub)
 }
 
-pub fn extract_auth_with_device(
+pub async fn extract_auth_with_device(
     headers: &HeaderMap,
+    pool: &PgPool,
 ) -> Result<(String, String), (StatusCode, String)> {
-    let token =
-        extract_bearer(headers).ok_or((StatusCode::UNAUTHORIZED, "未登录".to_string()))?;
-    let claims = verify_access(&token)
-        .map_err(|_| (StatusCode::UNAUTHORIZED, "token 无效或已过期".to_string()))?;
-    Ok((claims.sub, claims.device_id))
+    // Additive: API-key bearer variant. device_id is left empty — API keys
+    // are not tied to a physical device; sync attribution falls back to the
+    // user-level (POSTGRES GUC `app.current_device_id = ''`).
+    if let Some(token) = extract_bearer(headers) {
+        if token.starts_with("wvk_") {
+            let user_id = lookup_api_key(&token, pool).await?;
+            return Ok((user_id, String::new()));
+        }
+        let claims = verify_access(&token)
+            .map_err(|_| (StatusCode::UNAUTHORIZED, "token 无效或已过期".to_string()))?;
+        return Ok((claims.sub, claims.device_id));
+    }
+    Err((StatusCode::UNAUTHORIZED, "未登录".to_string()))
 }
 
 fn verify_access(token: &str) -> Result<Claims, (StatusCode, String)> {
