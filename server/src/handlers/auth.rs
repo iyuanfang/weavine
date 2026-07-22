@@ -177,9 +177,12 @@ pub async fn extract_auth_with_device(
     headers: &HeaderMap,
     pool: &PgPool,
 ) -> Result<(String, String), (StatusCode, String)> {
-    // Additive: API-key bearer variant. device_id is left empty — API keys
-    // are not tied to a physical device; sync attribution falls back to the
-    // user-level (POSTGRES GUC `app.current_device_id = ''`).
+    if let Some(raw_key) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+        let user_id = lookup_api_key(raw_key, pool).await?;
+        // API keys are not device-bound; empty device_id makes the sync
+        // attribution GUC fall back to user-level.
+        return Ok((user_id, String::new()));
+    }
     if let Some(token) = extract_bearer(headers) {
         if token.starts_with("wvk_") {
             let user_id = lookup_api_key(&token, pool).await?;
