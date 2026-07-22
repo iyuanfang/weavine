@@ -14,17 +14,6 @@ use crate::client::WeavineClient;
 use crate::config::{Config, Tier};
 use crate::error::{McpError, McpResult};
 
-#[derive(schemars::JsonSchema, serde::Deserialize, Default)]
-#[schemars(description = "Open JSON object body. Pass fields matching the entity contract.")]
-pub struct GenericBody(pub serde_json::Map<String, serde_json::Value>);
-
-#[derive(schemars::JsonSchema, serde::Deserialize, Default)]
-pub struct UpdateBody {
-    pub id: String,
-    #[serde(default)]
-    pub fields: serde_json::Map<String, serde_json::Value>,
-}
-
 #[derive(Clone)]
 pub struct WeavineMcpServer {
     pub(crate) client: WeavineClient,
@@ -110,32 +99,32 @@ fn tier1_tools() -> Vec<Tool> {
     let mut t = Vec::with_capacity(32);
     t.push(tool("list_contacts", "List contacts with optional filters.", schema_of::<contact::ListContactsQuery>()));
     t.push(tool("get_contact", "Get contact by id.", schema_of::<contact::ContactId>()));
-    t.push(tool("create_contact", "Create a contact. Body: contact fields.", schema_of::<GenericBody>()));
-    t.push(tool("update_contact", "Update a contact. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("create_contact", "Create a contact.", schema_of::<contact::CreateContactBody>()));
+    t.push(tool("update_contact", "Update a contact. Input: {id, fields: {...}}.", schema_of::<contact::UpdateContactBody>()));
     t.push(tool("delete_contact", "Delete a contact by id.", schema_of::<contact::ContactId>()));
     t.push(tool("upcoming_events", "List upcoming events within the next N days.", empty_schema()));
     t.push(tool("list_events", "List events with filters.", schema_of::<event::ListEventsQuery>()));
     t.push(tool("get_event", "Get event by id.", schema_of::<event::EventId>()));
-    t.push(tool("create_event", "Create an event. Body: event fields.", schema_of::<GenericBody>()));
-    t.push(tool("update_event", "Update an event. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("create_event", "Create an event.", schema_of::<event::CreateEventBody>()));
+    t.push(tool("update_event", "Update an event. Input: {id, fields: {...}}.", schema_of::<event::UpdateEventBody>()));
     t.push(tool("delete_event", "Delete an event by id.", schema_of::<event::EventId>()));
     t.push(tool("list_actions", "List action items with optional filters.", schema_of::<action::ListActionsQuery>()));
     t.push(tool("get_action", "Get an action by id.", schema_of::<action::ActionId>()));
-    t.push(tool("create_action", "Create an action item.", schema_of::<GenericBody>()));
-    t.push(tool("update_action", "Update an action. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("create_action", "Create an action item.", schema_of::<action::CreateActionBody>()));
+    t.push(tool("update_action", "Update an action. Input: {id, fields: {...}}.", schema_of::<action::UpdateActionBody>()));
     t.push(tool("delete_action", "Delete an action by id.", schema_of::<action::ActionId>()));
     t.push(tool("list_projects", "List projects.", schema_of::<project::ListProjectsQuery>()));
     t.push(tool("get_project", "Get project by id.", schema_of::<project::ProjectId>()));
-    t.push(tool("create_project", "Create a project. Body: project fields.", schema_of::<GenericBody>()));
-    t.push(tool("update_project", "Update a project. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("create_project", "Create a project.", schema_of::<project::CreateProjectBody>()));
+    t.push(tool("update_project", "Update a project. Input: {id, fields: {...}}.", schema_of::<project::UpdateProjectBody>()));
     t.push(tool("delete_project", "Delete a project by id.", schema_of::<project::ProjectId>()));
     t.push(tool("list_project_contacts", "List contacts on a project. Input: {id}.", schema_of::<project::ProjectId>()));
     t.push(tool("add_project_contact", "Add a contact to a project.", schema_of::<project::ProjectContactIds>()));
     t.push(tool("remove_project_contact", "Remove a contact from a project.", schema_of::<project::ProjectContactIds>()));
     t.push(tool("list_reminders", "List reminders with optional filters.", schema_of::<reminder::ListRemindersQuery>()));
     t.push(tool("get_reminder", "Get reminder by id.", schema_of::<reminder::ReminderId>()));
-    t.push(tool("create_reminder", "Create a reminder.", schema_of::<GenericBody>()));
-    t.push(tool("update_reminder", "Update a reminder. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("create_reminder", "Create a reminder.", schema_of::<reminder::CreateReminderBody>()));
+    t.push(tool("update_reminder", "Update a reminder. Input: {id, fields: {...}}.", schema_of::<reminder::UpdateReminderBody>()));
     t.push(tool("delete_reminder", "Delete a reminder by id.", schema_of::<reminder::ReminderId>()));
     t
 }
@@ -149,13 +138,13 @@ fn tier2_tools() -> Vec<Tool> {
     t.push(tool("diagnostic_user", "Server-side diagnostic of the current user.", schema_of::<diagnostic::DiagnosticUserInput>()));
     t.push(tool("diagnostic_startup", "Server startup diagnostic — db connectivity, sync status, counts.", empty_schema()));
     t.push(tool("list_tags", "List tags with optional filter.", schema_of::<tag::ListTagsQuery>()));
-    t.push(tool("create_tag", "Create a tag.", schema_of::<GenericBody>()));
-    t.push(tool("update_tag", "Update a tag. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("create_tag", "Create a tag.", schema_of::<tag::CreateTagBody>()));
+    t.push(tool("update_tag", "Update a tag. Input: {id, fields: {...}}.", schema_of::<tag::UpdateTagBody>()));
     t.push(tool("delete_tag", "Delete a tag by id.", schema_of::<tag::TagId>()));
     t.push(tool("list_interactions", "List interactions with filters.", schema_of::<interaction::ListInteractionsQuery>()));
     t.push(tool("get_interaction", "Get interaction by id.", schema_of::<interaction::InteractionId>()));
-    t.push(tool("create_interaction", "Create an interaction.", schema_of::<GenericBody>()));
-    t.push(tool("update_interaction", "Update an interaction. Input: {id, fields: {...}}.", schema_of::<UpdateBody>()));
+    t.push(tool("create_interaction", "Create an interaction.", schema_of::<interaction::CreateInteractionBody>()));
+    t.push(tool("update_interaction", "Update an interaction. Input: {id, fields: {...}}.", schema_of::<interaction::UpdateInteractionBody>()));
     t.push(tool("delete_interaction", "Delete an interaction by id.", schema_of::<interaction::InteractionId>()));
     t.push(tool("archive_summary", "Archive summary across entities.", empty_schema()));
     t.push(tool("archive_counts", "Per-entity archive counts.", empty_schema()));
@@ -236,8 +225,14 @@ impl WeavineMcpServer {
                 let input: crate::tools::contact::ContactId = Self::parse(args)?;
                 self.get_contact(input).await?
             }
-            "create_contact" => self.create_contact(Self::to_value(args)).await?,
-            "update_contact" => self.update_contact(Self::to_value(args)).await?,
+            "create_contact" => {
+                let input: crate::tools::contact::CreateContactBody = Self::parse(args)?;
+                self.create_contact(input).await?
+            }
+            "update_contact" => {
+                let input: crate::tools::contact::UpdateContactBody = Self::parse(args)?;
+                self.update_contact(input).await?
+            }
             "delete_contact" => {
                 let input: crate::tools::contact::ContactId = Self::parse(args)?;
                 self.delete_contact(input).await?
@@ -251,8 +246,14 @@ impl WeavineMcpServer {
                 let input: crate::tools::event::EventId = Self::parse(args)?;
                 self.get_event(input).await?
             }
-            "create_event" => self.create_event(Self::to_value(args)).await?,
-            "update_event" => self.update_event(Self::to_value(args)).await?,
+            "create_event" => {
+                let input: crate::tools::event::CreateEventBody = Self::parse(args)?;
+                self.create_event(input).await?
+            }
+            "update_event" => {
+                let input: crate::tools::event::UpdateEventBody = Self::parse(args)?;
+                self.update_event(input).await?
+            }
             "delete_event" => {
                 let input: crate::tools::event::EventId = Self::parse(args)?;
                 self.delete_event(input).await?
@@ -265,8 +266,14 @@ impl WeavineMcpServer {
                 let input: crate::tools::action::ActionId = Self::parse(args)?;
                 self.get_action(input).await?
             }
-            "create_action" => self.create_action(Self::to_value(args)).await?,
-            "update_action" => self.update_action(Self::to_value(args)).await?,
+            "create_action" => {
+                let input: crate::tools::action::CreateActionBody = Self::parse(args)?;
+                self.create_action(input).await?
+            }
+            "update_action" => {
+                let input: crate::tools::action::UpdateActionBody = Self::parse(args)?;
+                self.update_action(input).await?
+            }
             "delete_action" => {
                 let input: crate::tools::action::ActionId = Self::parse(args)?;
                 self.delete_action(input).await?
@@ -279,8 +286,14 @@ impl WeavineMcpServer {
                 let input: crate::tools::project::ProjectId = Self::parse(args)?;
                 self.get_project(input).await?
             }
-            "create_project" => self.create_project(Self::to_value(args)).await?,
-            "update_project" => self.update_project(Self::to_value(args)).await?,
+            "create_project" => {
+                let input: crate::tools::project::CreateProjectBody = Self::parse(args)?;
+                self.create_project(input).await?
+            }
+            "update_project" => {
+                let input: crate::tools::project::UpdateProjectBody = Self::parse(args)?;
+                self.update_project(input).await?
+            }
             "delete_project" => {
                 let input: crate::tools::project::ProjectId = Self::parse(args)?;
                 self.delete_project(input).await?
@@ -305,8 +318,14 @@ impl WeavineMcpServer {
                 let input: crate::tools::reminder::ReminderId = Self::parse(args)?;
                 self.get_reminder(input).await?
             }
-            "create_reminder" => self.create_reminder(Self::to_value(args)).await?,
-            "update_reminder" => self.update_reminder(Self::to_value(args)).await?,
+            "create_reminder" => {
+                let input: crate::tools::reminder::CreateReminderBody = Self::parse(args)?;
+                self.create_reminder(input).await?
+            }
+            "update_reminder" => {
+                let input: crate::tools::reminder::UpdateReminderBody = Self::parse(args)?;
+                self.update_reminder(input).await?
+            }
             "delete_reminder" => {
                 let input: crate::tools::reminder::ReminderId = Self::parse(args)?;
                 self.delete_reminder(input).await?
@@ -329,8 +348,14 @@ impl WeavineMcpServer {
                 let input: crate::tools::tag::ListTagsQuery = Self::parse(args)?;
                 self.list_tags(input).await?
             }
-            "create_tag" => self.create_tag(Self::to_value(args)).await?,
-            "update_tag" => self.update_tag(Self::to_value(args)).await?,
+            "create_tag" => {
+                let input: crate::tools::tag::CreateTagBody = Self::parse(args)?;
+                self.create_tag(input).await?
+            }
+            "update_tag" => {
+                let input: crate::tools::tag::UpdateTagBody = Self::parse(args)?;
+                self.update_tag(input).await?
+            }
             "delete_tag" => {
                 let input: crate::tools::tag::TagId = Self::parse(args)?;
                 self.delete_tag(input).await?
@@ -343,8 +368,14 @@ impl WeavineMcpServer {
                 let input: crate::tools::interaction::InteractionId = Self::parse(args)?;
                 self.get_interaction(input).await?
             }
-            "create_interaction" => self.create_interaction(Self::to_value(args)).await?,
-            "update_interaction" => self.update_interaction(Self::to_value(args)).await?,
+            "create_interaction" => {
+                let input: crate::tools::interaction::CreateInteractionBody = Self::parse(args)?;
+                self.create_interaction(input).await?
+            }
+            "update_interaction" => {
+                let input: crate::tools::interaction::UpdateInteractionBody = Self::parse(args)?;
+                self.update_interaction(input).await?
+            }
             "delete_interaction" => {
                 let input: crate::tools::interaction::InteractionId = Self::parse(args)?;
                 self.delete_interaction(input).await?

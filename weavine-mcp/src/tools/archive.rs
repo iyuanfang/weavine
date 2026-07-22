@@ -7,19 +7,30 @@ use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ArchiveListQuery {
+    #[schemars(description = "Entity type to filter. One of: action, event, contact, project, reminder, interaction, tag.")]
+    #[serde(default)]
     pub entity: Option<String>,
+
+    #[schemars(description = "Maximum items to return.")]
+    #[serde(default)]
     pub limit: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ArchiveUnarchiveInput {
+    #[schemars(description = "Entity type. One of: action, event, contact, project, reminder, interaction, tag.")]
     pub entity: String,
+
+    #[schemars(description = "Item UUID to unarchive.")]
     pub id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ArchiveBulkUnarchiveInput {
+    #[schemars(description = "Entity type. One of: action, event, contact, project, reminder, interaction, tag.")]
     pub entity: String,
+
+    #[schemars(description = "List of item UUIDs to unarchive.")]
     pub ids: Vec<String>,
 }
 

@@ -5,15 +5,55 @@ use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
 use crate::api;
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Filter parameters for tag listings.")]
 pub struct ListTagsQuery {
+    #[schemars(description = "Search query (matches tag name).")]
+    #[serde(default)]
     pub q: Option<String>,
+
+    #[schemars(description = "Maximum number of tags to return.")]
+    #[serde(default)]
     pub limit: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TagId {
+    #[schemars(description = "Tag UUID.")]
     pub id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Body for creating a new tag.")]
+pub struct CreateTagBody {
+    #[schemars(description = "Tag name. Must be unique per user.")]
+    pub name: String,
+
+    #[schemars(description = "Optional color (hex string or CSS color name).")]
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Mutable fields for updating a tag. Pass only fields to change.")]
+pub struct UpdateTagFields {
+    #[schemars(description = "Replace the tag name. Must be present for the update to take effect.")]
+    #[serde(default)]
+    pub name: Option<String>,
+
+    #[schemars(description = "Replace the color.")]
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(description = "Body for update_tag: pick the tag by id, set only fields to change.")]
+pub struct UpdateTagBody {
+    #[schemars(description = "UUID of the tag to update.")]
+    pub id: String,
+
+    #[schemars(description = "Mutable field overrides. Only fields set will be written.")]
+    pub fields: UpdateTagFields,
 }
 
 impl WeavineMcpServer {
@@ -30,17 +70,16 @@ impl WeavineMcpServer {
 
     pub async fn create_tag(
         &self,
-        input: serde_json::Value,
+        body: CreateTagBody,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/tags", &input, api!()).await?)
+        Ok(self.client.post("/api/tags", &body, api!()).await?)
     }
 
     pub async fn update_tag(
         &self,
-        input: serde_json::Value,
+        input: UpdateTagBody,
     ) -> McpResult<serde_json::Value> {
-        let id = input.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        Ok(self.client.put(&format!("/api/tags/{}", id), &input, api!()).await?)
+        Ok(self.client.put(&format!("/api/tags/{}", input.id), &input.fields, api!()).await?)
     }
 
     pub async fn delete_tag(

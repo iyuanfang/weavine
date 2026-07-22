@@ -3,17 +3,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
-use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthLoginInput {
+    #[schemars(description = "User email address.")]
     pub email: String,
+
+    #[schemars(description = "User password (plaintext, transmitted over HTTPS).")]
     pub password: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct AuthRegisterInput {
+    #[schemars(description = "User email address.")]
     pub email: String,
+
+    #[schemars(description = "User password (plaintext, transmitted over HTTPS).")]
     pub password: String,
 }
 

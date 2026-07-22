@@ -2,39 +2,147 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::McpResult;
-use crate::error::McpError;
 use crate::server::WeavineMcpServer;
 use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct EventId {
+    #[schemars(description = "Event UUID.")]
     pub id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Filter parameters for event listings.")]
 pub struct ListEventsQuery {
+    #[schemars(description = "Include archived events. Defaults to false.")]
     #[serde(default)]
     pub include_archived: Option<bool>,
+
+    #[schemars(description = "Filter events starting from this timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
     #[serde(default)]
     pub from: Option<String>,
+
+    #[schemars(description = "Filter events ending before this timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
     #[serde(default)]
     pub to: Option<String>,
+
+    #[schemars(description = "Filter by contact UUID.")]
     #[serde(default)]
     pub contact_id: Option<String>,
+
+    #[schemars(description = "Filter by project UUID.")]
     #[serde(default)]
     pub project_id: Option<String>,
+
+    #[schemars(description = "Maximum number of events to return.")]
     #[serde(default)]
     pub limit: Option<u32>,
+
+    #[schemars(description = "Pagination offset (skip N results).")]
     #[serde(default)]
     pub offset: Option<u32>,
 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Body for creating a new event.")]
+pub struct CreateEventBody {
+    #[schemars(description = "Event title.")]
+    pub title: String,
+
+    #[schemars(description = "Event type. Typical values: event, meeting, call, deadline. Defaults to \"event\". Sent as JSON key \"type\".")]
+    #[serde(default, rename = "type")]
+    pub event_type: Option<String>,
+
+    #[schemars(description = "Start timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC). Defaults to server time.")]
+    #[serde(default)]
+    pub start_at: Option<String>,
+
+    #[schemars(description = "End timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
+    #[serde(default)]
+    pub end_at: Option<String>,
+
+    #[schemars(description = "Location text.")]
+    #[serde(default)]
+    pub location: Option<String>,
+
+    #[schemars(description = "Notes for the event.")]
+    #[serde(default)]
+    pub notes: Option<String>,
+
+    #[schemars(description = "Contact UUID to link.")]
+    #[serde(default)]
+    pub contact_id: Option<String>,
+
+    #[schemars(description = "Project UUID to link.")]
+    #[serde(default)]
+    pub project_id: Option<String>,
+
+    #[schemars(description = "Minutes before start to trigger a reminder.")]
+    #[serde(default)]
+    pub reminder_lead_minutes: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Mutable fields for updating an event. Pass only fields to change.")]
+pub struct UpdateEventFields {
+    #[schemars(description = "Replace the title.")]
+    #[serde(default)]
+    pub title: Option<String>,
+
+    #[schemars(description = "Replace the event type.")]
+    #[serde(default)]
+    pub event_type: Option<String>,
+
+    #[schemars(description = "Replace the start timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
+    #[serde(default)]
+    pub start_at: Option<String>,
+
+    #[schemars(description = "Replace the end timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
+    #[serde(default)]
+    pub end_at: Option<String>,
+
+    #[schemars(description = "Replace the location.")]
+    #[serde(default)]
+    pub location: Option<String>,
+
+    #[schemars(description = "Replace the notes.")]
+    #[serde(default)]
+    pub notes: Option<String>,
+
+    #[schemars(description = "Replace the contact link (UUID).")]
+    #[serde(default)]
+    pub contact_id: Option<String>,
+
+    #[schemars(description = "Replace the project link (UUID).")]
+    #[serde(default)]
+    pub project_id: Option<String>,
+
+    #[schemars(description = "Replace reminder lead minutes.")]
+    #[serde(default)]
+    pub reminder_lead_minutes: Option<i32>,
+
+    #[schemars(description = "Archive timestamp to soft-delete. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
+    #[serde(default)]
+    pub archived_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(description = "Body for update_event: pick the event by id, set only fields to change.")]
+pub struct UpdateEventBody {
+    #[schemars(description = "UUID of the event to update.")]
+    pub id: String,
+
+    #[schemars(description = "Mutable field overrides. Only fields set will be written.")]
+    pub fields: UpdateEventFields,
+}
+
 impl WeavineMcpServer {
     pub async fn upcoming_events(&self) -> McpResult<serde_json::Value> {
         let v = self.client.get("/api/events/upcoming", &[], api!()).await?;
         Ok(v)
     }
 
-        pub async fn list_events(
+    pub async fn list_events(
         &self,
         q: ListEventsQuery,
     ) -> McpResult<serde_json::Value> {
@@ -51,7 +159,7 @@ impl WeavineMcpServer {
         Ok(v)
     }
 
-        pub async fn get_event(
+    pub async fn get_event(
         &self,
         input: EventId,
     ) -> McpResult<serde_json::Value> {
@@ -59,28 +167,23 @@ impl WeavineMcpServer {
         Ok(v)
     }
 
-        pub async fn create_event(
+    pub async fn create_event(
         &self,
-        body: serde_json::Value,
+        body: CreateEventBody,
     ) -> McpResult<serde_json::Value> {
         let v = self.client.post("/api/events", &body, api!()).await?;
         Ok(v)
     }
 
-        pub async fn update_event(
+    pub async fn update_event(
         &self,
-        input: serde_json::Value,
+        input: UpdateEventBody,
     ) -> McpResult<serde_json::Value> {
-        let id = input.get("id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| McpError::BadInput("缺少 id 字段".into()))?
-            .to_string();
-        let body = input.get("fields").cloned().unwrap_or(serde_json::json!({}));
-        let v = self.client.put(&format!("/api/events/{id}"), &body, api!()).await?;
+        let v = self.client.put(&format!("/api/events/{}", input.id), &input.fields, api!()).await?;
         Ok(v)
     }
 
-        pub async fn delete_event(
+    pub async fn delete_event(
         &self,
         input: EventId,
     ) -> McpResult<serde_json::Value> {
@@ -88,5 +191,3 @@ impl WeavineMcpServer {
         Ok(serde_json::json!({ "ok": true }))
     }
 }
-
-

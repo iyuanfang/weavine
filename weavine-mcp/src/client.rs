@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use reqwest::{Client, StatusCode};
+use serde::Serialize;
 use serde_json::Value;
 use tokio::time::sleep;
 use tracing::{debug, warn};
@@ -77,12 +78,22 @@ impl WeavineClient {
         }
     }
 
-    pub async fn post(&self, path: &str, body: &Value, api_key: &str) -> McpResult<Value> {
+    pub async fn post<T: Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+        api_key: &str,
+    ) -> McpResult<Value> {
         self.send_with_body(reqwest::Method::POST, path, body, api_key)
             .await
     }
 
-    pub async fn put(&self, path: &str, body: &Value, api_key: &str) -> McpResult<Value> {
+    pub async fn put<T: Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+        api_key: &str,
+    ) -> McpResult<Value> {
         self.send_with_body(reqwest::Method::PUT, path, body, api_key)
             .await
     }
@@ -170,11 +181,11 @@ impl WeavineClient {
         }
     }
 
-    async fn send_with_body(
+    async fn send_with_body<T: Serialize>(
         &self,
         method: reqwest::Method,
         path: &str,
-        body: &Value,
+        body: &T,
         api_key: &str,
     ) -> McpResult<Value> {
         let mut attempts = 0u8;

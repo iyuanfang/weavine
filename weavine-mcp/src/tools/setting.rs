@@ -7,12 +7,16 @@ use crate::api;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SettingDeleteInput {
+    #[schemars(description = "Setting key name to delete.")]
     pub key: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SettingUpsertInput {
+    #[schemars(description = "Setting key name.")]
     pub key: String,
+
+    #[schemars(description = "Setting value (any valid JSON).")]
     pub value: serde_json::Value,
 }
 

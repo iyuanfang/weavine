@@ -5,18 +5,99 @@ use crate::error::McpResult;
 use crate::server::WeavineMcpServer;
 use crate::api;
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Filter parameters for interaction listings.")]
 pub struct ListInteractionsQuery {
+    #[schemars(description = "Filter by contact UUID.")]
+    #[serde(default)]
     pub contact_id: Option<String>,
+
+    #[schemars(description = "Filter by event UUID.")]
+    #[serde(default)]
     pub event_id: Option<String>,
+
+    #[schemars(description = "Filter by channel. Typical values: meeting, call, email, chat, social, other.")]
+    #[serde(default)]
     pub kind: Option<String>,
+
+    #[schemars(description = "Maximum number of interactions to return.")]
+    #[serde(default)]
     pub limit: Option<i64>,
+
+    #[schemars(description = "Pagination offset (skip N results).")]
+    #[serde(default)]
     pub offset: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct InteractionId {
+    #[schemars(description = "Interaction UUID.")]
     pub id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Body for creating a new interaction.")]
+pub struct CreateInteractionBody {
+    #[schemars(description = "Contact UUID. If set, updates the contact's last_contacted_at.")]
+    #[serde(default)]
+    pub contact_id: Option<String>,
+
+    #[schemars(description = "Action UUID to link.")]
+    #[serde(default)]
+    pub action_id: Option<String>,
+
+    #[schemars(description = "Event UUID to link.")]
+    #[serde(default)]
+    pub event_id: Option<String>,
+
+    #[schemars(description = "When the interaction occurred. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC). Defaults to server time.")]
+    #[serde(default)]
+    pub occurred_at: Option<String>,
+
+    #[schemars(description = "Channel. Typical values: meeting, call, email, chat, social, other.")]
+    #[serde(default)]
+    pub channel: Option<String>,
+
+    #[schemars(description = "Summary of the interaction.")]
+    pub summary: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
+#[schemars(description = "Mutable fields for updating an interaction. Pass only fields to change.")]
+pub struct UpdateInteractionFields {
+    #[schemars(description = "Replace the contact link (UUID).")]
+    #[serde(default)]
+    pub contact_id: Option<String>,
+
+    #[schemars(description = "Replace the action link (UUID).")]
+    #[serde(default)]
+    pub action_id: Option<String>,
+
+    #[schemars(description = "Replace the event link (UUID).")]
+    #[serde(default)]
+    pub event_id: Option<String>,
+
+    #[schemars(description = "Replace the occurred-at timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
+    #[serde(default)]
+    pub occurred_at: Option<String>,
+
+    #[schemars(description = "Replace the channel.")]
+    #[serde(default)]
+    pub channel: Option<String>,
+
+    #[schemars(description = "Replace the summary.")]
+    #[serde(default)]
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[schemars(description = "Body for update_interaction: pick the interaction by id, set only fields to change.")]
+pub struct UpdateInteractionBody {
+    #[schemars(description = "UUID of the interaction to update.")]
+    pub id: String,
+
+    #[schemars(description = "Mutable field overrides. Only fields set will be written.")]
+    pub fields: UpdateInteractionFields,
 }
 
 impl WeavineMcpServer {
@@ -43,17 +124,16 @@ impl WeavineMcpServer {
 
     pub async fn create_interaction(
         &self,
-        input: serde_json::Value,
+        body: CreateInteractionBody,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/interactions", &input, api!()).await?)
+        Ok(self.client.post("/api/interactions", &body, api!()).await?)
     }
 
     pub async fn update_interaction(
         &self,
-        input: serde_json::Value,
+        input: UpdateInteractionBody,
     ) -> McpResult<serde_json::Value> {
-        let id = input.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-        Ok(self.client.put(&format!("/api/interactions/{}", id), &input, api!()).await?)
+        Ok(self.client.put(&format!("/api/interactions/{}", input.id), &input.fields, api!()).await?)
     }
 
     pub async fn delete_interaction(
