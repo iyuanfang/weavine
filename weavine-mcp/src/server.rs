@@ -130,7 +130,7 @@ fn tier1_tools() -> Vec<Tool> {
 }
 
 fn tier2_tools() -> Vec<Tool> {
-    use crate::tools::{archive, auth_jwt, diagnostic, interaction, search, setting, sync, tag};
+    use crate::tools::{auth_jwt, diagnostic, interaction, search, setting, sync, tag};
     let mut t = Vec::with_capacity(28);
     t.push(tool("auth_register", "Register a new account. No API key needed.", schema_of::<auth_jwt::AuthRegisterInput>()));
     t.push(tool("auth_login", "Login by email + password. No API key needed.", schema_of::<auth_jwt::AuthLoginInput>()));
@@ -146,11 +146,6 @@ fn tier2_tools() -> Vec<Tool> {
     t.push(tool("create_interaction", "Create an interaction.", schema_of::<interaction::CreateInteractionBody>()));
     t.push(tool("update_interaction", "Update an interaction. Input: {id, fields: {...}}.", schema_of::<interaction::UpdateInteractionBody>()));
     t.push(tool("delete_interaction", "Delete an interaction by id.", schema_of::<interaction::InteractionId>()));
-    t.push(tool("archive_summary", "Archive summary across entities.", empty_schema()));
-    t.push(tool("archive_counts", "Per-entity archive counts.", empty_schema()));
-    t.push(tool("archive_list", "List archived items.", schema_of::<archive::ArchiveListQuery>()));
-    t.push(tool("archive_unarchive_one", "Unarchive one item.", schema_of::<archive::ArchiveUnarchiveInput>()));
-    t.push(tool("archive_bulk_unarchive", "Bulk unarchive.", schema_of::<archive::ArchiveBulkUnarchiveInput>()));
     t.push(tool("list_settings", "List current-user settings.", empty_schema()));
     t.push(tool("upsert_setting", "Upsert a setting.", schema_of::<setting::SettingUpsertInput>()));
     t.push(tool("delete_setting", "Delete a setting by key.", schema_of::<setting::SettingDeleteInput>()));
@@ -379,20 +374,6 @@ impl WeavineMcpServer {
             "delete_interaction" => {
                 let input: crate::tools::interaction::InteractionId = Self::parse(args)?;
                 self.delete_interaction(input).await?
-            }
-            "archive_summary" => self.archive_summary().await?,
-            "archive_counts" => self.archive_counts().await?,
-            "archive_list" => {
-                let input: crate::tools::archive::ArchiveListQuery = Self::parse(args)?;
-                self.archive_list(input).await?
-            }
-            "archive_unarchive_one" => {
-                let input: crate::tools::archive::ArchiveUnarchiveInput = Self::parse(args)?;
-                self.archive_unarchive_one(input).await?
-            }
-            "archive_bulk_unarchive" => {
-                let input: crate::tools::archive::ArchiveBulkUnarchiveInput = Self::parse(args)?;
-                self.archive_bulk_unarchive(input).await?
             }
             "list_settings" => self.list_settings().await?,
             "upsert_setting" => {

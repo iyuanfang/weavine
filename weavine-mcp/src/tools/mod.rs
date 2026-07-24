@@ -1,5 +1,4 @@
 pub mod action;
-pub mod archive;
 pub mod auth_jwt;
 pub mod contact;
 pub mod diagnostic;

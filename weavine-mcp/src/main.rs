@@ -62,8 +62,9 @@ async fn run_http(cfg: Arc<Config>) -> anyhow::Result<()> {
     if let Ok(extra) = std::env::var("WEAVINE_MCP_ALLOWED_HOSTS") {
         svc_config.allowed_hosts = extra.split(',').map(|s| s.trim().to_string()).collect();
     }
-    svc_config.stateful_mode = false;
-    svc_config.json_response = true;
+    // stateful_mode defaults to true (rmcp 2.2): enables MCP-Session-Id on initialize,
+    // GET → SSE channel for server notifications, DELETE → session termination.
+    // json_response is only honored when stateful_mode=false; left implicit default.
     let svc = StreamableHttpService::new(
         move || {
             Ok(WeavineMcpServer::new(cfg_for_factory.clone())
@@ -76,7 +77,7 @@ async fn run_http(cfg: Arc<Config>) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(bind)
         .await
         .with_context(|| format!("无法 bind {bind}"))?;
-    tracing::info!(%bind, "weavine-mcp streamable-http 上线 (POST/GET /mcp)");
+    tracing::info!(%bind, "weavine-mcp streamable-http 上线 (POST/GET/DELETE /mcp, stateful)");
 
     let server = axum::serve(listener, router);
     tokio::select! {

@@ -14,10 +14,6 @@ pub struct ActionId {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[schemars(description = "Filter parameters for action listings.")]
 pub struct ListActionsQuery {
-    #[schemars(description = "Include archived actions. Defaults to false.")]
-    #[serde(default)]
-    pub include_archived: Option<bool>,
-
     #[schemars(description = "Filter by contact UUID.")]
     #[serde(default)]
     pub contact_id: Option<String>,
@@ -26,7 +22,7 @@ pub struct ListActionsQuery {
     #[serde(default)]
     pub project_id: Option<String>,
 
-    #[schemars(description = "Filter by status. One of: todo, next, in_progress, done, inbox.")]
+    #[schemars(description = "Filter by status. One of: inbox, open, waiting, done.")]
     #[serde(default)]
     pub status: Option<String>,
 
@@ -51,7 +47,7 @@ pub struct CreateActionBody {
     #[serde(default)]
     pub description: Option<String>,
 
-    #[schemars(description = "Workflow status. Typical values: inbox, next, todo, in_progress, done. Defaults to inbox.")]
+    #[schemars(description = "Workflow status. One of: inbox, open, waiting, done. Defaults to inbox.")]
     #[serde(default)]
     pub status: Option<String>,
 
@@ -89,7 +85,7 @@ pub struct UpdateActionFields {
     #[serde(default)]
     pub description: Option<String>,
 
-    #[schemars(description = "New status. Typical values: inbox, next, todo, in_progress, done.")]
+    #[schemars(description = "New status. One of: inbox, open, waiting, done.")]
     #[serde(default)]
     pub status: Option<String>,
 
@@ -116,10 +112,6 @@ pub struct UpdateActionFields {
     #[schemars(description = "Mark completed-at timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
     #[serde(default)]
     pub completed_at: Option<String>,
-
-    #[schemars(description = "Mark archived-at timestamp to soft-delete. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
-    #[serde(default)]
-    pub archived_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -138,7 +130,6 @@ impl WeavineMcpServer {
         q: ListActionsQuery,
     ) -> McpResult<serde_json::Value> {
         let mut pairs: Vec<(&str, String)> = Vec::new();
-        pairs.push(("archived", if q.include_archived.unwrap_or(false) { "true".to_string() } else { "false".to_string() }));
         if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
         if let Some(v) = &q.project_id { pairs.push(("project_id", v.clone())); }
         if let Some(v) = &q.status { pairs.push(("status", v.clone())); }

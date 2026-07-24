@@ -14,10 +14,6 @@ pub struct ProjectId {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[schemars(description = "Filter parameters for project listings.")]
 pub struct ListProjectsQuery {
-    #[schemars(description = "Include archived projects. Defaults to false.")]
-    #[serde(default)]
-    pub include_archived: Option<bool>,
-
     #[schemars(description = "Filter by stage.")]
     #[serde(default)]
     pub status: Option<String>,
@@ -94,10 +90,6 @@ pub struct UpdateProjectFields {
     #[schemars(description = "Completion timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
     #[serde(default)]
     pub completed_at: Option<String>,
-
-    #[schemars(description = "Archive timestamp to soft-delete. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
-    #[serde(default)]
-    pub archived_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -116,7 +108,6 @@ impl WeavineMcpServer {
         q: ListProjectsQuery,
     ) -> McpResult<serde_json::Value> {
         let mut pairs: Vec<(&str, String)> = Vec::new();
-        pairs.push(("archived", if q.include_archived.unwrap_or(false) { "true".to_string() } else { "false".to_string() }));
         if let Some(v) = &q.status { pairs.push(("status", v.clone())); }
         if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
         if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }

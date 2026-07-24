@@ -14,10 +14,6 @@ pub struct EventId {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[schemars(description = "Filter parameters for event listings.")]
 pub struct ListEventsQuery {
-    #[schemars(description = "Include archived events. Defaults to false.")]
-    #[serde(default)]
-    pub include_archived: Option<bool>,
-
     #[schemars(description = "Filter events starting from this timestamp. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
     #[serde(default)]
     pub from: Option<String>,
@@ -120,10 +116,6 @@ pub struct UpdateEventFields {
     #[schemars(description = "Replace reminder lead minutes.")]
     #[serde(default)]
     pub reminder_lead_minutes: Option<i32>,
-
-    #[schemars(description = "Archive timestamp to soft-delete. Format: \"YYYY-MM-DD HH:MM:SS\" (UTC).")]
-    #[serde(default)]
-    pub archived_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -147,7 +139,6 @@ impl WeavineMcpServer {
         q: ListEventsQuery,
     ) -> McpResult<serde_json::Value> {
         let mut pairs: Vec<(&str, String)> = Vec::new();
-        pairs.push(("archived", if q.include_archived.unwrap_or(false) { "true".to_string() } else { "false".to_string() }));
         if let Some(v) = &q.from { pairs.push(("from", v.clone())); }
         if let Some(v) = &q.to { pairs.push(("to", v.clone())); }
         if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
