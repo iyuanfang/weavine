@@ -42,7 +42,13 @@ impl WeavineMcpServer {
 }
 
 fn empty_schema() -> Arc<JsonObject> {
-    Arc::new(JsonObject::new())
+    let mut m = JsonObject::new();
+    m.insert("type".to_string(), serde_json::Value::String("object".to_string()));
+    m.insert(
+        "properties".to_string(),
+        serde_json::Value::Object(JsonObject::new()),
+    );
+    Arc::new(m)
 }
 
 tokio::task_local! {
@@ -151,7 +157,6 @@ fn tier2_tools() -> Vec<Tool> {
     t.push(tool("delete_setting", "Delete a setting by key.", schema_of::<setting::SettingDeleteInput>()));
     t.push(tool("search", "Cross-entity search.", schema_of::<search::SearchQuery>()));
     t.push(tool("sync_manifest", "Get sync manifest.", schema_of::<sync::SyncManifestInput>()));
-    t.push(tool("sync_push", "Push sync changes.", schema_of::<sync::SyncPushInput>()));
     t.push(tool("sync_pull", "Pull sync changes since cursor.", schema_of::<sync::SyncPullInput>()));
     t
 }
@@ -391,10 +396,6 @@ impl WeavineMcpServer {
             "sync_manifest" => {
                 let input: crate::tools::sync::SyncManifestInput = Self::parse(args)?;
                 self.sync_manifest(input).await?
-            }
-            "sync_push" => {
-                let input: crate::tools::sync::SyncPushInput = Self::parse(args)?;
-                self.sync_push(input).await?
             }
             "sync_pull" => {
                 let input: crate::tools::sync::SyncPullInput = Self::parse(args)?;

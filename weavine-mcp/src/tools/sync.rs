@@ -11,12 +11,6 @@ pub struct SyncManifestInput {
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-pub struct SyncPushInput {
-    pub device_id: String,
-    pub changes: serde_json::Value,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SyncPullInput {
     pub device_id: String,
     pub since: Option<String>,
@@ -28,16 +22,6 @@ impl WeavineMcpServer {
         _input: SyncManifestInput,
     ) -> McpResult<serde_json::Value> {
         Ok(self.client.post("/api/sync/manifest", &serde_json::Value::Null, api!()).await?)
-    }
-
-    pub async fn sync_push(
-        &self,
-        input: SyncPushInput,
-    ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/sync/push", &serde_json::json!({
-            "device_id": input.device_id,
-            "changes": input.changes,
-        }), api!()).await?)
     }
 
     pub async fn sync_pull(
