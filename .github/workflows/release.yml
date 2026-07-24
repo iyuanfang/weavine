@@ -27,34 +27,15 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
+          shared-key: windows-cargo
+          cache-on-failure: true
 
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Initialize SQLite database
-        run: |
-          pnpm exec prisma db push
-          cp prisma/dev.db dev.db
-        env:
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Download portable Node.js for Windows
-        run: node scripts/download-node.mjs win32 x64
-
-      - name: Build Next.js standalone
-        run: pnpm build
-        env:
-          IS_DESKTOP: 'true'
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Patch standalone output for Tauri bundling
-        run: node scripts/copy-tauri-standalone.mjs
-        env:
-          IS_DESKTOP: 'true'
 
       - name: Build Tauri app (Windows MSI)
         id: build
@@ -80,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weavine-windows-msi
-          path: src-tauri/target/release/bundle/msi/*
+          path: target/release/bundle/msi/*
           if-no-files-found: error
 
   build-linux:
@@ -101,6 +82,12 @@ jobs:
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install sccache
+        run: |
+          sudo apt-get install -y -qq sccache
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          mkdir -p ~/.cache/sccache
+
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update -qq
@@ -112,39 +99,20 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
+          shared-key: linux-cargo
+          cache-on-failure: true
 
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Initialize SQLite database
-        run: |
-          pnpm exec prisma db push
-          cp prisma/dev.db dev.db
-        env:
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Download portable Node.js for Linux
-        run: node scripts/download-node.mjs linux x64
-
-      - name: Build Next.js standalone
-        run: pnpm build
-        env:
-          IS_DESKTOP: 'true'
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Patch standalone output for Tauri bundling
-        run: node scripts/copy-tauri-standalone.mjs
-        env:
-          IS_DESKTOP: 'true'
-
       - name: Build Tauri app (Linux)
         id: build
         run: |
-          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles deb 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -158,17 +126,210 @@ jobs:
           name: tauri-build-log-linux
           path: tauri-build.log
 
+      - name: Stage Linux bundle artifacts
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          echo "Bundle directory tree:"
+          find target/release/bundle -maxdepth 4 -type f || true
+          mkdir -p linux-out
+          # Use xargs so empty result is not an error
+          find target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 2>/dev/null \
+            | xargs -0 -r -I {} cp -v {} linux-out/ 2>&1 || echo "No .deb or .AppImage files found to stage"
+          echo "Staged artifacts:"
+          ls -la linux-out/ || true
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: weavine-linux
-          path: |
-            src-tauri/target/release/bundle/deb/*
-            src-tauri/target/release/bundle/appimage/*
+          path: linux-out/*
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Cargo dependencies (sccache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          shared-key: macos-cargo
+          cache-on-failure: true
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app (macOS DMG)
+        id: build
+        run: |
+          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build log on failure
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-build-log-macos
+          path: tauri-build.log
+
+      - name: Stage macOS bundle artifacts
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          echo "Bundle directory tree:"
+          find target/release/bundle -maxdepth 4 -type f || true
+          mkdir -p macos-out
+          find target/release/bundle -type f \( -name '*.dmg' -o -name '*.app' \) -print0 2>/dev/null \
+            | xargs -0 -r -I {} cp -rv {} macos-out/ 2>&1 || echo "No .dmg or .app files found to stage"
+          echo "Staged artifacts:"
+          ls -la macos-out/ || true
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: weavine-macos
+          path: macos-out/*
+          if-no-files-found: error
+
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Rust toolchain (stable) with Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools-version: '34.0.0'
+          ndk-version: '26.1.10909125'
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          shared-key: android-cargo
+          cache-on-failure: true
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Generate Android project
+        run: cargo tauri android init
+
+      - name: Inject frontendDist assets into Gradle config
+        # src-tauri/gen/android/ is gitignored, so we patch build.gradle.kts
+        # on every CI run. Without this, the web-spa dist/ never gets
+        # bundled into the APK and the WebView opens to a blank white screen.
+        # base64 payload decodes to the sourceSets override line below.
+        run: |
+          echo CmFuZHJvaWQuc291cmNlU2V0c1sibWFpbiJdLmFzc2V0cy5zcmNEaXJzKCJzcmMvbWFpbi9hc3NldHMiLCAiLi4vLi4vLi4vLi4vYXBwcy93ZWItc3BhL2Rpc3QiKQo= \
+            | base64 -d >> src-tauri/gen/android/app/build.gradle.kts
+          echo "=== last 5 lines of patched build.gradle.kts ==="
+          tail -5 src-tauri/gen/android/app/build.gradle.kts
+
+      - name: Build Tauri Android APK
+        id: build
+        run: |
+          cargo tauri android build --apk 2>&1 | tee tauri-android-build.log
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+
+      - name: Upload build log on failure
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-build-log
+          path: tauri-android-build.log
+
+      - name: Stage Android APK
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          mkdir -p android-out ~/.android
+          # Ensure debug keystore exists (Gradle auto-creates it during build
+          # on local machines but CI runners may not have one yet)
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "Generating debug.keystore"
+            keytool -genkey -v \
+              -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+          fi
+          # Tauri produces *-release-unsigned.apk (no signing config) — modern
+          # Android refuses to install unsigned APKs, so sign with the debug
+          # keystore.
+          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' | head -1)
+          if [ -n "$UNSIGNED" ]; then
+            echo "Signing $UNSIGNED with debug keystore"
+            BT="$ANDROID_HOME/build-tools/34.0.0"
+            "$BT/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
+            "$BT/apksigner" sign \
+              --ks ~/.android/debug.keystore \
+              --ks-pass pass:android \
+              --ks-key-alias androiddebugkey \
+              --key-pass pass:android \
+              --out android-out/Weavine_universal-release.apk \
+              android-out/app-unsigned-aligned.apk
+            "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
+            rm android-out/app-unsigned-aligned.apk
+          else
+            echo "No unsigned release APK found, copying all APKs as-is"
+            find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \;
+          fi
+          echo "Staged APKs:"
+          ls -la android-out/
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: weavine-android
+          path: android-out/*.apk
           if-no-files-found: error
 
   release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-linux, build-macos, build-android]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -185,8 +346,7 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \
-            --generate-notes \
-            --draft
+            --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -201,10 +361,28 @@ jobs:
 
       - name: Upload Linux artifacts to Release
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --clobber \
-            artifacts/weavine-linux/*.deb \
-            artifacts/weavine-linux/*.AppImage
+          # actions/upload-artifact@v4 preserves relative paths
+          find artifacts/weavine-linux -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload macOS artifacts to Release
+        run: |
+          find artifacts/weavine-macos -type f \( -name '*.dmg' -o -name '*.app' \) -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload Android APK to Release
+        run: |
+          find artifacts/weavine-android -type f -name '*.apk' -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
         env:
           GH_TOKEN: ${{ github.token }}

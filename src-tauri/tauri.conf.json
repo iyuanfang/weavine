@@ -1,35 +1,66 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Weavine",
-  "version": "0.1.0",
-  "identifier": "com.weavine.prm",
+  "version": "0.2.29",
+  "identifier": "com.weavine.desktop",
   "build": {
-    "frontendDist": "../tauri-dist"
+    "beforeBuildCommand": "pnpm --dir apps/web-spa run build:tauri",
+    "beforeDevCommand": "pnpm --dir apps/web-spa run dev",
+    "devUrl": "http://localhost:5181",
+    "frontendDist": "../apps/web-spa/dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
         "title": "Weavine",
-        "url": "/",
         "width": 1280,
-        "height": 820
+        "height": 820,
+        "visible": true,
+        "devtools": true
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    },
+    "withGlobalTauri": false
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage", "msi"],
-    "resources": ["../standalone-bundle/**/*", "../node_bin/*"],
+    "targets": [
+      "deb",
+      "appimage",
+      "msi",
+      "app",
+      "dmg"
+    ],
+    "resources": [],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico",
       "icons/icon.png"
-    ]
+    ],
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["wix/preserve-data.wxs"],
+        "componentRefs": ["AppDataDir"]
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      }
+    },
+    "android": {
+      "minSdkVersion": 24
+    },
+    "iOS": {
+      "minimumSystemVersion": "15.0"
+    }
   }
 }

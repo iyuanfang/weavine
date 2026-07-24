@@ -1,31 +1,114 @@
+pub mod boot_log;
+pub mod business;
+#[cfg(feature = "tauri")]
 pub mod commands;
 pub mod db;
+pub mod migration;
 pub mod models;
+pub mod project_template;
+pub mod sync;
+pub mod tag_color;
 
-use commands::{action, contact, event, interaction, reminder, search, setting, tag};
-use tauri::Manager;
-use db::Database;
-use std::fs;
-use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
-use std::thread;
-use std::time::{Duration, Instant};
+#[cfg(feature = "tauri")]
+use std::sync::OnceLock;
 
-const SERVER_PORT: u16 = 3199;
-const SERVER_HOST: &str = "127.0.0.1";
-const SERVER_STARTUP_TIMEOUT_SECS: u64 = 30;
+#[cfg(feature = "tauri")]
+static STARTUP_ERROR: OnceLock<String> = OnceLock::new();
 
-struct ServerProcess(Mutex<Option<Child>>);
+#[cfg(feature = "tauri")]
+pub(crate) fn startup_error() -> Option<String> {
+    STARTUP_ERROR.get().cloned()
+}
 
+#[cfg(not(feature = "tauri"))]
+pub(crate) fn startup_error() -> Option<String> {
+    None
+}
+
+#[cfg(feature = "tauri")]
+fn dirs_data_dir_fallback() -> std::path::PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("com.weavine.desktop")
+}
+
+#[cfg(feature = "tauri")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let database = Database::new().expect("Failed to initialize database");
+    use commands::{action, contact, diagnostic, event, interaction, project, project_contact, reminder, search, setting, tag};
+    use db::Database;
+    use std::fs;
+
+    let initial_data_dir = db::get_db_path()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(dirs_data_dir_fallback);
+    boot_log::init(&initial_data_dir);
+    boot_log::log("Tauri run() invoked");
+
+    let database = match Database::new() {
+        Ok(db) => {
+            boot_log::log("Database::new succeeded");
+            db
+        }
+        Err(e) => {
+            let msg = format!("Failed to initialize database: {e}");
+            boot_log::log(&msg);
+            eprintln!("[weavine] {msg}");
+            STARTUP_ERROR.set(msg.clone()).ok();
+            let _ = fs::create_dir_all(&initial_data_dir);
+            let _ = fs::write(initial_data_dir.join("startup-error.log"), &msg);
+            boot_log::log("Falling back to in-memory database");
+            // Keep the webview alive so the user sees an error, not a blank page;
+            // desktop never hits this branch (dirs::data_dir always resolves).
+            Database::open_memory().expect("open_in_memory must succeed")
+        }
+    };
+
+    {
+        let conn = match database.conn.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                boot_log::log(&format!("sweep: lock failed: {e}"));
+                return;
+            }
+        };
+        let now = chrono::Utc::now();
+        match business::archive_sweep::sweep_archives(&conn, now) {
+            Ok(n) if n > 0 => {
+                let msg = format!("[archive] sweep archived {n} items at startup");
+                boot_log::log(&msg);
+                eprintln!("{msg}");
+            }
+            Ok(_) => boot_log::log("[archive] sweep: nothing to archive"),
+            Err(e) => {
+                let msg = format!("[archive] sweep failed: {e}");
+                boot_log::log(&msg);
+                eprintln!("{msg}");
+            }
+        }
+    }
+
+    // ── Background cloud sync ────────────────────────
+    {
+        let conn = match database.conn.lock() {
+            Ok(g) => g,
+            Err(e) => {
+                boot_log::log(&format!("sync: lock failed: {e}"));
+                return;
+            }
+        };
+        let is_linked = sync::is_linked(&conn).unwrap_or(false);
+        if is_linked {
+            boot_log::log("[sync] cloud sync linked — spawning periodic sync");
+        } else {
+            boot_log::log("[sync] not linked — periodic sync will idle-poll is_linked");
+        }
+        sync::spawn_periodic(db::get_db_path(), 300);
+    }
 
     tauri::Builder::default()
         .manage(database)
-        .manage(ServerProcess(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             contact::list_contacts,
             contact::create_contact,
@@ -61,174 +144,30 @@ pub fn run() {
             setting::upsert_setting,
             setting::delete_setting,
             search::search,
+            diagnostic::get_startup_info,
+            diagnostic::get_local_user,
+            project::list_projects,
+            project::create_project,
+            project::update_project,
+            project::delete_project,
+            project::get_project,
+            project::list_project_stages,
+            project_contact::add_project_contact,
+            project_contact::list_project_contacts,
+            project_contact::remove_project_contact,
+            commands::sync::cloud_login,
+            commands::sync::cloud_logout,
+            commands::sync::cloud_sync_now,
+            commands::sync::cloud_status,
+            commands::archive::archive_sweep,
         ])
-        .setup(|app| {
-            let handle = app.handle().clone();
-            let server_state = handle.state::<ServerProcess>();
-
-            if std::env::var("TAURI_DEV").is_err() {
-                if let Err(e) = spawn_standalone_server(&handle, &server_state) {
-                    eprintln!("[weavine] Failed to spawn Next.js server: {e}");
-                    if let Ok(data_dir) = handle.path().app_data_dir() {
-                        let _ = fs::create_dir_all(&data_dir);
-                        let _ = fs::write(data_dir.join("startup-error.log"), &e);
-                    }
-                }
-            }
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                let state = window.state::<ServerProcess>();
-                let child = state.0.lock().unwrap().take();
-                if let Some(mut child) = child {
-                    let _ = child.kill();
-                }
-            }
-        })
+        .setup(|_app| Ok(()))
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-fn resolve_db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?;
-    fs::create_dir_all(&data_dir).map_err(|e| format!("create app_data_dir: {e}"))?;
-    Ok(data_dir.join("dev.db"))
-}
-
-fn ensure_database(app: &tauri::AppHandle, server_dir: &PathBuf) -> Result<PathBuf, String> {
-    let db_path = resolve_db_path(app)?;
-
-    if db_path.exists() {
-        return Ok(db_path);
-    }
-
-    let bundled_db = server_dir.join("dev.db");
-    if bundled_db.exists() {
-        fs::copy(&bundled_db, &db_path)
-            .map_err(|e| format!("copy dev.db from bundle: {e}"))?;
-        println!("[weavine] Copied pre-initialized dev.db to {:?}", db_path);
-    } else {
-        println!("[weavine] No bundled dev.db found — Prisma will create it");
-    }
-
-    Ok(db_path)
-}
-
-fn resolve_node_path(app: &tauri::AppHandle, server_dir: &PathBuf) -> PathBuf {
-    let node_name = if cfg!(target_os = "windows") {
-        "node.exe"
-    } else {
-        "node"
-    };
-
-    if cfg!(not(dev)) {
-        if let Ok(resource_dir) = app.path().resource_dir() {
-            let bundled = resource_dir.join("node_bin").join(node_name);
-            if bundled.exists() {
-                println!("[weavine] Using bundled Node.js at {}", bundled.display());
-                return bundled;
-            }
-        }
-    }
-
-    let local_node = server_dir.join("../../node_bin").join(node_name);
-    if local_node.exists() {
-        println!("[weavine] Using local Node.js at {}", local_node.display());
-        return local_node;
-    }
-
-    println!("[weavine] Using system Node.js from PATH");
-    PathBuf::from("node")
-}
-
-fn spawn_standalone_server(
-    app: &tauri::AppHandle,
-    state: &tauri::State<ServerProcess>,
-) -> Result<(), String> {
-    let server_dir = if cfg!(dev) {
-        std::env::current_dir().unwrap().join(".next/standalone")
-    } else {
-        app.path()
-            .resource_dir()
-            .map_err(|e| format!("resource_dir: {e}"))?
-            .join("standalone-bundle")
-    };
-
-    let server_js = server_dir.join("server.js");
-    if !server_js.exists() {
-        return Err(format!(
-            "server.js not found at {} — did the postbuild script run?",
-            server_js.display()
-        ));
-    }
-
-    let db_path = ensure_database(app, &server_dir)?;
-    let db_url = format!("file:{}", db_path.display());
-
-    let node_path = resolve_node_path(app, &server_dir);
-    let mut cmd = Command::new(&node_path);
-    cmd.current_dir(&server_dir)
-        .arg("server.js")
-        .env("PORT", SERVER_PORT.to_string())
-        .env("HOSTNAME", SERVER_HOST)
-        .env("DATABASE_URL", &db_url)
-        .env("IS_DESKTOP", "true")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Failed to spawn node: {e}"))?;
-
-    if let Some(stdout) = child.stdout.take() {
-        thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines().flatten() {
-                println!("[next] {line}");
-            }
-        });
-    }
-    if let Some(stderr) = child.stderr.take() {
-        thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines().flatten() {
-                eprintln!("[next] {line}");
-            }
-        });
-    }
-
-    *state.0.lock().unwrap() = Some(child);
-
-    let url = format!("http://{SERVER_HOST}:{SERVER_PORT}/api/health");
-    let deadline = Instant::now() + Duration::from_secs(SERVER_STARTUP_TIMEOUT_SECS);
-    while Instant::now() < deadline {
-        if is_server_up(&url) {
-            println!("[weavine] Next.js server ready at {url}");
-            return Ok(());
-        }
-        thread::sleep(Duration::from_millis(200));
-    }
-    Err("Next.js server failed to start within timeout".to_string())
-}
-
-fn is_server_up(url: &str) -> bool {
-    let parts: Vec<&str> = url.split(':').collect();
-    if parts.len() < 3 {
-        return false;
-    }
-    let host = parts[1].trim_start_matches("//");
-    let port: u16 = match parts[2].split('/').next().unwrap_or("").parse() {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-    use std::net::TcpStream;
-    TcpStream::connect_timeout(
-        &format!("{host}:{port}").parse().unwrap(),
-        Duration::from_millis(500),
-    )
-    .is_ok()
+#[cfg(not(feature = "tauri"))]
+pub fn run() {
+    eprintln!("weavine_lib::run() is only available with the 'tauri' feature");
+    eprintln!("build the 'weavine-web' bin instead for the web server");
 }

@@ -4,26 +4,43 @@ out/
 dist/
 .env
 .env.local
-/prisma/dev.db
-/prisma/dev.db-journal
-/prisma/migrations/dev/
-/prisma/dev.db-shm
-/prisma/dev.db-wal
 /dev.db
 /dev.db-journal
 /dev.db-shm
 /dev.db-wal
+weavine-web.db*
 *.log
 coverage/
 test-results/
 playwright-report/
-prisma/settings.json
 .worktrees/
 release/
 dist-electron/
 *.exe
 standalone-bundle/
 node_bin/
+src-tauri/vc-runtime/
 
 # Tauri
 src-tauri/target/
+src-tauri/gen/android/
+src-tauri/gen/ios/
+
+# Local integration test artifacts
+test-data-integration/
+fresh-test.db
+tsconfig.tsbuildinfo
+
+# Sisyphus session continuation artifacts
+.sisyphus/
+
+# Tauri generated bindings (regenerated on build)
+src-tauri/gen/
+
+tauri-dist/
+.playwright-mcp/
+
+# Local logo preview renders (scratch files for design review)
+.weavine-logo-*.png
+target/
+jwt-*.pem

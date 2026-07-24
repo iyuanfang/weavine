@@ -87,7 +87,7 @@ pnpm tauri dev        # opens window, runs Next.js + Tauri shell
 │   ├── capabilities/default.json           (Tauri v2 permissions)
 │   ├── build.rs                            (Tauri build script)
 │   └── src/
-│       ├── main.rs                         (calls prm_lib::run())
+│       ├── main.rs                         (calls weavine_lib::run())
 │       ├── lib.rs                          (run() with generate_handler![35 commands])
 │       ├── db.rs                           (Database struct + migrations)
 │       ├── models.rs                       (8 domain structs + 3 DTOs + SearchResults)

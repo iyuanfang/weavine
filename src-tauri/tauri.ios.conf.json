@@ -1,0 +1,24 @@
+{
+  "build": {
+    "beforeBuildCommand": "pnpm --dir apps/web-spa run build"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "icon": [
+      "icons/ios-icon-20.png",
+      "icons/ios-icon-40.png",
+      "icons/ios-icon-60.png",
+      "icons/ios-icon-76.png",
+      "icons/ios-icon-83.5.png",
+      "icons/ios-icon-1024.png"
+    ],
+    "iOS": {
+      "minimumSystemVersion": "15.0"
+    }
+  }
+}

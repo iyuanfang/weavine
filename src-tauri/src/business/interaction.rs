@@ -1,0 +1,295 @@
+use crate::models::*;
+use rusqlite::{Connection, Transaction, TransactionBehavior};
+use uuid::Uuid;
+
+pub(crate) fn row_to_interaction(row: &rusqlite::Row) -> rusqlite::Result<Interaction> {
+    Ok(Interaction {
+        id: row.get(0)?,
+        user_id: row.get(1)?,
+        contact_id: row.get(2)?,
+        action_id: row.get(3)?,
+        event_id: row.get(4)?,
+        occurred_at: row.get(5)?,
+        channel: row.get(6)?,
+        summary: row.get(7)?,
+        created_at: row.get(8)?,
+        contact_nickname: row.get(9)?,
+    })
+}
+
+const INTERACTION_COLS: &str =
+    "Interaction.id, Interaction.user_id, Interaction.contact_id, Interaction.action_id, Interaction.event_id, Interaction.occurred_at, Interaction.channel, Interaction.summary, Interaction.created_at, c.nickname AS contact_nickname";
+
+const INTERACTION_JOIN: &str =
+    " LEFT JOIN \"Contact\" c ON c.id = Interaction.contact_id AND c.user_id = Interaction.user_id";
+
+pub fn list(
+    conn: &Connection,
+    user_id: &str,
+    contact_id: Option<&str>,
+    action_id: Option<&str>,
+    event_id: Option<&str>,
+    limit: Option<i64>,
+) -> rusqlite::Result<Vec<Interaction>> {
+    let limit = limit.unwrap_or(50);
+
+    let mut sql = format!(
+        "SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.user_id = ?1",
+    );
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(user_id.to_string())];
+    let mut idx = 2;
+
+    if let Some(cid) = contact_id {
+        sql.push_str(&format!(" AND contact_id = ?{}", idx));
+        param_values.push(Box::new(cid.to_string()));
+        idx += 1;
+    }
+    if let Some(aid) = action_id {
+        sql.push_str(&format!(" AND action_id = ?{}", idx));
+        param_values.push(Box::new(aid.to_string()));
+        idx += 1;
+    }
+    if let Some(eid) = event_id {
+        sql.push_str(&format!(" AND event_id = ?{}", idx));
+        param_values.push(Box::new(eid.to_string()));
+        idx += 1;
+    }
+
+    sql.push_str(&format!(" ORDER BY occurred_at DESC LIMIT ?{}", idx));
+    param_values.push(Box::new(limit));
+
+    let mut stmt = conn.prepare(&sql)?;
+    let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|b| b.as_ref()).collect();
+
+    let interactions = stmt
+        .query_map(params_refs.as_slice(), row_to_interaction)?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(interactions)
+}
+
+pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Result<Interaction> {
+    let id = Uuid::new_v4().to_string();
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+
+    // Use a transaction so the Interaction INSERT and Contact bump are atomic.
+    // new_unchecked is required because create() receives &Connection, not &mut.
+    let tx = Transaction::new_unchecked(conn, TransactionBehavior::Deferred)?;
+
+    tx.execute(
+        "INSERT INTO Interaction \
+         (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        rusqlite::params![
+            &id,
+            &input.user_id,
+            &input.contact_id,
+            &input.action_id,
+            &input.event_id,
+            &input.occurred_at,
+            &input.channel,
+            &input.summary,
+            &now,
+        ],
+    )?;
+
+    // Bump the contact's last_contacted_at when linked to a contact.
+    // Use the interaction's occurred_at so the sort reflects when the
+    // interaction happened, not when it was entered.
+    if let Some(contact_id) = &input.contact_id {
+        let rows = tx.execute(
+            "UPDATE Contact SET last_contacted_at = ?1 WHERE id = ?2",
+            rusqlite::params![&input.occurred_at, contact_id],
+        )?;
+        if rows == 0 {
+            eprintln!(
+                "[interaction::create] contact {} not found for last_contacted_at bump",
+                contact_id
+            );
+        }
+    }
+
+    let interaction = tx.query_row(
+        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
+        rusqlite::params![&id],
+        row_to_interaction,
+    )?;
+
+    tx.commit()?;
+    Ok(interaction)
+}
+
+pub fn update(conn: &Connection, input: &UpdateInteractionInput) -> rusqlite::Result<Interaction> {
+    let mut sql = String::from("UPDATE Interaction SET ");
+    let mut set_clauses: Vec<String> = Vec::new();
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    let mut param_idx = 1;
+
+    if let Some(ref cid) = input.contact_id {
+        set_clauses.push(format!("contact_id = ?{}", param_idx));
+        params.push(Box::new(cid.clone()));
+        param_idx += 1;
+    }
+    if let Some(ref aid) = input.action_id {
+        set_clauses.push(format!("action_id = ?{}", param_idx));
+        params.push(Box::new(aid.clone()));
+        param_idx += 1;
+    }
+    if let Some(ref eid) = input.event_id {
+        set_clauses.push(format!("event_id = ?{}", param_idx));
+        params.push(Box::new(eid.clone()));
+        param_idx += 1;
+    }
+    if let Some(ref occurred) = input.occurred_at {
+        set_clauses.push(format!("occurred_at = ?{}", param_idx));
+        params.push(Box::new(occurred.clone()));
+        param_idx += 1;
+    }
+    if let Some(ref ch) = input.channel {
+        set_clauses.push(format!("channel = ?{}", param_idx));
+        params.push(Box::new(ch.clone()));
+        param_idx += 1;
+    }
+    if let Some(ref sum) = input.summary {
+        set_clauses.push(format!("summary = ?{}", param_idx));
+        params.push(Box::new(sum.clone()));
+        param_idx += 1;
+    }
+
+    sql.push_str(&set_clauses.join(", "));
+    sql.push_str(&format!(" WHERE id = ?{}", param_idx));
+    params.push(Box::new(input.id.clone()));
+
+    {
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|b| b.as_ref()).collect();
+        conn.execute(&sql, params_refs.as_slice())?;
+    }
+
+    conn.query_row(
+        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
+        rusqlite::params![&input.id],
+        row_to_interaction,
+    )
+}
+
+pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM Interaction WHERE id = ?1", rusqlite::params![id])?;
+    Ok(())
+}
+
+pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Interaction> {
+    conn.query_row(
+        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
+        rusqlite::params![id],
+        row_to_interaction,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::migration;
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        migration::run(&conn).unwrap();
+        conn
+    }
+
+    fn insert_test_contact(conn: &Connection, id: &str, nickname: &str) {
+        conn.execute(
+            "INSERT INTO Contact (id, user_id, nickname, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
+            rusqlite::params![id, "local-default", nickname, "2026-01-01T00:00:00.000Z"],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn create_bumps_contact_last_contacted_at() {
+        let conn = setup_db();
+        insert_test_contact(&conn, "c1", "Alice");
+
+        let input = CreateInteractionInput {
+            user_id: "local-default".to_string(),
+            contact_id: Some("c1".to_string()),
+            action_id: None,
+            event_id: None,
+            occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
+            channel: Some("phone".to_string()),
+            summary: "Test call".to_string(),
+        };
+
+        let interaction = create(&conn, &input).unwrap();
+        assert_eq!(interaction.contact_nickname, Some("Alice".to_string()));
+
+        let bumped: Option<String> = conn
+            .query_row(
+                "SELECT last_contacted_at FROM Contact WHERE id = ?1",
+                rusqlite::params!["c1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(bumped, Some("2026-06-15T10:30:00.000Z".to_string()));
+    }
+
+    #[test]
+    fn create_with_none_contact_id_skips_bump() {
+        let conn = setup_db();
+        insert_test_contact(&conn, "c1", "Alice");
+
+        let input = CreateInteractionInput {
+            user_id: "local-default".to_string(),
+            contact_id: None,
+            action_id: None,
+            event_id: None,
+            occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
+            channel: None,
+            summary: "Standalone note".to_string(),
+        };
+
+        let interaction = create(&conn, &input).unwrap();
+        assert!(interaction.contact_nickname.is_none());
+
+        let bumped: Option<String> = conn
+            .query_row(
+                "SELECT last_contacted_at FROM Contact WHERE id = ?1",
+                rusqlite::params!["c1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(bumped, None);
+    }
+
+    #[test]
+    fn create_with_missing_contact_still_succeeds() {
+        let conn = setup_db();
+
+        // Disable FK enforcement for this test — we're testing the bump-logic
+        // path (UPDATE returns 0 rows, log a warning, don't fail), not FK
+        // behavior. Production FK constraint prevents INSERT with a bogus
+        // contact_id; the "missing contact" scenario happens only as a
+        // concurrent-delete race, which we cannot reproduce in a single-
+        // threaded test without disabling FK checks.
+        conn.execute_batch("PRAGMA foreign_keys=OFF;").unwrap();
+
+        let input = CreateInteractionInput {
+            user_id: "local-default".to_string(),
+            contact_id: Some("nonexistent".to_string()),
+            action_id: None,
+            event_id: None,
+            occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
+            channel: None,
+            summary: "Orphan interaction".to_string(),
+        };
+
+        let interaction = create(&conn, &input).unwrap();
+        assert_eq!(interaction.summary, "Orphan interaction");
+        assert!(interaction.contact_nickname.is_none());
+    }
+}
