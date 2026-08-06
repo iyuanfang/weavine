@@ -1,0 +1,78 @@
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use serde::{Deserialize, Serialize};
+use tauri::State;
+
+use crate::db::Database;
+use crate::sync::config;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OcrFields {
+    pub name: Option<String>,
+    pub company: Option<String>,
+    pub title: Option<String>,
+    pub email: Option<String>,
+    pub phone: Vec<String>,
+    pub address: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OcrLine { pub text: String }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OcrResult {
+    pub raw_text: String,
+    pub lines: Vec<OcrLine>,
+    pub fields: OcrFields,
+    pub avg_confidence: f32,
+    pub langs: String,
+    pub langs_actual: Vec<String>,
+}
+
+fn load_credentials(conn: &rusqlite::Connection) -> Result<(String, String), String> {
+    let url = config::get(conn, config::KEY_SERVER_URL)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "未连接云端".to_string())?;
+    let token = config::get(conn, config::KEY_ACCESS_TOKEN)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "未登录云端".to_string())?;
+    Ok((url, token))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn extract_card(
+    db: State<'_, Database>,
+    image_base64: String,
+) -> Result<OcrResult, String> {
+    let (server_url, token) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        load_credentials(&conn)?
+    };
+
+    let bytes = B64.decode(image_base64.as_bytes())
+        .map_err(|e| format!("decode base64: {e}"))?;
+
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name("card.png")
+        .mime_str("image/png")
+        .map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new()
+        .text("kind", "card_image")
+        .part("file", part);
+
+    let url = format!("{}/api/cards/extract", server_url.trim_end_matches('/'));
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .bearer_auth(&token)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("ocr request failed: {e}"))?;
+
+    let status = resp.status();
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(format!("ocr failed ({}): {}", status, body));
+    }
+
+    serde_json::from_str::<OcrResult>(&body).map_err(|e| format!("parse ocr response: {e}"))
+}

@@ -8,6 +8,7 @@ pub mod params;
 pub mod project;
 pub mod project_contact;
 pub mod media;
+pub mod ocr;
 pub mod reminder;
 pub mod search;
 pub mod setting;
