@@ -80,6 +80,7 @@ async fn main() {
         .route("/api/media", post(handlers::media::upload).get(handlers::media::list_by_owner))
         .route("/api/media/:id", delete(handlers::media::delete))
         .route("/api/media/:id/blob", get(handlers::media::get_blob))
+        .route("/api/cards/extract", post(handlers::ocr::extract_card))
         // Interactions
         .route("/api/interactions", get(handlers::interaction::list).post(handlers::interaction::create))
         .route("/api/interactions/:id", get(handlers::interaction::get).put(handlers::interaction::update).delete(handlers::interaction::delete))
