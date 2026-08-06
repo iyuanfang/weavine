@@ -128,8 +128,20 @@ pub async fn push(
         return Err((StatusCode::UNAUTHORIZED, "device revoked".to_string()));
     }
 
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tx: {e}")))?;
+
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&req.device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("set_config: {e}")))?;
+
     let mut accepted = Vec::new();
     let mut conflicts = Vec::new();
+    let mut sp_id: u32 = 0;
 
     for entity in req.entities {
         let table = match entity.kind.as_str() {
@@ -176,16 +188,18 @@ pub async fn push(
                 continue;
             }
 
-            let mut tx = pool
-                .begin()
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tx: {e}")))?;
+            let sp_name = format!("sp_{sp_id}");
+            sp_id += 1;
 
-            sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
-                .bind(&req.device_id)
+            sqlx::query(&format!("SAVEPOINT {sp_name}"))
                 .execute(&mut *tx)
                 .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("set_config: {e}")))?;
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("savepoint: {e}"),
+                    )
+                })?;
 
             let mut cmp_result: Option<Ordering> = None;
             let should_upsert = if has_updated_at {
@@ -227,38 +241,15 @@ pub async fn push(
                     .and_then(|v| v.as_str())
                     .filter(|s| !s.is_empty());
 
-                if deleted_at.is_some() {
-                    let del = sqlx::query(&format!(
+                let op_result = if deleted_at.is_some() {
+                    sqlx::query(&format!(
                         "DELETE FROM {} WHERE id = $1 AND user_id = $2",
                         table
                     ))
                     .bind(&row_id)
                     .bind(&user_id)
                     .execute(&mut *tx)
-                    .await;
-
-                    match del {
-                        Ok(_) => {
-                            tx.commit().await.map_err(|e| {
-                                (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}"))
-                            })?;
-                            accepted.push(format!("{}:{}", entity.kind, row_id));
-                        }
-                        Err(e) => {
-                            let msg = e.to_string();
-                            let is_data_conflict = is_data_conflict_error(&msg);
-                            tx.rollback().await.ok();
-                            if is_data_conflict {
-                                conflicts.push(Conflict {
-                                    kind: entity.kind.clone(),
-                                    row_id: row_id.clone(),
-                                    reason: msg,
-                                });
-                            } else {
-                                return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("delete: {e}")));
-                            }
-                        }
-                    }
+                    .await
                 } else {
                     let row_str = serde_json::to_string(&row_json)
                         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("serialize: {e}")))?;
@@ -284,36 +275,53 @@ pub async fn push(
                         table, table, update_set
                     );
 
-                    let upsert = sqlx::query(&sql)
+                    sqlx::query(&sql)
                         .bind(&row_str)
                         .execute(&mut *tx)
-                        .await;
+                        .await
+                };
 
-                    match upsert {
-                        Ok(_) => {
-                            tx.commit().await.map_err(|e| {
-                                (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}"))
+                match op_result {
+                    Ok(_) => {
+                        sqlx::query(&format!("RELEASE SAVEPOINT {sp_name}"))
+                            .execute(&mut *tx)
+                            .await
+                            .map_err(|e| {
+                                (
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    format!("release sp: {e}"),
+                                )
                             })?;
-                            accepted.push(format!("{}:{}", entity.kind, row_id));
-                        }
-                        Err(e) => {
-                            let msg = e.to_string();
-                            let is_data_conflict = is_data_conflict_error(&msg);
-                            tx.rollback().await.ok();
-                            if is_data_conflict {
-                                conflicts.push(Conflict {
-                                    kind: entity.kind.clone(),
-                                    row_id: row_id.clone(),
-                                    reason: msg,
-                                });
-                            } else {
-                                return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("upsert: {e}")));
-                            }
+                        accepted.push(format!("{}:{}", entity.kind, row_id));
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        let is_data_conflict = is_data_conflict_error(&msg);
+                        sqlx::query(&format!("ROLLBACK TO SAVEPOINT {sp_name}"))
+                            .execute(&mut *tx)
+                            .await
+                            .ok();
+                        if is_data_conflict {
+                            conflicts.push(Conflict {
+                                kind: entity.kind.clone(),
+                                row_id: row_id.clone(),
+                                reason: msg,
+                            });
+                        } else {
+                            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("upsert: {e}")));
                         }
                     }
                 }
             } else {
-                tx.rollback().await.ok();
+                sqlx::query(&format!("RELEASE SAVEPOINT {sp_name}"))
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("release sp: {e}"),
+                        )
+                    })?;
                 if cmp_result == Some(Ordering::Less) {
                     conflicts.push(Conflict {
                         kind: entity.kind.clone(),
@@ -324,6 +332,13 @@ pub async fn push(
             }
         }
     }
+
+    tx.commit().await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("commit: {e}"),
+        )
+    })?;
 
     let server_revision: i64 =
         sqlx::query_scalar("SELECT server_revision FROM sync_manifest WHERE user_id = $1")
