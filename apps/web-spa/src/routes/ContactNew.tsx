@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { TagPicker } from '../components/TagPicker';
+import { CardScanner, type ScannedFields } from '../components/CardScanner';
 import type { CreateContactInput } from '../lib/adapter/types';
 
 // ── Constants ───────────────────────────────────────
@@ -66,6 +67,15 @@ export function ContactNew() {
     return <div className="loading">正在加载用户…</div>;
   }
 
+  const applyScanned = (f: ScannedFields) => {
+    if (f.name) setName(f.name);
+    if (f.company) setCompany(f.company);
+    if (f.title) setTitle(f.title);
+    if (f.email) setEmail(f.email);
+    if (f.phone && f.phone.length > 0) setPhone(f.phone.join(' / '));
+    if (f.address) setCity(f.address);
+  };
+
   return (
     <div className="page page--narrow">
       <div className="page-header">
@@ -73,6 +83,10 @@ export function ContactNew() {
           <h1 className="page-title">新建联系人</h1>
           <p className="page-subtitle">把一个最近见过的人加进你的人脉网络</p>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <CardScanner onApply={applyScanned} />
       </div>
 
       {createMutation.isError && (
