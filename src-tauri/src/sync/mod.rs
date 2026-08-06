@@ -34,7 +34,7 @@ pub struct SyncResult {
 /// Logs into the server, stores credentials in SyncState, and runs
 /// an initial sync (push local data, pull remote data).
 pub async fn link(
-    conn: &Connection,
+    conn: &mut Connection,
     server_url: &str,
     email: &str,
     password: &str,
@@ -49,15 +49,13 @@ pub async fn link(
     config::set(conn, KEY_USER_ID, &resp.user_id)?;
     config::set(conn, KEY_USER_EMAIL, email)?;
 
-    // Mark last_revision as 0 so first pull gets everything
     config::set(conn, KEY_LAST_PULLED_REVISION, "0")?;
 
-    // Run initial sync
     sync_once_with_conn(conn).await
 }
 
 /// Run a single sync cycle: push then pull.
-pub async fn sync_once(conn: &Connection) -> anyhow::Result<SyncResult> {
+pub async fn sync_once(conn: &mut Connection) -> anyhow::Result<SyncResult> {
     sync_once_with_conn(conn).await
 }
 
@@ -83,13 +81,14 @@ pub fn spawn_periodic(db_path: std::path::PathBuf, interval_secs: u64) {
                 return;
             }
         };
+        let mut conn = conn;
         let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
 
         let interval = std::time::Duration::from_secs(interval_secs);
         loop {
             if config::is_linked(&conn).unwrap_or(false) {
                 rt.block_on(async {
-                    match sync_once_with_conn(&conn).await {
+                    match sync_once_with_conn(&mut conn).await {
                         Ok(r) => eprintln!(
                             "[sync] periodic: pushed={} pulled={} conflicts={}",
                             r.pushed, r.pulled, r.conflicts
@@ -105,7 +104,7 @@ pub fn spawn_periodic(db_path: std::path::PathBuf, interval_secs: u64) {
 
 // ── Internal implementation ───────────────────────────
 
-async fn sync_once_with_conn(conn: &Connection) -> anyhow::Result<SyncResult> {
+async fn sync_once_with_conn(conn: &mut Connection) -> anyhow::Result<SyncResult> {
     if !config::is_linked(conn)? {
         return Err(anyhow::anyhow!("not linked to a cloud account"));
     }
@@ -176,6 +175,8 @@ async fn push_all(
 ) -> anyhow::Result<i64> {
     let mut entities = Vec::new();
     let local_user_id = "local-default";
+    let last_pushed_at = config::get(conn, KEY_LAST_PUSHED_AT)?.unwrap_or_default();
+    let mut max_pushed_at: String = last_pushed_at.clone();
 
     for kind in ENTITY_KINDS {
         let table = match kind_to_sqlite_table(kind) {
@@ -188,17 +189,24 @@ async fn push_all(
             continue;
         }
 
-        // Build SELECT query
         let col_list = cols
             .iter()
             .map(|c| format!("\"{}\"", c))
             .collect::<Vec<_>>()
             .join(", ");
 
-        let sql = format!(
-            "SELECT {} FROM \"{}\" WHERE \"user_id\" = ?1",
-            col_list, table
-        );
+        let has_updated_at = UPDATED_AT_TABLES.contains(&kind);
+        let sql = if has_updated_at {
+            format!(
+                "SELECT {} FROM \"{}\" WHERE \"user_id\" = ?1 AND \"updated_at\" > ?2",
+                col_list, table
+            )
+        } else {
+            format!(
+                "SELECT {} FROM \"{}\" WHERE \"user_id\" = ?1",
+                col_list, table
+            )
+        };
 
         let mut stmt = match conn.prepare(&sql) {
             Ok(s) => s,
@@ -208,7 +216,12 @@ async fn push_all(
             }
         };
 
-        let rows: Vec<Value> = match stmt.query_map([local_user_id], |row| {
+        let params: Vec<&dyn rusqlite::types::ToSql> = if has_updated_at {
+            vec![&local_user_id, &last_pushed_at]
+        } else {
+            vec![&local_user_id]
+        };
+        let rows: Vec<Value> = match stmt.query_map(rusqlite::params_from_iter(params), |row| {
             let mut map = Map::new();
             let bool_cols = boolean_columns(kind);
             let int_cols = integer_columns(kind);
@@ -246,7 +259,14 @@ async fn push_all(
             continue;
         }
 
-        // Inject cloud user_id, add PG id for junction tables
+        for row in &rows {
+            if let Some(ua) = row.get("updated_at").and_then(|v| v.as_str()) {
+                if ua > max_pushed_at.as_str() {
+                    max_pushed_at = ua.to_string();
+                }
+            }
+        }
+
         let mapped_rows: Vec<Value> = rows
             .into_iter()
             .map(|row| {
@@ -275,12 +295,15 @@ async fn push_all(
     let push_resp = api::push(server_url, access_token, device_id, entities).await?;
     result.pushed = push_resp.accepted.len();
     result.conflicts = push_resp.conflicts.len();
+    if !max_pushed_at.is_empty() && max_pushed_at != last_pushed_at {
+        config::set(conn, KEY_LAST_PUSHED_AT, &max_pushed_at)?;
+    }
     Ok(push_resp.server_revision)
 }
 
 /// Pull remote changes and apply them locally.
 async fn pull_all(
-    conn: &Connection,
+    conn: &mut Connection,
     server_url: &str,
     access_token: &str,
     result: &mut SyncResult,
@@ -291,8 +314,9 @@ async fn pull_all(
     loop {
         let pull_resp = api::pull(server_url, access_token, since, 200).await?;
 
+        let tx = conn.transaction()?;
         for change in &pull_resp.rows {
-            if let Err(e) = apply_change(conn, change, local_user_id) {
+            if let Err(e) = apply_change(&tx, change, local_user_id) {
                 eprintln!(
                     "[sync] apply {} {} failed: {}",
                     change.kind,
@@ -303,8 +327,8 @@ async fn pull_all(
                 result.pulled += 1;
             }
         }
+        tx.commit()?;
 
-        // Save progress
         config::set(
             conn,
             KEY_LAST_PULLED_REVISION,

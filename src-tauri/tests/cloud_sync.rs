@@ -47,12 +47,12 @@ fn setup() -> Connection {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cloud_login_and_pull() {
-    let conn = setup();
+    let mut conn = setup();
 
     let pre_linked = sync::config::is_linked(&conn).expect("is_linked");
     assert!(!pre_linked, "must start unlinked");
 
-    let link_result = sync::link(&conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
+    let link_result = sync::link(&mut conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
         .await
         .expect("sync::link should succeed with valid creds");
     println!(
@@ -116,8 +116,8 @@ async fn cloud_logout_clears_state() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn push_with_boolean_columns_succeeds() {
-    let conn = setup();
-    sync::link(&conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
+    let mut conn = setup();
+    sync::link(&mut conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
         .await
         .expect("initial link");
 
@@ -132,7 +132,7 @@ async fn push_with_boolean_columns_succeeds() {
     )
     .expect("insert contact");
 
-    let sync_result = sync::sync_once(&conn).await.expect("sync_once must not fail on boolean columns");
+    let sync_result = sync::sync_once(&mut conn).await.expect("sync_once must not fail on boolean columns");
     println!(
         "push-with-bool: pushed={}, pulled={}, conflicts={}",
         sync_result.pushed, sync_result.pulled, sync_result.conflicts
@@ -156,7 +156,7 @@ async fn push_with_boolean_columns_succeeds() {
 ///      had a null email — only one survived the insert.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn case_a_empty_local_pulls_server_data_unchanged() {
-    let conn = setup();
+    let mut conn = setup();
     sync::config::clear_all(&conn).expect("clear_all before case A");
 
     let server_url = SERVER_URL;
@@ -179,7 +179,7 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
     println!("case A: server revision before = {rev_before}");
 
     // Run initial sync — should pull all server rows.
-    let link_result = sync::link(&conn, server_url, TEST_EMAIL, TEST_PASSWORD)
+    let link_result = sync::link(&mut conn, server_url, TEST_EMAIL, TEST_PASSWORD)
         .await
         .expect("link should succeed");
     println!(
@@ -265,10 +265,10 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
 /// pushed, and the push side does not duplicate or archive server rows.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn case_b_both_sides_have_data_merges() {
-    let conn = setup();
+    let mut conn = setup();
 
     // First link so we know we're starting clean.
-    sync::link(&conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
+    sync::link(&mut conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
         .await
         .expect("initial link");
 
@@ -291,7 +291,7 @@ async fn case_b_both_sides_have_data_merges() {
     .expect("insert local-only contact");
 
     // Sync should push this new contact AND pull any server changes.
-    let result = sync::sync_once(&conn).await.expect("sync_once case B");
+    let result = sync::sync_once(&mut conn).await.expect("sync_once case B");
     println!(
         "case B sync: pushed={}, pulled={}, conflicts={}",
         result.pushed, result.pulled, result.conflicts

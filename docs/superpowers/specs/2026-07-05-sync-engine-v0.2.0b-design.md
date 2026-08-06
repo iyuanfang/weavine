@@ -308,3 +308,59 @@ DB 当前**完全空**(v0.2.0a 部署时已清理)。所以:
 8. server 端 build + 部署(rustc 1.88.0 server-side,glibc 2.32)
 9. smoke test: register + login + manifest + push + pull 端到端
 10. **不动** desktop,不动 SPA — 这版纯 server 改
+
+---
+
+## 实现状态与优化方案（Addendum 2026-08-06）
+
+> 代码审查后追加。记录**实际实现与本节 spec 的偏差**、同步性能根因、以及修复方案。
+> 代码版本：0.2.29。
+
+### A. 实际实现与 spec 的关键偏差
+
+1. **LWW 接受条件用了 `>=` 而非 spec 规定的 `>`**（server `handlers/sync.rs` L211）。
+   - spec §L66-69：`payload.updated_at > server.updated_at` 才 accept；`==` 判 `tie_409`，**不写库、不 bump**。
+   - 实现：`updated_at >= existing_ua` —— **等于也算 accept**。
+   - 后果：客户端传来的未变行（其 `updated_at` 等于服务端）被 `ON CONFLICT DO UPDATE` 重新写入 → 11 个 trigger firing → 抬高 `server_revision` + 写 `sync_change_log`。**这是同步自激膨胀的直接原因。**
+
+2. **Push 是全量快照，非增量**（client `sync/mod.rs` `push_all` L198-202）。
+   - `SELECT {cols} FROM {table} WHERE user_id = ?1` 不带 revision 过滤，每周期把该用户所有表的所有行上传。
+   - `last_pushed_revision` 已存（L135-137）但**从未用于过滤推送**。
+   - spec push 请求里的 `since_revision` 字段，服务端 `push` handler **根本未读取**（L107-333）。
+
+3. **Push 响应字段名偏差**：spec 定义 `applied[]`，实现返回 `accepted[]`。
+
+### B. "同步很慢"的根因（自激循环）
+
+```
+每 5 分钟:
+  客户端全量上传 N 行 (偏差2)
+    → 服务端对未变行也 re-upsert (偏差1, >= 含相等)
+      → 全部 N 行 bump server_revision + 写 change_log
+        → 下次 pull 拉回全部 N 行变更
+          → 客户端逐行 INSERT OR REPLACE (无事务)
+            → 永不收敛, change_log 无限增长
+```
+
+放大效应：N 行数据 → 每周期 ~N（HTTP 序列化）+ N（upsert）+ 11N（trigger）+ N（本地落地）次操作。N 上千时单次同步以秒~十秒计，随数据量线性恶化。
+
+### C. 修复方案（对齐 spec + 真正增量）
+
+| # | 修复 | 改动量 | 效果 |
+|---|------|--------|------|
+| **F1** | **服务端 `>=` 改 `>`**；`==` 时**静默 no-op**（不 bump、不写 log、不返回 conflict） | 1 行 + 分支 | **立即止血**：断自激，停止 revision 虚高 |
+| **F2** | **客户端增量 push**：`last_pushed_revision` 记录"已推送最大 `updated_at`"，只推 `updated_at > 该值` 的行 | 中 | 日常同步 O(变更) 而非 O(N) |
+| **F3** | **客户端 pull 落地包事务**：`conn.transaction()` 包裹 apply 循环 | 小 | 大/首拉快一个数量级 |
+| **F4** | **服务端 push 合并单事务**：整次 push 一次 begin/commit | 小 | 减事务与 trigger 重复提交 |
+| **F5** | **`sync_change_log` 定期 prune**（snapshot-prune / 90d TTL） | 中 | 防日志无限增长（原 defer 0d） |
+| **F6** | （可选）大推送分片 + 服务端 bulk upsert 绕过 trigger 批量路径 | 大 | 极大体量进一步优化 |
+
+**落地顺序**：F1（一行止血）→ F2 + F3（真正解决慢）→ F4 + F5（服务端健壮）→ F6。
+
+> 注：F1 把 `==` 从 spec 的 `tie_409` 改为静默 no-op，是为消除变更自激而做的 spec  refinement；如坚持返回 `tie_409`，客户端需对 `==` conflict 静默忽略（不重试），但 no-op 更干净。
+
+### D. 多端同步状态补充
+
+- 功能层面"多端同步"已落地（manifest/push/pull + 5 分钟后台定时器 + 11 trigger 写 change_log）。
+- **性能层面不达标**：在修复 F1–F3 前，实质是"每 5 分钟全量重传 + 自激"，应列为 P0 紧急优化项。
+- "团队/共享编辑同一 contact" 依 README 仍为 **out-of-scope**（单用户 PRM，非 CRM）。

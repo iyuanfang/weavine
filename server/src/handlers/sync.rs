@@ -6,6 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use super::auth::extract_auth;
@@ -186,6 +187,7 @@ pub async fn push(
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("set_config: {e}")))?;
 
+            let mut cmp_result: Option<Ordering> = None;
             let should_upsert = if has_updated_at {
                 let updated_at = row_json
                     .get("updated_at")
@@ -208,7 +210,11 @@ pub async fn push(
 
                 match existing {
                     None => true,
-                    Some((Some(existing_ua),)) => updated_at >= existing_ua.as_str(),
+                    Some((Some(existing_ua),)) => {
+                        let ord = updated_at.cmp(existing_ua.as_str());
+                        cmp_result = Some(ord);
+                        ord == Ordering::Greater
+                    }
                     _ => true,
                 }
             } else {
@@ -308,11 +314,13 @@ pub async fn push(
                 }
             } else {
                 tx.rollback().await.ok();
-                conflicts.push(Conflict {
-                    kind: entity.kind.clone(),
-                    row_id: row_id.clone(),
-                    reason: "server has newer updated_at".to_string(),
-                });
+                if cmp_result == Some(Ordering::Less) {
+                    conflicts.push(Conflict {
+                        kind: entity.kind.clone(),
+                        row_id: row_id.clone(),
+                        reason: "server has newer updated_at".to_string(),
+                    });
+                }
             }
         }
     }

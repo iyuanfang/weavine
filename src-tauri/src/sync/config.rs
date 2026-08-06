@@ -9,6 +9,7 @@ pub const KEY_USER_ID: &str = "user_id";
 pub const KEY_USER_EMAIL: &str = "user_email";
 pub const KEY_LAST_PULLED_REVISION: &str = "last_pulled_revision";
 pub const KEY_LAST_PUSHED_REVISION: &str = "last_pushed_revision";
+pub const KEY_LAST_PUSHED_AT: &str = "last_pushed_at";
 
 /// Read a string value from SyncState.
 pub fn get(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
