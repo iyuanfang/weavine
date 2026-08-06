@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { isTauri } from '../lib/adapter';
+import { getAccessToken } from '../lib/auth/storage';
 
 export interface ScannedFields {
   name?: string | null;
@@ -16,10 +17,11 @@ interface Props {
   disabled?: boolean;
 }
 
-interface ScanResult extends ScannedFields {
+interface ScanResult {
   raw_text: string;
   avg_confidence: number;
   langs_actual: string[];
+  fields: ScannedFields;
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -44,10 +46,14 @@ async function callExtract(imageBase64: string): Promise<ScanResult> {
   const blob = new Blob([bytes], { type: mime });
   const form = new FormData();
   form.append('file', blob, 'card.png');
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const resp = await fetch('/api/cards/extract', {
     method: 'POST',
     body: form,
     credentials: 'include',
+    headers,
   });
   if (!resp.ok) {
     throw new Error(`ocr failed: ${resp.status} ${await resp.text()}`);
@@ -80,12 +86,12 @@ export function CardScanner({ onApply, disabled }: Props) {
   const apply = () => {
     if (!result) return;
     onApply({
-      name: result.name,
-      company: result.company,
-      title: result.title,
-      email: result.email,
-      phone: result.phone ?? [],
-      address: result.address,
+      name: result.fields.name,
+      company: result.fields.company,
+      title: result.fields.title,
+      email: result.fields.email,
+      phone: result.fields.phone ?? [],
+      address: result.fields.address,
     });
   };
 
@@ -152,25 +158,28 @@ export function CardScanner({ onApply, disabled }: Props) {
 
       {result && (
         <div style={{ marginTop: 10, display: 'grid', gap: 6 }} data-testid="card-scanner-fields">
-          {([
-            ['姓名', result.name],
-            ['公司', result.company],
-            ['职位', result.title],
-            ['邮箱', result.email],
-            ['电话', (result.phone ?? []).join(' / ')],
-            ['地址', result.address],
-          ] as const).map(([label, value]) =>
-            value ? (
-              <div
-                key={label}
-                data-testid={`card-scanner-field-${label}`}
-                style={{ display: 'flex', gap: 8, fontSize: 'var(--text-sm)' }}
-              >
-                <span style={{ color: 'var(--muted)', minWidth: 48 }}>{label}</span>
-                <span style={{ flex: 1 }}>{value}</span>
-              </div>
-            ) : null,
-          )}
+          {(() => {
+            const pairs: [string, string | null | undefined][] = [
+              ['姓名', result.fields.name],
+              ['公司', result.fields.company],
+              ['职位', result.fields.title],
+              ['邮箱', result.fields.email],
+              ['电话', (result.fields.phone ?? []).join(' / ')],
+              ['地址', result.fields.address],
+            ];
+            return pairs.map(([label, value]) =>
+              value ? (
+                <div
+                  key={label}
+                  data-testid={`card-scanner-field-${label}`}
+                  style={{ display: 'flex', gap: 8, fontSize: 'var(--text-sm)' }}
+                >
+                  <span style={{ color: 'var(--muted)', minWidth: 48 }}>{label}</span>
+                  <span style={{ flex: 1 }}>{value}</span>
+                </div>
+              ) : null,
+            );
+          })()}
           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
             <button
               type="button"

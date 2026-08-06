@@ -16,6 +16,7 @@
     "weavine-web": "cargo run --bin weavine-web"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tauri-apps/cli": "^2"
   }
 }

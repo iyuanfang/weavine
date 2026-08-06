@@ -84,6 +84,61 @@ fn looks_like_email(s: &str) -> bool {
     !local.is_empty() && domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')
 }
 
+fn is_han(c: char) -> bool {
+    matches!(c,
+        '\u{4E00}'..='\u{9FFF}'   // CJK Unified Ideographs
+        | '\u{3400}'..='\u{4DBF}' // CJK Extension A
+        | '\u{F900}'..='\u{FAFF}' // CJK Compatibility Ideographs
+    )
+}
+
+/// Extract a Chinese name from the first lines of the card.
+/// Handles cases like "MY Mega Yitrium   林     科" where the
+/// Chinese name is buried in a long English+CJK line.
+fn extract_chinese_name(lines: &[OcrLine]) -> Option<String> {
+    for line in lines.iter().take(6) {
+        let text = line.text.trim();
+        if text.is_empty() { continue; }
+        let han: Vec<char> = text.chars().filter(|c| is_han(*c)).collect();
+        if han.len() < 2 || han.len() > 5 { continue; }
+        let joined: String = han.into_iter().collect();
+        // Skip if the Han chars look like company/title keywords
+        if joined.contains("公司") || joined.contains("地址")
+            || joined.contains("电话") || joined.contains("邮箱")
+            || joined.contains("中国") || joined.contains("上海")
+            || joined.contains("区") || joined.contains("市")
+            || joined.contains("楼") || joined.contains("室")
+            || joined.contains("号") || joined.contains("街")
+            || joined.contains("路")
+        {
+            continue;
+        }
+        return Some(joined);
+    }
+    None
+}
+
+/// English name fallback for non-CJK cards.
+fn extract_english_name(lines: &[OcrLine]) -> Option<String> {
+    for (idx, line) in lines.iter().enumerate() {
+        if idx >= 4 { break; }
+        let text = line.text.trim();
+        if text.is_empty() || text.chars().count() > 12 { continue; }
+        let digits = text.chars().filter(|c| c.is_ascii_digit()).count();
+        let punct = text.chars().filter(|c| matches!(c, '@' | '/' | '.')).count();
+        if digits > 0 || punct > 0 { continue; }
+        let lower = text.to_lowercase();
+        if lower.contains("tel") || lower.contains("phone")
+            || lower.contains("mail") || lower.contains("公司")
+            || lower.contains("地址")
+        {
+            continue;
+        }
+        return Some(text.to_string());
+    }
+    None
+}
+
 fn extract_fields(lines: &[OcrLine]) -> OcrFields {
     let mut phone: Vec<String> = Vec::new();
     let mut email: Option<String> = None;
@@ -127,18 +182,19 @@ fn extract_fields(lines: &[OcrLine]) -> OcrFields {
                 || lower.contains("区") || lower.contains("市"))
         {
             address = Some(text.to_string());
-        } else if name.is_none() && idx < 4 && text.chars().count() <= 12 {
-            let digits = text.chars().filter(|c| c.is_ascii_digit()).count();
-            let punct = text.chars().filter(|c| matches!(c, '@' | '/' | '.')).count();
-            if digits == 0 && punct == 0
-                && !lower.contains("tel") && !lower.contains("phone")
-                && !lower.contains("mail") && !lower.contains("公司")
-                && !lower.contains("地址")
-            {
-                name = Some(text.to_string());
-            }
         }
     }
+
+    let zh = extract_chinese_name(lines);
+    let en = extract_english_name(lines);
+    let name = match (zh, en) {
+        (Some(z), Some(e)) if z.chars().count() <= 4 && e.chars().count() + z.chars().count() + 3 <= 24 => {
+            Some(format!("{} ({})", z, e))
+        }
+        (Some(z), _) => Some(z),
+        (None, Some(e)) => Some(e),
+        (None, None) => None,
+    };
 
     OcrFields { name, company, title, email, phone, address }
 }
