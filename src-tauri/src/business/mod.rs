@@ -3,6 +3,7 @@ pub mod archive_sweep;
 pub mod contact;
 pub mod diagnostic;
 pub mod event;
+pub mod event_participant;
 pub mod interaction;
 pub mod project;
 pub mod project_contact;

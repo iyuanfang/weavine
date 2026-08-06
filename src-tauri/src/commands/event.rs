@@ -59,6 +59,52 @@ pub fn get_event(db: State<Database>, id: String) -> Result<Event, String> {
     business::event::get(&conn, &id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn list_event_participants(
+    db: State<Database>,
+    event_id: String,
+    user_id: String,
+) -> Result<Vec<EntityLink>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    business::event_participant::list(&conn, &event_id, &user_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_event_participant(
+    db: State<Database>,
+    event_id: String,
+    contact_id: String,
+    role: String,
+) -> Result<EntityLink, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    business::event_participant::add(&conn, &event_id, &contact_id, &role).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_event_participant_role(
+    db: State<Database>,
+    event_id: String,
+    contact_id: String,
+    role: String,
+    user_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    business::event_participant::set_role(&conn, &event_id, &contact_id, &role, &user_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn remove_event_participant(
+    db: State<Database>,
+    event_id: String,
+    contact_id: String,
+    user_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    business::event_participant::remove(&conn, &event_id, &contact_id, &user_id)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub fn get_upcoming_events(
     db: State<Database>,

@@ -187,6 +187,19 @@ CREATE TABLE IF NOT EXISTS "ProjectContact" (
     "added_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY ("project_id", "contact_id")
 );
+
+CREATE TABLE IF NOT EXISTS "EntityLink" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "from_type" TEXT NOT NULL,
+    "from_id" TEXT NOT NULL,
+    "to_type" TEXT NOT NULL,
+    "to_id" TEXT NOT NULL,
+    "relation_type" TEXT NOT NULL,
+    "role" TEXT NOT NULL DEFAULT 'participant',
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE ("user_id", "from_type", "from_id", "to_type", "to_id", "relation_type")
+);
 "#;
 
 const INDEX_SQL: &str = r#"
