@@ -6,6 +6,7 @@ pub mod contact;
 pub mod diagnostic;
 pub mod event;
 pub mod interaction;
+pub mod media;
 pub mod project;
 pub mod project_contact;
 pub mod reminder;

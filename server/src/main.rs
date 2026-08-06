@@ -77,6 +77,9 @@ async fn main() {
         .route("/api/projects/:id", get(handlers::project::get).put(handlers::project::update).delete(handlers::project::delete))
         .route("/api/projects/:id/contacts", get(handlers::project_contact::list).post(handlers::project_contact::add))
         .route("/api/projects/:id/contacts/:contact_id", delete(handlers::project_contact::remove))
+        .route("/api/media", post(handlers::media::upload).get(handlers::media::list_by_owner))
+        .route("/api/media/:id", delete(handlers::media::delete))
+        .route("/api/media/:id/blob", get(handlers::media::get_blob))
         // Interactions
         .route("/api/interactions", get(handlers::interaction::list).post(handlers::interaction::create))
         .route("/api/interactions/:id", get(handlers::interaction::get).put(handlers::interaction::update).delete(handlers::interaction::delete))
