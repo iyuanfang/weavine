@@ -46,13 +46,15 @@ pub const ENTITY_KINDS: &[&str] = &[
     "interaction", "reminder",
     // level 3
     "contact_tag", "project_contact",
+    // level 3.5 (junction-like, push-all)
+    "entity_link",
 ];
 
 pub const UPDATED_AT_TABLES: &[&str] = &[
     "contact", "project", "event", "action", "setting",
 ];
 
-pub const JUNCTION_TABLES: &[&str] = &["contact_tag", "project_contact"];
+pub const JUNCTION_TABLES: &[&str] = &["contact_tag", "project_contact", "entity_link"];
 
 pub fn sqlite_table_to_kind(table: &str) -> Option<&'static str> {
     match table {
@@ -66,6 +68,7 @@ pub fn sqlite_table_to_kind(table: &str) -> Option<&'static str> {
         "Setting" => Some("setting"),
         "ContactTag" => Some("contact_tag"),
         "ProjectContact" => Some("project_contact"),
+        "EntityLink" => Some("entity_link"),
         _ => None,
     }
 }
@@ -82,6 +85,7 @@ pub fn kind_to_sqlite_table(kind: &str) -> Option<&'static str> {
         "setting" => Some("Setting"),
         "contact_tag" => Some("ContactTag"),
         "project_contact" => Some("ProjectContact"),
+        "entity_link" => Some("EntityLink"),
         _ => None,
     }
 }
@@ -149,6 +153,7 @@ pub fn push_columns(kind: &str) -> &'static [&'static str] {
         "setting" => &["id","user_id","key","value","updated_at"],
         "contact_tag" => &["user_id","contact_id","tag_id"],
         "project_contact" => &["user_id","project_id","contact_id","role","added_at"],
+        "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","created_at"],
         _ => &[],
     }
 }

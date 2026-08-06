@@ -148,6 +148,21 @@ pub struct ProjectContact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
+pub struct EntityLink {
+    pub id: String,
+    pub user_id: String,
+    pub from_type: String,
+    pub from_id: String,
+    pub to_type: String,
+    pub to_id: String,
+    pub relation_type: String,
+    pub role: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectContactWithContact {
     pub contact: Contact,
     pub role: Option<String>,

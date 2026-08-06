@@ -698,6 +698,26 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
          "role"=>"role", "addedAt"=>"added_at"]
     );
 
+    // ── EntityLink ──
+    rebuild!(EntityLink, r#"
+        CREATE TABLE IF NOT EXISTS "EntityLink__new" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+            "from_type" TEXT NOT NULL,
+            "from_id" TEXT NOT NULL,
+            "to_type" TEXT NOT NULL,
+            "to_id" TEXT NOT NULL,
+            "relation_type" TEXT NOT NULL,
+            "role" TEXT NOT NULL DEFAULT 'participant',
+            "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );"#,
+        ["id"=>"id", "ownerId"=>"user_id",
+         "fromType"=>"from_type", "fromId"=>"from_id",
+         "toType"=>"to_type", "toId"=>"to_id",
+         "relationType"=>"relation_type", "role"=>"role",
+         "createdAt"=>"created_at"]
+    );
+
     // ── UserAccount ──
     rebuild!(UserAccount, r#"
         CREATE TABLE IF NOT EXISTS "UserAccount__new" (
