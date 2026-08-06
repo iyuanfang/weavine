@@ -200,6 +200,20 @@ CREATE TABLE IF NOT EXISTS "EntityLink" (
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE ("user_id", "from_type", "from_id", "to_type", "to_id", "relation_type")
 );
+
+CREATE TABLE IF NOT EXISTS "Media" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "kind" TEXT NOT NULL,
+    "owner_type" TEXT NOT NULL,
+    "owner_id" TEXT NOT NULL,
+    "mime" TEXT NOT NULL,
+    "size_bytes" INTEGER NOT NULL DEFAULT 0,
+    "sha256" TEXT,
+    "filename" TEXT,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 "#;
 
 const INDEX_SQL: &str = r#"
