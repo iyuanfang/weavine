@@ -2,7 +2,10 @@ import { useEffect } from "react";
 
 import { useAdapter } from "./adapter";
 import { useUserId } from "./auth";
-import { ensurePermission, fire } from "./notifications";
+import { ensurePermission, fire, type ReminderSound } from "./notifications";
+
+const SOUND_SETTING_KEY = "reminder_sound";
+const VALID_SOUNDS: ReadonlyArray<ReminderSound> = ["default", "chime", "bell", "silent"];
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -15,6 +18,15 @@ export function useReminderPoller() {
     let timerId: ReturnType<typeof setInterval> | null = null;
 
     async function tick() {
+      let sound: ReminderSound = "default";
+      try {
+        const all = await adapter.settings.list(userId!);
+        const row = all.find((s) => s.key === SOUND_SETTING_KEY);
+        if (row && VALID_SOUNDS.includes(row.value as ReminderSound)) {
+          sound = row.value as ReminderSound;
+        }
+      } catch {}
+
       let reminders;
       try {
         reminders = await adapter.reminders.list({
@@ -29,7 +41,7 @@ export function useReminderPoller() {
       for (const r of reminders) {
         if (r.dispatched || r.dismissed) continue;
         if (new Date(r.trigger_at).getTime() > now) continue;
-        const ok = fire("Weavine · 提醒", humanize(r));
+        const ok = fire("Weavine · 提醒", humanize(r), undefined, sound);
         if (ok) {
           try {
             await adapter.reminders.update({ id: r.id, dispatched: true });

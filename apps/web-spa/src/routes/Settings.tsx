@@ -114,6 +114,8 @@ export function SettingsPage() {
       <ArchivePanel />
       <BackupRestorePanel />
 
+      <ReminderSoundCard />
+
       {showAdd && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: 'grid', gap: 14 }}>
@@ -995,6 +997,66 @@ function BackupRestorePanel() {
           e.target.value = '';
         }}
       />
+    </div>
+  );
+}
+
+function ReminderSoundCard() {
+  const adapter = useAdapter();
+  const userId = useUserId();
+  const queryClient = useQueryClient();
+
+  const settingsQuery = useQuery({
+    queryKey: ['settings', userId],
+    queryFn: () => adapter.settings.list(userId!),
+    enabled: !!userId,
+  });
+
+  const upsert = useMutation({
+    mutationFn: (value: string) => adapter.settings.upsert(userId!, 'reminder_sound', value),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings', userId] });
+    },
+  });
+
+  const current = settingsQuery.data?.find((s) => s.key === 'reminder_sound')?.value ?? 'default';
+
+  const preview = (value: string) => {
+    if (typeof window === 'undefined') return;
+    void import('../lib/notifications').then(({ fire }) => {
+      fire('Weavine · 试听', `声音样本: ${value}`, 'weavine-sound-preview', value as never);
+    });
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+        🔔 提醒声音
+      </h3>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 12px', lineHeight: 1.6 }}>
+        选择触发提醒时播放的声音。系统通知权限必须已授予。
+      </p>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {[
+          { value: 'default', label: '系统默认' },
+          { value: 'chime', label: '清脆提示' },
+          { value: 'bell', label: '柔和铃声' },
+          { value: 'silent', label: '静音' },
+        ].map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            className={current === opt.value ? 'btn btn-primary' : 'btn'}
+            onClick={() => {
+              upsert.mutate(opt.value);
+              preview(opt.value);
+            }}
+            disabled={upsert.isPending}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

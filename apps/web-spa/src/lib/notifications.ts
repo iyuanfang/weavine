@@ -9,6 +9,8 @@
 
 export type NotificationPermissionState = "default" | "granted" | "denied";
 
+export type ReminderSound = "default" | "chime" | "bell" | "silent";
+
 export function getPermission(): NotificationPermissionState {
   if (typeof Notification === "undefined") return "denied";
   return Notification.permission as NotificationPermissionState;
@@ -26,13 +28,62 @@ export async function ensurePermission(): Promise<NotificationPermissionState> {
   }
 }
 
-export function fire(title: string, body: string, tag?: string): boolean {
+let audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (audioCtx) return audioCtx;
+  const Ctor = (window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+  if (!Ctor) return null;
+  audioCtx = new Ctor();
+  return audioCtx;
+}
+
+function tone(freqStart: number, freqEnd: number, durationMs: number, type: OscillatorType = "sine") {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freqStart, now);
+  if (freqEnd !== freqStart) {
+    osc.frequency.exponentialRampToValueAtTime(freqEnd, now + durationMs / 1000);
+  }
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.3, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + durationMs / 1000 + 0.05);
+}
+
+function playSound(name: ReminderSound) {
+  if (name === "silent" || name === "default") return;
+  try {
+    if (name === "chime") tone(880, 440, 350);
+    else if (name === "bell") tone(1320, 1320, 700, "triangle");
+  } catch {}
+}
+
+export function fire(
+  title: string,
+  body: string,
+  tag?: string,
+  sound: ReminderSound = "default",
+): boolean {
   if (typeof Notification === "undefined") return false;
   if (Notification.permission !== "granted") return false;
   try {
-    const opts: NotificationOptions = { body, silent: false };
+    const opts: NotificationOptions = {
+      body,
+      silent: sound === "silent" || sound === "chime" || sound === "bell",
+    };
     if (tag) opts.tag = tag;
     new Notification(title, opts);
+    playSound(sound);
     return true;
   } catch {
     return false;
