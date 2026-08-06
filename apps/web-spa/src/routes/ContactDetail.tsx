@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { useAdapter } from '../lib/adapter';
+import { useAdapter, isTauri } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { Avatar } from '../components/Avatar';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import { backTarget } from '../lib/backNavigation';
@@ -130,6 +131,61 @@ export function ContactDetail() {
   const interactions = interactionsQuery.data ?? [];
 
   const displayName = contact.nickname || contact.name || '?';
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  useEffect(() => {
+    if (!isTauri || !userId || !contact.id) return;
+    let cancelled = false;
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) =>
+        invoke<string | null>('get_avatar', {
+          user_id: userId,
+          contact_id: contact.id,
+        }),
+      )
+      .then((url) => {
+        if (!cancelled) setAvatarDataUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, contact.id]);
+
+  const onPickAvatar = () => fileInputRef.current?.click();
+
+  const onAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !userId || !contact.id) return;
+    if (!isTauri) {
+      const reader = new FileReader();
+      reader.onload = () => setAvatarDataUrl(String(reader.result ?? ''));
+      reader.readAsDataURL(file);
+      return;
+    }
+    setAvatarUploading(true);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result ?? ''));
+        r.onerror = () => reject(r.error ?? new Error('read failed'));
+        r.readAsDataURL(file);
+      });
+      const { invoke } = await import('@tauri-apps/api/core');
+      const res = await invoke<{ media: { id: string }; data_url: string }>(
+        'upload_avatar',
+        { user_id: userId, contact_id: contact.id, data_url: dataUrl },
+      );
+      setAvatarDataUrl(res.data_url);
+    } catch (err) {
+      console.error('avatar upload failed', err);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
   const imp = IMPORTANCE_BADGE[contact.importance] ?? IMPORTANCE_BADGE.low;
   const impLabel = IMPORTANCE_LABELS[contact.importance];
 
@@ -162,9 +218,18 @@ export function ContactDetail() {
       >
         <div
           className="avatar avatar--lg"
-          style={{ background: avatarBg(displayName) }}
+          style={{ background: avatarBg(displayName), position: 'relative', cursor: 'pointer' }}
+          onClick={onPickAvatar}
+          title={avatarUploading ? '上传中…' : '点击更换头像'}
         >
-          {displayName.slice(0, 1).toUpperCase()}
+          <Avatar name={displayName} src={avatarDataUrl} size={88} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            style={{ display: 'none' }}
+            onChange={onAvatarChange}
+          />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="cluster cluster--loose">
