@@ -14,6 +14,7 @@ interface Props {
   placeholder?: string;
   emptyText?: string;
   disabled?: boolean;
+  emptyState?: React.ReactNode;
 }
 
 export function SearchablePicker({
@@ -23,6 +24,7 @@ export function SearchablePicker({
   placeholder = '搜索…',
   emptyText = '没有匹配的项',
   disabled,
+  emptyState,
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -133,7 +135,7 @@ export function SearchablePicker({
               textAlign: 'center',
             }}
           >
-            {emptyText}
+            {emptyState ?? emptyText}
           </div>
         ) : (
           filtered.map((opt, idx) => {

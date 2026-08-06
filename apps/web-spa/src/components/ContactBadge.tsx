@@ -1,17 +1,19 @@
 import type { Contact } from '../lib/adapter/types';
+import { Avatar } from './Avatar';
 
 type ContactBadgeInput =
   | string
-  | (Pick<Contact, 'nickname' | 'name'> & { id?: string })
+  | (Pick<Contact, 'nickname' | 'name'> & { id?: string; avatar_url?: string | null })
   | null
   | undefined;
 
 interface ContactBadgeProps {
   contact: ContactBadgeInput;
   compact?: boolean;
+  avatarUrl?: string | null;
 }
 
-export function ContactBadge({ contact, compact = false }: ContactBadgeProps) {
+export function ContactBadge({ contact, compact = false, avatarUrl }: ContactBadgeProps) {
   if (!contact) return null;
 
   const name =
@@ -19,6 +21,10 @@ export function ContactBadge({ contact, compact = false }: ContactBadgeProps) {
       ? contact.trim()
       : (contact.nickname ?? contact.name ?? '').trim();
   if (!name) return null;
+
+  const url =
+    avatarUrl ??
+    (typeof contact === 'string' ? null : contact.avatar_url ?? null);
 
   return (
     <span
@@ -29,9 +35,7 @@ export function ContactBadge({ contact, compact = false }: ContactBadgeProps) {
           : undefined
       }
     >
-      <span aria-hidden style={{ flexShrink: 0, fontSize: '0.85em' }}>
-        👤
-      </span>
+      <Avatar name={name} src={url} size={compact ? 18 : 22} />
       <span
         style={{
           overflow: 'hidden',
