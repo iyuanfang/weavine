@@ -1,6 +1,6 @@
 use axum::{
     http::{header::CACHE_CONTROL, HeaderValue},
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use sqlx::PgPool;
@@ -66,6 +66,8 @@ async fn main() {
         .route("/api/events/upcoming", get(handlers::event::upcoming))
         .route("/api/events", get(handlers::event::list).post(handlers::event::create))
         .route("/api/events/:id", get(handlers::event::get).put(handlers::event::update).delete(handlers::event::delete))
+        .route("/api/events/:id/participants", get(handlers::event::list_participants).post(handlers::event::add_participant))
+        .route("/api/events/:id/participants/:cid", patch(handlers::event::set_participant_role).delete(handlers::event::remove_participant))
         // Actions
         .route("/api/actions", get(handlers::action::list).post(handlers::action::create))
         .route("/api/actions/:id", get(handlers::action::get).put(handlers::action::update).delete(handlers::action::delete))

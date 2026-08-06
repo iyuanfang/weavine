@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -251,4 +251,172 @@ pub async fn upcoming(
     .fetch_all(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(rows))
+}
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ParticipantRow {
+    pub contact_id: String,
+    pub role: String,
+}
+
+async fn fetch_participants(
+    executor: impl sqlx::PgExecutor<'_>,
+    event_id: &str,
+) -> Result<Vec<ParticipantRow>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT to_id AS contact_id, role FROM entity_links \
+         WHERE from_type='event' AND from_id=$1 AND relation_type='participated' \
+         ORDER BY created_at ASC"
+    )
+    .bind(event_id)
+    .fetch_all(executor)
+    .await
+}
+
+async fn sync_main_participant(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event_id: &str,
+) -> Result<(), sqlx::Error> {
+    let first: Option<(String,)> = sqlx::query_as(
+        "SELECT to_id FROM entity_links \
+         WHERE from_type='event' AND from_id=$1 AND relation_type='participated' \
+         ORDER BY created_at ASC LIMIT 1"
+    )
+    .bind(event_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    sqlx::query("UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3")
+        .bind(first.map(|(c,)| c))
+        .bind(super::now_str())
+        .bind(event_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+fn validate_role(role: &str) -> bool {
+    matches!(role, "organizer" | "participant" | "referred" | "mentioned")
+}
+
+async fn authorize_event(
+    executor: impl sqlx::PgExecutor<'_>,
+    event_id: &str,
+    user_id: &str,
+    for_update: bool,
+) -> Result<(), (StatusCode, String)> {
+    let lock = if for_update { " FOR UPDATE" } else { "" };
+    let q = format!(
+        "SELECT user_id FROM event WHERE id=$1 AND deleted_at IS NULL{lock}"
+    );
+    let owner: Option<(String,)> = sqlx::query_as(&q)
+        .bind(event_id)
+        .fetch_optional(executor)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    match owner {
+        Some((u,)) if u == user_id => Ok(()),
+        Some(_) => Err((StatusCode::FORBIDDEN, "无权访问".into())),
+        None => Err((StatusCode::NOT_FOUND, "事件不存在".into())),
+    }
+}
+
+pub async fn list_participants(
+    headers: HeaderMap,
+    State(pool): State<Arc<PgPool>>,
+    Path(event_id): Path<String>,
+) -> Result<Json<Vec<ParticipantRow>>, (StatusCode, String)> {
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
+    authorize_event(&*pool, &event_id, &auth, false).await?;
+    let rows = fetch_participants(&*pool, &event_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(rows))
+}
+
+pub async fn add_participant(
+    headers: HeaderMap,
+    State(pool): State<Arc<PgPool>>,
+    Path(event_id): Path<String>,
+    Json(body): Json<ParticipantRow>,
+) -> Result<Json<ParticipantRow>, (StatusCode, String)> {
+    let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
+    let mut tx = pool.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query("SELECT set_config('app.current_device_id', $1, true)")
+        .bind(&device_id.to_string())
+        .execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    authorize_event(&mut *tx, &event_id, &auth, true).await?;
+    let role = if validate_role(&body.role) { body.role.clone() } else { "participant".to_string() };
+    sqlx::query(
+        "INSERT INTO entity_links (user_id, from_type, from_id, to_type, to_id, relation_type, role) \
+         VALUES ($1, 'event', $2, 'contact', $3, 'participated', $4) \
+         ON CONFLICT (user_id, from_type, from_id, to_type, to_id, relation_type) \
+         DO UPDATE SET role = EXCLUDED.role"
+    )
+    .bind(&auth)
+    .bind(&event_id)
+    .bind(&body.contact_id)
+    .bind(&role)
+    .execute(&mut *tx).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sync_main_participant(&mut tx, &event_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(ParticipantRow { contact_id: body.contact_id, role }))
+}
+
+pub async fn set_participant_role(
+    headers: HeaderMap,
+    State(pool): State<Arc<PgPool>>,
+    Path((event_id, contact_id)): Path<(String, String)>,
+    Json(body): Json<ParticipantRow>,
+) -> Result<Json<ParticipantRow>, (StatusCode, String)> {
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
+    authorize_event(&*pool, &event_id, &auth, false).await?;
+    if !validate_role(&body.role) {
+        return Err((StatusCode::BAD_REQUEST, "无效角色".into()));
+    }
+    let rows = sqlx::query(
+        "UPDATE entity_links SET role=$1 \
+         WHERE user_id=$2 AND from_type='event' AND from_id=$3 AND to_id=$4 \
+           AND relation_type='participated'"
+    )
+    .bind(&body.role)
+    .bind(&auth)
+    .bind(&event_id)
+    .bind(&contact_id)
+    .execute(&*pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if rows.rows_affected() == 0 {
+        return Err((StatusCode::NOT_FOUND, "参与者不存在".into()));
+    }
+    Ok(Json(ParticipantRow { contact_id, role: body.role }))
+}
+
+pub async fn remove_participant(
+    headers: HeaderMap,
+    State(pool): State<Arc<PgPool>>,
+    Path((event_id, contact_id)): Path<(String, String)>,
+) -> Result<(StatusCode, ()), (StatusCode, String)> {
+    let auth = extract_auth(&headers, pool.as_ref()).await?;
+    let mut tx = pool.begin().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    authorize_event(&mut *tx, &event_id, &auth, true).await?;
+    sqlx::query(
+        "DELETE FROM entity_links \
+         WHERE user_id=$1 AND from_type='event' AND from_id=$2 AND to_id=$3 \
+           AND relation_type='participated'"
+    )
+    .bind(&auth)
+    .bind(&event_id)
+    .bind(&contact_id)
+    .execute(&mut *tx).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sync_main_participant(&mut tx, &event_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    tx.commit().await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok((StatusCode::NO_CONTENT, ()))
 }
