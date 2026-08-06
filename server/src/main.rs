@@ -5,6 +5,7 @@ use axum::{
 };
 use sqlx::PgPool;
 use std::sync::Arc;
+use std::time::Duration;
 use tower_http::{
     cors::CorsLayer,
     services::{ServeDir, ServeFile},
@@ -15,6 +16,9 @@ mod api_key_crypto;
 mod auth_keys;
 mod business;
 mod handlers;
+
+const CHANGE_LOG_TTL_DAYS: i64 = 90;
+const CHANGE_LOG_PRUNE_INTERVAL_SECS: u64 = 3600;
 
 #[tokio::main]
 async fn main() {
@@ -36,6 +40,8 @@ async fn main() {
     }
 
     let pool = Arc::new(pool);
+
+    spawn_change_log_pruner(pool.clone());
 
     // Initialize JWT keys from PEM files (RS256)
     handlers::JWT_KEYS
@@ -117,4 +123,25 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     println!("weavine-server listening on http://{addr}");
     axum::serve(listener, app).await.unwrap();
+}
+
+fn spawn_change_log_pruner(pool: Arc<PgPool>) {
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        run_prune(&pool).await;
+        let mut ticker = tokio::time::interval(Duration::from_secs(CHANGE_LOG_PRUNE_INTERVAL_SECS));
+        ticker.tick().await;
+        loop {
+            ticker.tick().await;
+            run_prune(&pool).await;
+        }
+    });
+}
+
+async fn run_prune(pool: &PgPool) {
+    match handlers::sync::prune_change_log(pool, CHANGE_LOG_TTL_DAYS).await {
+        Ok(n) if n > 0 => println!("[sync-prune] deleted {n} change_log rows older than {CHANGE_LOG_TTL_DAYS} days"),
+        Err(e) => eprintln!("[sync-prune] error: {e}"),
+        Ok(_) => {}
+    }
 }
