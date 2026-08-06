@@ -114,6 +114,7 @@ export function ContactNew() {
                   required
                   placeholder="给他/她起个昵称"
                   autoFocus
+                  data-testid="contact-nickname"
                 />
               </div>
               <div className="grid-2">
@@ -124,6 +125,7 @@ export function ContactNew() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="真实姓名"
+                    data-testid="contact-name"
                   />
                 </div>
                 <div>
@@ -133,6 +135,7 @@ export function ContactNew() {
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     placeholder="所在公司"
+                    data-testid="contact-company"
                   />
                 </div>
               </div>
@@ -143,6 +146,7 @@ export function ContactNew() {
                     className="input-base"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    data-testid="contact-title"
                   />
                 </div>
                 <div>
@@ -151,6 +155,7 @@ export function ContactNew() {
                     className="input-base"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
+                    data-testid="contact-city"
                   />
                 </div>
               </div>
@@ -162,6 +167,7 @@ export function ContactNew() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    data-testid="contact-email"
                   />
                 </div>
                 <div>
@@ -171,6 +177,7 @@ export function ContactNew() {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    data-testid="contact-phone"
                   />
                 </div>
               </div>
@@ -233,6 +240,7 @@ export function ContactNew() {
             type="submit"
             className="btn btn-primary"
             disabled={createMutation.isPending || !nickname.trim()}
+            data-testid="contact-submit"
           >
             {createMutation.isPending ? '保存中…' : '保存'}
           </button>

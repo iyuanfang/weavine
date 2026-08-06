@@ -109,6 +109,7 @@ export function CardScanner({ onApply, disabled }: Props) {
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif"
+            data-testid="card-scanner-input"
             style={{ display: 'none' }}
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -121,12 +122,13 @@ export function CardScanner({ onApply, disabled }: Props) {
           <img
             src={preview}
             alt="card preview"
+            data-testid="card-scanner-preview"
             style={{ width: 88, height: 56, objectFit: 'cover', borderRadius: 4 }}
           />
         )}
-        {busy && <span style={{ color: 'var(--muted)' }}>识别中…</span>}
+        {busy && <span style={{ color: 'var(--muted)' }} data-testid="card-scanner-busy">识别中…</span>}
         {result && (
-          <span style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
+          <span style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }} data-testid="card-scanner-confidence">
             置信度 {Math.round(result.avg_confidence * 100)}%
             {result.langs_actual.length > 0 && ` · ${result.langs_actual.join('+')}`}
           </span>
@@ -149,7 +151,7 @@ export function CardScanner({ onApply, disabled }: Props) {
       )}
 
       {result && (
-        <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+        <div style={{ marginTop: 10, display: 'grid', gap: 6 }} data-testid="card-scanner-fields">
           {([
             ['姓名', result.name],
             ['公司', result.company],
@@ -161,6 +163,7 @@ export function CardScanner({ onApply, disabled }: Props) {
             value ? (
               <div
                 key={label}
+                data-testid={`card-scanner-field-${label}`}
                 style={{ display: 'flex', gap: 8, fontSize: 'var(--text-sm)' }}
               >
                 <span style={{ color: 'var(--muted)', minWidth: 48 }}>{label}</span>
@@ -174,6 +177,7 @@ export function CardScanner({ onApply, disabled }: Props) {
               className="btn btn-primary"
               onClick={apply}
               disabled={busy}
+              data-testid="card-scanner-apply"
             >
               应用到表单
             </button>
