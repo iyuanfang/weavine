@@ -32,6 +32,7 @@ export function SearchablePicker({
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const selected = useMemo(
     () => options.find((o) => o.id === value) ?? null,
@@ -51,7 +52,10 @@ export function SearchablePicker({
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t)) return;
+      if (dropdownRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -112,6 +116,7 @@ export function SearchablePicker({
   const dropdown =
     open && pos ? (
       <div
+        ref={dropdownRef}
         style={{
           position: 'fixed',
           top: pos.top,
@@ -135,7 +140,7 @@ export function SearchablePicker({
               textAlign: 'center',
             }}
           >
-            {emptyState ?? emptyText}
+            {options.length === 0 && emptyState ? emptyState : emptyText}
           </div>
         ) : (
           filtered.map((opt, idx) => {

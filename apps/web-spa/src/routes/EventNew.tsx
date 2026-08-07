@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
+import { PickerEmptyState } from '../components/PickerEmptyState';
 import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
@@ -230,7 +231,8 @@ export function EventNew() {
                       sublabel: p.stage,
                     }))}
                     placeholder="搜索项目…"
-                    emptyText="还没有项目"
+                    emptyText="没有匹配的项目"
+                    emptyState={<PickerEmptyState kind="project" />}
                   />
                 </div>
                 <div>
@@ -244,7 +246,8 @@ export function EventNew() {
                       sublabel: c.company ?? c.title ?? null,
                     }))}
                     placeholder="搜索联系人…"
-                    emptyText="还没有联系人"
+                    emptyText="没有匹配的联系人"
+                    emptyState={<PickerEmptyState kind="contact" />}
                   />
                 </div>
               </div>
