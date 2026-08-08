@@ -504,6 +504,18 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         }
     }
 
+    let entity_link_label_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('EntityLink') WHERE name='label'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    if !entity_link_label_exists {
+        conn.execute("ALTER TABLE \"EntityLink\" ADD COLUMN \"label\" TEXT", [])?;
+    }
+
     Ok(())
 }
 
@@ -785,12 +797,14 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "to_id" TEXT NOT NULL,
             "relation_type" TEXT NOT NULL,
             "role" TEXT NOT NULL DEFAULT 'participant',
+            "label" TEXT,
             "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );"#,
         ["id"=>"id", "ownerId"=>"user_id",
          "fromType"=>"from_type", "fromId"=>"from_id",
          "toType"=>"to_type", "toId"=>"to_id",
          "relationType"=>"relation_type", "role"=>"role",
+         "label"=>"label",
          "createdAt"=>"created_at"]
     );
 

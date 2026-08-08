@@ -62,6 +62,9 @@ async fn main() {
         // Contacts
         .route("/api/contacts", get(handlers::contact::list).post(handlers::contact::create))
         .route("/api/contacts/:id", get(handlers::contact::get).put(handlers::contact::update).delete(handlers::contact::delete))
+        .route("/api/graph/:contact_id", get(handlers::graph::get))
+        .route("/api/graph/:contact_id/relations", post(handlers::graph::add_relation))
+        .route("/api/graph/:contact_id/relations/:other_id", delete(handlers::graph::remove_relation))
         // Events
         .route("/api/events/upcoming", get(handlers::event::upcoming))
         .route("/api/events", get(handlers::event::list).post(handlers::event::create))

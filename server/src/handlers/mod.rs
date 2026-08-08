@@ -5,6 +5,7 @@ pub mod auth;
 pub mod contact;
 pub mod diagnostic;
 pub mod event;
+pub mod graph;
 pub mod interaction;
 pub mod media;
 pub mod ocr;

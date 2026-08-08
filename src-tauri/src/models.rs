@@ -159,6 +159,8 @@ pub struct EntityLink {
     pub relation_type: String,
     pub role: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<String>,
 }
 

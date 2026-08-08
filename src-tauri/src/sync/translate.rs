@@ -156,7 +156,7 @@ pub fn push_columns(kind: &str) -> &'static [&'static str] {
         "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","created_at","updated_at"],
         "contact_tag" => &["user_id","contact_id","tag_id"],
         "project_contact" => &["user_id","project_id","contact_id","role","added_at"],
-        "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","created_at"],
+        "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","label","created_at"],
         _ => &[],
     }
 }

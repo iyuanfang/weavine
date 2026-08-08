@@ -12,7 +12,8 @@ fn row_to_entity_link(row: &rusqlite::Row) -> rusqlite::Result<EntityLink> {
         to_id: row.get(5)?,
         relation_type: row.get(6)?,
         role: row.get(7)?,
-        created_at: row.get(8)?,
+        label: row.get(8)?,
+        created_at: row.get(9)?,
     })
 }
 
@@ -84,7 +85,7 @@ pub fn add(
     sync_main_participant(conn, event_id, &user_id)?;
 
     conn.query_row(
-        "SELECT id, user_id, from_type, from_id, to_type, to_id, relation_type, role, created_at \
+        "SELECT id, user_id, from_type, from_id, to_type, to_id, relation_type, role, label, created_at \
          FROM EntityLink WHERE user_id = ?1 AND from_type='event' AND from_id = ?2 \
            AND to_id = ?3 AND relation_type='participated'",
         params![user_id, event_id, contact_id],
@@ -94,7 +95,7 @@ pub fn add(
 
 pub fn list(conn: &Connection, event_id: &str, user_id: &str) -> rusqlite::Result<Vec<EntityLink>> {
     let mut stmt = conn.prepare(
-        "SELECT id, user_id, from_type, from_id, to_type, to_id, relation_type, role, created_at \
+        "SELECT id, user_id, from_type, from_id, to_type, to_id, relation_type, role, label, created_at \
          FROM EntityLink \
          WHERE user_id = ?1 AND from_type='event' AND from_id = ?2 \
            AND relation_type='participated' \
