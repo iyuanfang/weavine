@@ -15,6 +15,7 @@ import { ContactsList } from './routes/ContactsList';
 import { ContactNew } from './routes/ContactNew';
 import { ContactEdit } from './routes/ContactEdit';
 import { ContactDetail } from './routes/ContactDetail';
+import { ContactGraph } from './routes/ContactGraph';
 import { Calendar } from './routes/Calendar';
 import { EventNew } from './routes/EventNew';
 import { EventEdit } from './routes/EventEdit';
@@ -65,6 +66,7 @@ export const routes: AppRoute[] = [
   { path: '/contacts', Component: ContactsList, label: 'Contacts' },
   { path: '/contacts/:id', Component: ContactDetail, label: 'ContactDetail' },
   { path: '/contacts/:id/edit', Component: ContactEdit, label: 'ContactEdit' },
+  { path: '/contacts/:id/graph', Component: ContactGraph, label: 'ContactGraph' },
   { path: '/contacts/new', Component: ContactNew, label: 'ContactNew' },
   { path: '/calendar', Component: Calendar, label: 'Calendar' },
   { path: '/events/:id', Component: EventDetail, label: 'EventDetail' },

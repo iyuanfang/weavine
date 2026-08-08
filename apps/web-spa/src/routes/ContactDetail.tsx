@@ -270,6 +270,9 @@ export function ContactDetail() {
           <Link to={back.href} className="btn btn-ghost">
             {back.label}
           </Link>
+          <Link to={`/contacts/${id}/graph`} className="btn btn-secondary" data-testid="contact-graph-link">
+            🕸️ 关系图
+          </Link>
           <Link
             to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
             className="btn btn-secondary"

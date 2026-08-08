@@ -39,6 +39,8 @@ import type {
   CreateReminderInput,
   CreateTagInput,
   Event,
+  GraphEdge,
+  GraphResponse,
   Interaction,
   ListContactsResult,
   LocalUser,
@@ -366,6 +368,15 @@ export class TauriAdapter implements PRMAdapter {
       Promise.reject(new Error('api_keys are cloud-only — sign in via the cloud path')),
     revoke: (): Promise<void> =>
       Promise.reject(new Error('api_keys are cloud-only — sign in via the cloud path')),
+  };
+
+  graph = {
+    get: (_contact_id: string, _depth?: number): Promise<GraphResponse> =>
+      Promise.reject(new Error('graph is cloud-only — sign in via the cloud path')),
+    addRelation: (_contact_id: string, _body: unknown): Promise<GraphEdge> =>
+      Promise.reject(new Error('graph is cloud-only — sign in via the cloud path')),
+    removeRelation: (_contact_id: string, _other_id: string): Promise<void> =>
+      Promise.reject(new Error('graph is cloud-only — sign in via the cloud path')),
   };
 }
 

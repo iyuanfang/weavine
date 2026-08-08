@@ -86,6 +86,31 @@ export interface ParticipantRow {
   nickname?: string | null;
 }
 
+export interface GraphNode {
+  id: string;
+  nickname: string | null;
+  name: string | null;
+  company: string | null;
+  title: string | null;
+  importance: string | null;
+}
+
+export interface GraphEdge {
+  from_id: string;
+  to_id: string;
+  relation_type: string;
+  role: string | null;
+  label: string | null;
+  depth: number;
+}
+
+export interface GraphResponse {
+  center_id: string;
+  depth: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
 export interface Interaction {
   id: string;
   user_id: string;
@@ -483,6 +508,20 @@ export interface PRMAdapter {
     update(input: UpdateReminderInput): Promise<Reminder>;
     delete(id: string): Promise<void>;
     dismiss(id: string): Promise<void>;
+  };
+
+  graph: {
+    get(contact_id: string, depth?: number): Promise<GraphResponse>;
+    addRelation(
+      contact_id: string,
+      body: {
+        other_contact_id: string;
+        label?: string | null;
+        relation_type?: string | null;
+        role?: string | null;
+      },
+    ): Promise<GraphEdge>;
+    removeRelation(contact_id: string, other_id: string): Promise<void>;
   };
 
   tags: {
