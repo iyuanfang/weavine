@@ -15,7 +15,7 @@ function labelOf(n: GraphNode): string {
 }
 
 export function ContactGraph() {
-  const { contactId } = useParams() as { contactId: string };
+  const { id: contactId } = useParams() as { id: string };
   const adapter = useAdapter();
   const queryClient = useQueryClient();
   const [depth, setDepth] = useState(2);
@@ -233,9 +233,13 @@ export function ContactGraph() {
           <div className="card" style={{ padding: 0 }}>
             <ul style={{ listStyle: 'none', margin: 0 }}>
               {graph.edges.map((e, i) => {
-                const other = graph.nodes.find(
-                  (n) => n.id === (e.from_id === contactId ? e.to_id : e.from_id),
-                );
+                const involvesCenter = e.from_id === contactId || e.to_id === contactId;
+                const otherId = involvesCenter
+                  ? e.from_id === contactId
+                    ? e.to_id
+                    : e.from_id
+                  : e.from_id;
+                const other = graph.nodes.find((n) => n.id === otherId);
                 if (!other) return null;
                 return (
                   <li
@@ -248,13 +252,21 @@ export function ContactGraph() {
                       borderBottom: '1px solid var(--border)',
                     }}
                   >
-                    <Link
-                      to={`/contacts/${other.id}`}
-                      style={{ fontWeight: 600, color: 'var(--text)' }}
-                    >
-                      {labelOf(other)}
-                    </Link>
-                    {other.company && (
+                    {involvesCenter ? (
+                      <Link
+                        to={`/contacts/${other.id}`}
+                        style={{ fontWeight: 600, color: 'var(--text)' }}
+                      >
+                        {labelOf(other)}
+                      </Link>
+                    ) : (
+                      <span style={{ fontWeight: 600 }}>
+                        {labelOf(graph.nodes.find((n) => n.id === e.from_id) ?? other)}
+                        {' ↔ '}
+                        {labelOf(graph.nodes.find((n) => n.id === e.to_id) ?? other)}
+                      </span>
+                    )}
+                    {other.company && involvesCenter && (
                       <span style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
                         · {other.company}
                       </span>
@@ -268,18 +280,20 @@ export function ContactGraph() {
                     >
                       {e.label ?? e.relation_type} · {e.depth} 跳
                     </span>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      style={{ color: 'var(--danger)' }}
-                      onClick={() => {
-                        if (confirm(`删除与「${labelOf(other)}」的关系？`)) {
-                          removeMutation.mutate(other.id);
-                        }
-                      }}
-                    >
-                      删除
-                    </button>
+                    {involvesCenter && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ color: 'var(--danger)' }}
+                        onClick={() => {
+                          if (confirm(`删除与「${labelOf(other)}」的关系？`)) {
+                            removeMutation.mutate(other.id);
+                          }
+                        }}
+                      >
+                        删除
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -309,13 +323,16 @@ function AddRelationModal({
   onClose: () => void;
 }) {
   const adapter = useAdapter();
+  const userId = useUserId();
   const queryClient = useQueryClient();
   const [otherId, setOtherId] = useState('');
   const [label, setLabel] = useState('');
 
   const contactsQuery = useQuery({
-    queryKey: ['contacts-all-for-graph'],
-    queryFn: async () => (await adapter.contacts.list({ user_id: useUserIdOrThrow(), limit: 500 })).items,
+    queryKey: ['contacts-all-for-graph', userId],
+    queryFn: () =>
+      adapter.contacts.list({ user_id: userId!, limit: 500 }).then((r) => r.items),
+    enabled: !!userId,
   });
   const candidates = (contactsQuery.data ?? []).filter((c) => c.id !== contactId && !knownContactIds.has(c.id));
 
@@ -404,8 +421,3 @@ function AddRelationModal({
 }
 
 import { useUserId } from '../lib/auth';
-function useUserIdOrThrow(): string {
-  const u = useUserId();
-  if (!u) throw new Error('user not loaded');
-  return u;
-}

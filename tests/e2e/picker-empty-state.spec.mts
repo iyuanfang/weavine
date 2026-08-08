@@ -88,9 +88,9 @@ test.describe('SearchablePicker emptyState CTA', () => {
       '新建项目',
     );
 
-    // Contact picker — switch focus
-    const contactInput = page.getByPlaceholder('搜索联系人…');
-    await contactInput.click();
+    // Contact multi-picker — click the "+ 添加参与者…" button to open
+    const addContactButton = page.getByRole('button', { name: /\+ 添加参与者/ });
+    await addContactButton.click();
     await expect(page.getByTestId('picker-empty-contact')).toBeVisible();
     await expect(page.getByTestId('picker-empty-contact-create')).toHaveText(
       '新建联系人',
@@ -159,9 +159,10 @@ test.describe('SearchablePicker emptyState CTA', () => {
     expect(createResp.ok()).toBeTruthy();
 
     await page.goto(`${baseURL ?? SPA_BASE}/events/new`);
-    const contactInput = page.getByPlaceholder('搜索联系人…');
-    await contactInput.click();
-    await contactInput.fill('zzzzzzzzz-no-match-zzzzzzzzz');
+    const addContactButton = page.getByRole('button', { name: /\+ 添加参与者/ });
+    await addContactButton.click();
+    const searchInput = page.getByPlaceholder('搜索联系人…');
+    await searchInput.fill('zzzzzzzzz-no-match-zzzzzzzzz');
 
     // emptyState CTA must NOT be shown — should see the plain emptyText instead
     await expect(page.getByTestId('picker-empty-contact')).toHaveCount(0);
