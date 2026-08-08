@@ -43,7 +43,9 @@ import type {
   GraphResponse,
   Interaction,
   ListContactsResult,
+  ListMediaParams,
   LocalUser,
+  MediaItem,
   PRMAdapter,
   Project,
   ProjectContactWithContact,
@@ -59,6 +61,7 @@ import type {
   UpdateProjectInput,
   UpdateReminderInput,
   UpdateTagInput,
+  UploadMediaInput,
 } from './types';
 
 type UserIdPayload = { user_id?: string | null; [k: string]: unknown };
@@ -377,6 +380,45 @@ export class TauriAdapter implements PRMAdapter {
       Promise.reject(new Error('graph is cloud-only — sign in via the cloud path')),
     removeRelation: (_contact_id: string, _other_id: string): Promise<void> =>
       Promise.reject(new Error('graph is cloud-only — sign in via the cloud path')),
+  };
+
+  media = {
+    upload: async (input: UploadMediaInput): Promise<MediaItem> => {
+      if (input.kind !== 'avatar' || input.owner_type !== 'contact') {
+        throw new Error('only contact avatars are supported on desktop');
+      }
+      const user_id = await this.userIdReady;
+      const bytes = input.bytes;
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const data_url = `data:${input.mime};base64,${btoa(bin)}`;
+      const res = await invoke<{ media: MediaItem; data_url: string }>('upload_avatar', {
+        user_id,
+        contact_id: input.owner_id,
+        data_url,
+      });
+      return res.media;
+    },
+
+    getBlobDataUrl: async (id: string): Promise<string> => {
+      const url = await invoke<string | null>('get_media_data_url', { media_id: id });
+      if (!url) throw new Error(`media ${id} not found`);
+      return url;
+    },
+
+    listByOwner: async (p: ListMediaParams): Promise<MediaItem[]> => {
+      const user_id = await this.userIdReady;
+      return invoke<MediaItem[]>('list_media_by_owner', {
+        user_id,
+        kind: p.kind,
+        owner_type: p.owner_type,
+        owner_id: p.owner_id,
+      });
+    },
+
+    delete: async (id: string): Promise<void> => {
+      await invoke<void>('delete_media', { media_id: id });
+    },
   };
 }
 

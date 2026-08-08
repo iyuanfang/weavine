@@ -32,7 +32,9 @@ import type {
   GraphResponse,
   Interaction,
   ListContactsResult,
+  ListMediaParams,
   LocalUser,
+  MediaItem,
   PRMAdapter,
   Project,
   ProjectContactWithContact,
@@ -48,6 +50,7 @@ import type {
   UpdateProjectInput,
   UpdateReminderInput,
   UpdateTagInput,
+  UploadMediaInput,
 } from './types';
 
 // ── API base URL ───────────────────────────────────────
@@ -468,5 +471,62 @@ export class HttpAdapter implements PRMAdapter {
         'DELETE',
         `/api/api_keys/${encodeURIComponent(id)}${qs({ user_id })}`,
       ),
+  };
+
+  media = {
+    upload: async (input: UploadMediaInput): Promise<MediaItem> => {
+      const form = new FormData();
+      form.append('kind', input.kind);
+      form.append('owner_type', input.owner_type);
+      form.append('owner_id', input.owner_id);
+      const blob = new Blob([input.bytes.buffer.slice(input.bytes.byteOffset, input.bytes.byteOffset + input.bytes.byteLength) as ArrayBuffer], { type: input.mime });
+      form.append('file', blob, input.filename ?? 'upload');
+      const token = getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const resp = await fetch(
+        buildUrl(this.baseUrl, '/api/media', 'POST'),
+        { method: 'POST', headers, body: form },
+      );
+      if (!resp.ok) {
+        let msg = '';
+        try { msg = await resp.text(); } catch { msg = ''; }
+        throw new Error(`POST /api/media: ${resp.status} ${resp.statusText} — ${msg}`);
+      }
+      return resp.json() as Promise<MediaItem>;
+    },
+
+    getBlobDataUrl: async (id: string): Promise<string> => {
+      const url = buildUrl(this.baseUrl, `/api/media/${encodeURIComponent(id)}/blob`, 'GET');
+      const token = getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const resp = await fetch(url, { method: 'GET', headers });
+      if (!resp.ok) {
+        let msg = '';
+        try { msg = await resp.text(); } catch { msg = ''; }
+        throw new Error(`GET /api/media/${id}/blob: ${resp.status} ${resp.statusText} — ${msg}`);
+      }
+      const mime = resp.headers.get('content-type') ?? 'application/octet-stream';
+      const buf = new Uint8Array(await resp.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+      const b64 = btoa(bin);
+      return `data:${mime};base64,${b64}`;
+    },
+
+    listByOwner: (p: ListMediaParams): Promise<MediaItem[]> =>
+      request<MediaItem[]>(
+        this.baseUrl,
+        'GET',
+        '/api/media' + qs({
+          kind: p.kind,
+          owner_type: p.owner_type,
+          owner_id: p.owner_id,
+        }),
+      ),
+
+    delete: (id: string): Promise<void> =>
+      request<void>(this.baseUrl, 'DELETE', `/api/media/${encodeURIComponent(id)}`),
   };
 }

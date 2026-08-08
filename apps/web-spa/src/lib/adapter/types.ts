@@ -568,6 +568,13 @@ export interface PRMAdapter {
     reveal(user_id: string, id: string): Promise<ApiKeyRevealed>;
     revoke(user_id: string, id: string): Promise<void>;
   };
+
+  media: {
+    upload(input: UploadMediaInput): Promise<MediaItem>;
+    getBlobDataUrl(id: string): Promise<string>;
+    listByOwner(p: ListMediaParams): Promise<MediaItem[]>;
+    delete(id: string): Promise<void>;
+  };
 }
 
 export interface CloudStatus {
@@ -609,4 +616,34 @@ export interface ArchivedItem {
   id: string;
   title: string;
   archived_at: string;
+}
+
+export interface MediaItem {
+  id: string;
+  user_id: string;
+  kind: string;
+  owner_type: string;
+  owner_id: string;
+  mime: string;
+  size_bytes: number;
+  sha256: string | null;
+  filename: string | null;
+}
+
+export type MediaKind = 'avatar' | 'card_image' | 'attachment';
+export type MediaOwnerType = 'contact' | 'event' | 'project';
+
+export interface UploadMediaInput {
+  kind: MediaKind;
+  owner_type: MediaOwnerType;
+  owner_id: string;
+  bytes: Uint8Array;
+  mime: string;
+  filename?: string | null;
+}
+
+export interface ListMediaParams {
+  kind: MediaKind;
+  owner_type: MediaOwnerType;
+  owner_id: string;
 }
