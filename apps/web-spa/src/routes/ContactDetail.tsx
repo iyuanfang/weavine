@@ -76,6 +76,9 @@ export function ContactDetail() {
 
   const [interactionSummary, setInteractionSummary] = useState('');
   const [interactionChannel, setInteractionChannel] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const createInteractionMutation = useMutation({
     mutationFn: (input: CreateInteractionInput) => adapter.interactions.create(input),
@@ -131,9 +134,6 @@ export function ContactDetail() {
   const interactions = interactionsQuery.data ?? [];
 
   const displayName = contact.nickname || contact.name || '?';
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
-  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     if (!isTauri || !userId || !contact.id) return;
