@@ -80,6 +80,25 @@ export function ContactDetail() {
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
+  useEffect(() => {
+    if (!isTauri || !userId || !id) return;
+    let cancelled = false;
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) =>
+        invoke<string | null>('get_avatar', {
+          user_id: userId,
+          contact_id: id,
+        }),
+      )
+      .then((url) => {
+        if (!cancelled) setAvatarDataUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, id]);
+
   const createInteractionMutation = useMutation({
     mutationFn: (input: CreateInteractionInput) => adapter.interactions.create(input),
     onSuccess: () => {
@@ -134,25 +153,6 @@ export function ContactDetail() {
   const interactions = interactionsQuery.data ?? [];
 
   const displayName = contact.nickname || contact.name || '?';
-
-  useEffect(() => {
-    if (!isTauri || !userId || !contact.id) return;
-    let cancelled = false;
-    import('@tauri-apps/api/core')
-      .then(({ invoke }) =>
-        invoke<string | null>('get_avatar', {
-          user_id: userId,
-          contact_id: contact.id,
-        }),
-      )
-      .then((url) => {
-        if (!cancelled) setAvatarDataUrl(url);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, contact.id]);
 
   const onPickAvatar = () => fileInputRef.current?.click();
 
