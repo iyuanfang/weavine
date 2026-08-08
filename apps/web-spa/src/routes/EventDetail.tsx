@@ -148,7 +148,7 @@ export function EventDetail() {
         </div>
       </section>
 
-      <section className="section">
+<section className="section">
         <h2 className="section__title">关联</h2>
         <div className="card" style={{ marginTop: 10, padding: 16 }}>
           <div
@@ -160,15 +160,28 @@ export function EventDetail() {
           >
             <div>
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
-                联系人
+                参与者
               </div>
-              {eventQuery.data?.contact_id ? (
-                <span
+              {event.participants && event.participants.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {event.participants.map((p) => (
+                    <Link
+                      key={p.contact_id}
+                      to={`/contacts/${p.contact_id}`}
+                      className="tag-chip tag-chip--active"
+                      data-testid="event-participant"
+                    >
+                      {p.nickname ?? '?'}
+                    </Link>
+                  ))}
+                </div>
+              ) : eventQuery.data?.contact_id ? (
+                <Link
+                  to={`/contacts/${eventQuery.data.contact_id}`}
                   className="tag-chip tag-chip--active"
-                  style={{ cursor: 'default' }}
                 >
                   {eventQuery.data.contact_nickname ?? '?'}
-                </span>
+                </Link>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}
@@ -177,7 +190,7 @@ export function EventDetail() {
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 项目
               </div>
-{eventQuery.data?.project_id && eventQuery.data.project_title ? (
+              {eventQuery.data?.project_id && eventQuery.data.project_title ? (
                 <span
                   className="tag-chip tag-chip--active"
                   style={{ cursor: 'default' }}

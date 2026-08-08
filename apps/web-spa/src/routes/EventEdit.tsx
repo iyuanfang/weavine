@@ -6,10 +6,11 @@ import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { PickerEmptyState } from '../components/PickerEmptyState';
+import { ContactMultiPicker } from '../components/ContactMultiPicker';
 import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import type { Contact, Event, Project, UpdateEventInput } from '../lib/adapter/types';
+import type { Event, Project, UpdateEventInput } from '../lib/adapter/types';
 
 function toLocalInput(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -37,12 +38,6 @@ export function EventEdit() {
     queryFn: () => adapter.events.get(id),
   });
 
-  const contactsQuery = useQuery({
-    queryKey: ['contacts', userId],
-    queryFn: () => adapter.contacts.list({ user_id: userId! }),
-    enabled: !!userId,
-  });
-
   const projectsQuery = useQuery({
     queryKey: ['projects', userId],
     queryFn: () => adapter.projects.list({ user_id: userId!, archived: 'false', limit: 500 }),
@@ -55,7 +50,7 @@ export function EventEdit() {
   const [endAt, setEndAt] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
-  const [contactId, setContactId] = useState<string>('');
+  const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [projectId, setProjectId] = useState<string>('');
   const [reminderLeadMinutes, setReminderLeadMinutes] = useState<number | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -69,7 +64,13 @@ export function EventEdit() {
       setEndAt(toLocalInput(e.end_at));
       setLocation(e.location ?? '');
       setNotes(e.notes ?? '');
-      setContactId(e.contact_id ?? '');
+      const ids =
+        e.participants && e.participants.length > 0
+          ? e.participants.map((p) => p.contact_id)
+          : e.contact_id
+          ? [e.contact_id]
+          : [];
+      setParticipantIds(ids);
       setProjectId(e.project_id ?? '');
       setReminderLeadMinutes(e.reminder_lead_minutes ?? null);
       setHydrated(true);
@@ -114,14 +115,15 @@ export function EventEdit() {
       end_at: endAt ? new Date(endAt).toISOString() : null,
       location: location.trim() || null,
       notes: notes.trim() || null,
-      contact_id: contactId || null,
+      contact_id: participantIds[0] ?? null,
       project_id: projectId || null,
       reminder_lead_minutes: reminderLeadMinutes,
+      participant_contact_ids: participantIds,
     };
     updateMutation.mutate(patch);
   };
 
-  if (eventQuery.isLoading || contactsQuery.isLoading || !hydrated) {
+  if (eventQuery.isLoading || !hydrated) {
     return <div className="loading">加载中</div>;
   }
 
@@ -133,7 +135,6 @@ export function EventEdit() {
     );
   }
 
-  const contacts = contactsQuery.data?.items ?? [];
   const projects = projectsQuery.data ?? [];
   const linkedProject = projectId
     ? projects.find((p: Project) => p.id === projectId)
@@ -260,18 +261,10 @@ export function EventEdit() {
                   />
                 </div>
                 <div>
-                  <label className="input-label">关联联系人</label>
-                  <SearchablePicker
-                    value={contactId}
-                    onChange={setContactId}
-                    options={contacts.map((c: Contact) => ({
-                      id: c.id,
-                      label: c.nickname ?? c.name ?? '?',
-                      sublabel: c.company ?? c.title ?? null,
-                    }))}
-                    placeholder="搜索联系人…"
-                    emptyText="没有匹配的联系人"
-                    emptyState={<PickerEmptyState kind="contact" />}
+                  <label className="input-label">参与者（可多选）</label>
+                  <ContactMultiPicker
+                    selectedIds={participantIds}
+                    onChange={setParticipantIds}
                   />
                 </div>
               </div>

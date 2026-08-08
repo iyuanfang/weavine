@@ -6,10 +6,11 @@ import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { PickerEmptyState } from '../components/PickerEmptyState';
+import { ContactMultiPicker } from '../components/ContactMultiPicker';
 import { EVENT_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import type { Contact, CreateEventInput, Event, Project } from '../lib/adapter/types';
+import type { CreateEventInput, Event, Project } from '../lib/adapter/types';
 
 function formatLocal(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -31,7 +32,7 @@ export function EventNew() {
   const [endAt, setEndAt] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
-  const [contactId, setContactId] = useState<string>('');
+  const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [projectId, setProjectId] = useState<string>(projectIdParam ?? '');
   const [reminderLeadMinutes, setReminderLeadMinutes] = useState<number | null>(null);
 
@@ -54,13 +55,6 @@ export function EventNew() {
       setEndAt(inferredLocal);
     }
   }, [startAt]);
-
-  const contactsQuery = useQuery({
-    queryKey: ['contacts', userId],
-    queryFn: () => adapter.contacts.list({ user_id: userId! }),
-    enabled: !!userId,
-  });
-  const contacts = contactsQuery.data?.items ?? [];
 
   const projectsQuery = useQuery({
     queryKey: ['projects', userId],
@@ -100,9 +94,10 @@ export function EventNew() {
       end_at: endAt ? new Date(endAt).toISOString() : null,
       location: location.trim() || null,
       notes: notes.trim() || null,
-      contact_id: contactId || null,
+      contact_id: participantIds[0] ?? null,
       project_id: projectId || null,
       reminder_lead_minutes: reminderLeadMinutes,
+      participant_contact_ids: participantIds.length > 0 ? participantIds : null,
     });
   };
 
@@ -236,18 +231,10 @@ export function EventNew() {
                   />
                 </div>
                 <div>
-                  <label className="input-label">关联联系人</label>
-                  <SearchablePicker
-                    value={contactId}
-                    onChange={setContactId}
-                    options={contacts.map((c: Contact) => ({
-                      id: c.id,
-                      label: c.nickname ?? c.name ?? '?',
-                      sublabel: c.company ?? c.title ?? null,
-                    }))}
-                    placeholder="搜索联系人…"
-                    emptyText="没有匹配的联系人"
-                    emptyState={<PickerEmptyState kind="contact" />}
+                  <label className="input-label">参与者（可多选）</label>
+                  <ContactMultiPicker
+                    selectedIds={participantIds}
+                    onChange={setParticipantIds}
                   />
                 </div>
               </div>

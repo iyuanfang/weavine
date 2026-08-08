@@ -462,14 +462,36 @@ export function Calendar() {
                                   <span style={{ fontSize: 'var(--text-xs)' }}>{icon}</span>
                                   {meta.label}
                                 </span>
-                                {event.contact_id && event.contact_nickname && (
-                                  <ContactBadge
-                                    contact={{
-                                      id: event.contact_id,
-                                      nickname: event.contact_nickname,
-                                      name: null,
+                                {event.participants && event.participants.length > 0
+                                  ? event.participants.slice(0, 3).map((p) => (
+                                      <ContactBadge
+                                        key={p.contact_id}
+                                        contact={{
+                                          id: p.contact_id,
+                                          nickname: p.nickname ?? '?',
+                                          name: null,
+                                        }}
+                                      />
+                                    ))
+                                  : event.contact_id && event.contact_nickname && (
+                                      <ContactBadge
+                                        contact={{
+                                          id: event.contact_id,
+                                          nickname: event.contact_nickname,
+                                          name: null,
+                                        }}
+                                      />
+                                    )}
+                                {event.participants && event.participants.length > 3 && (
+                                  <span
+                                    style={{
+                                      fontSize: 'var(--text-xs)',
+                                      color: 'var(--muted)',
+                                      alignSelf: 'center',
                                     }}
-                                  />
+                                  >
+                                    +{event.participants.length - 3}
+                                  </span>
                                 )}
                                 {event.project_id && event.project_title && (
                                   <ProjectBadge

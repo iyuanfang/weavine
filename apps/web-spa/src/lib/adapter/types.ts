@@ -76,6 +76,14 @@ export interface Event {
   contact_nickname?: string | null;
   /** LEFT JOIN Project — only set when project_id is not null */
   project_title?: string | null;
+  /** Multi-participant list (server's entity_links.relation_type='participated') */
+  participants?: ParticipantRow[];
+}
+
+export interface ParticipantRow {
+  contact_id: string;
+  role: string;
+  nickname?: string | null;
 }
 
 export interface Interaction {
@@ -259,6 +267,7 @@ export interface CreateEventInput {
   contact_id?: string | null;
   project_id?: string | null;
   reminder_lead_minutes?: number | null;
+  participant_contact_ids?: string[] | null;
 }
 
 export interface UpdateEventInput {
@@ -273,6 +282,7 @@ export interface UpdateEventInput {
   project_id?: string | null;
   reminder_lead_minutes?: number | null;
   archived_at?: string | null;
+  participant_contact_ids?: string[] | null;
 }
 
 export interface CreateActionInput {
