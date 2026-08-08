@@ -292,14 +292,35 @@ async fn push_all(
         return Ok(0);
     }
 
-    let push_resp = api::push(server_url, access_token, device_id, entities).await?;
-    result.pushed = push_resp.accepted.len();
-    result.conflicts = push_resp.conflicts.len();
+    // F6: chunk each EntityPush.rows into PUSH_CHUNK_SIZE batches to keep
+    // per-request payload bounded; server-side savepoint batching remains
+    // unchanged, but per-row trigger overhead amortizes over fewer round-trips.
+    let mut last_server_rev = 0;
+    for entity in entities.iter() {
+        for chunk_rows in entity.rows.chunks(PUSH_CHUNK_SIZE) {
+            let chunk = EntityPush {
+                kind: entity.kind.clone(),
+                rows: chunk_rows.to_vec(),
+            };
+            let push_resp = api::push(
+                server_url,
+                access_token,
+                device_id,
+                vec![chunk],
+            )
+            .await?;
+            result.pushed += push_resp.accepted.len();
+            result.conflicts += push_resp.conflicts.len();
+            last_server_rev = push_resp.server_revision;
+        }
+    }
     if !max_pushed_at.is_empty() && max_pushed_at != last_pushed_at {
         config::set(conn, KEY_LAST_PUSHED_AT, &max_pushed_at)?;
     }
-    Ok(push_resp.server_revision)
+    Ok(last_server_rev)
 }
+
+const PUSH_CHUNK_SIZE: usize = 500;
 
 /// Pull remote changes and apply them locally.
 async fn pull_all(

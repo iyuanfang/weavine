@@ -455,6 +455,55 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         );",
     )?;
 
+    // ── Phase 3 #3 ────────────────────────────────────────────
+    // Add EventParticipant junction (multi-person events).
+    // Keep Event.contact_id as denormalized first-participant pointer
+    // (mirrors server's sync_main_participant pattern; preserves desktop sync
+    // compatibility — contact_id stays in sync translation columns).
+    let has_ep: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='EventParticipant'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_ep == 0 {
+        conn.execute_batch(
+            "CREATE TABLE \"EventParticipant\" (
+                \"id\" TEXT NOT NULL PRIMARY KEY,
+                \"user_id\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,
+                \"event_id\" TEXT NOT NULL REFERENCES \"Event\"(\"id\") ON DELETE CASCADE,
+                \"contact_id\" TEXT NOT NULL REFERENCES \"Contact\"(\"id\") ON DELETE CASCADE,
+                \"role\" TEXT,
+                \"created_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (\"event_id\", \"contact_id\")
+            );
+            CREATE INDEX IF NOT EXISTS \"EventParticipant_event_id_idx\" ON \"EventParticipant\"(\"event_id\");
+            CREATE INDEX IF NOT EXISTS \"EventParticipant_contact_id_idx\" ON \"EventParticipant\"(\"contact_id\");
+            CREATE INDEX IF NOT EXISTS \"EventParticipant_user_id_idx\" ON \"EventParticipant\"(\"user_id\");",
+        )?;
+
+        let has_event_contact_id: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('Event') WHERE name='contact_id'",
+            [],
+            |r| r.get(0),
+        )?;
+        if has_event_contact_id > 0 {
+            let mut stmt = conn.prepare(
+                "SELECT user_id, id, contact_id FROM \"Event\" WHERE contact_id IS NOT NULL",
+            )?;
+            let rows = stmt.query_map([], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+            })?;
+            for r in rows {
+                let (uid, eid, cid) = r?;
+                let pid = uuid::Uuid::new_v4().to_string();
+                conn.execute(
+                    "INSERT OR IGNORE INTO \"EventParticipant\" (id, user_id, event_id, contact_id) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![pid, uid, eid, cid],
+                )?;
+            }
+        }
+    }
+
     Ok(())
 }
 

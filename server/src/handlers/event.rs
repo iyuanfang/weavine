@@ -17,6 +17,21 @@ const EVENT_SELECT: &str = "SELECT e.id, e.user_id, e.title, e.event_type, e.sta
      LEFT JOIN contact c ON c.id = e.contact_id AND c.user_id = e.user_id \
      LEFT JOIN project p ON p.id = e.project_id AND p.user_id = e.user_id";
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ParticipantRow {
+    pub contact_id: String,
+    pub role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nickname: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EventWithParticipants {
+    #[serde(flatten)]
+    pub event: Event,
+    pub participants: Vec<ParticipantRow>,
+}
+
 #[derive(Deserialize)]
 pub struct ListParams {
     pub user_id: Option<String>,
@@ -38,9 +53,9 @@ pub async fn list(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<ListParams>,
-) -> Result<Json<Vec<Event>>, (StatusCode, String)> {
+) -> Result<Json<Vec<EventWithParticipants>>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
-    let rows = sqlx::query_as::<_, Event>(&format!(
+    let events = sqlx::query_as::<_, Event>(&format!(
         "{EVENT_SELECT} WHERE e.user_id = $1 \
          AND ($2::text IS NULL OR e.contact_id = $2) \
          AND ($3::text IS NULL OR e.project_id = $3) \
@@ -59,14 +74,25 @@ pub async fn list(
     .fetch_all(&*pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(rows))
+    let event_ids: Vec<String> = events.iter().map(|e| e.id.clone()).collect();
+    let parts_map = fetch_participants_for_events(&*pool, &event_ids)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let result: Vec<EventWithParticipants> = events
+        .into_iter()
+        .map(|e| {
+            let participants = parts_map.get(&e.id).cloned().unwrap_or_default();
+            EventWithParticipants { event: e, participants }
+        })
+        .collect();
+    Ok(Json(result))
 }
 
 pub async fn create(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<Value>,
-) -> Result<Json<Event>, (StatusCode, String)> {
+) -> Result<Json<EventWithParticipants>, (StatusCode, String)> {
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
@@ -104,6 +130,41 @@ pub async fn create(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    let mut participant_ids: Vec<String> = Vec::new();
+    if let Some(arr) = body.get("participant_contact_ids").and_then(|v| v.as_array()) {
+        for v in arr {
+            if let Some(s) = v.as_str() {
+                participant_ids.push(s.to_string());
+            }
+        }
+        participant_ids.sort();
+        participant_ids.dedup();
+    }
+    if !participant_ids.is_empty() {
+        for cid in &participant_ids {
+            sqlx::query(
+                "INSERT INTO entity_links (user_id, from_type, from_id, to_type, to_id, relation_type, role) \
+                 VALUES ($1, 'event', $2, 'contact', $3, 'participated', 'participant') \
+                 ON CONFLICT (user_id, from_type, from_id, to_type, to_id, relation_type) DO NOTHING"
+            )
+            .bind(&auth)
+            .bind(&id)
+            .bind(cid)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+        sqlx::query(
+            "UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3"
+        )
+        .bind(&participant_ids[0])
+        .bind(&now)
+        .bind(&id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -115,14 +176,17 @@ pub async fn create(
     .fetch_one(&*pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(event))
+    let participants = fetch_participants(&*pool, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(EventWithParticipants { event, participants }))
 }
 
 pub async fn get(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
-) -> Result<Json<Event>, (StatusCode, String)> {
+) -> Result<Json<EventWithParticipants>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let event = sqlx::query_as::<_, Event>(&format!(
         "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2",
@@ -133,7 +197,10 @@ pub async fn get(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .ok_or((StatusCode::NOT_FOUND, "事件不存在".to_string()))?;
-    Ok(Json(event))
+    let participants = fetch_participants(&*pool, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(EventWithParticipants { event, participants }))
 }
 
 pub async fn update(
@@ -141,7 +208,7 @@ pub async fn update(
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
     Json(body): Json<Value>,
-) -> Result<Json<Event>, (StatusCode, String)> {
+) -> Result<Json<EventWithParticipants>, (StatusCode, String)> {
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let now = super::now_str();
 
@@ -198,11 +265,63 @@ pub async fn update(
     q = q.bind(&id).bind(&auth);
     q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    if let Some(arr) = body.get("participant_contact_ids").and_then(|v| v.as_array()) {
+        let mut new_ids: Vec<String> = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+        new_ids.sort();
+        new_ids.dedup();
+
+        sqlx::query(
+            "DELETE FROM entity_links WHERE user_id=$1 AND from_type='event' AND from_id=$2 AND relation_type='participated'"
+        )
+        .bind(&auth)
+        .bind(&id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        for cid in &new_ids {
+            sqlx::query(
+                "INSERT INTO entity_links (user_id, from_type, from_id, to_type, to_id, relation_type, role) \
+                 VALUES ($1, 'event', $2, 'contact', $3, 'participated', 'participant')"
+            )
+            .bind(&auth)
+            .bind(&id)
+            .bind(cid)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+
+        let new_first: Option<&String> = new_ids.first();
+        sqlx::query("UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3")
+            .bind(new_first.cloned().unwrap_or_default())
+            .bind(&now)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    get(headers, State(pool), Path(id)).await
+    let event = sqlx::query_as::<_, Event>(&format!(
+        "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2",
+    ))
+    .bind(&id)
+    .bind(&auth)
+    .fetch_optional(&*pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::NOT_FOUND, "事件不存在".to_string()))?;
+    let participants = fetch_participants(&*pool, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(EventWithParticipants { event, participants }))
 }
 
 pub async fn delete(
@@ -239,10 +358,10 @@ pub async fn upcoming(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
     Query(p): Query<UpcomingParams>,
-) -> Result<Json<Vec<Event>>, (StatusCode, String)> {
+) -> Result<Json<Vec<EventWithParticipants>>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let now = super::now_str();
-    let rows = sqlx::query_as::<_, Event>(&format!(
+    let events = sqlx::query_as::<_, Event>(&format!(
         "{EVENT_SELECT} WHERE e.user_id = $1 AND e.start_at >= $2 AND e.archived_at IS NULL \
          ORDER BY e.start_at LIMIT $3",
     ))
@@ -250,26 +369,62 @@ pub async fn upcoming(
     .bind(p.limit.unwrap_or(20))
     .fetch_all(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(rows))
+    let event_ids: Vec<String> = events.iter().map(|e| e.id.clone()).collect();
+    let parts_map = fetch_participants_for_events(&*pool, &event_ids)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let result: Vec<EventWithParticipants> = events
+        .into_iter()
+        .map(|e| {
+            let participants = parts_map.get(&e.id).cloned().unwrap_or_default();
+            EventWithParticipants { event: e, participants }
+        })
+        .collect();
+    Ok(Json(result))
 }
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct ParticipantRow {
-    pub contact_id: String,
-    pub role: String,
-}
-
 async fn fetch_participants(
     executor: impl sqlx::PgExecutor<'_>,
     event_id: &str,
 ) -> Result<Vec<ParticipantRow>, sqlx::Error> {
     sqlx::query_as(
-        "SELECT to_id AS contact_id, role FROM entity_links \
-         WHERE from_type='event' AND from_id=$1 AND relation_type='participated' \
-         ORDER BY created_at ASC"
+        "SELECT el.to_id AS contact_id, el.role, c.nickname AS nickname \
+         FROM entity_links el \
+         LEFT JOIN contact c ON c.id = el.to_id AND c.user_id = el.user_id \
+         WHERE el.from_type='event' AND el.from_id=$1 AND el.relation_type='participated' \
+         ORDER BY el.created_at ASC"
     )
     .bind(event_id)
     .fetch_all(executor)
     .await
+}
+
+async fn fetch_participants_for_events(
+    executor: impl sqlx::PgExecutor<'_>,
+    event_ids: &[String],
+) -> Result<std::collections::HashMap<String, Vec<ParticipantRow>>, sqlx::Error> {
+    use std::collections::HashMap;
+    let mut out: HashMap<String, Vec<ParticipantRow>> = HashMap::new();
+    if event_ids.is_empty() {
+        return Ok(out);
+    }
+    let rows: Vec<(String, String, Option<String>)> = sqlx::query_as(
+        "SELECT el.from_id, el.to_id AS contact_id, c.nickname AS nickname \
+         FROM entity_links el \
+         LEFT JOIN contact c ON c.id = el.to_id AND c.user_id = el.user_id \
+         WHERE el.from_type='event' AND el.from_id = ANY($1) AND el.relation_type='participated' \
+         ORDER BY el.created_at ASC"
+    )
+    .bind(event_ids)
+    .fetch_all(executor)
+    .await?;
+    for (event_id, contact_id, nickname) in rows {
+        out.entry(event_id).or_default().push(ParticipantRow {
+            contact_id,
+            role: "participant".into(),
+            nickname,
+        });
+    }
+    Ok(out)
 }
 
 async fn sync_main_participant(
@@ -363,7 +518,7 @@ pub async fn add_participant(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(ParticipantRow { contact_id: body.contact_id, role }))
+    Ok(Json(ParticipantRow { contact_id: body.contact_id, role, nickname: None }))
 }
 
 pub async fn set_participant_role(
@@ -392,7 +547,7 @@ pub async fn set_participant_role(
     if rows.rows_affected() == 0 {
         return Err((StatusCode::NOT_FOUND, "参与者不存在".into()));
     }
-    Ok(Json(ParticipantRow { contact_id, role: body.role }))
+    Ok(Json(ParticipantRow { contact_id, role: body.role, nickname: None }))
 }
 
 pub async fn remove_participant(
