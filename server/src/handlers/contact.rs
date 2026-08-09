@@ -59,7 +59,7 @@ pub async fn list(
 
     let query_sql = format!(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
-         notes, importance, reminder_enabled, reminder_interval_days::BIGINT AS reminder_interval_days, last_contacted_at, \
+         notes, importance, last_contacted_at, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact \
          WHERE user_id = $1 \
@@ -104,7 +104,7 @@ pub async fn get(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut contact: Contact = sqlx::query_as(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
-         notes, importance, reminder_enabled, reminder_interval_days::BIGINT AS reminder_interval_days, last_contacted_at, \
+         notes, importance, last_contacted_at, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact WHERE id = $1 AND user_id = $2",
     )
@@ -149,8 +149,8 @@ pub async fn create(
 
     sqlx::query(
         "INSERT INTO contact (id, user_id, nickname, name, company, title, city, email, phone, wechat, \
-         notes, importance, reminder_enabled, reminder_interval_days, created_at, updated_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,false,$13,$14,$15)",
+         notes, importance, created_at, updated_at) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
     )
     .bind(&id)
     .bind(&auth)
@@ -163,8 +163,7 @@ pub async fn create(
     .bind(body.get("phone").and_then(|v| v.as_str()))
     .bind(body.get("wechat").and_then(|v| v.as_str()))
     .bind(body.get("notes").and_then(|v| v.as_str()))
-    .bind(body.get("importance").and_then(|v| v.as_str()).unwrap_or("medium"))
-    .bind(body.get("reminder_interval_days").and_then(|v| v.as_i64()).map(|n| n as i32))
+    .bind(body.get("importance").and_then(|v| v.as_str()).unwrap_or("low"))
     .bind(&now)
     .bind(&now)
     .execute(&mut *tx)
@@ -237,11 +236,6 @@ pub async fn update(
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx)); binds.push(Bind::Text(v)); idx += 1;
         }
-    }
-    if let Some(v) = body.get("reminder_interval_days").and_then(|v| v.as_i64()) {
-        sets.push(format!("reminder_interval_days = ${}", idx));
-        binds.push(Bind::I32(v as i32));
-        idx += 1;
     }
     sets.push(format!("updated_at = ${}", idx)); binds.push(Bind::Text(&now)); idx += 1;
 
