@@ -73,13 +73,9 @@ pub struct CreateContactBody {
     #[serde(default)]
     pub notes: Option<String>,
 
-    #[schemars(description = "Importance level. Typical values: low, medium, high. Defaults to medium.")]
+    #[schemars(description = "Importance level. Typical values: low, medium, high. Defaults to low.")]
     #[serde(default)]
     pub importance: Option<String>,
-
-    #[schemars(description = "Reminder interval in days.")]
-    #[serde(default)]
-    pub reminder_interval_days: Option<i32>,
 
     #[schemars(description = "Tag UUIDs to associate with this contact.")]
     #[serde(default)]
@@ -128,10 +124,6 @@ pub struct UpdateContactFields {
     #[schemars(description = "Replace the importance level.")]
     #[serde(default)]
     pub importance: Option<String>,
-
-    #[schemars(description = "Replace the reminder interval in days.")]
-    #[serde(default)]
-    pub reminder_interval_days: Option<i32>,
 
     #[schemars(description = "Replace associated tag UUIDs. All existing tags are replaced.")]
     #[serde(default)]
