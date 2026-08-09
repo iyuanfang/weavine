@@ -1,18 +1,8 @@
 import { useRef, useState } from 'react';
 import { Popover } from './Popover';
+import { IMPORTANCE_OPTIONS, importanceMeta } from '../lib/contact-importance';
 
-const OPTIONS: { value: string; label: string; color: string; icon: string }[] = [
-  { value: 'normal', label: '普通', color: '#9ca3af', icon: '⚪' },
-  { value: 'low', label: '低', color: '#6b7280', icon: '⚪' },
-  { value: 'medium', label: '中', color: '#f59e0b', icon: '🟡' },
-  { value: 'high', label: '高', color: '#ef4444', icon: '🔴' },
-];
-
-const META = Object.fromEntries(OPTIONS.map((o) => [o.value, o]));
-
-export function importanceMeta(value: string): { label: string; color: string; icon: string } {
-  return META[value] ?? { label: value, color: '#9ca3af', icon: '·' };
-}
+const OPTIONS = IMPORTANCE_OPTIONS;
 
 export function ImportancePicker({
   value,

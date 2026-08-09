@@ -9,6 +9,11 @@ import { useUserId } from '../lib/auth';
 import { avatarBg } from '../lib/contactColor';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { tagColor } from '../lib/tagColor';
+import {
+  IMPORTANCE_DOT,
+  IMPORTANCE_LABEL,
+  IMPORTANCE_VALUES,
+} from '../lib/contact-importance';
 import { parseCsv, parseVCard } from '../lib/import/parseContacts';
 import type {
   CreateContactInput,
@@ -56,21 +61,6 @@ async function runWithConcurrency<T>(
   await Promise.all(lanes);
   return results;
 }
-
-const IMPORTANCE_LABELS: Record<string, string> = {
-  normal: '普通',
-  high: '高',
-  medium: '中',
-  low: '低',
-};
-
-const IMPORTANCE_VALUES = ['normal', 'high', 'medium', 'low'] as const;
-
-const IMPORTANCE_DOT: Record<string, string> = {
-  high: '#ef4444',
-  medium: '#f59e0b',
-  low: '#9ca3af',
-};
 
 const PAGE_SIZE = 20;
 
@@ -356,7 +346,7 @@ export function ContactsList() {
                       className="filter-panel__item-dot"
                       style={{ background: IMPORTANCE_DOT[value] }}
                     />
-                    <span>{IMPORTANCE_LABELS[value]}</span>
+                    <span>{IMPORTANCE_LABEL[value]}</span>
                   </span>
                   <span className="filter-panel__count">{countsByImportance[value] ?? 0}</span>
                 </button>
