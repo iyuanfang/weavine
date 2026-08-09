@@ -96,8 +96,8 @@ pub fn list_contacts_for_project(
     use crate::business::contact::hydrate_tags;
     let mut stmt = conn.prepare(
         "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.city, \
-                c.email, c.phone, c.wechat, c.notes, c.importance, c.reminder_enabled, \
-                c.reminder_interval_days, c.last_contacted_at, c.created_at, c.updated_at, \
+                c.email, c.phone, c.wechat, c.notes, c.importance, \
+                c.last_contacted_at, c.created_at, c.updated_at, \
                 pc.role, pc.added_at \
          FROM Contact c \
          INNER JOIN ProjectContact pc ON pc.contact_id = c.id \
@@ -107,7 +107,7 @@ pub fn list_contacts_for_project(
     let rows: Vec<(Contact, Option<String>, String)> = stmt
         .query_map(params![project_id], |row| {
             let c = crate::business::contact::row_to_contact(row)?;
-            Ok((c, row.get(17)?, row.get(18)?))
+            Ok((c, row.get(15)?, row.get(16)?))
         })?
         .filter_map(|r| r.ok())
         .collect();
