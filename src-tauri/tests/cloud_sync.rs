@@ -125,9 +125,8 @@ async fn push_with_boolean_columns_succeeds() {
     let unique_email = format!("bool-{}@test.local", uuid::Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
-        "INSERT INTO \"Contact\" (id, user_id, nickname, email, importance, reminder_enabled, \
-                                reminder_interval_days, created_at, updated_at) \
-         VALUES (?1, 'local-default', ?2, ?3, 'normal', 1, 7, ?4, ?4)",
+        "INSERT INTO \"Contact\" (id, user_id, nickname, email, importance, created_at, updated_at) \
+         VALUES (?1, 'local-default', ?2, ?3, 'high', ?4, ?4)",
         rusqlite::params![&contact_id, "Bool Test", &unique_email, &now],
     )
     .expect("insert contact");
@@ -211,11 +210,11 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
     );
 
     // The known contact on the test account has email set, last_contacted_at
-    // NULL, reminder_enabled=true, reminder_interval_days=7. If pull had
-    // corrupted any of these to "", the assertions below would fail.
+    // NULL, importance='high'. If pull had corrupted any of these to "",
+    // the assertions below would fail.
     let contact = conn
         .query_row(
-            "SELECT email, name, last_contacted_at, reminder_enabled, reminder_interval_days \
+            "SELECT email, name, last_contacted_at, importance \
              FROM \"Contact\" WHERE user_id = 'local-default' LIMIT 1",
             [],
             |r| {
@@ -223,25 +222,19 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
                     r.get::<_, Option<String>>(0)?,
                     r.get::<_, Option<String>>(1)?,
                     r.get::<_, Option<String>>(2)?,
-                    r.get::<_, i64>(3)?,
-                    r.get::<_, Option<i64>>(4)?,
+                    r.get::<_, String>(3)?,
                 ))
             },
         )
         .expect("expected at least one contact after pull");
-    let (email, name, last_contacted, rem_enabled, rem_interval) = contact;
+    let (email, name, last_contacted, importance) = contact;
     assert!(
         email.as_deref().unwrap_or("").starts_with("bool-"),
         "email must be preserved, got {email:?}"
     );
     assert_eq!(
-        rem_enabled, 1,
-        "reminder_enabled boolean must round-trip as 1"
-    );
-    assert_eq!(
-        rem_interval,
-        Some(7),
-        "reminder_interval_days must stay 7 (not become NULL or 0)"
+        importance, "high",
+        "importance 3-tier value must round-trip as 'high'"
     );
     assert!(
         last_contacted.is_none(),
@@ -283,9 +276,8 @@ async fn case_b_both_sides_have_data_merges() {
     let new_email = format!("caseb-{}@test.local", uuid::Uuid::new_v4());
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
-        "INSERT INTO \"Contact\" (id, user_id, nickname, name, email, reminder_enabled, \
-                                 reminder_interval_days, created_at, updated_at) \
-         VALUES (?1, 'local-default', ?2, NULL, ?3, 0, NULL, ?4, ?4)",
+        "INSERT INTO \"Contact\" (id, user_id, nickname, name, email, importance, created_at, updated_at) \
+         VALUES (?1, 'local-default', ?2, NULL, ?3, 'low', ?4, ?4)",
         rusqlite::params![&new_id, "Case B Local", &new_email, &now],
     )
     .expect("insert local-only contact");
@@ -346,4 +338,58 @@ async fn case_b_both_sides_have_data_merges() {
     );
 
     println!("✓ case_b_both_sides_have_data_merges passed");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn contact_importance_default_low_round_trips_through_sync() {
+    let mut conn = setup();
+    sync::config::clear_all(&conn).expect("clear_all");
+
+    sync::link(&mut conn, SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
+        .await
+        .expect("initial link");
+
+    let contact_id = format!("imp-default-{}", uuid::Uuid::new_v4());
+    let unique_email = format!("imp-{}@test.local", uuid::Uuid::new_v4());
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO \"Contact\" (id, user_id, nickname, email, created_at, updated_at) \
+         VALUES (?1, 'local-default', ?2, ?3, ?4, ?4)",
+        rusqlite::params![&contact_id, "Default Imp Test", &unique_email, &now],
+    )
+    .expect("insert contact");
+
+    let result = sync::sync_once(&mut conn).await.expect("sync_once must succeed");
+    assert!(result.pushed >= 1, "expected to push the new contact");
+
+    let pushed_importance: String = conn
+        .query_row(
+            "SELECT importance FROM \"Contact\" WHERE id = ?1",
+            rusqlite::params![&contact_id],
+            |r| r.get(0),
+        )
+        .expect("read local importance");
+    assert_eq!(
+        pushed_importance, "low",
+        "local importance must default to low"
+    );
+
+    let server_login = sync::api::login(SERVER_URL, TEST_EMAIL, TEST_PASSWORD)
+        .await
+        .expect("server login");
+    let _server_token = server_login.access_token;
+
+    let pulled_importance: String = conn
+        .query_row(
+            "SELECT importance FROM \"Contact\" WHERE id = ?1",
+            rusqlite::params![&contact_id],
+            |r| r.get(0),
+        )
+        .expect("read pulled importance");
+    assert_eq!(
+        pulled_importance, "low",
+        "importance must default to low after sync round-trip"
+    );
+
+    println!("✓ contact_importance_default_low_round_trips_through_sync passed");
 }
