@@ -371,7 +371,8 @@ fn apply_change(
     change: &ChangeRow,
     local_user_id: &str,
 ) -> anyhow::Result<()> {
-    let table = match kind_to_sqlite_table(&change.kind) {
+    let kind = canonical_kind(&change.kind);
+    let table = match kind_to_sqlite_table(kind) {
         Some(t) => t,
         None => {
             return Err(anyhow::anyhow!("unknown entity kind: {}", change.kind));
@@ -393,7 +394,7 @@ fn apply_change(
             };
 
             // Build INSERT OR REPLACE
-            let cols = push_columns(&change.kind);
+            let cols = push_columns(kind);
             if cols.is_empty() {
                 return Err(anyhow::anyhow!("no columns for {}", change.kind));
             }
@@ -414,9 +415,9 @@ fn apply_change(
 
             let mut stmt = conn.prepare(&sql)?;
 
-            let bool_cols = boolean_columns(&change.kind);
-            let null_int_cols = nullable_integer_columns(&change.kind);
-            let zero_int_cols = default_zero_integer_columns(&change.kind);
+            let bool_cols = boolean_columns(kind);
+            let null_int_cols = nullable_integer_columns(kind);
+            let zero_int_cols = default_zero_integer_columns(kind);
 
             let params: Vec<Box<dyn rusqlite::types::ToSql>> = cols
                 .iter()
@@ -619,5 +620,87 @@ mod tests {
     fn push_columns_includes_archived_at() {
         let cols = push_columns("project");
         assert!(cols.contains(&"archived_at"));
+    }
+
+    #[test]
+    fn pull_entity_links_plural_kind_applies_to_entity_link_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE EntityLink (
+                id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                from_type TEXT NOT NULL,
+                from_id TEXT NOT NULL,
+                to_type TEXT NOT NULL,
+                to_id TEXT NOT NULL,
+                relation_type TEXT NOT NULL,
+                role TEXT NOT NULL,
+                label TEXT,
+                created_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        let data = json!({
+            "id": "el1", "user_id": "u1",
+            "from_type": "event", "from_id": "ev1",
+            "to_type": "contact", "to_id": "c1",
+            "relation_type": "participated", "role": "participant",
+            "created_at": "2026-08-09T00:00:00Z"
+        });
+        // PG trigger logs TG_TABLE_NAME = `entity_links` (plural).
+        apply_change(&conn, &change_row("entity_links", "INSERT", "rel1", data), "local-default")
+            .expect("apply alias kind");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM EntityLink", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "plural pull kind must land in EntityLink");
+    }
+
+    #[test]
+    fn pull_media_applies_storage_key_and_int_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE Media (
+                id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                owner_type TEXT NOT NULL,
+                owner_id TEXT NOT NULL,
+                mime TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL DEFAULT 0,
+                sha256 TEXT,
+                filename TEXT,
+                storage_key TEXT NOT NULL DEFAULT '',
+                width INTEGER,
+                height INTEGER,
+                alt_text TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        let data = json!({
+            "id": "m1", "user_id": "u1",
+            "kind": "avatar", "owner_type": "contact", "owner_id": "c1",
+            "mime": "image/webp", "size_bytes": 1234,
+            "sha256": "abc", "filename": "a.webp",
+            "storage_key": "u1/avatar/contact/c1/a.webp",
+            "width": 100, "height": 100, "alt_text": null,
+            "created_at": "2026-08-09T00:00:00Z",
+            "updated_at": "2026-08-09T00:00:00Z"
+        });
+        apply_change(&conn, &change_row("media", "INSERT", "m1", data), "local-default")
+            .expect("apply media");
+        let (storage_key, width, height, size): (String, Option<i64>, Option<i64>, i64) = conn
+            .query_row(
+                "SELECT storage_key, width, height, size_bytes FROM Media WHERE id='m1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .expect("query");
+        assert_eq!(storage_key, "u1/avatar/contact/c1/a.webp");
+        assert_eq!(width, Some(100));
+        assert_eq!(height, Some(100));
+        assert_eq!(size, 1234);
     }
 }

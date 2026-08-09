@@ -88,7 +88,19 @@ pub fn kind_to_sqlite_table(kind: &str) -> Option<&'static str> {
         "project_contact" => Some("ProjectContact"),
         "media" => Some("Media"),
         "entity_link" => Some("EntityLink"),
+        // PG table is plural `entity_links`; triggers log TG_TABLE_NAME,
+        // so pull deliveries arrive as the plural form.
+        "entity_links" => Some("EntityLink"),
         _ => None,
+    }
+}
+
+/// Normalize a wire kind (e.g. the plural PG table name `entity_links`
+/// from a pull delivery) into the canonical sync kind (`entity_link`).
+pub fn canonical_kind(kind: &str) -> &str {
+    match kind {
+        "entity_links" => "entity_link",
+        other => other,
     }
 }
 
@@ -153,7 +165,7 @@ pub fn push_columns(kind: &str) -> &'static [&'static str] {
         "project" => &["id","user_id","title","description","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at"],
         "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","created_at"],
         "setting" => &["id","user_id","key","value","updated_at"],
-        "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","created_at","updated_at"],
+        "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","storage_key","width","height","alt_text","created_at","updated_at"],
         "contact_tag" => &["user_id","contact_id","tag_id"],
         "project_contact" => &["user_id","project_id","contact_id","role","added_at"],
         "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","label","created_at"],

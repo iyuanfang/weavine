@@ -12,7 +12,7 @@ use std::sync::Arc;
 use super::auth::extract_auth;
 use super::now_str;
 
-const UPDATED_AT_TABLES: &[&str] = &["contact", "project", "event", "action", "setting"];
+const UPDATED_AT_TABLES: &[&str] = &["contact", "project", "event", "action", "setting", "media"];
 
 /// Postgres errors that should become 200 + `conflicts` instead of 500.
 fn is_data_conflict_error(msg: &str) -> bool {
@@ -155,6 +155,8 @@ pub async fn push(
             "setting" => "setting",
             "contact_tag" => "contact_tag",
             "project_contact" => "project_contact",
+            "entity_link" => "entity_links",
+            "media" => "media",
             _ => {
                 conflicts.push(Conflict {
                     kind: entity.kind.clone(),
