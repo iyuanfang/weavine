@@ -6,13 +6,13 @@ import { PageHeader } from '../components/PageHeader';
 import { TagPicker } from '../components/TagPicker';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import {
+  DEFAULT_IMPORTANCE,
+  IMPORTANCE_OPTIONS,
+  normalizeImportance,
+  type Importance,
+} from '../lib/contact-importance';
 import type { UpdateContactInput } from '../lib/adapter/types';
-
-const IMPORTANCE_OPTIONS = [
-  { value: 'high', label: '🔴 高' },
-  { value: 'medium', label: '🟡 中' },
-  { value: 'low', label: '⚪ 低' },
-] as const;
 
 export function ContactEdit() {
   const { id } = useParams() as { id: string };
@@ -35,7 +35,7 @@ export function ContactEdit() {
   const [phone, setPhone] = useState('');
   const [wechat, setWechat] = useState('');
   const [notes, setNotes] = useState('');
-  const [importance, setImportance] = useState('medium');
+  const [importance, setImportance] = useState<Importance>(DEFAULT_IMPORTANCE);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
@@ -51,7 +51,7 @@ export function ContactEdit() {
       setPhone(c.phone ?? '');
       setWechat(c.wechat ?? '');
       setNotes(c.notes ?? '');
-      setImportance(c.importance ?? 'medium');
+      setImportance(normalizeImportance(c.importance));
       setSelectedTagIds(c.tags.map((t) => t.id));
       setHydrated(true);
     }
@@ -202,7 +202,7 @@ export function ContactEdit() {
                     className="input-base"
                     style={{ cursor: 'pointer' }}
                     value={importance}
-                    onChange={(e) => setImportance(e.target.value)}
+                    onChange={(e) => setImportance(e.target.value as Importance)}
                   >
                     {IMPORTANCE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>

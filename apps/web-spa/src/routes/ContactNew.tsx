@@ -6,15 +6,12 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { TagPicker } from '../components/TagPicker';
 import { CardScanner, type ScannedFields } from '../components/CardScanner';
+import {
+  DEFAULT_IMPORTANCE,
+  IMPORTANCE_OPTIONS,
+  type Importance,
+} from '../lib/contact-importance';
 import type { CreateContactInput } from '../lib/adapter/types';
-
-// ── Constants ───────────────────────────────────────
-
-const IMPORTANCE_OPTIONS = [
-  { value: 'high', label: '高' },
-  { value: 'medium', label: '中' },
-  { value: 'low', label: '低' },
-] as const;
 
 // ── Page ────────────────────────────────────────────
 
@@ -33,7 +30,7 @@ export function ContactNew() {
   const [phone, setPhone] = useState('');
   const [wechat, setWechat] = useState('');
   const [notes, setNotes] = useState('');
-  const [importance, setImportance] = useState<string>('medium');
+  const [importance, setImportance] = useState<Importance>(DEFAULT_IMPORTANCE);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const createMutation = useMutation({
@@ -196,7 +193,7 @@ export function ContactNew() {
                     className="input-base"
                     style={{ cursor: 'pointer' }}
                     value={importance}
-                    onChange={(e) => setImportance(e.target.value)}
+                    onChange={(e) => setImportance(e.target.value as Importance)}
                   >
                     {IMPORTANCE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
