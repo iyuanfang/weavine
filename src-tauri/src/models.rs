@@ -39,8 +39,6 @@ pub struct Contact {
     pub wechat: Option<String>,
     pub notes: Option<String>,
     pub importance: String,
-    pub reminder_enabled: bool,
-    pub reminder_interval_days: Option<i64>,
     pub last_contacted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,

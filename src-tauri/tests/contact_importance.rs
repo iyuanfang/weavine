@@ -132,3 +132,25 @@ fn contact_importance_check_constraint_rejects_invalid() {
         "fresh-DB CHECK constraint should reject invalid importance value"
     );
 }
+#[test]
+fn business_create_contact_default_importance_is_low() {
+    let conn = setup();
+    seed_user(&conn);
+    let input = weavine_lib::models::CreateContactInput {
+        user_id: "u1".into(),
+        nickname: "Alice".into(),
+        name: Some("Alice".into()),
+        company: None,
+        title: None,
+        city: None,
+        email: None,
+        phone: None,
+        wechat: None,
+        notes: None,
+        importance: None,
+        tag_ids: None,
+    };
+
+    let created = weavine_lib::business::contact::create(&conn, &input).expect("create");
+    assert_eq!(created.importance, "low", "default importance must be 'low'");
+}

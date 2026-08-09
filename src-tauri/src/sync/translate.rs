@@ -110,7 +110,7 @@ pub fn canonical_kind(kind: &str) -> &str {
 /// `invalid input syntax for type boolean: "1"`.
 pub fn boolean_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["reminder_enabled"],
+        "contact" => &[] as &[&str],
         "reminder" => &["dispatched", "dismissed"],
         "event" => &["reminder_enabled"],
         _ => &[],
@@ -124,7 +124,7 @@ pub fn boolean_columns(kind: &str) -> &'static [&'static str] {
 /// `invalid input syntax for type integer: "1"`.
 pub fn integer_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["reminder_interval_days"],
+        "contact" => &[] as &[&str],
         "action" => &["priority"],
         "reminder" => &["reminder_lead_minutes"],
         "event" => &["reminder_lead_minutes"],
@@ -138,7 +138,7 @@ pub fn integer_columns(kind: &str) -> &'static [&'static str] {
 /// `invalid input syntax for type integer: ""`.
 pub fn nullable_integer_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["reminder_interval_days"],
+        "contact" => &[] as &[&str],
         "reminder" => &["reminder_lead_minutes"],
         "event" => &["reminder_lead_minutes"],
         _ => &[],
@@ -157,7 +157,7 @@ pub fn default_zero_integer_columns(kind: &str) -> &'static [&'static str] {
 
 pub fn push_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["id","user_id","nickname","name","company","title","city","email","phone","wechat","notes","importance","reminder_enabled","reminder_interval_days","last_contacted_at","created_at","updated_at"],
+        "contact" => &["id","user_id","nickname","name","company","title","city","email","phone","wechat","notes","importance","last_contacted_at","created_at","updated_at"],
         "tag" => &["id","user_id","name","color","created_at"],
         "event" => &["id","user_id","title","event_type","start_at","end_at","location","notes","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at"],
         "action" => &["id","user_id","title","description","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at"],

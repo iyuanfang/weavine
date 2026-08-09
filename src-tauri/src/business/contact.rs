@@ -16,16 +16,14 @@ pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
         wechat: row.get(9)?,
         notes: row.get(10)?,
         importance: row.get(11)?,
-        reminder_enabled: row.get::<_, i64>(12)? != 0,
-        reminder_interval_days: row.get(13)?,
-        last_contacted_at: row.get(14)?,
-        created_at: row.get(15)?,
-        updated_at: row.get(16)?,
-        avatar_storage_key: row.get(17).ok(),
-        avatar_mime: row.get(18).ok(),
-        avatar_width: row.get(19).ok(),
-        avatar_height: row.get(20).ok(),
-        avatar_alt_text: row.get(21).ok(),
+        last_contacted_at: row.get(12)?,
+        created_at: row.get(13)?,
+        updated_at: row.get(14)?,
+        avatar_storage_key: row.get(15).ok(),
+        avatar_mime: row.get(16).ok(),
+        avatar_width: row.get(17).ok(),
+        avatar_height: row.get(18).ok(),
+        avatar_alt_text: row.get(19).ok(),
         tags: Vec::new(),
     })
 }
@@ -183,16 +181,16 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
     let now = chrono::Utc::now()
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
-    let importance = input.importance.clone().unwrap_or_else(|| "normal".to_string());
+    let importance = input.importance.clone().unwrap_or_else(|| "low".to_string());
 
     conn.execute(
         "INSERT INTO Contact \
          (id, user_id, nickname, name, company, title, city, \
-          email, phone, wechat, notes, importance, reminder_enabled, \
-          reminder_interval_days, last_contacted_at, created_at, updated_at) \
+          email, phone, wechat, notes, importance, \
+          last_contacted_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
-                 ?8, ?9, ?10, ?11, ?12, ?13, \
-                 ?14, ?15, ?16, ?17)",
+                 ?8, ?9, ?10, ?11, ?12, \
+                 ?13, ?14, ?15)",
         rusqlite::params![
             &id,
             &input.user_id,
@@ -206,8 +204,6 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
             &input.wechat,
             &input.notes,
             &importance,
-            &1i64,
-            None::<String>,
             None::<String>,
             &now,
             &now,
@@ -380,7 +376,7 @@ mod tests {
                 "local-default",
                 nickname,
                 nickname,
-                "normal",
+                "low",
                 last_contacted_at,
                 created_at,
                 updated_at,
