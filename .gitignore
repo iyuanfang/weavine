@@ -44,3 +44,6 @@ tauri-dist/
 .weavine-logo-*.png
 target/
 jwt-*.pem
+
+# Runtime media uploads (per-user directories)
+.media/
