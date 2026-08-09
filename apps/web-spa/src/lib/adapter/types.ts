@@ -48,8 +48,6 @@ export interface Contact {
   wechat: string | null;
   notes: string | null;
   importance: string;
-  reminder_enabled: boolean;
-  reminder_interval_days: number | null;
   last_contacted_at: string | null;
   created_at: string;
   updated_at: string;
