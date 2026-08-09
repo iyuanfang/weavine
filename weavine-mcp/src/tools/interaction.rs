@@ -38,7 +38,7 @@ pub struct InteractionId {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Default)]
 #[schemars(description = "Body for creating a new interaction.")]
 pub struct CreateInteractionBody {
-    #[schemars(description = "Contact UUID. If set, updates the contact's last_contacted_at.")]
+    #[schemars(description = "Contact UUID. If set, updates the contact's last_interaction_at.")]
     #[serde(default)]
     pub contact_id: Option<String>,
 

@@ -30,7 +30,7 @@ pub struct ListContactsQuery {
     #[serde(default)]
     pub offset: Option<u32>,
 
-    #[schemars(description = "Sort order. Values: last_contacted_at, created_at, nickname.")]
+    #[schemars(description = "Sort order. Values: last_interaction_at, created_at, nickname.")]
     #[serde(default)]
     pub sort: Option<String>,
 }
