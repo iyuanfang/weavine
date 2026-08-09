@@ -39,7 +39,7 @@ pub struct Contact {
     pub wechat: Option<String>,
     pub notes: Option<String>,
     pub importance: String,
-    pub last_contacted_at: Option<String>,
+    pub last_interaction_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     #[cfg_attr(feature = "sqlx", sqlx(skip))]
@@ -201,6 +201,68 @@ pub struct ProjectContactWithContact {
     pub added_at: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReminderKind {
+    Time,
+    Cadence,
+}
+
+impl Default for ReminderKind {
+    fn default() -> Self {
+        Self::Time
+    }
+}
+
+impl std::fmt::Display for ReminderKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Time => write!(f, "time"),
+            Self::Cadence => write!(f, "cadence"),
+        }
+    }
+}
+
+impl std::str::FromStr for ReminderKind {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "time" => Ok(Self::Time),
+            "cadence" => Ok(Self::Cadence),
+            _ => Err(format!("invalid ReminderKind: {s}")),
+        }
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl sqlx::Type<sqlx::Postgres> for ReminderKind {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        <&str as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+        <&str as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl sqlx::Encode<'_, sqlx::Postgres> for ReminderKind {
+    fn encode_by_ref(
+        &self,
+        buf: &mut sqlx::postgres::PgArgumentBuffer,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        let s = self.to_string();
+        <&str as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&s.as_str(), buf)
+    }
+}
+
+#[cfg(feature = "sqlx")]
+impl sqlx::Decode<'_, sqlx::Postgres> for ReminderKind {
+    fn decode(value: sqlx::postgres::PgValueRef<'_>) -> Result<Self, sqlx::error::BoxDynError> {
+        let s = <&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        s.parse().map_err(|e: String| -> sqlx::error::BoxDynError { e.into() })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
 pub struct Reminder {
@@ -209,9 +271,10 @@ pub struct Reminder {
     pub contact_id: Option<String>,
     pub event_id: Option<String>,
     pub trigger_at: String,
-    pub kind: String,
+    pub kind: ReminderKind,
     pub dispatched: bool,
     pub dismissed: bool,
+    pub invitation_token: Option<String>,
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub contact_nickname: Option<String>,
@@ -246,12 +309,12 @@ pub struct ListContactsParams {
 }
 
 pub const CONTACT_SORT_WHITELIST: &[(&str, &str)] = &[
-    ("last_contacted_at", "last_contacted_at DESC NULLS LAST, created_at DESC, id ASC"),
-    ("created_at",       "created_at DESC, id ASC"),
-    ("nickname",         "nickname COLLATE NOCASE ASC, id ASC"),
+    ("last_interaction_at", "last_interaction_at DESC NULLS LAST, created_at DESC, id ASC"),
+    ("created_at",         "created_at DESC, id ASC"),
+    ("nickname",           "nickname COLLATE NOCASE ASC, id ASC"),
 ];
 
-pub const DEFAULT_CONTACT_SORT: &str = "last_contacted_at";
+pub const DEFAULT_CONTACT_SORT: &str = "last_interaction_at";
 pub const DEFAULT_CONTACT_LIMIT: i64 = 20;
 pub const MAX_CONTACT_LIMIT: i64 = 200;
 
@@ -442,7 +505,8 @@ pub struct CreateReminderInput {
     pub contact_id: Option<String>,
     pub event_id: Option<String>,
     pub trigger_at: String,
-    pub kind: Option<String>,
+    pub kind: Option<ReminderKind>,
+    pub invitation_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -450,7 +514,7 @@ pub struct UpdateReminderInput {
     #[serde(default)]
     pub id: String,
     pub trigger_at: Option<String>,
-    pub kind: Option<String>,
+    pub kind: Option<ReminderKind>,
     pub dispatched: Option<bool>,
     pub dismissed: Option<bool>,
 }
