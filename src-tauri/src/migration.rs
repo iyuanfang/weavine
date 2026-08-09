@@ -64,9 +64,7 @@ CREATE TABLE IF NOT EXISTS "Contact" (
     "phone" TEXT,
     "wechat" TEXT,
     "notes" TEXT,
-    "importance" TEXT NOT NULL DEFAULT 'normal',
-    "reminder_enabled" INTEGER NOT NULL DEFAULT 1,
-    "reminder_interval_days" INTEGER,
+    "importance" TEXT NOT NULL DEFAULT 'low' CHECK("importance" IN ('low', 'medium', 'high')),
     "last_contacted_at" DATETIME,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL
@@ -233,7 +231,6 @@ CREATE INDEX IF NOT EXISTS "Contact_user_id_name_idx" ON "Contact"("user_id", "n
 CREATE INDEX IF NOT EXISTS "Contact_user_id_company_idx" ON "Contact"("user_id", "company");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_city_idx" ON "Contact"("user_id", "city");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_importance_idx" ON "Contact"("user_id", "importance");
-CREATE INDEX IF NOT EXISTS "Contact_user_id_reminder_enabled_last_contacted_at_idx" ON "Contact"("user_id", "reminder_enabled", "last_contacted_at");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_last_contacted_at_updated_at_idx" ON "Contact"("user_id", "last_contacted_at", "updated_at");
 CREATE UNIQUE INDEX IF NOT EXISTS "Contact_user_id_email_key" ON "Contact"("user_id", "email");
 CREATE UNIQUE INDEX IF NOT EXISTS "Tag_user_id_name_key" ON "Tag"("user_id", "name");
@@ -543,6 +540,45 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
     if !entity_link_label_exists {
         conn.execute("ALTER TABLE \"EntityLink\" ADD COLUMN \"label\" TEXT", [])?;
     }
+
+    // ── Phase 2.4 contact-importance cleanup ────────────────────
+    // SQLite cannot ALTER TABLE ADD CONSTRAINT, so the CHECK(importance IN ...)
+    // guard from SCHEMA_SQL only applies to fresh DBs. Existing DBs rely on
+    // business::contact validation to reject invalid importance values.
+    let drop_reminder_cols = [
+        ("Contact", "reminder_enabled"),
+        ("Contact", "reminder_interval_days"),
+    ];
+    for (table, col) in drop_reminder_cols {
+        let present: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
+            rusqlite::params![table, col],
+            |r| r.get(0),
+        )?;
+        if present > 0 {
+            conn.execute(
+                &format!("ALTER TABLE \"{table}\" DROP COLUMN \"{col}\""),
+                [],
+            )?;
+        }
+    }
+
+    let legacy_idx_present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='Contact_user_id_reminder_enabled_last_contacted_at_idx'",
+        [],
+        |r| r.get(0),
+    )?;
+    if legacy_idx_present > 0 {
+        conn.execute(
+            "DROP INDEX \"Contact_user_id_reminder_enabled_last_contacted_at_idx\"",
+            [],
+        )?;
+    }
+
+    conn.execute(
+        "UPDATE \"Contact\" SET \"importance\" = 'medium' WHERE \"importance\" = 'normal'",
+        [],
+    )?;
 
     Ok(())
 }
