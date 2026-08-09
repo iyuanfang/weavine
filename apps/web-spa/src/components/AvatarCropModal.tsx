@@ -13,18 +13,31 @@ const OUTPUT_QUALITY = 0.85;
 export function AvatarCropModal({ file, onCancel, onConfirm }: AvatarCropModalProps) {
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [boxSize] = useState(280);
   const [crop, setCrop] = useState({ x: 0.5, y: 0.5 });
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragging = useRef(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const previewImgRef = useRef<HTMLImageElement | null>(null);
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
     setImgUrl(url);
     const probe = new Image();
-    probe.onload = () => setImgSize({ w: probe.naturalWidth, h: probe.naturalHeight });
+    probe.onload = () => {
+      setImgSize({ w: probe.naturalWidth, h: probe.naturalHeight });
+      imgRef.current = probe; // cache loaded image for confirm()
+    };
+    probe.onerror = () => {
+      setLoadError('图片无法解码，请换一张 JPG/PNG/WebP 图片');
+    };
     probe.src = url;
-    return () => URL.revokeObjectURL(url);
+    // Intentionally NOT revoking the blob URL here. React's cleanup runs
+    // before DOM removal, so the <img> is still in the DOM with src=blob:…
+    // The browser would log ERR_FILE_NOT_FOUND. One blob URL per modal
+    // session is negligible — it's auto-cleaned on page close.
+    return () => { /* noop */ };
   }, [file]);
 
   useEffect(() => {
@@ -47,7 +60,23 @@ export function AvatarCropModal({ file, onCancel, onConfirm }: AvatarCropModalPr
   if (!imgUrl || !imgSize) {
     return (
       <div className="modal-backdrop" data-testid="avatar-crop-modal">
-        <div className="modal">加载中…</div>
+        <div className="modal">
+          {loadError ? (
+            <div style={{ padding: 24, maxWidth: 420 }}>
+              <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>调整头像</h2>
+              <p style={{ margin: '0 0 16px', color: 'var(--text-muted)', fontSize: 13 }}>
+                {loadError}
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button type="button" className="button-secondary" onClick={onCancel}>
+                  关闭
+                </button>
+              </div>
+            </div>
+          ) : (
+            '加载中…'
+          )}
+        </div>
       </div>
     );
   }
@@ -61,6 +90,8 @@ export function AvatarCropModal({ file, onCancel, onConfirm }: AvatarCropModalPr
   const cropBox = boxSize;
 
   const confirm = async () => {
+    const img = imgRef.current;
+    if (!img || !img.complete) return;
     const scale = imgSize.w / displayW;
     const sourceSize = cropBox * scale;
     const sx = (crop.x * displayW) - cropBox / 2;
@@ -73,7 +104,7 @@ export function AvatarCropModal({ file, onCancel, onConfirm }: AvatarCropModalPr
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(await loadImage(imgUrl), safeSx, safeSy, sourceSize, sourceSize, 0, 0, TARGET_SIZE, TARGET_SIZE);
+    ctx.drawImage(img, safeSx, safeSy, sourceSize, sourceSize, 0, 0, TARGET_SIZE, TARGET_SIZE);
     const blob: Blob | null = await new Promise((res) =>
       canvas.toBlob(res, OUTPUT_MIME, OUTPUT_QUALITY),
     );
@@ -106,6 +137,7 @@ export function AvatarCropModal({ file, onCancel, onConfirm }: AvatarCropModalPr
           }}
         >
           <img
+            ref={previewImgRef}
             src={imgUrl}
             alt=""
             draggable={false}
@@ -142,11 +174,3 @@ export function AvatarCropModal({ file, onCancel, onConfirm }: AvatarCropModalPr
   );
 }
 
-async function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = () => res(img);
-    img.onerror = (e) => rej(e);
-    img.src = src;
-  });
-}

@@ -46,7 +46,7 @@ export function Avatar({ src, name, size = 40, title }: AvatarProps) {
       }}
     >
       {showImage ? (
-        <img
+        <img key={src}
           src={src ?? ''}
           alt={name}
           onError={() => setErrored(true)}
