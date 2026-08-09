@@ -1,7 +1,9 @@
-# Weavine 产品需求规格（Spec）v1.0
+# Weavine 产品蓝图（Product Blueprint / Spec）
 
-> 版本：v1.0（合并版） ｜ 整理日期：2026-08-07 ｜ 最近更新：2026-08-09（合并项目根目录实现状态复查：git HEAD `912c7d4`，#1/#3/#4/#5 已落地，§5.7 同步白名单断链已修复；中国市场原则 + #14–#20，排除每日摘要） ｜ 状态：功能已落地，仅余 P2/P3 与中国特性待排期
+> 版本：**v1.1（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-09 — 新增 §3.5「快速捕获与节奏中枢」子系统设计（合并 #13/#14/#15，跨端 Ctrl+K + Android 语音 + 节奏提醒，亲密 14 天 / 重要 45 天）** ｜ 状态：核心功能已落地；Phase 2 子系统设计中；P2/P3 与 #16–#20 待排期
+> **产品蓝图（唯一权威）**：本文档是 Weavine 的**唯一产品蓝图**。所有需求设计、状态调整、平台策略、中国特性、技术债均回写此处，不再创建独立 spec 文件。文档结构一旦建立保持稳定，后续只追加章节、不重排结构。
 > **维护约定（living spec）**：本文档为活文档。每次需求变动须回写本节并更新上方「最近更新」日期；对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下，与 spec 编号（#1–#20）一一对应，便于持续跟踪。
+> **拍板溯源**：§3.5 子系统设计的所有关键决策（解析引擎选型、节奏模型、范围、Android 验证方式）来源于 2026-08-09 brainstorming 会话，详见各小节顶部加粗的「拍板结论」标注。
 > 合并来源：
 >
 > - 《Weavine 产品优化需求文档》（2026-08-06，产品规划视角，12 项需求 + 优先级）
@@ -175,18 +177,13 @@ relation_type × role 枚举:
 - 支持上传 + 首字母/色块兜底；移动端可调用相机。
   **依赖**：无（#4 强烈建议先有）。**验收**：可上传/更换头像；在列表与图谱节点正确显示。（已实现：Media 表 + `/api/media` 上传 + 裁剪 modal + server 持久化 + 图谱节点头像 + 首字母兜底；跨端同步已闭环 §5.7）
 
-#### ○ #13 手机端语音快速捕获（⬜ 未实现，2026-08-09 新增）
+#### ○ #13 手机端语音快速捕获（🟡 设计已批准 → 实施中，详见 §3.5）
 
 **目标/价值**：手机端旗舰交互——"说句话即建日程/联系人"，把关系捕获成本降到最低，是 local-first 与 #10 端上小模型哲学的落地点。**无需云端大模型，全链路端上闭环**。
 
-- 端上 ASR（iOS/Android 自带离线识别）将语音转文字。
-- **轻量解析层**（规则 + 中文时间库 + 本地联系人模糊匹配，或 #10 端上迷你模型做意图分类）抽取 `时间 / 参与者 / 标题`，**不调用云端 LLM**。
-- 结构化结果直接落本地 SQLite（零延迟、离线、零 token 成本、隐私不出端）。
-- 后台静默增量同步到 server（依赖 §5.7 同步闭环 + F2）。
-- 不限于日程：可扩展为"说句话建联系人/记一笔互动"。
-  **依赖**：#10（端上小模型，可降级为规则）、#3（事件多人，用于解析出的参与者）、§5.7 同步闭环（否则数据困在手机）。
-  **验收**：离线说"明天下午3点和KK林开会"→ 自动建事件（时间+参与者KK林）；全程无云端大模型调用；创建后可在其他端同步可见。
-  **优先级理由**：用户确认重要——它是手机端主形态最具差异化的捕获方式，直接强化 §10 的"本地捕获 + 云端智能"混合定位。
+**状态**：2026-08-09 brainstorm 已批准子系统设计（合并 #13/#14/#15 → 快速捕获与节奏中枢），进入实施。**详见 §3.5**。
+
+**简短依赖**：#10（端上小模型，可降级为规则）、#3（事件多人）、§5.7 同步闭环；新增数据列 `contact.last_interaction_at` + `ReminderKind::Cadence` 枚举。
 
 ---
 
@@ -215,6 +212,265 @@ relation_type × role 枚举:
 | △ #8  | 提醒声音           | 提醒铃声/声音设置与实现（开关、音效选择），已实现：settings 内 default/chime/bell/silent | 无   |
 | △ #10 | 移动端接入本地小模型 MCP | 手机版连本地端侧迷你小模型 MCP           | #12 |
 | △ #2  | 从合影获得独立头像      | 合照识别裁剪单人头像（**隐私坑**：合照其他人授权） | #1  |
+
+---
+
+## 3.5 快速捕获与节奏中枢子系统（Quick Capture & Cadence Hub）— 合并 #13/#14/#15
+
+> **拍板结论（2026-08-09 brainstorming）**：本地轻量解析优先 + 可选大模型边界最终定为「**纯本地确定，LLM 不上线**」（留给 #18/#20 后续）；节奏模型 = 按重要度档（亲密 14 天 / 重要 45 天，普通不提醒）；范围 = Web + Desktop + Android 全量 + 桌面麦克风；Android 验证方式 = APK + 本地模拟器。
+
+**一句话定位**：让用户在 5 秒内把一个想法 / 待办 / 互动 / 日程，通过键盘或语音，落到对的人身上，系统按关系重要性自动提醒"该联系谁了"。
+
+**范围（已确认）**：
+
+- ✅ Web（5181）+ Desktop（Tauri macOS/Windows/Linux）+ Android（Tauri APK，模拟器验证）
+- ✅ Ctrl+K 全局面板（Web/Desktop），Android 用浮动 FAB
+- ✅ **语音输入**：Desktop（macOS/Windows）+ Web 走 Web Speech API；**Android 走 Tauri 原生 plugin**（`tauri-plugin-android-speechrecognition`，D3 拍板）
+- ✅ 一句话创建：**日程 / 待办 / 互动**（三件事）
+- ✅ 本地确定性解析（规则 + chrono + 联系人模糊匹配）
+- ✅ #14 节奏提醒：**亲密 14 天 / 重要 45 天，普通不提醒**；**owner = 端上 first-party + Server**(为 Web) + invitation token 去重(B2 拍板)
+
+### 3.5.1 架构（单子系统、跨端复用）
+
+```
+┌─────────────────────────────────────────────────────┐
+│  UI 层                                              │
+│  Web:   <QuickCapture/>  React + 全局快捷键 hook    │
+│  Desk:  同上, Tauri globalShortcut (系统级 Ctrl+K)   │
+│  Andr:  浮动 FAB + Web Speech API                   │
+└─────────────────────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  解析层 (Rust, 共享)                                 │
+│  weavine_lib::quick::parse(text) → QuickItem       │
+│   - chrono 解析时间                                  │
+│   - 字串匹配联系人 (已有索引 + 模糊)                   │
+│   - 关键词分类 (日程/待办/互动)                        │
+│   - 置信度评分 + 缺失字段标记                         │
+└─────────────────────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────┐
+│  写入层                                             │
+│  Desktop/Tauri: business::event/action/interaction │
+│  Web:            POST /api/events/actions/inter... │
+│  共用同一个 adapter（已有的 sync/translate 路径）      │
+└─────────────────────────────────────────────────────┘
+
+#14 节奏（独立线程）:
+┌─────────────────────────────────────────────────────┐
+│  Cadence Tick (每天 0:00 + 每小时检查)              │
+│   - 查 contact.importance + last_interaction_at    │
+│   - 满足阈值 → 创建 reminder (kind = Cadence)       │
+│   - 复用已有 reminder 系统 (同步/通知/音效)           │
+└─────────────────────────────────────────────────────┘
+```
+
+### 3.5.2 数据模型变更
+
+**Contact 表新增 1 列**（`weavine_lib::models::Contact`）：
+
+```rust
+pub last_interaction_at: Option<String>,  // ISO8601, nullable
+```
+
+**Contact.importance 统一**（**2026-08-09 清理·拍板 ✅**）：
+
+| 档位 | 字符串 | 节奏阈值 | 默认 |
+|------|--------|----------|------|
+| 高 | `high` | 14 天 | — |
+| 中 | `medium` | 45 天 | — |
+| 低 | `low` | 不提醒 | ✅ 默认 |
+
+- **三档语义固定**（`low`/`medium`/`high`），UI 选项与 schema 一致；**默认值改为 `low`**。
+- **历史 `normal` 数据迁移**为 `medium`（数据迁移 + 业务层兼容）。
+- **DB / 业务层 / server handler 默认值统一为 `low`**。Server handler 之前在 JSON 缺 `importance` 时硬塞 `'medium'` 的 bug **修复为跟随 DB 默认 `low`**，避免数据漂移。
+- **删 `ContactsList.tsx:67` 的 `'normal'` 过滤常量**（与 UI 三档不一致的死代码）。
+- **Onboarding 强制提示**用户给首批联系人打 importance 标签——避免"节奏提醒从未触发"的体验问题（低档默认 = 不提醒）。
+
+**删除死字段 `reminder_enabled` 与 `reminder_interval_days`**（**2026-08-09 拍板 ✅**）：
+
+- 调研结论：业务层 0 处使用、UI 0 处读写、SQL 0 处引用；只在 `cloud_sync.rs:239/244` 测试断言里出现。
+- 真正的"自动提醒"从未实现，被本节 §3.5 的 Cadence 中枢取代，**删除安全**。
+- **影响范围**：双栈 schema + business + sync + handler + types + 2 处测试断言（需改为不依赖已删除字段）。
+- 无用户可见行为变化。
+
+**Interaction 触发器**：在 `business::interaction::create()` 之后，附加 `UPDATE contact SET last_interaction_at = ?1 WHERE id = ?2`（`?1 = interaction.occurred_at`，**不是 `NOW()`**）。补记互动时（"上周和 KK 林吃饭"），`last_interaction_at` 必须回到当时而非今天，否则 cadence 阈值被无意义刷新、节奏语义失真。**同一事务内**，保证 cadence 计算一致。
+
+**Reminder 复用**，加 1 个枚举变体：
+
+```rust
+pub enum ReminderKind { Time, Cadence }
+```
+
+- `Time` = 已有（用户手设的）
+- `Cadence` = 系统自动生成（#14）
+
+`Importance` 枚举重写（`weavine_lib::models::Importance`）：
+
+```rust
+pub enum Importance { Low, Medium, High }
+// 序列化：Low -> "low", Medium -> "medium", High -> "high"
+// 与 SQLite/PG TEXT 列直接兼容；不允许其它字符串。
+```
+
+### 3.5.3 本地解析规则（确定性，无 LLM）
+
+```rust
+// weavine_lib::quick
+pub fn parse(input: &str, contacts: &[Contact]) -> QuickItem {
+    let now = Local::now();
+    let (kind, kind_score) = classify_kind(input);     // 关键词表
+    let due = chrono_parse(input, now);                // chrono 中文 + 英文
+    let contact = match_contact(input, contacts);      // 子串 + 别名 + 拼音简写
+    let confidence = compute_confidence(due, contact, kind_score);
+    QuickItem { kind, due, contact_id, summary, raw: input, confidence }
+}
+
+fn classify_kind(s: &str) -> (Kind, f32) {
+    if contains_any(s, &["开会","见","约","meeting","meet"]) -> (Event, 0.9)
+    else if contains_any(s, &["待办","记得","要","todo"]) -> (Action, 0.9)
+    else if contains_any(s, &["吃饭","通话","聊","call","dinner"]) -> (Interaction, 0.85)
+    else -> (Action, 0.6)  // 默认待办
+}
+```
+
+**规则覆盖**（Chinese + English）：
+
+- **时间**：chrono 中文支持 + 英文（"tomorrow", "next monday", "下周三", "下个月15号"）
+- **联系人**：已存联系人的姓名 / 别名 / 拼音简写 / 手机号尾号
+- **关键词**：手维护 kind 关键词表（各 20+ 词），后续按误判反馈调整
+
+**解析失败的兜底**：永远创建一个 Action（待办），raw 文本作为 summary，联系人/时间字段为 null，UI 显示"未识别时间 / 未匹配联系人，点击补全"。
+
+### 3.5.4 UI 设计
+
+**Web/Desktop**（共用 React 组件）：
+
+- Ctrl+K 触发（Desktop 走 `tauri-plugin-global-shortcut` 注册系统级快捷键，Web 走 `useEffect` 监听 keydown）
+- 三个 Tab（Tab 键切换）：日程 / 待办 / 互动
+- 输入框 + **实时解析预览**（下方 1 行显示 `→ 周三 14:00，联系人: 李雷`）
+- 联系人下拉（实时匹配）
+- `Enter` 创建，`Esc` 关闭
+
+**Android**（浮动 FAB）：
+
+- 全屏面板（同上），底部多一个麦克风按钮
+- **长按麦克风** → 录音 → 转文字（**Tauri 原生 plugin**：`tauri-plugin-android-speechrecognition` + `android.permission.RECORD_AUDIO` + `SpeechRecognizer.createSpeechRecognizer`；非 Web Speech API，因 Android WebView 不支持）→ 自动填入输入框
+
+### 3.5.5 #14 节奏触发
+
+**拍板**：高(亲密)= 14 天，中(重要)= 45 天，低(普通)= 不提醒。**owner = 端上 first-party（B2）** —— 桌面/Android 各自 SQLite 算本地、Server 算为 Web。同一 `CadenceEngine` trait 抽象，两套实现（sqlx::PgPool + rusqlite::Connection）。
+
+```rust
+// weavine_lib::cadence (新模块,共享 trait + 数据结构)
+// src-tauri/src/business/cadence.rs (桌面/Android: rusqlite 实现)
+// server/src/handlers/cadence.rs (Server: sqlx 实现)
+
+pub trait CadenceEngine {
+    fn stale_contacts(&self, importance: Importance, cutoff: DateTime<Utc>) -> Result<Vec<Contact>>;
+    fn existing_cadence_reminder(&self, contact_id: &str) -> Result<Option<Reminder>>;
+    fn create_cadence_reminder(&self, contact_id: &str, now: DateTime<Utc>, invitation_token: &str) -> Result<Reminder>;
+}
+
+// Desktop/Android 用 rusqlite::Connection 实现
+pub struct LocalCadenceEngine<'a> { pub conn: &'a rusqlite::Connection }
+
+// Server 用 sqlx::PgPool 实现
+pub struct ServerCadenceEngine<'a> { pub pool: &'a sqlx::PgPool }
+
+const CADENCE_THRESHOLDS: &[(Importance, i64)] = &[
+    (Importance::High, 14),    // 高(亲密)
+    (Importance::Medium, 45),  // 中(重要)
+];
+// Importance::Low 不在循环中 — 显式不提醒（避免淹没）；低档为新建联系人默认。
+
+pub async fn tick_cadence<E: CadenceEngine>(now: DateTime<Utc>, engine: &E) -> Result<()> {
+    for (importance, days) in CADENCE_THRESHOLDS {
+        let cutoff = now - Duration::days(*days);
+        for c in engine.stale_contacts(*importance, cutoff)? {
+            if engine.existing_cadence_reminder(&c.id)?.is_some() { continue; }
+            // invitation_token = "{user_id}:{contact_id}:{threshold_day}"(确定性生成,跨端等价)
+            let token = format!("{}:{}:{}", c.user_id, c.id, days);
+            engine.create_cadence_reminder(&c.id, now, &token)?;
+        }
+    }
+    Ok(())
+}
+```
+
+**调度**：
+
+- **Desktop**：启动时启动 tokio task，每 1 小时跑一次（rusqlite 实现）
+- **Android**：同 Desktop（Tauri Android runtime，rusqlite 连接本地 SQLite）
+- **Server**：cron job，每 1 小时跑一次（sqlx 实现）—— 为 Web 端计算
+
+**取消 / 暂停规则**：
+
+- 用户在联系人详情页点 [知道了] → 删除该 cadence reminder + 7 天内不重弹
+- 用户在联系人详情页设置"暂停提醒 N 天" → 跳过
+
+### 3.5.6 多端同步策略
+
+走已有的 sync 通道：
+
+- 新增 sync kind: `cadence_reminder`（沿用 reminder 表，通过 `ReminderKind` 区分）
+- `contact.last_interaction_at` 列同步（已有 contact sync 路径，只需更新 `push_columns`）
+- reminder sync 已实现 ✅（#12 已闭环）
+
+**B2 跨端去重 —— invitation token 协议**：
+
+```
+invitation_token = "{user_id}:{contact_id}:{threshold_day}"  // 确定性生成
+```
+
+- **桌面/Android 各自算**：用户 A 在桌面 A1 计算 cadence → 创建 reminder，token = `A:contact-123:14`
+- **桌面 A2 同步拉到这条 reminder**：reminder 的 `invitation_token` 跨端等价
+- **桌面 A2 自己也跑 cadence**：看到 `existing_cadence_reminder` 已存在（token 命中）→ 跳过
+- **Server 为 Web 算**：同样基于 token 幂等性 → 不会产生重复 reminder
+
+**Reminders 表新增 1 列**：`invitation_token TEXT NULL`（cadence 类 reminder 必填；time 类 reminder 为 NULL）。两端 reminder 通过 token 唯一性自动协调，无中心化去重服务。
+
+> invitation_token 是 B2 拍板引入的核心协议 —— 不依赖中心协调表，靠内容寻址（content addressing）天然去重。
+
+### 3.5.7 测试策略
+
+**单元测试**（`weavine_lib`）：
+
+- `quick::parse` 各场景：中/英 时间 + 联系人 + 类型，覆盖 30+ 用例
+- `cadence::tick` 边界：亲密过期 → 创建 reminder / 重要过期 → 创建 reminder / **普通档不参与(显式跳过)** / 无交互历史(close 联系人为全新 → 直接提醒) / invitation_token 幂等(同 contact 二次 tick 不创建重复 reminder)
+
+**E2E**（Playwright）：
+
+- Web Ctrl+K → 输入 → 解析预览 → 创建日程 → 验证日历显示
+- 桌面麦克风（E2E 不能测，手动验证）
+
+**Android**（模拟器）：
+
+- 启动 APK → 浮动按钮 → 文本输入 → 创建
+- 长按麦克风 → 录音（可放音频测试）→ 转文字 → 创建
+
+### 3.5.8 实施步骤（约 8 人/日）
+
+| #   | 任务                                       | 估算    | 备注                                                         |
+| --- | ---------------------------------------- | ----- | ---------------------------------------------------------- |
+| 1   | 数据模型：Contact.last_interaction_at + ReminderKind enum + migration | 0.5 d | 桌面 + server 双 migration                                    |
+| 2   | 本地解析引擎 `weavine_lib::quick` + 30+ 单测        | 1 d   | 关键词表与 chrono 中文支持                                            |
+| 3   | Web Ctrl+K 面板：React 组件 + 键盘 hook + 解析预览      | 1 d   | 与现有 SearchablePicker 复用                                    |
+| 4   | Desktop 全局快捷键：tauri-plugin-global-shortcut       | 0.5 d | 注册 Ctrl+K                                                  |
+| 5   | Android FAB + 语音：浮动按钮 + Tauri 原生 plugin         | 1 d   | `tauri-plugin-android-speechrecognition` + RECORD_AUDIO 权限 |
+| 6   | 桌面麦克风：Web Speech API（同 Android）                  | 0.5 d |                                                              |
+| 7   | #14 节奏引擎：CadenceEngine trait + 桌面/Android rusqlite 实现 + Server sqlx 实现 + invitation_token | 1.5 d | B2 拍板多套实现 + 跨端去重协议                                |
+| 8   | 跨端同步：cadence_reminder kind + contact 列同步        | 0.5 d | §5.7 修复已通，路径现成                                            |
+| 9   | E2E + 模拟器验证                                 | 1 d   | Playwright web + Android emulator APK                       |
+| 10  | Spec 文档更新（本文档对应章节）+ commit                  | 0.5 d | 本次 spec 编辑完成后即对应该项                                         |
+
+### 3.5.9 不在范围（明确）
+
+- ❌ **LLM 解析**（留 #18 / #20 后续）
+- ❌ **iOS**（本次仅 Android）
+- ❌ **全局搜索 / 命令面板扩展**（仅创建 + 跳转联系人详情）
+- ❌ **全局默认值 UI**（亲密 14 / 重要 45 硬编码，后续如要 UI 改设置再加）
+- ❌ **上架 / 应用商店**（仅 APK 本地）
 
 ---
 
@@ -281,12 +537,14 @@ relation_type × role 枚举:
 
 ## 5. 技术债与 spec/实现偏差（待排期）
 
-1. **密码哈希算法不一致**：桌面端/库用 `bcrypt 0.15`，云端用 `argon2 0.5`。本地账户链云端需重设密码。spec 应明确统一方案。
-2. **产品改名未清理**：identifier 实为 `com.weavine.desktop`，但 `PHASE1_VERIFICATION.md`、`multi-device-sync-design.md` 仍写 `com.weavine.prm`/`com.weavine.app`/keychain `com.weavine.prm.sync`。
-3. **Push 响应字段偏差**：spec 定义 `applied[]`，实现返回 `accepted[]`（handlers/sync.rs L328-332）。
-4. **tombstone / change_log 清理未实现**（spec 已 defer 到 0d）。
-5. **关联表 `id` 语义两端不对称**：SQLite 复合 PK，PG 用额外 UUID `id`（`add_junction_id` 生成），跨端依赖客户端补 id。
-6. **鉴权 RS256 设计但 `keys.rs` 可能未接入 auth**：server 用 `jsonwebtoken 0.9`，需确认运行时 HS256 还是 RS256。
+> **2026-08-09 全量复核**：除 §5.7（已修复）外，以下逐项逐代码核实，多数条目已过时或已实现，仅状态需修正。当前**无未决技术债**。
+
+1. **密码哈希算法不一致** ~~桌面端 bcrypt / 云端 argon2~~ —— **2026-08-09 已核实：无冲突**。server `register`（auth.rs L286 `bcrypt::hash`）与 `login`（L390 `bcrypt::verify`）实际使用 bcrypt；argon2 仅用于 **API key**（`api_key.rs` + `lookup_api_key`）。桌面端同用 bcrypt。无需统一，无需重设密码。（Cargo.toml 双依赖为有意设计，勿删。）
+2. **产品改名未清理** —— **2026-08-09 已清理 ✅**：identifier 实为 `com.weavine.desktop`。`PHASE1_VERIFICATION.md`、`docs/superpowers/specs/2026-07-04-multi-device-sync-design.md`（keychain `com.weavine.desktop.sync`）、`docs/superpowers/plans/2026-07-02-prm-three-platform-migration.md`、`.sisyphus/plans/2026-06-28-phase1-tauri-desktop.md` 全部更新。git grep 源码零残留（仅 `src-tauri/gen/` 构建产物含旧值，已忽略）。
+3. **Push 响应字段偏差** —— **spec 对齐实现（2026-08-09）**：实现返回 `accepted[]`（sync.rs L96 定义 / L354 返回），客户端 `mod.rs:312` 消费 `accepted`。正式契约字段名为 **`accepted[]`**，旧 spec 表述 `applied[]` 作废。
+4. **tombstone / change_log 清理** —— **2026-08-09 已实现**：`server/src/handlers/sync.rs` `prune_change_log()`（L450），`main.rs:167` 启动时调用，TTL 90 天（`CHANGE_LOG_TTL_DAYS`）。不再 defer。
+5. **关联表 `id` 语义两端不对称** —— **保留为已知设计（2026-08-09 确认）**：SQLite 复合 PK / PG 额外 UUID `id` 为有意不对称，跨端由客户端 `add_junction_id`（translate.rs L177）补 UUID 对齐。§5.7 修复后 round-trip 实测验证可用，无需改动。
+6. **鉴权 RS256 接入** —— **2026-08-09 已核实：已接入**。`server/src/auth_keys.rs` 用 `EncodingKey::from_rsa_pem`/`DecodingKey::from_rsa_pem` 从 PEM 加载，`auth.rs` `verify_access`/`issue_access_token` 均显式 `Algorithm::RS256`。运行时为 RS256，非 HS256。（注：桌面端 Tauri 进程内的 `jwt_secret()` 走 env HS256——那是本地模拟实现，与云端 RS256 不冲突。）
 7. **【2026-08-09 审计新增·P0·已修复 ✅】同步白名单遗漏 `entity_link`/`media`**：原 `server/src/handlers/sync.rs` 的 kind 白名单（L147-166）仅含 contact/tag/project/event/action/interaction/reminder/setting/contact_tag/project_contact，**不含 `entity_link` 与 `media`**——push 时服务端落入 `unknown entity kind` 分支拒绝 → 事件参与者（entity_link）与头像（media）无法跨端同步，且每轮同步稳定产生 conflict。另：PG 表名 `entity_links`（复数）与客户端 `entity_link`（单数）不一致，pull 方向同样失败。**2026-08-09 已修复并 round-trip 实测通过**：①服务端白名单补 `"entity_link" => "entity_links"`、`"media" => "media"`,UPDATED_AT_TABLES 追加 `media`;②客户端 `kind_to_sqlite_table` 加复数别名 `entity_links → EntityLink` + `canonical_kind` 归一;③`push_columns("media")` 补 `storage_key/width/height/alt_text`(此前缺列导致 not-null violation 是另一半根因);④`apply_change` 用 canonical kind 走映射;⑤实测:push entity_link/media 均 accepted,pull 返回复数 `entity_links` kind 完整闭环;⑥`cargo test -p weavine --lib` 27 passed。**P0 阻塞已解除。**
 
 ---
@@ -298,7 +556,11 @@ Phase 0  紧急止血      F1(>= → >)                    ✅ 已完成 (e0ce6a
   │
 Phase 1  地基          #3 事件多人 + 联系人间边 ✅ | #12 同步优化 F2/F3/F4/F5/F6 ✅
   │                  (本地全功能落地; 跨端同步已闭环 §5.7)
-Phase 2  护城河+可用    #4 关系图谱 ✅ + #1 头像 ✅ + #5 查找即新建 ✅ + #11 名片提取 ✅ + **#14 节奏提醒 + #15 语音记互动**
+Phase 2  护城河+可用    #4 关系图谱 ✅ + #1 头像 ✅ + #5 查找即新建 ✅ + #11 名片提取 ✅
+  │
+Phase 2.4 重要度清理     Contact.importance 3 档统一（low/medium/high 默认 low）+ 删 reminder 死字段（前置 §3.5）🟡 设计已批准 → 实施中（约 1.5 人/日，2026-08-09）
+  │
+Phase 2.5 快速捕获中枢  §3.5 子系统（#13 语音 + #14 节奏 + #15 互动扩展）🟡 设计已批准 → 实施中（约 8 人/日）
   │
 Phase 3  变现+合规      #9 云选型 + #6 onboarding/套餐   ⬜ 待做
   │
@@ -309,7 +571,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 收尾     技术债         §5 改名清理 / 密码哈希统一 / §5.7 同步白名单修复(P0) ✅ 已完成
 ```
 
-**关键路径**：`#3（事件侧）→ #4 关系图谱` 已完成；`#12 同步性能 F1–F6` 已落地；§5.7 同步白名单断链已修复（#3/#1 跨端已解锁）。中国特性需求以 **#14 节奏提醒**为 P1 抓手、**#15/#16 本地捕获**为数据积累底座（替代西方"自动流入"）。
+**关键路径**：`#3（事件侧）→ #4 关系图谱` 已完成；`#12 同步性能 F1–F6` 已落地；§5.7 同步白名单断链已修复（#3/#1 跨端已解锁）；**Phase 2.5 §3.5 子系统设计已批准（2026-08-09 brainstorm），进入实施**。中国特性需求以 **#14 节奏提醒**为 P1 抓手、**#15/#16 本地捕获**为数据积累底座（替代西方"自动流入"）。
 
 ---
 
@@ -319,16 +581,53 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 2. **#4 图谱**节点规模上限（数百 vs 数万）？是否需传递关系？
 3. **#6 套餐**角色分几类？免费/付费边界？
 4. **#9 云选型**目标市场（国内/海外）？对应合规标准？
-5. **#10 移动端**现有手机版形态？"本地小模型 MCP"的协议与承载？
+5. **#10 移动端形态** = Android Tauri APK + 本地模拟器验证（已在 §3.5 拍板）。**"端上小模型 MCP"的协议与承载仍待 #10 独立子项目确定**。
 6. **#2 合影头像**隐私授权机制如何合规？
-7. **§5 密码哈希**统一为 bcrypt 还是 argon2？跨端账户如何平滑迁移？
-8. **§5.7 同步白名单修复** —— ✅ 已于 2026-08-09 完成（服务端白名单补 entity_link/media + 客户端表名别名 + round-trip 实测），#3/#1 跨端已解锁。
+7. ~~**§5 密码哈希**统一为 bcrypt 还是 argon2？~~ —— 已于 2026-08-09 核实无冲突，bcrypt 双栈一致（argon2 仅用于 API key）。
+8. ~~**§5.7 同步白名单修复**~~ —— ✅ 已于 2026-08-09 完成（服务端白名单补 entity_link/media + 客户端表名别名 + round-trip 实测），#3/#1 跨端已解锁。
+
+### 7.1 §3.5 拍板记录（2026-08-09 brainstorming）
+
+| 决策点                | 拍板结论                                       | 拒绝的备选                                                    |
+| ------------------ | ------------------------------------------ | --------------------------------------------------------- |
+| **解析引擎**           | 纯本地确定（规则 + chrono + 联系人模糊），LLM 不上线      | 纯本地（差体验）/ 云端优先（贵）/ 混合并行（复杂度高）                              |
+| **节奏模型**           | 按重要度档：亲密 14 天 / 重要 45 天，普通不提醒              | 全局统一频率（淹没重要）/ 交互频率自动推断（解释性差、误判多）                            |
+| **范围**             | Web + Desktop + Android 全量 + 桌面麦克风         | 仅 Web/桌面 / 仅 Android / 暂缓                                  |
+| **Android 验证方式**   | APK + 本地模拟器                                 | 真机 / 仅代码不验证 / 需上架                                          |
+| **Ctrl+K 范围**      | 创建为主（日程/待办/互动 + 跳转联系人详情）                  | 全局搜索 + 命令面板 + 主题切换                                         |
+| **#13 语音输入**       | 优先级与 Web/桌面等同，本次随 Phase 2.5 一起做           | 单独延后 / 只桌面 / 只 Web                                          |
+
+> 详细架构与权衡见 §3.5 各小节；后续如要重评，先在 §3.5 顶部追加「拍板变更日志」并回写本表。
+
+### 7.2 §3.5 实施期发现的高优问题（需在写代码前拍板）
+
+> 以下 3 项均为 LLM spec review 阶段未显式讨论、但实施时会直接踩坑的关键决策。**对应代码不能动手**直到对应行 ✅。
+
+| 编号  | 问题                                                                 | 拍板结论（2026-08-09）                                                                                                          |
+| --- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **B** | **节奏提醒「重复弹」** — 单一 owner 设计                                                  | **B2:端上 first-party**：桌面/Android 各自 SQLite 算(为本地)、Server 算(为 Web)。reminder 通过 invitation token 跨端去重(§3.5.6)。代价:多套实现 + 协调协议,实施量约 B1 的 2-3 倍,换取 offline-first + 数据所有权。 |
+| **C** | **桌面端 cadence 代码错用 PG `Pool`** — 双栈分界未明示                                       | **跟随 B2**:cadence 计算需两套实现 —— server 走 sqlx::PgPool,桌面/Android 走 rusqlite::Connection。同一 Rust trait 抽象,内部各自执行。                                  |
+| **D** | **语音输入押宝 Web Speech API 不成立** — Android WebView 不支持 SpeechRecognition | **D3:按端能力选最稳** —— Desktop macOS/Windows + Web 走 Web Speech API(成熟零成本);Android 走 Tauri 原生 plugin(`tauri-plugin-android-speechrecognition` + `android.permission.RECORD_AUDIO` + `SpeechRecognizer.createSpeechRecognizer`)。whisper.cpp 留作 #10 远期选项。 |
+
+> **实施前置**:以上 3 项已拍板。下一步:writing-plans 阶段把 §3.5.5/§3.5.6/§3.5.4 落地为具体模块路径与接口签名(invitation token 协议、cadence trait 抽象、speech plugin 集成)。
+
+### 7.3 Contact 重要度清理拍板记录（2026-08-09 · Phase 2.4 前置）
+
+> 用户在 §3.5 实施前指出重要度现状不一致 → 触发清理。详见 §3.5.2。
+
+| 决策点 | 拍板结论 | 拒绝的备选 |
+| --- | --- | --- |
+| **档位定义** | **3 档（low / medium / high）+ 默认 low + 节奏映射（high 14 天 / medium 45 天 / low 不提醒）** | 4 档（含 normal）/ 重要性=手动频率字段 |
+| **历史 `normal` 数据** | **数据迁移 `normal → medium`**；medium 保留为合法档位；DB / business / server handler 默认改 `'low'`；删 `ContactsList.tsx:67` 的 `'normal'` 过滤常量 | 保留 normal 兜底默认（与 UI 三档不一致）/ 一次性全量改写为 medium |
+| **死字段 reminder_enabled / reminder_interval_days** | **完整删除**（双栈 schema + business + sync + handler + types + 2 处测试断言） | 保留但标 deprecated / 留作 §3.5 cadence 后路 |
+
+> **实施前置**：以上 3 项已拍板。Phase 2.4 实施完成后才进入 Phase 2.5 §3.5 主体开发（约 1.5 人/日）。
 
 ---
 
 ## 8. 需求编号索引
 
-| 编号  | 名称              | 优先级 | 实现状态（2026-08-09 复查，git HEAD 912c7d4）                            |
+| 编号  | 名称              | 优先级 | 实现状态（2026-08-09 复查 + 2026-08-09 修复迭代至 git HEAD 4b701e4）  |
 | --- | --------------- | --- | ------------------------------------------------------------ |
 | #3  | 关系模型重构（事件侧）     | P0  | ✅ 已实现（事件多人 + 联系人间边 + 前端 UI + E2E）；跨端同步已闭环 §5.7            |
 | #12 | 多端同步 + 性能优化     | P0  | ✅ F1–F6 已落地；§5.7 白名单断链已修复（entity_link/media 跨端已通）          |
@@ -341,14 +640,14 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | #8  | 提醒声音            | P3  | ✅ 已实现（Settings + poller + WebAudio）                          |
 | #10 | 移动端小模型 MCP      | P3  | ⬜                                                            |
 | #2  | 合影取头像           | P3  | ⬜                                                            |
-| #13 | 手机端语音快速捕获       | P1  | ⬜（2026-08-09 新增）                                             |
+| #13 | 手机端语音快速捕获       | P1  | 🟡 设计已批准 → 实施中（详见 §3.5 子系统设计）；前置 Phase 2.4 重要度清理 |
 
 **中国特性新增需求（2026-08-09，详见 §11；每日摘要已排除）：**
 
 | 编号  | 名称                  | 优先级 | 实现状态 |
 | --- | ------------------- | --- | ---- |
-| #14 | 保持联系节奏提醒（替代每日摘要）    | P1  | ⬜    |
-| #15 | 语音快记扩展·记互动（扩展 #13）  | P1  | ⬜    |
+| #14 | 保持联系节奏提醒（替代每日摘要）    | P1  | 🟡 设计已批准 → 实施中（亲密 14 / 重要 45，详见 §3.5） |
+| #15 | 语音快记扩展·记互动（扩展 #13）  | P1  | 🟡 设计已批准 → 实施中（与 #13 同子系统，详见 §3.5） |
 | #16 | 通话/通讯录本地导入（Android） | P2  | ⬜    |
 | #17 | 会议准备简报              | P2  | ⬜    |
 | #18 | 引荐洞察                | P2  | ⬜    |
@@ -359,7 +658,11 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 ## 9. 完成度审计（2026-08-09，二次审查 + 合并项目根目录复查）
 
-> 基准：2026-08-06 首次审查（彼时 #1/#3事件侧/#4/#5/#8/#11 均标 ⬜）。本轮核查对象：WSL `//wsl.localhost/Ubuntu-24.04/home/yf/workspace/opencode/weavine` 最新代码（git HEAD `912c7d4`，含 8/9 下午一波提交：`f16fe2a` #4 图谱、`7491e1d` #3 事件多人 UI、`d0fa495`/`912c7d4` #1 头像、`d9c6e1e` #5、`7a9bafa` #12 F6）。同时与项目根目录 `Weavine-产品需求Spec.md`（8/9 15:07）的「✅ 全部落地」判断对齐——**经代码复核，该判断基本成立**；§5.7 同步白名单断链已随修复闭环（2026-08-09）。
+> **历史基准（2026-08-09 上午审计）**：git HEAD `912c7d4`，含 8/9 下午一波提交：`f16fe2a` #4 图谱、`7491e1d` #3 事件多人 UI、`d0fa495`/`912c7d4` #1 头像、`d9c6e1e` #5、`7a9bafa` #12 F6。
+>
+> **当前 HEAD（2026-08-09 晚间）**：`4b701e4`（含 §5.7 同步白名单修复 `9194994` + 头像链路 `83d207e` + SW/HMR 修复 `091e857` + Spec 同步 `4b701e4`）。§5.7 同步白名单断链已随修复闭环；§3.5 子系统设计进入实施。
+>
+> 首次审查：2026-08-06（彼时 #1/#3事件侧/#4/#5/#8/#11 均标 ⬜）。两次审查间增量见 §9.1。
 
 ### 9.1 相对 8/6 的变化（⬜ → ✅/🔶）
 
@@ -377,15 +680,16 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 ### 9.2 仍未完成 / 阻塞项
 
 - ~~**🔴 P0 同步白名单断链（§5.7，最高性价比修复）**~~ **✅ 已修复（2026-08-09）**：`entity_link`/`media` 原未入 `server/src/handlers/sync.rs` kind 白名单（L147-166），push 时服务端落 `unknown entity kind` 拒绝 → #3 参与者（entity_link）与 #1 头像（media）的跨端同步不通。已按「2 行服务端白名单 + 1 行客户端表名别名（entity_link↔entity_links）+ round-trip 测试」方案修复并实测通过（push entity_link/media accepted，pull 复数 kind 闭环；`cargo test -p weavine --lib` 27 passed）。
-- **⚪ #2 / #6 / #9 / #10** 仍 ⬜；**密码哈希双轨技术债未修**（§5-1）。
-- **⚪ 中国特性需求 #13–#20** 全部 ⬜（新增，待排期）。
+- **🟡 Contact 重要度清理（Phase 2.4 前置）设计已批准（2026-08-09），实施中**：详见 §3.5.2 + §7.3。约 1.5 人/日（双栈 schema + business + server handler + UI 三档 + 删 reminder 死字段 + 测试改写）。**必须在 Phase 2.5 §3.5 主体开发前完成**。
+- **🟡 #13 / #14 / #15 子系统设计已批准（2026-08-09），实施中**：详见 §3.5。约 8 人/日（数据模型 0.5d + 解析引擎 1d + Ctrl+K 面板 1d + 全局快捷键 0.5d + Android FAB 1d + 桌面麦克风 0.5d + #14 节奏引擎 1d + 同步 0.5d + E2E/模拟器 1d + Spec 0.5d）。**前置：Phase 2.4 重要度清理**。
+- **⚪ #2 / #6 / #9 / #10 / #16–#20** 仍 ⬜；密码哈希双轨技术债 §5-1 已核实无冲突。
 
 ### 9.3 估计完成度
 
 - 核心功能（#1/#3/#4/#5/#8/#11/#12）：**本地全功能已落地，跨端同步已闭环**（§5.7 修复）。
-- 不加权（按 12 项原生需求计）：约 **70%**（#2/#6/#9/#10 未做按 0 计，其余基本 ✅）。
-- 加权（P0×4/P1×3/P2×2/P3×1）：约 **78%**。
-- 关键路径阻塞：§5.7 已修复（#3/#1 跨端已解锁）；下一步排 #13–#20 中国特性与 #2/#6/#9/#10。
+- 不加权（按 12 项原生需求 + #13/#14/#15 子系统进度计）：约 **70% → 72%**（Phase 2.4 重要度清理设计中，未计入 ✅ 完成度）。
+- 加权（P0×4/P1×3/P2×2/P3×1）：约 **78% → 80%**。
+- 关键路径阻塞：§5.7 已修复（#3/#1 跨端已解锁）；Phase 2.4 重要度清理进入实施；Phase 2.5 §3.5 子系统前置 Phase 2.4；下一步排 #16–#20 与 #2/#6/#9/#10。
 
 ---
 
@@ -441,7 +745,9 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 ### 10.7 手机端语音快速捕获（#13）= 主形态的旗舰交互
 
-手机端优先的真正抓手是"说句话即建"——把语音捕获做成本地闭环、不依赖云端大模型（端上 ASR + 轻量解析，呼应 #10 端上小模型）。它生产的是 #3 事件多人的数据（"和KK林开会"=事件+参与者），并经 §5.7 同步闭环回灌 server，使 Web 重模型得以在图谱/起草中复用。优先级 P1（用户确认重要）：是手机端最具差异化的捕获方式，但依赖同步闭环先通，故排在 Phase 2 之后、与 #4 图谱协同。
+手机端优先的真正抓手是"说句话即建"——把语音捕获做成本地闭环、不依赖云端大模型（端上 ASR + 轻量解析，呼应 #10 端上小模型）。它生产的是 #3 事件多人的数据（"和KK林开会"=事件+参与者），并经 §5.7 同步闭环回灌 server，使 Web 重模型得以在图谱/起草中复用。优先级 P1（用户确认重要）：是手机端最具差异化的捕获方式，但依赖同步闭环先通。
+
+**2026-08-09 更新**：#13 已与 #14 节奏提醒 + #15 语音记互动合并为 **§3.5 快速捕获与节奏中枢子系统**，范围扩展为 Web + Desktop + Android 全量，进入 Phase 2.5 实施（详见 §3.5）。
 
 ---
 
@@ -464,24 +770,21 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 ### 11.3 中国特性驱动的新增需求（#14–#20）
 
-#### ○ #14 保持联系节奏提醒（Keep-in-Touch Cadence）（⬜ 未实现，2026-08-09 新增）
+#### ○ #14 保持联系节奏提醒（Keep-in-Touch Cadence）（🟡 设计已批准 → 实施中，详见 §3.5）
 
-**目标/价值**：个人关系靠维护，断联=丢机会（转介绍 / 合作 / 人情）。这是国内个人 PRM 的"灵魂功能"，也是"每日摘要"的更优替代——按每个联系人设定的联系周期（如每 90 天）基于最近 `interaction` 算"距上次 N 天"，逾期才提醒，贴合国内"不要天天被打扰"的习惯。
+**目标/价值**：个人关系靠维护，断联=丢机会（转介绍 / 合作 / 人情）。这是国内个人 PRM 的"灵魂功能"，也是"每日摘要"的更优替代。
 
-- 每个联系人可设联系周期（天 / 周 / 月 / 年）；系统据最近一次 interaction 时间算下次应联系日。
-- 逾期 / 临期经端上提醒引擎（#8 已建）本地触发，**无需 server**。
-- 与 #13/#15 协同："说句话记一次见面 / 通话"即刷新互动时间、重置周期。
-  **依赖**：interactions 模型（已有）、提醒引擎（#8）。**验收**：设周期后逾期能本地提醒；记录互动后周期重置。
-  **中国特性理由**：零云端依赖、零合规风险；本地可算的"不打扰但不断联"方案。
+**拍板（2026-08-09）**：亲密 14 天 / 重要 45 天，普通不提醒（不打扰但不断联）。不引入 `cadence_days` 字段（用 `importance` 派生），不引入全局默认 UI（硬编码）。详见 §3.5 §3.5.5。
 
-#### ○ #15 语音快记扩展——说句话记互动（扩展 #13）（⬜ 未实现，2026-08-09 新增）
+**中国特性理由**：零云端依赖、零合规风险；本地可算。
 
-**目标/价值**：国内无合规自动通道（§11.1），数据只能靠主动本地捕获。#13 只建日程，本需求把语音管线扩展到"说句话记一段互动 / 笔记 / 人情"，把捕获成本压到最低。
+#### ○ #15 语音快记扩展——说句话记互动（扩展 #13）（🟡 设计已批准 → 实施中，详见 §3.5）
 
-- 端上 ASR→轻量解析，除时间 / 参与者外抽取互动类型（见面 / 通话 / 饭局 / 送礼）与备注，结构化落本地 SQLite。
-- 后台静默增量同步（依赖 §5.7 闭环 + F2）。
-  **依赖**：#13 管线、#10 端上小模型（做清理）。**验收**：离线说"上周和KK林吃饭聊了X项目"→ 自动建 interaction 并关联两人。
-  **中国特性理由**：以"极致顺滑的手动"替代"自动流入"（§11.1-1）。
+**目标/价值**：国内无合规自动通道（§11.1），数据只能靠主动本地捕获。本需求把语音管线从 #13（建日程）扩展到"说句话记一段互动 / 笔记 / 人情"，把捕获成本压到最低。
+
+**拍板（2026-08-09）**：与 #13 同子系统（§3.5），语音管线复用同一解析引擎（`weavine_lib::quick`），仅 `classify_kind` 加 "吃饭 / 通话 / 聊 / call / dinner" 等互动关键词，落 `Interaction` 而非 `Event`。
+
+**中国特性理由**：以"极致顺滑的手动"替代"自动流入"（§11.1-1）。
 
 #### △ #16 通话记录 / 通讯录本地导入（Android Local Import）（⬜ 未实现，2026-08-09 新增）
 
@@ -531,4 +834,6 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 ---
 
-*本文档（工作区维护版）与项目根目录 `Weavine-产品需求Spec.md` 已合并统一（2026-08-09）：以本文档为真相源，吸收项目根目录版「✅ 全部落地」的代码复查结论（git HEAD 912c7d4），并保留本文档独有的中国市场原则（§11）、#13–#20、排除每日摘要、§10 平台策略，以及 §5.7 同步白名单断链（P0）记录（已于 2026-08-09 修复）。对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下。*
+*本文档（工作区维护版）与项目根目录 `Weavine-产品需求Spec.md` 已合并统一（2026-08-09）：以本文档为真相源，吸收项目根目录版「✅ 全部落地」的代码复查结论（git HEAD `4b701e4`，含 §5.7 同步白名单修复），并保留本文档独有的中国市场原则（§11）、#13–#20、排除每日摘要、§10 平台策略，以及 §5.7 同步白名单断链（P0）记录（已于 2026-08-09 修复）。对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下。*
+
+*2026-08-09 追加：本文档升格为 **产品蓝图**（v1.1），锁定为唯一权威需求来源；§3.5「快速捕获与节奏中枢」子系统设计（合并 #13 / #14 / #15，跨端 Ctrl+K + Android 语音 + 节奏提醒，亲密 14 / 重要 45）已批准，进入 Phase 2.5 实施。所有后续需求、状态调整、平台策略、中国特性、技术债均回写本文档，不再创建独立 spec 文件。拍板溯源详见 §7.1。*

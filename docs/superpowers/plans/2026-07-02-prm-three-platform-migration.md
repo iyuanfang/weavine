@@ -1330,7 +1330,7 @@ for migration in MIGRATIONS {
 
 - [ ] **Step 3: Test fresh-install scenario**
 
-Delete `~/.local/share/com.weavine.prm/dev.db`, run `tauri:dev`, verify schema bootstraps and app works.
+Delete `~/.local/share/com.weavine.desktop/dev.db`, run `tauri:dev`, verify schema bootstraps and app works.
 
 - [ ] **Step 4: Test upgrade path**
 
@@ -1714,15 +1714,15 @@ git commit -m "feat(mobile): bottom tab navigation"
 ```rust
 fn data_dir() -> PathBuf {
     #[cfg(target_os = "android")]
-    { dirs::data_dir().unwrap().join("com.weavine.prm") }
+    { dirs::data_dir().unwrap().join("com.weavine.desktop") }
     #[cfg(target_os = "ios")]
     { dirs::document_dir().unwrap() }  // iOS sandboxed
     #[cfg(target_os = "macos")]
-    { dirs::data_dir().unwrap().join("com.weavine.prm") }
+    { dirs::data_dir().unwrap().join("com.weavine.desktop") }
     #[cfg(target_os = "linux")]
-    { dirs::data_dir().unwrap().join("com.weavine.prm") }
+    { dirs::data_dir().unwrap().join("com.weavine.desktop") }
     #[cfg(target_os = "windows")]
-    { dirs::data_dir().unwrap().join("com.weavine.prm") }
+    { dirs::data_dir().unwrap().join("com.weavine.desktop") }
 }
 ```
 

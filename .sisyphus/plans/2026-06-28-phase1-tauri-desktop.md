@@ -104,7 +104,7 @@ dirs = "5"
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
   "productName": "Weavine",
   "version": "0.1.0",
-  "identifier": "com.weavine.app",
+  "identifier": "com.weavine.desktop",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3100",

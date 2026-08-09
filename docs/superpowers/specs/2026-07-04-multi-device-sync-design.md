@@ -156,8 +156,8 @@ CREATE INDEX refresh_tokens_user_device_idx ON refresh_tokens(user_id, device_id
 2. Modal: register (email + password) OR login (email + password).
 3. POST to server, receive tokens.
 4. App stores tokens in OS keychain:
-   - macOS: `Keychain Access` item name `com.weavine.prm.sync`
-   - Linux: `secret-service` (libsecret/Gnome Keyring) — fallback: encrypted file at `~/.local/share/com.weavine.prm/sync-token.bin` (age-encrypted with a key derived from a password re-prompted once-per-launch is overkill; for v0.2 we'll use a **plain JSON** at `~/.config/com.weavine.prm/sync.json` with restricted perms, and document the security caveat).
+   - macOS: `Keychain Access` item name `com.weavine.desktop.sync`
+   - Linux: `secret-service` (libsecret/Gnome Keyring) — fallback: encrypted file at `~/.local/share/com.weavine.desktop/sync-token.bin` (age-encrypted with a key derived from a password re-prompted once-per-launch is overkill; for v0.2 we'll use a **plain JSON** at `~/.config/com.weavine.desktop/sync.json` with restricted perms, and document the security caveat).
    - Windows: DPAPI via `windows-rs` `CryptProtectData`.
 5. App notes `linked_device_id = <device>` in the same JSON for `/devices`.
 6. From this moment, the **TauriAdapter** wraps `weavine_lib::sync::run()` whenever the app boots, on focus, after every mutation, and every 5 minutes.
@@ -281,7 +281,7 @@ Migration `009_sync.sql` adds this table on the desktop SQLite without touching 
 
 - `HttpAdapter` already exists; it gets a sibling `RemoteAdapter` that wraps `weavine_lib::sync` and selects base URL + bearer header.
 - The app's `useAdapter()` stays a single hook. The selection logic:
-  - If `~/.config/com.weavine.prm/sync.json` exists + valid tokens → **RemoteAdapter** (writes go to local SQLite **then** sync engine pushes).
+  - If `~/.config/com.weavine.desktop/sync.json` exists + valid tokens → **RemoteAdapter** (writes go to local SQLite **then** sync engine pushes).
   - Else → **HttpAdapter** (current, talks to `weavine-web` on `127.0.0.1:3000`).
 - The Tauri shell still talks to its in-process local DB; the difference is that mutations also schedule a sync push.
 
