@@ -26,10 +26,10 @@ pub struct ListParams {
 
 fn validate_sort_by(sort_by: &str) -> &'static str {
     match sort_by {
-        "last_contacted_at" => "last_contacted_at DESC NULLS LAST",
+        "last_interaction_at" => "last_interaction_at DESC NULLS LAST",
         "created_at" => "created_at DESC",
         "nickname" => "nickname ASC",
-        _ => "last_contacted_at DESC NULLS LAST",
+        _ => "last_interaction_at DESC NULLS LAST",
     }
 }
 
@@ -39,7 +39,7 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
-    let sort_col = validate_sort_by(p.sort_by.as_deref().unwrap_or("last_contacted_at"));
+    let sort_col = validate_sort_by(p.sort_by.as_deref().unwrap_or("last_interaction_at"));
     let limit = p.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = p.offset.unwrap_or(0).max(0);
 
@@ -59,7 +59,7 @@ pub async fn list(
 
     let query_sql = format!(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
-         notes, importance, last_contacted_at, \
+         notes, importance, last_interaction_at, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact \
          WHERE user_id = $1 \
@@ -104,7 +104,7 @@ pub async fn get(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut contact: Contact = sqlx::query_as(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
-         notes, importance, last_contacted_at, \
+         notes, importance, last_interaction_at, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact WHERE id = $1 AND user_id = $2",
     )

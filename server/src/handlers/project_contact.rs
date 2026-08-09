@@ -23,7 +23,7 @@ struct ContactWithRole {
     wechat: Option<String>,
     notes: Option<String>,
     importance: String,
-    last_contacted_at: Option<String>,
+    last_interaction_at: Option<String>,
     created_at: String,
     updated_at: String,
     role: Option<String>,
@@ -38,7 +38,7 @@ pub async fn list(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, ContactWithRole>(
         "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.city, c.email, c.phone, c.wechat, \
-                c.notes, c.importance, c.last_contacted_at, \
+                c.notes, c.importance, c.last_interaction_at, \
                 c.created_at, c.updated_at, pc.role, pc.added_at \
          FROM project_contact pc \
          JOIN contact c ON c.id = pc.contact_id \
@@ -64,7 +64,7 @@ pub async fn list(
             wechat: r.wechat,
             notes: r.notes,
             importance: r.importance,
-            last_contacted_at: r.last_contacted_at,
+            last_interaction_at: r.last_interaction_at,
             created_at: r.created_at,
             updated_at: r.updated_at,
             avatar_storage_key: None,

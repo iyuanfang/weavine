@@ -25,7 +25,7 @@ pub async fn query(
 
     let contacts = sqlx::query_as::<_, Contact>(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
-                notes, importance, last_contacted_at, \
+                notes, importance, last_interaction_at, \
                 created_at, updated_at \
          FROM contact WHERE user_id = $1 AND (nickname ILIKE $2 OR name ILIKE $2 OR company ILIKE $2)",
     )

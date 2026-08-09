@@ -10,7 +10,7 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Reminder;
 
-const REMINDER_SELECT: &str = "SELECT r.id, r.user_id, r.contact_id, r.event_id, r.trigger_at, r.kind, r.dispatched, r.dismissed, r.created_at, \
+const REMINDER_SELECT: &str = "SELECT r.id, r.user_id, r.contact_id, r.event_id, r.trigger_at, r.kind, r.dispatched, r.dismissed, r.invitation_token, r.created_at, \
      c.nickname AS contact_nickname \
      FROM reminder r \
      LEFT JOIN contact c ON c.id = r.contact_id AND c.user_id = r.user_id";
@@ -66,14 +66,15 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query(
-        "INSERT INTO reminder (id, user_id, contact_id, event_id, trigger_at, kind, created_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        "INSERT INTO reminder (id, user_id, contact_id, event_id, trigger_at, kind, invitation_token, created_at) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
     )
     .bind(&id).bind(&auth)
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
     .bind(body.get("event_id").and_then(|v| v.as_str()))
     .bind(body.get("trigger_at").and_then(|v| v.as_str()).unwrap_or(&now))
-    .bind(body.get("kind").and_then(|v| v.as_str()).unwrap_or("event"))
+    .bind(body.get("kind").and_then(|v| v.as_str()).unwrap_or("time"))
+    .bind(body.get("invitation_token").and_then(|v| v.as_str()))
     .bind(&now)
     .execute(&mut *tx).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -130,7 +131,7 @@ pub async fn update(
     let mut sets = Vec::new();
     let mut params: Vec<String> = Vec::new();
     let mut idx = 1u32;
-    for field in &["trigger_at", "kind", "contact_id", "event_id"] {
+    for field in &["trigger_at", "kind", "contact_id", "event_id", "invitation_token"] {
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx));
             params.push(v.to_string()); idx += 1;
