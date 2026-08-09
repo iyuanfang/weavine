@@ -60,7 +60,7 @@ pub async fn list(
     let query_sql = format!(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
          notes, importance, reminder_enabled, reminder_interval_days::BIGINT AS reminder_interval_days, last_contacted_at, \
-         created_at, updated_at \
+         created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact \
          WHERE user_id = $1 \
          AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR company ILIKE '%' || $2 || '%') \
@@ -105,7 +105,7 @@ pub async fn get(
     let mut contact: Contact = sqlx::query_as(
         "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
          notes, importance, reminder_enabled, reminder_interval_days::BIGINT AS reminder_interval_days, last_contacted_at, \
-         created_at, updated_at \
+         created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)

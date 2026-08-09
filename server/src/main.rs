@@ -1,8 +1,9 @@
 use axum::{
     http::{header::CACHE_CONTROL, HeaderValue},
     routing::{delete, get, patch, post, put},
-    Router,
+    Extension, Router,
 };
+use handlers::storage::{serve_file, LocalFsStorage, Storage};
 use sqlx::PgPool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,6 +42,15 @@ async fn main() {
 
     let pool = Arc::new(pool);
 
+    let storage_root = std::env::var("MEDIA_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::path::PathBuf::from(std::env::var("WEAVINE_DATA_DIR").unwrap_or_else(|_| "/var/lib/weavine".into()))
+                .join("media")
+        });
+    tokio::fs::create_dir_all(&storage_root).await.expect("create media dir");
+    let storage: Arc<dyn Storage> = Arc::new(LocalFsStorage::new(storage_root));
+
     spawn_change_log_pruner(pool.clone());
 
     // Initialize JWT keys from PEM files (RS256)
@@ -48,7 +58,7 @@ async fn main() {
         .set(auth_keys::Keys::from_env().expect("Failed to load JWT keys from PEM files"))
         .expect("JWT_KEYS already initialized");
 
-    let app = Router::new()
+    let api = Router::new()
         .route("/api/health", get(|| async { "OK" }))
         // Auth
         .route("/api/auth/register", post(handlers::auth::register))
@@ -81,7 +91,7 @@ async fn main() {
         .route("/api/projects/:id/contacts", get(handlers::project_contact::list).post(handlers::project_contact::add))
         .route("/api/projects/:id/contacts/:contact_id", delete(handlers::project_contact::remove))
         .route("/api/media", post(handlers::media::upload).get(handlers::media::list_by_owner))
-        .route("/api/media/:id", delete(handlers::media::delete))
+        .route("/api/media/:id", get(handlers::media::get_by_id).delete(handlers::media::delete))
         .route("/api/media/:id/blob", get(handlers::media::get_blob))
         .route("/api/cards/extract", post(handlers::ocr::extract_card))
         // Interactions
@@ -113,6 +123,15 @@ async fn main() {
         .route("/api/sync/manifest", post(handlers::sync::manifest))
         .route("/api/sync/push", post(handlers::sync::push))
         .route("/api/sync/pull", post(handlers::sync::pull))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        ));
+
+    let files = Router::new().route("/files/*key", get(serve_file));
+
+    let app = api
+        .merge(files)
         // SPA fallback
         .fallback_service({
             let spa_dir =
@@ -120,11 +139,8 @@ async fn main() {
             ServeDir::new(&spa_dir)
                 .fallback(ServeFile::new(format!("{}/index.html", spa_dir.trim_end_matches('/'))))
         })
-        .layer(SetResponseHeaderLayer::overriding(
-            CACHE_CONTROL,
-            HeaderValue::from_static("no-store"),
-        ))
         .layer(CorsLayer::permissive())
+        .layer(Extension(storage))
         .with_state(pool);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "3000".into());

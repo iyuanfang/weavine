@@ -46,6 +46,11 @@ pub struct Contact {
     pub updated_at: String,
     #[cfg_attr(feature = "sqlx", sqlx(skip))]
     pub tags: Vec<Tag>,
+    pub avatar_storage_key: Option<String>,
+    pub avatar_mime: Option<String>,
+    pub avatar_width: Option<i64>,
+    pub avatar_height: Option<i64>,
+    pub avatar_alt_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,10 +179,17 @@ pub struct Media {
     pub owner_id: String,
     pub mime: String,
     pub size_bytes: i64,
+    pub storage_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_text: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

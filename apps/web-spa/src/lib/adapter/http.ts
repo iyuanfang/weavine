@@ -496,23 +496,13 @@ export class HttpAdapter implements PRMAdapter {
       return resp.json() as Promise<MediaItem>;
     },
 
-    getBlobDataUrl: async (id: string): Promise<string> => {
-      const url = buildUrl(this.baseUrl, `/api/media/${encodeURIComponent(id)}/blob`, 'GET');
-      const token = getAccessToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const resp = await fetch(url, { method: 'GET', headers });
-      if (!resp.ok) {
-        let msg = '';
-        try { msg = await resp.text(); } catch { msg = ''; }
-        throw new Error(`GET /api/media/${id}/blob: ${resp.status} ${resp.statusText} — ${msg}`);
-      }
-      const mime = resp.headers.get('content-type') ?? 'application/octet-stream';
-      const buf = new Uint8Array(await resp.arrayBuffer());
-      let bin = '';
-      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-      const b64 = btoa(bin);
-      return `data:${mime};base64,${b64}`;
+    url: async (id: string): Promise<string> => {
+      const item = await request<MediaItem>(
+        this.baseUrl,
+        'GET',
+        `/api/media/${encodeURIComponent(id)}`,
+      );
+      return buildUrl(this.baseUrl, `/files/${item.storage_key}`, 'GET');
     },
 
     listByOwner: (p: ListMediaParams): Promise<MediaItem[]> =>

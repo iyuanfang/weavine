@@ -54,6 +54,11 @@ export interface Contact {
   created_at: string;
   updated_at: string;
   tags: Tag[];
+  avatar_storage_key: string | null;
+  avatar_mime: string | null;
+  avatar_width: number | null;
+  avatar_height: number | null;
+  avatar_alt_text: string | null;
 }
 
 export interface Event {
@@ -415,6 +420,9 @@ export interface SearchResults {
 // ──────────────────────────────────────────────
 
 export interface PRMAdapter {
+  /** Base URL of the server transport. Empty string means same-origin. */
+  baseUrl: string;
+
   /** Returns the current local user (single-user desktop model). */
   getLocalUser(): Promise<LocalUser>;
 
@@ -571,7 +579,7 @@ export interface PRMAdapter {
 
   media: {
     upload(input: UploadMediaInput): Promise<MediaItem>;
-    getBlobDataUrl(id: string): Promise<string>;
+    url(id: string): Promise<string>;
     listByOwner(p: ListMediaParams): Promise<MediaItem[]>;
     delete(id: string): Promise<void>;
   };
@@ -628,6 +636,10 @@ export interface MediaItem {
   size_bytes: number;
   sha256: string | null;
   filename: string | null;
+  storage_key: string;
+  width: number | null;
+  height: number | null;
+  alt_text: string | null;
 }
 
 export type MediaKind = 'avatar' | 'card_image' | 'attachment';

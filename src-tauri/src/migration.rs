@@ -393,6 +393,34 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS \"Project_archived_at_idx\" ON \"Project\"(\"archived_at\");",
     )?;
 
+    // Avatar mirror columns on Contact + storage fields on Media. Idempotent.
+    let avatar_mirror_cols = [
+        ("Contact", "avatar_storage_key", "TEXT"),
+        ("Contact", "avatar_mime", "TEXT"),
+        ("Contact", "avatar_width", "INTEGER"),
+        ("Contact", "avatar_height", "INTEGER"),
+        ("Contact", "avatar_alt_text", "TEXT"),
+    ];
+    let media_storage_cols = [
+        ("Media", "storage_key", "TEXT NOT NULL DEFAULT ''"),
+        ("Media", "width", "INTEGER"),
+        ("Media", "height", "INTEGER"),
+        ("Media", "alt_text", "TEXT"),
+    ];
+    for (table, col, decl) in avatar_mirror_cols.iter().chain(media_storage_cols.iter()) {
+        let present: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
+            rusqlite::params![table, col],
+            |r| r.get(0),
+        )?;
+        if present == 0 {
+            conn.execute(
+                &format!("ALTER TABLE \"{table}\" ADD COLUMN \"{col}\" {decl}"),
+                [],
+            )?;
+        }
+    }
+
     let stale_indexes: &[(&str, &str)] = &[
         ("Action_user_id_project_id_idx", "Action"),
         ("Event_user_id_project_id_idx", "Event"),

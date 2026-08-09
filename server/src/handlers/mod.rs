@@ -15,6 +15,7 @@ pub mod reminder;
 pub mod search;
 pub mod setting;
 pub mod sync;
+pub mod storage;
 pub mod tag;
 
 use std::sync::OnceLock;

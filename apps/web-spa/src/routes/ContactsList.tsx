@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
+import { Avatar } from '../components/Avatar';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { avatarBg } from '../lib/contactColor';
+import { avatarUrlFor } from '../lib/avatarUrl';
 import { tagColor } from '../lib/tagColor';
 import { parseCsv, parseVCard } from '../lib/import/parseContacts';
 import type {
@@ -517,8 +519,9 @@ function ContactRow({
   contact: Contact;
   onChangeImportance: (value: string) => void;
 }) {
+  const adapter = useAdapter();
   const displayName = c.nickname || c.name || '?';
-  const initials = displayName.slice(0, 1).toUpperCase();
+  const avatarUrl = avatarUrlFor(c, { baseUrl: adapter.baseUrl });
 
   return (
     <div
@@ -533,7 +536,7 @@ function ContactRow({
           className="avatar avatar--sm"
           style={{ background: avatarBg(displayName) }}
         >
-          {initials}
+          <Avatar name={displayName} src={avatarUrl} size={32} />
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>

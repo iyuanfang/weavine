@@ -21,6 +21,11 @@ pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
         last_contacted_at: row.get(14)?,
         created_at: row.get(15)?,
         updated_at: row.get(16)?,
+        avatar_storage_key: row.get(17).ok(),
+        avatar_mime: row.get(18).ok(),
+        avatar_width: row.get(19).ok(),
+        avatar_height: row.get(20).ok(),
+        avatar_alt_text: row.get(21).ok(),
         tags: Vec::new(),
     })
 }

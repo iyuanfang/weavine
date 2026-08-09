@@ -1,12 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { Avatar } from '../components/Avatar';
+import { AvatarCropModal } from '../components/AvatarCropModal';
+import { AvatarViewModal } from '../components/AvatarViewModal';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
+import { avatarUrlFor } from '../lib/avatarUrl';
 import { backTarget } from '../lib/backNavigation';
 import type { CreateInteractionInput } from '../lib/adapter/types';
 
@@ -77,31 +80,9 @@ export function ContactDetail() {
   const [interactionSummary, setInteractionSummary] = useState('');
   const [interactionChannel, setInteractionChannel] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
-
-  useEffect(() => {
-    if (!userId || !id) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const items = await adapter.media.listByOwner({
-          kind: 'avatar',
-          owner_type: 'contact',
-          owner_id: id,
-        });
-        const first = items[0];
-        if (!first || cancelled) return;
-        const url = await adapter.media.getBlobDataUrl(first.id);
-        if (!cancelled) setAvatarDataUrl(url);
-      } catch {
-        if (!cancelled) setAvatarDataUrl(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, id, adapter]);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [viewingAvatar, setViewingAvatar] = useState(false);
 
   const createInteractionMutation = useMutation({
     mutationFn: (input: CreateInteractionInput) => adapter.interactions.create(input),
@@ -157,26 +138,32 @@ export function ContactDetail() {
   const interactions = interactionsQuery.data ?? [];
 
   const displayName = contact.nickname || contact.name || '?';
+  const contactAvatarUrl = avatarUrlFor(contact, { baseUrl: adapter.baseUrl });
 
   const onPickAvatar = () => fileInputRef.current?.click();
 
   const onAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !userId || !contact.id) return;
+    if (!file || !contact.id) return;
+    setCropFile(file);
+  };
+
+  const onCropConfirm = async (blob: Blob) => {
+    setCropFile(null);
+    if (!contact.id) return;
     setAvatarUploading(true);
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const item = await adapter.media.upload({
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      await adapter.media.upload({
         kind: 'avatar',
         owner_type: 'contact',
         owner_id: contact.id,
         bytes,
-        mime: file.type || 'application/octet-stream',
-        filename: file.name || 'avatar',
+        mime: blob.type || 'image/webp',
+        filename: 'avatar.webp',
       });
-      const url = await adapter.media.getBlobDataUrl(item.id);
-      setAvatarDataUrl(url);
+      await queryClient.invalidateQueries({ queryKey: ['contact', contact.id] });
     } catch (err) {
       console.error('avatar upload failed', err);
     } finally {
@@ -216,10 +203,10 @@ export function ContactDetail() {
         <div
           className="avatar avatar--lg"
           style={{ background: avatarBg(displayName), position: 'relative', cursor: 'pointer' }}
-          onClick={onPickAvatar}
-          title={avatarUploading ? '上传中…' : '点击更换头像'}
+          onClick={() => contactAvatarUrl && setViewingAvatar(true)}
+          title={contactAvatarUrl ? '点击查看大图' : ''}
         >
-          <Avatar name={displayName} src={avatarDataUrl} size={88} />
+          <Avatar name={displayName} src={contactAvatarUrl} size={88} />
           <input
             ref={fileInputRef}
             type="file"
@@ -267,6 +254,15 @@ export function ContactDetail() {
           <Link to={back.href} className="btn btn-ghost">
             {back.label}
           </Link>
+          <button
+            type="button"
+            onClick={onPickAvatar}
+            disabled={avatarUploading}
+            className="btn btn-secondary"
+            style={{ opacity: avatarUploading ? 0.6 : 1 }}
+          >
+            {avatarUploading ? '上传中…' : '更换头像'}
+          </button>
           <Link to={`/contacts/${id}/graph`} className="btn btn-secondary" data-testid="contact-graph-link">
             🕸️ 关系图
           </Link>
@@ -450,6 +446,22 @@ export function ContactDetail() {
           </div>
         )}
       </section>
+
+      {viewingAvatar && contactAvatarUrl && (
+        <AvatarViewModal
+          src={contactAvatarUrl}
+          alt={displayName}
+          onClose={() => setViewingAvatar(false)}
+        />
+      )}
+
+      {cropFile && (
+        <AvatarCropModal
+          file={cropFile}
+          onCancel={() => setCropFile(null)}
+          onConfirm={onCropConfirm}
+        />
+      )}
     </div>
   );
 }

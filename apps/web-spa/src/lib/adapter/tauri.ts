@@ -67,6 +67,7 @@ import type {
 type UserIdPayload = { user_id?: string | null; [k: string]: unknown };
 
 export class TauriAdapter implements PRMAdapter {
+  baseUrl = '';
   private userIdReady: Promise<string>;
 
   constructor() {
@@ -401,6 +402,12 @@ export class TauriAdapter implements PRMAdapter {
     },
 
     getBlobDataUrl: async (id: string): Promise<string> => {
+      const url = await invoke<string | null>('get_media_data_url', { media_id: id });
+      if (!url) throw new Error(`media ${id} not found`);
+      return url;
+    },
+
+    url: async (id: string): Promise<string> => {
       const url = await invoke<string | null>('get_media_data_url', { media_id: id });
       if (!url) throw new Error(`media ${id} not found`);
       return url;
