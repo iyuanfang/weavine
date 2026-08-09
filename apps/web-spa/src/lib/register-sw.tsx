@@ -13,6 +13,18 @@ import { isTauri } from './adapter/tauri';
 export function RegisterSW() {
   useEffect(() => {
     if (isTauri) return;
+    // Dev-only: cache-first SW pins a stale bundle, defeating Vite HMR.
+    if (import.meta.env.DEV) {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => r.unregister());
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+      }
+      return;
+    }
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {
         // silently ignore — SW failure is non-fatal
