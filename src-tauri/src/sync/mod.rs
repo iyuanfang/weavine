@@ -515,8 +515,6 @@ mod tests {
                 wechat TEXT,
                 notes TEXT,
                 importance TEXT,
-                reminder_enabled INTEGER,
-                reminder_interval_days INTEGER,
                 last_contacted_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -598,7 +596,6 @@ mod tests {
                 "company": null, "title": null, "city": null,
                 "email": null, "phone": null, "wechat": null,
                 "notes": null, "importance": null,
-                "reminder_enabled": false, "reminder_interval_days": null,
                 "last_contacted_at": null,
                 "created_at": "2026-07-05T00:00:00Z",
                 "updated_at": "2026-07-05T00:00:00Z"
