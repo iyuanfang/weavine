@@ -65,7 +65,7 @@ async function runWithConcurrency<T>(
 const PAGE_SIZE = 20;
 
 const SORT_OPTIONS: { value: ContactSortBy; label: string }[] = [
-  { value: 'last_contacted_at', label: '最近联系' },
+  { value: 'last_interaction_at', label: '最近互动' },
   { value: 'created_at', label: '最近添加' },
   { value: 'nickname', label: '姓名 A-Z' },
 ];
@@ -79,7 +79,7 @@ export function ContactsList() {
   const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [selectedImportance, setSelectedImportance] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<ContactSortBy>('last_contacted_at');
+  const [sortBy, setSortBy] = useState<ContactSortBy>('last_interaction_at');
   const [page, setPage] = useState(0);
 
   const importFileRef = useRef<HTMLInputElement>(null);

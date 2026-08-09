@@ -109,7 +109,7 @@ export class TauriAdapter implements PRMAdapter {
       const inner = await this.withUserId(p);
       // Apply defaults so callers can omit sort/ pagination fields.
       const paramsWithDefaults = {
-        sort_by: 'last_contacted_at',
+        sort_by: 'last_interaction_at',
         limit: 20,
         offset: 0,
         ...inner,

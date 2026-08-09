@@ -48,7 +48,7 @@ export interface Contact {
   wechat: string | null;
   notes: string | null;
   importance: string;
-  last_contacted_at: string | null;
+  last_interaction_at: string | null;
   created_at: string;
   updated_at: string;
   tags: Tag[];
@@ -175,6 +175,7 @@ export interface Reminder {
   kind: string;
   dispatched: boolean;
   dismissed: boolean;
+  invitation_token?: string | null;
   created_at: string;
   /** LEFT JOIN Contact — only set when contact_id is not null */
   contact_nickname?: string | null;
@@ -216,7 +217,7 @@ export interface StartupInfo {
 // in src-tauri/src/commands/*
 // ──────────────────────────────────────────────
 
-export type ContactSortBy = 'last_contacted_at' | 'created_at' | 'nickname';
+export type ContactSortBy = 'last_interaction_at' | 'created_at' | 'nickname';
 export type ContactSortDir = 'desc' | 'asc';
 
 export interface ListContactsParams {
