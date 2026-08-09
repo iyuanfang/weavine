@@ -97,17 +97,17 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
         ],
     )?;
 
-    // Bump the contact's last_contacted_at when linked to a contact.
+    // Bump the contact's last_interaction_at when linked to a contact.
     // Use the interaction's occurred_at so the sort reflects when the
     // interaction happened, not when it was entered.
     if let Some(contact_id) = &input.contact_id {
         let rows = tx.execute(
-            "UPDATE Contact SET last_contacted_at = ?1 WHERE id = ?2",
+            "UPDATE Contact SET last_interaction_at = ?1 WHERE id = ?2",
             rusqlite::params![&input.occurred_at, contact_id],
         )?;
         if rows == 0 {
             eprintln!(
-                "[interaction::create] contact {} not found for last_contacted_at bump",
+                "[interaction::create] contact {} not found for last_interaction_at bump",
                 contact_id
             );
         }
@@ -211,7 +211,7 @@ mod tests {
     }
 
     #[test]
-    fn create_bumps_contact_last_contacted_at() {
+    fn create_bumps_contact_last_interaction_at() {
         let conn = setup_db();
         insert_test_contact(&conn, "c1", "Alice");
 
@@ -230,7 +230,7 @@ mod tests {
 
         let bumped: Option<String> = conn
             .query_row(
-                "SELECT last_contacted_at FROM Contact WHERE id = ?1",
+                "SELECT last_interaction_at FROM Contact WHERE id = ?1",
                 rusqlite::params!["c1"],
                 |row| row.get(0),
             )
@@ -258,7 +258,7 @@ mod tests {
 
         let bumped: Option<String> = conn
             .query_row(
-                "SELECT last_contacted_at FROM Contact WHERE id = ?1",
+                "SELECT last_interaction_at FROM Contact WHERE id = ?1",
                 rusqlite::params!["c1"],
                 |row| row.get(0),
             )

@@ -157,7 +157,7 @@ pub fn default_zero_integer_columns(kind: &str) -> &'static [&'static str] {
 
 pub fn push_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["id","user_id","nickname","name","company","title","city","email","phone","wechat","notes","importance","last_contacted_at","created_at","updated_at"],
+        "contact" => &["id","user_id","nickname","name","company","title","city","email","phone","wechat","notes","importance","last_interaction_at","created_at","updated_at"],
         "tag" => &["id","user_id","name","color","created_at"],
         "event" => &["id","user_id","title","event_type","start_at","end_at","location","notes","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at"],
         "action" => &["id","user_id","title","description","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at"],

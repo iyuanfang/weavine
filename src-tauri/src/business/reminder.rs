@@ -3,23 +3,31 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const REMINDER_COLS: &str =
-    "Reminder.id, Reminder.user_id, Reminder.contact_id, Reminder.event_id, Reminder.trigger_at, Reminder.kind, Reminder.dispatched, Reminder.dismissed, Reminder.created_at, c.nickname AS contact_nickname";
+    "Reminder.id, Reminder.user_id, Reminder.contact_id, Reminder.event_id, Reminder.trigger_at, Reminder.kind, Reminder.dispatched, Reminder.dismissed, Reminder.invitation_token, Reminder.created_at, c.nickname AS contact_nickname";
 
 const REMINDER_JOIN: &str =
     " LEFT JOIN \"Contact\" c ON c.id = Reminder.contact_id AND c.user_id = Reminder.user_id";
 
 pub(crate) fn row_to_reminder(row: &rusqlite::Row) -> rusqlite::Result<Reminder> {
+    let kind_str: String = row.get(5)?;
+    let kind: ReminderKind = kind_str.parse().map_err(|e: String| {
+        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            e,
+        )))
+    })?;
     Ok(Reminder {
         id: row.get(0)?,
         user_id: row.get(1)?,
         contact_id: row.get(2)?,
         event_id: row.get(3)?,
         trigger_at: row.get(4)?,
-        kind: row.get(5)?,
+        kind,
         dispatched: row.get::<_, i64>(6)? != 0,
         dismissed: row.get::<_, i64>(7)? != 0,
-        created_at: row.get(8)?,
-        contact_nickname: row.get(9)?,
+        invitation_token: row.get(8)?,
+        created_at: row.get(9)?,
+        contact_nickname: row.get(10)?,
     })
 }
 
@@ -74,19 +82,20 @@ pub fn create(conn: &Connection, input: &CreateReminderInput) -> rusqlite::Resul
     let now = chrono::Utc::now()
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
-    let kind = input.kind.clone().unwrap_or_else(|| "event".to_string());
+    let kind_str = input.kind.unwrap_or_default().to_string();
 
     conn.execute(
         "INSERT INTO Reminder \
-         (id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7)",
+         (id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, invitation_token, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7, ?8)",
         rusqlite::params![
             &id,
             &input.user_id,
             &input.contact_id,
             &input.event_id,
             &input.trigger_at,
-            &kind,
+            &kind_str,
+            &input.invitation_token,
             &now,
         ],
     )?;
@@ -111,7 +120,7 @@ pub fn update(conn: &Connection, input: &UpdateReminderInput) -> rusqlite::Resul
     }
     if let Some(ref k) = input.kind {
         set_clauses.push(format!("kind = ?{}", param_idx));
-        params.push(Box::new(k.clone()));
+        params.push(Box::new(k.to_string()));
         param_idx += 1;
     }
     if let Some(disp) = input.dispatched {
@@ -178,18 +187,16 @@ pub fn claim_due_reminders(conn: &Connection) -> rusqlite::Result<Vec<Reminder>>
 
 impl Reminder {
     pub fn summary(&self) -> String {
-        match self.kind.as_str() {
-            "event" => "日程提醒".to_string(),
-            "action" => "待办提醒".to_string(),
-            "contact" => "联系人提醒".to_string(),
-            _ => "提醒".to_string(),
+        match self.kind {
+            ReminderKind::Time => "定时提醒".to_string(),
+            ReminderKind::Cadence => "周期提醒".to_string(),
         }
     }
 }
 
 pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> rusqlite::Result<()> {
     conn.execute(
-        "DELETE FROM Reminder WHERE event_id = ?1 AND kind = 'event'",
+        "DELETE FROM Reminder WHERE event_id = ?1 AND kind = 'time'",
         rusqlite::params![event.id],
     )?;
     if let Some(lead) = event.reminder_lead_minutes {
@@ -202,7 +209,7 @@ pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> r
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         conn.execute(
             "INSERT INTO Reminder (id, user_id, event_id, trigger_at, kind, dispatched, dismissed, created_at) \
-             VALUES (?1, ?2, ?3, ?4, 'event', 0, 0, ?5)",
+             VALUES (?1, ?2, ?3, ?4, 'time', 0, 0, ?5)",
             rusqlite::params![id, event.user_id, event.id, trigger_str, now],
         )?;
     }

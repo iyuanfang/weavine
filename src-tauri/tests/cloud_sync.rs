@@ -209,12 +209,12 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
         "server revision must not change when local push is empty"
     );
 
-    // The known contact on the test account has email set, last_contacted_at
+    // The known contact on the test account has email set, last_interaction_at
     // NULL, importance='high'. If pull had corrupted any of these to "",
     // the assertions below would fail.
     let contact = conn
         .query_row(
-            "SELECT email, name, last_contacted_at, importance \
+            "SELECT email, name, last_interaction_at, importance \
              FROM \"Contact\" WHERE user_id = 'local-default' LIMIT 1",
             [],
             |r| {
@@ -227,7 +227,7 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
             },
         )
         .expect("expected at least one contact after pull");
-    let (email, name, last_contacted, importance) = contact;
+    let (email, name, last_interaction, importance) = contact;
     assert!(
         email.as_deref().unwrap_or("").starts_with("bool-"),
         "email must be preserved, got {email:?}"
@@ -237,8 +237,8 @@ async fn case_a_empty_local_pulls_server_data_unchanged() {
         "importance 3-tier value must round-trip as 'high'"
     );
     assert!(
-        last_contacted.is_none(),
-        "last_contacted_at NULL must stay NULL, got {last_contacted:?}"
+        last_interaction.is_none(),
+        "last_interaction_at NULL must stay NULL, got {last_interaction:?}"
     );
     assert!(
         name.is_none() || name.as_deref() == Some(""),
@@ -324,7 +324,7 @@ async fn case_b_both_sides_have_data_merges() {
     );
 
     // NULL preservation invariant: no Contact row should have email = ""
-    // or last_contacted_at = "" — those would be corruption artifacts.
+    // or last_interaction_at = "" — those would be corruption artifacts.
     let corrupted_email: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM \"Contact\" WHERE email = ''",

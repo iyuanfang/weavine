@@ -515,7 +515,7 @@ mod tests {
                 wechat TEXT,
                 notes TEXT,
                 importance TEXT,
-                last_contacted_at TEXT,
+                last_interaction_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -596,7 +596,7 @@ mod tests {
                 "company": null, "title": null, "city": null,
                 "email": null, "phone": null, "wechat": null,
                 "notes": null, "importance": null,
-                "last_contacted_at": null,
+                "last_interaction_at": null,
                 "created_at": "2026-07-05T00:00:00Z",
                 "updated_at": "2026-07-05T00:00:00Z"
             });

@@ -39,8 +39,8 @@ fn search_returns_contact_with_correct_importance_after_reminder_column_drop() {
     );
     assert_eq!(c.notes.as_deref(), Some("needle-token"));
     assert!(
-        c.last_contacted_at.is_none(),
-        "last_contacted_at must be None for a fresh contact"
+        c.last_interaction_at.is_none(),
+        "last_interaction_at must be None for a fresh contact"
     );
 }
 

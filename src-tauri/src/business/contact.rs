@@ -16,7 +16,7 @@ pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
         wechat: row.get(9)?,
         notes: row.get(10)?,
         importance: row.get(11)?,
-        last_contacted_at: row.get(12)?,
+        last_interaction_at: row.get(12)?,
         created_at: row.get(13)?,
         updated_at: row.get(14)?,
         avatar_storage_key: row.get(15).ok(),
@@ -187,7 +187,7 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
         "INSERT INTO Contact \
          (id, user_id, nickname, name, company, title, city, \
           email, phone, wechat, notes, importance, \
-          last_contacted_at, created_at, updated_at) \
+          last_interaction_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
                  ?8, ?9, ?10, ?11, ?12, \
                  ?13, ?14, ?15)",
@@ -364,12 +364,12 @@ mod tests {
         conn: &Connection,
         id: &str,
         nickname: &str,
-        last_contacted_at: Option<&str>,
+        last_interaction_at: Option<&str>,
         created_at: &str,
         updated_at: &str,
     ) {
         conn.execute(
-            "INSERT INTO Contact (id, user_id, nickname, name, importance, last_contacted_at, created_at, updated_at) \
+            "INSERT INTO Contact (id, user_id, nickname, name, importance, last_interaction_at, created_at, updated_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 id,
@@ -377,7 +377,7 @@ mod tests {
                 nickname,
                 nickname,
                 "low",
-                last_contacted_at,
+                last_interaction_at,
                 created_at,
                 updated_at,
             ],
@@ -386,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn list_with_sort_by_last_contacted_at_returns_20_items_and_total_25() {
+    fn list_with_sort_by_last_interaction_at_returns_20_items_and_total_25() {
         let conn = setup_db();
         for i in 0..25 {
             let id = format!("c-{:02}", i);
@@ -412,7 +412,7 @@ mod tests {
             tag_id: None,
             search: None,
             importance: None,
-            sort_by: "last_contacted_at".to_string(),
+            sort_by: "last_interaction_at".to_string(),
             limit: 20,
             offset: 0,
         };
@@ -422,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn list_with_sort_by_last_contacted_at_page_2_returns_5_items() {
+    fn list_with_sort_by_last_interaction_at_page_2_returns_5_items() {
         let conn = setup_db();
         for i in 0..25 {
             let id = format!("c-{:02}", i);
@@ -448,7 +448,7 @@ mod tests {
             tag_id: None,
             search: None,
             importance: None,
-            sort_by: "last_contacted_at".to_string(),
+            sort_by: "last_interaction_at".to_string(),
             limit: 20,
             offset: 20,
         };

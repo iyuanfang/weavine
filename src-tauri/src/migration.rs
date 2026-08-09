@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS "Contact" (
     "wechat" TEXT,
     "notes" TEXT,
     "importance" TEXT NOT NULL DEFAULT 'low' CHECK("importance" IN ('low', 'medium', 'high')),
-    "last_contacted_at" DATETIME,
+"last_interaction_at" DATETIME,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL
 );
@@ -139,9 +139,10 @@ CREATE TABLE IF NOT EXISTS "Reminder" (
     "contact_id" TEXT REFERENCES "Contact"("id") ON DELETE CASCADE,
     "event_id" TEXT REFERENCES "Event"("id") ON DELETE CASCADE,
     "trigger_at" DATETIME NOT NULL,
-    "kind" TEXT NOT NULL DEFAULT 'event',
+    "kind" TEXT NOT NULL DEFAULT 'time' CHECK("kind" IN ('time', 'cadence')),
     "dispatched" INTEGER NOT NULL DEFAULT 0,
     "dismissed" INTEGER NOT NULL DEFAULT 0,
+    "invitation_token" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -231,7 +232,7 @@ CREATE INDEX IF NOT EXISTS "Contact_user_id_name_idx" ON "Contact"("user_id", "n
 CREATE INDEX IF NOT EXISTS "Contact_user_id_company_idx" ON "Contact"("user_id", "company");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_city_idx" ON "Contact"("user_id", "city");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_importance_idx" ON "Contact"("user_id", "importance");
-CREATE INDEX IF NOT EXISTS "Contact_user_id_last_contacted_at_updated_at_idx" ON "Contact"("user_id", "last_contacted_at", "updated_at");
+CREATE INDEX IF NOT EXISTS "Contact_user_id_last_interaction_at_updated_at_idx" ON "Contact"("user_id", "last_interaction_at", "updated_at");
 CREATE UNIQUE INDEX IF NOT EXISTS "Contact_user_id_email_key" ON "Contact"("user_id", "email");
 CREATE UNIQUE INDEX IF NOT EXISTS "Tag_user_id_name_key" ON "Tag"("user_id", "name");
 CREATE INDEX IF NOT EXISTS "ContactTag_user_id_idx" ON "ContactTag"("user_id");
@@ -254,7 +255,7 @@ CREATE INDEX IF NOT EXISTS "Action_user_id_project_id_idx" ON "Action"("user_id"
 CREATE INDEX IF NOT EXISTS "Event_user_id_project_id_idx" ON "Event"("user_id", "project_id");
 CREATE INDEX IF NOT EXISTS "ProjectContact_user_id_idx" ON "ProjectContact"("user_id");
 CREATE INDEX IF NOT EXISTS "ProjectContact_contact_id_idx" ON "ProjectContact"("contact_id");
-CREATE INDEX IF NOT EXISTS "Contact_user_id_last_contacted_at_idx" ON "Contact"("user_id", "last_contacted_at DESC");
+CREATE INDEX IF NOT EXISTS "Contact_user_id_last_interaction_at_idx" ON "Contact"("user_id", "last_interaction_at DESC");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_created_at_idx" ON "Contact"("user_id", "created_at DESC");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_nickname_idx" ON "Contact"("user_id", "nickname COLLATE NOCASE ASC");
 CREATE TABLE IF NOT EXISTS "UserAccount" (
@@ -580,6 +581,30 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         [],
     )?;
 
+    // ── Phase 2.5 quick-capture cadence hub ─────────────────────
+    let rename_present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Contact') WHERE name='last_contacted_at'",
+        [],
+        |r| r.get(0),
+    )?;
+    if rename_present > 0 {
+        conn.execute(
+            "ALTER TABLE \"Contact\" RENAME COLUMN \"last_contacted_at\" TO \"last_interaction_at\"",
+            [],
+        )?;
+    }
+    let token_present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('reminder') WHERE name='invitation_token'",
+        [],
+        |r| r.get(0),
+    )?;
+    if token_present == 0 {
+        conn.execute(
+            "ALTER TABLE \"reminder\" ADD COLUMN \"invitation_token\" TEXT",
+            [],
+        )?;
+    }
+
     Ok(())
 }
 
@@ -678,7 +703,7 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "city" TEXT, "email" TEXT, "phone" TEXT, "wechat" TEXT, "notes" TEXT,
             "importance" TEXT NOT NULL DEFAULT 'normal',
             "reminder_enabled" INTEGER NOT NULL DEFAULT 1,
-            "reminder_interval_days" INTEGER, "last_contacted_at" DATETIME,
+            "reminder_interval_days" INTEGER, "last_interaction_at" DATETIME,
             "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" DATETIME NOT NULL
         );"#,
@@ -686,7 +711,7 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
          "company"=>"company", "title"=>"title", "city"=>"city", "email"=>"email",
          "phone"=>"phone", "wechat"=>"wechat", "notes"=>"notes", "importance"=>"importance",
          "reminderEnabled"=>"reminder_enabled", "reminderIntervalDays"=>"reminder_interval_days",
-         "lastContactedAt"=>"last_contacted_at", "createdAt"=>"created_at", "updatedAt"=>"updated_at"]
+         "lastContactedAt"=>"last_interaction_at", "createdAt"=>"created_at", "updatedAt"=>"updated_at"]
     );
 
     // ── Tag ──
@@ -783,9 +808,10 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "contact_id" TEXT REFERENCES "Contact"("id") ON DELETE CASCADE,
             "event_id" TEXT REFERENCES "Event"("id") ON DELETE CASCADE,
             "trigger_at" DATETIME NOT NULL,
-            "kind" TEXT NOT NULL DEFAULT 'event',
+            "kind" TEXT NOT NULL DEFAULT 'time',
             "dispatched" INTEGER NOT NULL DEFAULT 0,
             "dismissed" INTEGER NOT NULL DEFAULT 0,
+            "invitation_token" TEXT,
             "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );"#,
         ["id"=>"id", "ownerId"=>"user_id", "contactId"=>"contact_id",

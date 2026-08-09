@@ -70,8 +70,16 @@ fn contact_legacy_normal_value_migrates_to_medium() {
             \"id\" TEXT NOT NULL PRIMARY KEY,
             \"user_id\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,
             \"nickname\" TEXT NOT NULL,
+            \"name\" TEXT,
+            \"company\" TEXT,
+            \"title\" TEXT,
+            \"city\" TEXT,
+            \"email\" TEXT,
+            \"phone\" TEXT,
+            \"wechat\" TEXT,
+            \"notes\" TEXT,
             \"importance\" TEXT NOT NULL DEFAULT 'normal',
-            \"last_contacted_at\" DATETIME,
+            \"last_interaction_at\" DATETIME,
             \"created_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             \"updated_at\" DATETIME NOT NULL
         );
@@ -153,4 +161,38 @@ fn business_create_contact_default_importance_is_low() {
 
     let created = weavine_lib::business::contact::create(&conn, &input).expect("create");
     assert_eq!(created.importance, "low", "default importance must be 'low'");
+}
+
+#[test]
+fn sqlite_contact_column_renamed_to_last_interaction_at() {
+    let conn = setup();
+    let has_old: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('Contact') WHERE name='last_contacted_at'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(has_old, 0, "last_contacted_at must be renamed (M19)");
+    let has_new: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('Contact') WHERE name='last_interaction_at'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(has_new, 1, "last_interaction_at must exist (M19)");
+}
+
+#[test]
+fn sqlite_reminder_has_invitation_token_column() {
+    let conn = setup();
+    let has: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('reminder') WHERE name='invitation_token'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(has, 1, "reminder.invitation_token must exist (M19)");
 }
