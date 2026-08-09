@@ -17,6 +17,10 @@ pub struct GraphNode {
     pub company: Option<String>,
     pub title: Option<String>,
     pub importance: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_storage_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_mime: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -51,7 +55,7 @@ pub async fn get(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let max_depth = p.depth.unwrap_or(2).clamp(1, 4);
 
-    let rows: Vec<(String, Option<String>, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+    let rows: Vec<(String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
         r#"
         WITH RECURSIVE reachable(id, depth) AS (
             SELECT $1::text, 0
@@ -67,7 +71,8 @@ pub async fn get(
               AND el.user_id = $2
               AND r.depth < $3
         )
-        SELECT DISTINCT r.id, c.nickname, c.name, c.company, c.title
+        SELECT DISTINCT r.id, c.nickname, c.name, c.company, c.title,
+               c.avatar_storage_key, c.avatar_mime
         FROM reachable r
         JOIN contact c ON c.id = r.id AND c.user_id = $2
         "#,
@@ -81,13 +86,15 @@ pub async fn get(
 
     let nodes: Vec<GraphNode> = rows
         .into_iter()
-        .map(|(id, nickname, name, company, title)| GraphNode {
+        .map(|(id, nickname, name, company, title, avatar_storage_key, avatar_mime)| GraphNode {
             id,
             nickname,
             name,
             company,
             title,
             importance: None,
+            avatar_storage_key,
+            avatar_mime,
         })
         .collect();
 

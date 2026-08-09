@@ -18,6 +18,13 @@ export default defineConfig({
         target: 'http://127.0.0.1:3000',
         changeOrigin: true,
       },
+      // Avatar / media files are stored on the server backend (Storage trait).
+      // Forward /files/* to the server so <img src="/files/..."> resolves in the
+      // browser dev SPA (which is served from Vite on :5181, not :3000).
+      '/files': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
     },
   },
   clearScreen: false,

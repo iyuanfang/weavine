@@ -1,9 +1,15 @@
+import { useAdapter } from '../lib/adapter';
 import type { Contact } from '../lib/adapter/types';
+import { avatarUrlFor } from '../lib/avatarUrl';
 import { Avatar } from './Avatar';
 
 type ContactBadgeInput =
   | string
-  | (Pick<Contact, 'nickname' | 'name'> & { id?: string; avatar_url?: string | null })
+  | (Pick<Contact, 'nickname' | 'name'> & {
+      id?: string;
+      avatar_storage_key?: string | null;
+      avatar_mime?: string | null;
+    })
   | null
   | undefined;
 
@@ -14,6 +20,7 @@ interface ContactBadgeProps {
 }
 
 export function ContactBadge({ contact, compact = false, avatarUrl }: ContactBadgeProps) {
+  const adapter = useAdapter();
   if (!contact) return null;
 
   const name =
@@ -22,9 +29,21 @@ export function ContactBadge({ contact, compact = false, avatarUrl }: ContactBad
       : (contact.nickname ?? contact.name ?? '').trim();
   if (!name) return null;
 
-  const url =
-    avatarUrl ??
-    (typeof contact === 'string' ? null : contact.avatar_url ?? null);
+  let computedUrl: string | null;
+  if (typeof contact === 'string') {
+    computedUrl = null;
+  } else if (contact.avatar_storage_key) {
+    computedUrl = avatarUrlFor(
+      {
+        avatar_storage_key: contact.avatar_storage_key,
+        avatar_mime: contact.avatar_mime ?? null,
+      } as Contact,
+      { baseUrl: adapter.baseUrl },
+    );
+  } else {
+    computedUrl = null;
+  }
+  const url = avatarUrl ?? computedUrl;
 
   return (
     <span

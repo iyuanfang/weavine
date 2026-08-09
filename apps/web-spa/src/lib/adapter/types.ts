@@ -98,6 +98,8 @@ export interface GraphNode {
   company: string | null;
   title: string | null;
   importance: string | null;
+  avatar_storage_key?: string | null;
+  avatar_mime?: string | null;
 }
 
 export interface GraphEdge {

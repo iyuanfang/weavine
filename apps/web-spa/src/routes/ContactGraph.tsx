@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
+import { avatarUrlFor } from '../lib/avatarUrl';
 import type { GraphNode } from '../lib/adapter/types';
 
 const RING1_RADIUS = 180;
@@ -29,6 +30,15 @@ export function ContactGraph() {
     queryKey: ['graph', contactId, depth],
     queryFn: () => adapter.graph.get(contactId, depth),
   });
+
+  const avatarUrl = (n: GraphNode): string | null =>
+    avatarUrlFor(
+      {
+        avatar_storage_key: n.avatar_storage_key ?? null,
+        avatar_mime: n.avatar_mime ?? null,
+      } as Parameters<typeof avatarUrlFor>[0],
+      { baseUrl: adapter.baseUrl },
+    );
 
   const removeMutation = useMutation({
     mutationFn: (otherId: string) => adapter.graph.removeRelation(contactId, otherId),
@@ -191,8 +201,14 @@ export function ContactGraph() {
             const p = placedAt[n.id];
             if (!p) return null;
             const isRing1 = ring1.includes(n);
+            const url = avatarUrl(n);
             return (
               <g key={n.id} data-testid={`graph-node-${n.id}`}>
+                <defs>
+                  <clipPath id={`clip-${n.id}`}>
+                    <circle cx={p.x} cy={p.y} r={NODE_R} />
+                  </clipPath>
+                </defs>
                 <circle
                   cx={p.x}
                   cy={p.y}
@@ -201,16 +217,29 @@ export function ContactGraph() {
                   stroke={isRing1 ? '#2563eb' : '#cbd5e1'}
                   strokeWidth={2}
                 />
-                <text
-                  x={p.x}
-                  y={p.y + 4}
-                  fontSize="12"
-                  fontWeight={600}
-                  fill="#0f172a"
-                  textAnchor="middle"
-                >
-                  {labelOf(n).length > 6 ? labelOf(n).slice(0, 6) + '…' : labelOf(n)}
-                </text>
+                {url && (
+                  <image
+                    href={url}
+                    x={p.x - NODE_R}
+                    y={p.y - NODE_R}
+                    width={NODE_R * 2}
+                    height={NODE_R * 2}
+                    preserveAspectRatio="xMidYMid slice"
+                    clipPath={`url(#clip-${n.id})`}
+                  />
+                )}
+                {!url && (
+                  <text
+                    x={p.x}
+                    y={p.y + 4}
+                    fontSize="12"
+                    fontWeight={600}
+                    fill="#0f172a"
+                    textAnchor="middle"
+                  >
+                    {labelOf(n).length > 6 ? labelOf(n).slice(0, 6) + '…' : labelOf(n)}
+                  </text>
+                )}
                 <a href={`/contacts/${n.id}`}>
                   <title>
                     {labelOf(n)}
