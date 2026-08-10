@@ -1,3 +1,4 @@
+import { listen } from '@tauri-apps/api/event';
 import { useEffect } from 'react';
 
 import { isTauri } from '../lib/adapter';
@@ -5,8 +6,11 @@ import { isTauri } from '../lib/adapter';
 export function useGlobalShortcut(combo: string, cb: () => void) {
   useEffect(() => {
     if (isTauri) {
-      // Tauri path registered via tauri-plugin-global-shortcut (Task 8)
-      return;
+      // Registered system-wide via tauri-plugin-global-shortcut in Rust (desktop).
+      const unlistenP = listen('ctrl-k-pressed', () => cb());
+      return () => {
+        unlistenP.then((unlisten) => unlisten()).catch(() => {});
+      };
     }
     const key = combo.toLowerCase().replace('ctrl+', '');
     const handler = (e: KeyboardEvent) => {

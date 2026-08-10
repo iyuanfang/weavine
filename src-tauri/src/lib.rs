@@ -40,6 +40,8 @@ pub fn run() {
     use commands::{action, contact, diagnostic, event, interaction, media, ocr, project, project_contact, quick, reminder, search, setting, tag};
     use db::Database;
     use std::fs;
+    use tauri::Emitter;
+    use tauri_plugin_global_shortcut::ShortcutState;
 
     let initial_data_dir = db::get_db_path()
         .parent()
@@ -175,7 +177,22 @@ pub fn run() {
             commands::archive::archive_sweep,
             quick::quick_parse,
         ])
-        .setup(|_app| Ok(()))
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_shortcuts(["CommandOrControl+K"])?
+                        .with_handler(|app, _shortcut, event| {
+                            if event.state == ShortcutState::Pressed {
+                                let _ = app.emit("ctrl-k-pressed", ());
+                            }
+                        })
+                        .build(),
+                )?;
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
