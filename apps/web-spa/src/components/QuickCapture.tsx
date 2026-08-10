@@ -52,14 +52,15 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
 
 interface Props {
   onClose: () => void;
+  initialText?: string;
 }
 
-export function QuickCapture({ onClose }: Props) {
+export function QuickCapture({ onClose, initialText = '' }: Props) {
   const adapter = useAdapter();
   const { data: localUser } = useLocalUser();
   const userId = localUser?.id ?? '';
 
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [parsed, setParsed] = useState<ParsedQuick | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
