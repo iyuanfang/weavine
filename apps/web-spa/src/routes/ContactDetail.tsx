@@ -81,6 +81,7 @@ export function ContactDetail() {
   const [interactionChannel, setInteractionChannel] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [viewingAvatar, setViewingAvatar] = useState(false);
 
@@ -153,6 +154,7 @@ export function ContactDetail() {
     setCropFile(null);
     if (!contact.id) return;
     setAvatarUploading(true);
+    setAvatarError(null);
     try {
       const bytes = new Uint8Array(await blob.arrayBuffer());
       await adapter.media.upload({
@@ -166,6 +168,7 @@ export function ContactDetail() {
       await queryClient.invalidateQueries({ queryKey: ['contact', contact.id] });
     } catch (err) {
       console.error('avatar upload failed', err);
+      setAvatarError(err instanceof Error ? err.message : '头像上传失败');
     } finally {
       setAvatarUploading(false);
     }
@@ -263,6 +266,11 @@ export function ContactDetail() {
           >
             {avatarUploading ? '上传中…' : '更换头像'}
           </button>
+          {avatarError && (
+            <span role="alert" style={{ color: '#dc2626', fontSize: 13, alignSelf: 'center' }}>
+              {avatarError}
+            </span>
+          )}
           <Link to={`/contacts/${id}/graph`} className="btn btn-secondary" data-testid="contact-graph-link">
             🕸️ 关系图
           </Link>

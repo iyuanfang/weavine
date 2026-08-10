@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface AvatarProps {
   src?: string | null;
@@ -24,6 +24,7 @@ function colorFor(name: string): string {
 
 export function Avatar({ src, name, size = 40, title }: AvatarProps) {
   const [errored, setErrored] = useState(false);
+  useEffect(() => { setErrored(false); }, [src]);
   const showImage = !!src && !errored;
   return (
     <span
@@ -50,6 +51,7 @@ export function Avatar({ src, name, size = 40, title }: AvatarProps) {
           src={src ?? ''}
           alt={name}
           onError={() => setErrored(true)}
+          onLoad={() => setErrored(false)}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       ) : (
