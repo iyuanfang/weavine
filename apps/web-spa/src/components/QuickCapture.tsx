@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { parseQuick } from '../lib/adapter/quick-capture';
-import { useAdapter } from '../lib/adapter';
-import { useLocalUser } from '../lib/auth';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
 const KIND_LABEL: Record<QuickKind, string> = {
@@ -56,10 +54,7 @@ interface Props {
 }
 
 export function QuickCapture({ onClose, initialText = '' }: Props) {
-  const adapter = useAdapter();
-  const { data: localUser } = useLocalUser();
-  const userId = localUser?.id ?? '';
-
+  const userId = typeof window !== 'undefined' ? (window.localStorage.getItem('weavine.user_id') ?? '') : '';
   const [text, setText] = useState(initialText);
   const [parsed, setParsed] = useState<ParsedQuick | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,15 +65,15 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
 
   useEffect(() => {
     if (!userId) return;
-    adapter.contacts
-      .list({ user_id: userId, limit: 100 })
-      .then((r) => {
-        setContactNames(
-          r.items.flatMap((c) => [c.nickname, ...(c.name ? [c.name] : [])]),
-        );
+    fetch('/api/contacts', {
+      headers: { Authorization: `Bearer ${window.localStorage.getItem('weavine.access_token') ?? ''}` },
+    })
+      .then((r) => r.json())
+      .then((data: { items: Array<{ nickname: string; name?: string | null }> }) => {
+        setContactNames(data.items.flatMap((c) => [c.nickname, ...(c.name ? [c.name] : [])]));
       })
       .catch(() => {});
-  }, [adapter, userId]);
+  }, [userId]);
 
   useEffect(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -171,6 +166,9 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
         alignItems: 'flex-start',
         justifyContent: 'center',
         paddingTop: '12vh',
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
       }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();

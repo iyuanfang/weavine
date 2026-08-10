@@ -1,7 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode, useMemo, useState } from 'react';
 
-import { AppShell } from './components/AppShell';
 import { QuickCapture } from './components/QuickCapture';
 import { QuickFab } from './components/QuickFab';
 import { useGlobalShortcut } from './hooks/useGlobalShortcut';
@@ -34,7 +33,7 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 }
 
-function AppInner({ children }: { children?: ReactNode }) {
+export function AppInner({ children }: { children?: ReactNode }) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickInitial, setQuickInitial] = useState('');
   useGlobalShortcut('k', () => setQuickOpen((o) => !o));
@@ -44,7 +43,7 @@ function AppInner({ children }: { children?: ReactNode }) {
   };
   return (
     <>
-      <AppShell>{children}</AppShell>
+      {children}
       <QuickFab onOpen={openQuick} />
       {quickOpen && (
         <QuickCapture
