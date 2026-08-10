@@ -1,7 +1,9 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { type ReactNode, useMemo } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 
 import { AppShell } from './components/AppShell';
+import { QuickCapture } from './components/QuickCapture';
+import { useGlobalShortcut } from './hooks/useGlobalShortcut';
 import { RegisterSW } from './lib/register-sw';
 import { useReminderPoller } from './lib/use-reminder-poller';
 import {
@@ -31,10 +33,21 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 }
 
+function AppInner({ children }: { children?: ReactNode }) {
+  const [quickOpen, setQuickOpen] = useState(false);
+  useGlobalShortcut('k', () => setQuickOpen((o) => !o));
+  return (
+    <>
+      <AppShell>{children}</AppShell>
+      {quickOpen && <QuickCapture onClose={() => setQuickOpen(false)} />}
+    </>
+  );
+}
+
 export function App({ children }: { children?: ReactNode }) {
   return (
     <Providers>
-      <AppShell>{children}</AppShell>
+      <AppInner>{children}</AppInner>
     </Providers>
   );
 }

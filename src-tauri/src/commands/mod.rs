@@ -7,6 +7,7 @@ pub mod interaction;
 pub mod params;
 pub mod project;
 pub mod project_contact;
+pub mod quick;
 pub mod media;
 pub mod ocr;
 pub mod reminder;

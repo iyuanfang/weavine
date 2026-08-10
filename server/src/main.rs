@@ -125,6 +125,8 @@ async fn main() {
         .route("/api/sync/manifest", post(handlers::sync::manifest))
         .route("/api/sync/push", post(handlers::sync::push))
         .route("/api/sync/pull", post(handlers::sync::pull))
+        // Quick capture (Ctrl+K parser)
+        .route("/api/quick/parse", post(handlers::quick::parse))
         .layer(SetResponseHeaderLayer::if_not_present(
             CACHE_CONTROL,
             HeaderValue::from_static("no-store"),

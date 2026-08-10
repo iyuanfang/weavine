@@ -14,6 +14,7 @@ pub enum Kind {
     Interaction,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QuickItem {
     pub kind: Kind,
     pub kind_score: f32,

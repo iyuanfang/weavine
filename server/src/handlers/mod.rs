@@ -11,6 +11,7 @@ pub mod media;
 pub mod ocr;
 pub mod project;
 pub mod project_contact;
+pub mod quick;
 pub mod reminder;
 pub mod search;
 pub mod setting;
