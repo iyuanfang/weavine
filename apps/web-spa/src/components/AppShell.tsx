@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router-dom';
 import { isTauri } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
 import { clearSession } from '../lib/auth/storage';
+import { useQuickCapture } from '../App';
 
 const navItems = [
   { to: '/today', label: '今天', icon: '🎯', end: true },
@@ -17,8 +18,14 @@ const navItems = [
   { to: '/settings', label: '设置', icon: '⚙️' },
 ];
 
+function shortcutLabel(): string {
+  if (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)) return '⌘K';
+  return 'Ctrl K';
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading: userLoading } = useLocalUser();
+  const { open: openQuickCapture } = useQuickCapture();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showArchiveTip, setShowArchiveTip] = useState(() => {
     if (typeof localStorage === 'undefined') return false;
@@ -55,6 +62,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav className="app-shell__menu">
+        <button
+          type="button"
+          className="app-shell__menu-item app-shell__menu-item--quick"
+          onClick={() => {
+            openQuickCapture('');
+            setDrawerOpen(false);
+          }}
+        >
+          <span className="app-shell__menu-icon">⚡</span>
+          <span>快速记录</span>
+          <kbd className="app-shell__menu-kbd">{shortcutLabel()}</kbd>
+        </button>
+
         {navItems.map((item) => (
           <NavLink
             key={item.to}

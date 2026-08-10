@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, createContext, useContext, useMemo, useState } from 'react';
 
 import { QuickCapture } from './components/QuickCapture';
 import { QuickFab } from './components/QuickFab';
@@ -12,6 +12,18 @@ import {
   createWebQueryClient,
   type PRMAdapter,
 } from './lib/adapter';
+
+interface QuickCaptureApi {
+  open: (initialText?: string) => void;
+}
+
+const QuickCaptureContext = createContext<QuickCaptureApi | null>(null);
+
+export function useQuickCapture(): QuickCaptureApi {
+  const ctx = useContext(QuickCaptureContext);
+  if (!ctx) throw new Error('useQuickCapture must be used within AppInner');
+  return ctx;
+}
 
 function ReminderPoller() {
   useReminderPoller();
@@ -37,12 +49,13 @@ export function AppInner({ children }: { children?: ReactNode }) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickInitial, setQuickInitial] = useState('');
   useGlobalShortcut('k', () => setQuickOpen((o) => !o));
-  const openQuick = (initialText: string) => {
+  const openQuick = (initialText: string = '') => {
     setQuickInitial(initialText);
     setQuickOpen(true);
   };
+  const quickApi = useMemo<QuickCaptureApi>(() => ({ open: openQuick }), []);
   return (
-    <>
+    <QuickCaptureContext.Provider value={quickApi}>
       {children}
       <QuickFab onOpen={openQuick} />
       {quickOpen && (
@@ -51,7 +64,7 @@ export function AppInner({ children }: { children?: ReactNode }) {
           initialText={quickInitial}
         />
       )}
-    </>
+    </QuickCaptureContext.Provider>
   );
 }
 

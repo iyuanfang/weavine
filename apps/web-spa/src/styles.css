@@ -190,6 +190,33 @@ button:focus-visible {
   color: var(--fg-soft);
   transition: background var(--transition), color var(--transition);
   font-weight: 500;
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.app-shell__menu-item--quick {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 6px;
+  border: 1px solid var(--accent);
+}
+
+.app-shell__menu-kbd {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  white-space: nowrap;
 }
 
 .app-shell__menu-item:hover {
