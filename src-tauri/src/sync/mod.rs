@@ -654,6 +654,47 @@ mod tests {
     }
 
     #[test]
+    fn pull_reminder_preserves_invitation_token() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE Reminder (
+                id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                contact_id TEXT,
+                event_id TEXT,
+                trigger_at TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                dispatched BOOLEAN NOT NULL DEFAULT false,
+                dismissed BOOLEAN NOT NULL DEFAULT false,
+                invitation_token TEXT,
+                created_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        let data = json!({
+            "id": "r1", "user_id": "u1",
+            "contact_id": "c1", "event_id": null,
+            "trigger_at": "2026-08-15T09:00:00Z",
+            "kind": "cadence",
+            "dispatched": false, "dismissed": false,
+            "invitation_token": "u1:c1:14",
+            "created_at": "2026-08-01T00:00:00Z"
+        });
+        apply_change(&conn, &change_row("reminder", "INSERT", "r1", data), "local-default")
+            .expect("apply reminder");
+        let (kind, token, contact_id): (String, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT kind, invitation_token, contact_id FROM Reminder WHERE id='r1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .expect("query reminder");
+        assert_eq!(kind, "cadence");
+        assert_eq!(token, Some("u1:c1:14".to_string()), "invitation_token must round-trip through pull");
+        assert_eq!(contact_id, Some("c1".to_string()));
+    }
+
+    #[test]
     fn pull_media_applies_storage_key_and_int_columns() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(

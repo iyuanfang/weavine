@@ -163,7 +163,7 @@ pub fn push_columns(kind: &str) -> &'static [&'static str] {
         "action" => &["id","user_id","title","description","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at"],
         "interaction" => &["id","user_id","contact_id","action_id","event_id","occurred_at","channel","summary","created_at"],
         "project" => &["id","user_id","title","description","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at"],
-        "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","created_at"],
+        "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","invitation_token","created_at"],
         "setting" => &["id","user_id","key","value","updated_at"],
         "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","storage_key","width","height","alt_text","created_at","updated_at"],
         "contact_tag" => &["user_id","contact_id","tag_id"],
@@ -212,5 +212,11 @@ mod tests {
                 assert!(!col.contains(char::is_uppercase), "{} column {} is not snake_case", kind, col);
             }
         }
+    }
+
+    #[test]
+    fn push_columns_reminder_includes_invitation_token() {
+        let cols = push_columns("reminder");
+        assert!(cols.contains(&"invitation_token"), "reminder push must include invitation_token for cross-device cadence dedup");
     }
 }
