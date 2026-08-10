@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import { buildRouterObjects } from './routes-config';
-import { AppInner } from './App';
+import { App } from './App';
 
 // Tauri 2 WebViews boot at http(s)://tauri.localhost/ (see
 // tauri-2.11.5/src/manager/mod.rs:787). routes-config has no '/' route — it was
@@ -34,8 +34,8 @@ if (!rootEl) throw new Error('root element missing');
 
 createRoot(rootEl).render(
   <StrictMode>
-    <AppInner>
+    <App>
       <RouterProvider router={router} />
-    </AppInner>
+    </App>
   </StrictMode>,
 );

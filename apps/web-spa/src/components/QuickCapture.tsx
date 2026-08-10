@@ -1,6 +1,9 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useAdapter } from '../lib/adapter';
+import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
@@ -54,7 +57,9 @@ interface Props {
 }
 
 export function QuickCapture({ onClose, initialText = '' }: Props) {
-  const userId = typeof window !== 'undefined' ? (window.localStorage.getItem('weavine.user_id') ?? '') : '';
+  const adapter = useAdapter();
+  const queryClient = useQueryClient();
+  const userId = useUserId() ?? '';
   const [text, setText] = useState(initialText);
   const [parsed, setParsed] = useState<ParsedQuick | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,15 +70,13 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
 
   useEffect(() => {
     if (!userId) return;
-    fetch('/api/contacts', {
-      headers: { Authorization: `Bearer ${window.localStorage.getItem('weavine.access_token') ?? ''}` },
-    })
-      .then((r) => r.json())
+    adapter.contacts
+      .list({ user_id: userId })
       .then((data: { items: Array<{ nickname: string; name?: string | null }> }) => {
         setContactNames(data.items.flatMap((c) => [c.nickname, ...(c.name ? [c.name] : [])]));
       })
       .catch(() => {});
-  }, [userId]);
+  }, [adapter, userId]);
 
   useEffect(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -103,17 +106,48 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
     };
   }, [text, contactNames, userId]);
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    parseQuick(trimmed, contactNames, userId)
-      .then(() => {
-        setSubmitted(true);
-        window.setTimeout(onClose, 400);
-      })
-      .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : String(e));
-      });
+    if (!trimmed || !userId) return;
+    try {
+      const p = parsed ?? (await parseQuick(trimmed, contactNames, userId));
+      const summary = p.summary || trimmed;
+      const now = new Date().toISOString();
+      switch (p.kind) {
+        case 'event':
+          await adapter.events.create({
+            user_id: userId,
+            title: summary,
+            type: '其他',
+            start_at: p.due ?? now,
+            contact_id: p.contact_id,
+          });
+          queryClient.invalidateQueries({ queryKey: ['events', userId] });
+          break;
+        case 'action':
+          await adapter.actions.create({
+            user_id: userId,
+            title: summary,
+            due_at: p.due,
+            contact_id: p.contact_id,
+          });
+          queryClient.invalidateQueries({ queryKey: ['actions', userId] });
+          break;
+        case 'interaction':
+          await adapter.interactions.create({
+            user_id: userId,
+            summary,
+            occurred_at: p.due ?? now,
+            contact_id: p.contact_id,
+          });
+          queryClient.invalidateQueries({ queryKey: ['interactions', userId] });
+          break;
+      }
+      setSubmitted(true);
+      window.setTimeout(onClose, 400);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const preview = useMemo(() => {

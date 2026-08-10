@@ -6,7 +6,6 @@
 import type { ComponentType, LazyExoticComponent } from 'react';
 import type { RouteObject } from 'react-router-dom';
 
-import { Providers } from './App';
 import { AppShell } from './components/AppShell';
 import { RequireAuth } from './lib/auth/RequireAuth';
 import { LoginPage } from './routes/Login';
@@ -91,26 +90,21 @@ export const routes: AppRoute[] = [
 ];
 
 /**
- * Build the React Router v6 data object array.
- *
- *   bare=true   → just <Providers> (QueryClient + adapter). Used for /login.
- *   bare=false  → <RequireAuth> → <Providers> → <AppShell> + page. On web,
- *                 RequireAuth gates on a valid JWT in localStorage.
+ * Build the React Router v6 data object array. Adapter + QueryClient
+ * providers live once at the app root (see App.tsx), so routes render
+ * bare: just the component. RequireAuth gates JWT on web (pass-through
+ * on Tauri).
  */
 export function buildRouterObjects(): RouteObject[] {
   return routes.map(({ path, Component, bare }) => ({
     path,
     element: bare ? (
-      <Providers>
-        <Component />
-      </Providers>
+      <Component />
     ) : (
       <RequireAuth>
-        <Providers>
-          <AppShell>
-            <Component />
-          </AppShell>
-        </Providers>
+        <AppShell>
+          <Component />
+        </AppShell>
       </RequireAuth>
     ),
   }));

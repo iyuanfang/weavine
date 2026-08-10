@@ -51,11 +51,18 @@ test.describe('QuickCapture (Ctrl+K panel)', () => {
     await page.waitForTimeout(500);
     await expect(page.getByText('事件')).toBeVisible();
 
-    await page.getByRole('button', { name: '记录' }).click();
+    await page.getByRole('button', { name: '记录', exact: true }).click();
     await expect(page.getByText('已记录 ✓', { exact: true })).toBeVisible();
 
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
+
+    const eventsResp = await api.get(`${SERVER_BASE}/api/events`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    expect(eventsResp.ok()).toBeTruthy();
+    const events = (await eventsResp.json()) as unknown[];
+    expect(events.length).toBeGreaterThan(0);
 
     await ctx.close();
     await api.dispose();
