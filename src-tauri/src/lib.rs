@@ -6,6 +6,7 @@ pub mod db;
 pub mod migration;
 pub mod models;
 pub mod project_template;
+pub mod quick;
 pub mod sync;
 pub mod tag_color;
 
