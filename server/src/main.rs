@@ -16,6 +16,7 @@ use tower_http::{
 mod api_key_crypto;
 mod auth_keys;
 mod business;
+mod cadence_server;
 mod handlers;
 
 const CHANGE_LOG_TTL_DAYS: i64 = 90;
@@ -52,6 +53,7 @@ async fn main() {
     let storage: Arc<dyn Storage> = Arc::new(LocalFsStorage::new(storage_root));
 
     spawn_change_log_pruner(pool.clone());
+    cadence_server::spawn_cadence_scheduler(pool.clone());
 
     // Initialize JWT keys from PEM files (RS256)
     handlers::JWT_KEYS
