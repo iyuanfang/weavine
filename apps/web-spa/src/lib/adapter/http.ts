@@ -346,6 +346,14 @@ export class HttpAdapter implements PRMAdapter {
       request<void>(this.baseUrl, 'POST', `/api/reminders/${id}/dismiss`),
   };
 
+  notifications = {
+    show: async () => {
+      throw new Error('Use browser Notification API directly on web');
+    },
+    requestPermission: async (): Promise<NotificationPermission> => 'default',
+    permission: async (): Promise<NotificationPermission> => 'default',
+  };
+
   tags = {
     list: (user_id: string): Promise<Tag[]> =>
       request<Tag[]>(this.baseUrl, 'GET', '/api/tags' + qs({ user_id })),

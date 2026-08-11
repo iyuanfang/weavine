@@ -519,6 +519,15 @@ export interface PRMAdapter {
     dismiss(id: string): Promise<void>;
   };
 
+  notifications: {
+    /** Show a system-native notification. Returns notification id on string. */
+    show: (input: { title: string; body?: string; tag?: string }) => Promise<string>;
+    /** Request OS permission to show notifications (mainly Android 13+ / Safari). */
+    requestPermission: () => Promise<'granted' | 'denied' | 'default'>;
+    /** Current permission state. */
+    permission: () => Promise<'granted' | 'denied' | 'default'>;
+  };
+
   graph: {
     get(contact_id: string, depth?: number): Promise<GraphResponse>;
     addRelation(

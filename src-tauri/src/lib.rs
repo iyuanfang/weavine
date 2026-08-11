@@ -42,6 +42,7 @@ pub fn run() {
     use std::fs;
     use tauri::Emitter;
     use tauri_plugin_global_shortcut::ShortcutState;
+    use tauri_plugin_notification;
 
     let initial_data_dir = db::get_db_path()
         .parent()
@@ -191,6 +192,7 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            app.handle().plugin(tauri_plugin_notification::init())?;
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -32,7 +32,7 @@ export function createAdapter(): PRMAdapter {
     ? new TauriAdapter()
     : new HttpAdapter();
 
-  return _adapter;
+  return _adapter!;
 }
 
 /** Ready-to-use singleton instance. Auto-detects Tauri vs browser. */

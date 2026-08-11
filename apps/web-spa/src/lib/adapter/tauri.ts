@@ -19,6 +19,7 @@
 //   the two stacks are aligned on `user_id` end-to-end.
 
 import { invoke } from '@tauri-apps/api/core';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 import type {
   Action,
@@ -259,6 +260,22 @@ export class TauriAdapter implements PRMAdapter {
       invoke<void>('delete_reminder', { id }),
     dismiss: (id: string): Promise<void> =>
       invoke<void>('dismiss_reminder', { id }),
+  };
+
+  notifications = {
+    show: async (input: { title: string; body?: string; tag?: string }) => {
+      const { title, body, tag } = input;
+      sendNotification({ title, body, ...(tag ? { tag } : {}) });
+      return tag ?? `tnotif-${Date.now()}`;
+    },
+    requestPermission: async () => {
+      const perm = await requestPermission();
+      return perm === 'granted' ? 'granted' : perm === 'denied' ? 'denied' : 'default';
+    },
+    permission: async () => {
+      const perm = await isPermissionGranted();
+      return perm ? 'granted' : 'default';
+    },
   };
 
   tags = {
