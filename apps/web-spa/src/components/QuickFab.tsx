@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { isTauri } from '../lib/adapter/tauri';
 import { isAndroid, recognizeSpeech, speechRecognitionAvailable } from '../lib/voice';
 
 interface Props {
@@ -10,7 +11,11 @@ export function QuickFab({ onOpen }: Props) {
   const [listening, setListening] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  if (!isAndroid()) return null;
+  // Hidden on Android Tauri APK until native STT plugin lands: WebView lacks
+  // webkitSpeechRecognition, so a tap would degrade to an empty panel (bad UX).
+  // Re-enable when tauri-plugin-android-speechrecognition / sherpa-onnx / 讯飞
+  // SDK ships (Phase 2.6+ deferred — see spec §3.5.6).
+  if (!isAndroid() || isTauri) return null;
 
   const handleTap = () => {
     setBusy(true);
