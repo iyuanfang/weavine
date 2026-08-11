@@ -331,7 +331,17 @@ fn parse_summary_with_due() {
     let now = chrono::Utc::now();
     let items = vec![];
     let item = parse("明天和李雷开会", &items, now);
-    assert!(item.summary.starts_with("event: "));
+    assert_eq!(item.summary, "明天和李雷开会");
+}
+
+#[test]
+fn parse_summary_strips_trailing_period() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let input = "明天和李雷开会。";
+    let item = parse(input, &items, now);
+    assert_eq!(item.summary, "明天和李雷开会");
+    assert_eq!(item.raw, input);
 }
 
 #[test]
@@ -3231,4 +3241,99 @@ fn parse_weekday_chinese_next_monday_one_on_one_me_me_me_me_me_me_me_me_me_me_me
     let item = parse("下周一和李雷碰头", &items, now);
     assert_eq!(item.kind, Kind::Event);
     assert!(item.due.unwrap() > now);
+}
+#[test]
+fn parse_tomorrow_afternoon_3pm_chinese() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("明天下午3点和test开会", &items, now);
+    assert_eq!(item.kind, Kind::Event);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "15:00");
+    assert_eq!(
+        local.date_naive(),
+        chrono::Local::now().date_naive() + chrono::Duration::days(1),
+    );
+}
+
+#[test]
+fn parse_today_afternoon_5pm_chinese() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("今天下午5点和小王吃饭", &items, now);
+    assert_eq!(item.kind, Kind::Interaction);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "17:00");
+}
+
+#[test]
+fn parse_tomorrow_24h_format() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("明天15:30 提交周报", &items, now);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "15:30");
+}
+
+#[test]
+fn parse_tomorrow_morning_chinese() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("明天上午10点开会", &items, now);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "10:00");
+}
+
+#[test]
+fn parse_tomorrow_evening_chinese() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("明天晚上8点和李雷打电话", &items, now);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "20:00");
+}
+
+#[test]
+fn parse_tomorrow_half_hour_chinese() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("明天下午3点半和小王喝咖啡", &items, now);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "15:30");
+}
+
+#[test]
+fn parse_next_friday_afternoon_3pm() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("下周五下午3点提交报告", &items, now);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "15:00");
+}
+
+#[test]
+fn parse_english_3pm_tomorrow() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("meeting tomorrow at 3pm", &items, now);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "15:00");
+}
+
+#[test]
+fn parse_noon_keeps_12() {
+    let now = chrono::Utc::now();
+    let items = vec![];
+    let item = parse("明天中午12点和小王吃饭", &items, now);
+    let due = item.due.expect("due must be set");
+    let local = due.with_timezone(&chrono::Local);
+    assert_eq!(local.format("%H:%M").to_string(), "12:00");
 }
