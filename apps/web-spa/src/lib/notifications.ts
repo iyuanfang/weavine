@@ -9,11 +9,17 @@
 
 export type NotificationPermissionState = "default" | "granted" | "denied";
 
+export type NotificationPerm = NotificationPermissionState;
+
 export type ReminderSound = "default" | "chime" | "bell" | "silent";
 
 export function getPermission(): NotificationPermissionState {
   if (typeof Notification === "undefined") return "denied";
   return Notification.permission as NotificationPermissionState;
+}
+
+export function currentPermission(): NotificationPerm {
+  return getPermission();
 }
 
 export async function ensurePermission(): Promise<NotificationPermissionState> {
@@ -84,6 +90,28 @@ export function fire(
     if (tag) opts.tag = tag;
     new Notification(title, opts);
     playSound(sound);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function showBrowserNotification(opts: {
+  title: string;
+  body?: string;
+  tag?: string;
+  onClick?: () => void;
+}): Promise<boolean> {
+  if (typeof Notification === "undefined") return false;
+  const perm = await ensurePermission();
+  if (perm !== "granted") return false;
+  try {
+    const n = new Notification(opts.title, {
+      body: opts.body,
+      tag: opts.tag,
+      silent: false,
+    });
+    if (opts.onClick) n.onclick = opts.onClick;
     return true;
   } catch {
     return false;

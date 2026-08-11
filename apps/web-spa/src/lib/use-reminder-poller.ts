@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { useAdapter } from "./adapter";
+import type { Reminder } from "./adapter/types";
 import { useUserId } from "./auth";
 import { ensurePermission, fire, type ReminderSound } from "./notifications";
 
@@ -38,9 +39,11 @@ export function useReminderPoller() {
         return;
       }
       const now = Date.now();
+      const due: Reminder[] = [];
       for (const r of reminders) {
         if (r.dispatched || r.dismissed) continue;
         if (new Date(r.trigger_at).getTime() > now) continue;
+        due.push(r);
         const ok = fire("Weavine · 提醒", humanize(r), undefined, sound);
         if (ok) {
           try {
@@ -49,6 +52,9 @@ export function useReminderPoller() {
             console.warn("reminder poller: mark dispatched failed", e);
           }
         }
+      }
+      for (const r of due) {
+        window.dispatchEvent(new CustomEvent("weavine:reminder", { detail: r }));
       }
     }
 

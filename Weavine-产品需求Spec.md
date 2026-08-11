@@ -1,6 +1,6 @@
 # Weavine 产品蓝图（Product Blueprint / Spec）
 
-> 版本：**v1.1（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-10 — §3.5「快速捕获与节奏中枢」全部实施完成（Ctrl+K + Android FAB + 节奏提醒 + 跨端同步），3 个 E2E 测试通过** ｜ 状态：核心功能已落地；Phase 2 子系统设计中；P2/P3 与 #16–#20 待排期
+> 版本：**v1.1（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-11 — 新增 §3.6「事件开始提醒与跨端原生通知」子系统设计（合并 #8 提醒声音 + 事件 reminder_lead_minutes 闭环，桌面/Android/Web 三端原生通道）** ｜ 状态：核心功能已落地；Phase 2 子系统设计中；P2/P3 与 #16–#20 待排期
 > **产品蓝图（唯一权威）**：本文档是 Weavine 的**唯一产品蓝图**。所有需求设计、状态调整、平台策略、中国特性、技术债均回写此处，不再创建独立 spec 文件。文档结构一旦建立保持稳定，后续只追加章节、不重排结构。
 > **维护约定（living spec）**：本文档为活文档。每次需求变动须回写本节并更新上方「最近更新」日期；对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下，与 spec 编号（#1–#20）一一对应，便于持续跟踪。
 > **拍板溯源**：§3.5 子系统设计的所有关键决策（解析引擎选型、节奏模型、范围、Android 验证方式）来源于 2026-08-09 brainstorming 会话，详见各小节顶部加粗的「拍板结论」标注。
@@ -474,6 +474,156 @@ invitation_token = "{user_id}:{contact_id}:{threshold_day}"  // 确定性生成
 
 ---
 
+## 3.6 事件开始提醒与跨端原生通知（Event Reminder & Cross-Platform Native Notifications）
+
+> **拍板结论（2026-08-11）**：
+> - **D1 = A**：事件 INSERT/UPDATE 时服务端即时派生 reminder 写入 reminder 表（kind='time'，event_id FK；trigger_at = start_at − reminder_lead_minutes）；dispatcher 每 60s 仅扫描 reminder 表，不再回头算 event。
+> - **D2 = A**：多端各弹一次，共享 dismissed 状态——任一端调用 `POST /api/reminders/:id/dismiss` 即把 invitation_token 对应的全部 reminder 标记 dismissed（用 `event:{event_id}:{lead}` 作为 token 内容寻址）。
+> - **D3 = A**：保持现状——store UTC（TEXT），前端 toLocaleString 按本地时区显示。reminder_lead_minutes 是整数分钟，无夏令时歧义。
+> - **D4 = A**：本轮只做 Web + 桌面（Tauri macOS/Windows/Linux）+ Android APK，iOS 留 #10 远期。
+> - **事件 reminder_lead_minutes 默认值**：0 = 不提醒；> 0 时按整数分钟派生。QuickCapture 已接 reminder_lead_minutes 字段（schema 已就绪）。
+> - **kind 复用**：`reminder_kind_check` 当前约束 `('time','cadence')`；事件派生用 `kind='time'`，靠 `event_id` FK 与 invitation_token 区分。**不扩枚举**，避免再次迁移。
+
+### 3.6.1 架构（4 段流水线）
+
+```
+[事件 INSERT/UPDATE（reminder_lead_minutes>0）]
+        ↓ service-side hook（同一 tx）
+[reminder INSERT kind='time' event_id=... trigger_at=start_at-lead invitation_token=event:{id}:{lead}]
+        ↓
+[ReminderPoller 客户端]
+  ├─ Web（localhost/HTTPS）→ adapter.reminders.list() 每 30s → in-app Toast + 浏览器 Notification API
+  ├─ Desktop Tauri → adapter.reminders.list() 每 30s → tauri-plugin-notification 系统通知（UNUserNotificationCenter/WinRT/libnotify）
+  └─ Android Tauri APK → adapter.reminders.list() 每 30s → tauri-plugin-notification（NotificationManager + 通知 channel）
+        ↓ 用户点击/dismiss
+[POST /api/reminders/:id/dismiss] → server 按 invitation_token 同 token 全部置 dismissed=true
+        ↓
+[下次 list() 自动排除 dismissed=true]
+```
+
+**Server-side dispatcher fallback**：客户端全部离线/未启动时，server dispatcher 每 60s 把过期 reminder 标 `dispatched=true`（防止累积），但不负责推送——纯客户端责任。这保证恢复在线时不会回弹历史未送达项。
+
+### 3.6.2 数据模型（无新表，复用 reminder）
+
+```sql
+-- reminder 表当前结构（已存在，无需 migration）
+id              text PK
+user_id         text NOT NULL FK
+contact_id      text NULL FK
+event_id        text NULL FK        ← 事件派生用此字段
+trigger_at      text NOT NULL       ← ISO8601 UTC（"2026-08-11T15:00:00Z"）
+kind            text NOT NULL       ← CHECK ('time'|'cadence')  事件派生用 'time'
+dispatched      boolean DEFAULT false
+dismissed       boolean DEFAULT false
+invitation_token text NULL           ← 内容寻址: 'event:{event_id}:{lead_minutes}'
+created_at      text NOT NULL
+server_revision bigint
+deleted_at      text NULL
+
+-- 索引已就位:
+--   idx_reminder_owner_trigger(user_id, trigger_at, dispatched, dismissed)
+--   idx_reminder_invitation_token(invitation_token) WHERE invitation_token IS NOT NULL
+```
+
+### 3.6.3 服务端实现
+
+**A. 事件 reminder 派生（`server/src/handlers/event.rs`）**
+
+`create`/`update` handler 同事务内追加：
+
+| 情况 | 派生动作 |
+|---|---|
+| INSERT `reminder_lead_minutes > 0` + `start_at` 存在 | INSERT reminder: kind='time', event_id, trigger_at=start_at-lead, invitation_token=`event:{event_id}:{lead}` |
+| UPDATE `reminder_lead_minutes`/`start_at` 变化 | UPSERT 同 token 的 reminder（保留 dispatched 历史）；lead=0 或 NULL 时 DELETE |
+| 事件 DELETE/archived | DELETE 同 token 的 reminder（cascade 由 FK 接管） |
+
+**B. Reminder dispatcher（新增 `server/src/reminder_dispatcher.rs`）**
+
+```rust
+const REMINDER_DISPATCH_INTERVAL_SECS: u64 = 60;
+pub async fn tick_reminder_dispatch_async(now: DateTime<Utc>, pool: &PgPool) -> Result<usize>;
+pub fn spawn_reminder_dispatcher(pool: Arc<PgPool>);
+```
+
+每 60s：`SELECT id, invitation_token FROM reminder WHERE dispatched=false AND dismissed=false AND deleted_at IS NULL AND trigger_at <= now()` → 标 `dispatched=true`。只标记，不推送——推送是客户端责任（避免中心化推送服务的复杂度）。
+
+`server/src/main.rs:56` 在 `spawn_cadence_scheduler(pool.clone())` 旁边追加一行。
+
+### 3.6.4 三端原生通道
+
+| 端 | 触发路径 | 系统 API | 实施组件 |
+|---|---|---|---|
+| **Web** | `use-reminder-poller.ts` 每 30s 拉 `/api/reminders` → 新出现的 `dispatched=false` → Toast 组件 + 浏览器 `Notification` API（需用户授权） | W3C Notification API + Service Worker（可选） | `apps/web-spa/src/components/ReminderToast.tsx`（新）+ `lib/notifications.ts`（封装） |
+| **Desktop Tauri** | 同 poller → `TauriAdapter.notifications.show({ title, body })` → `tauri-plugin-notification` invoke | macOS UNUserNotificationCenter / Windows Toast XML / Linux libnotify | `Cargo.toml` 加 `tauri-plugin-notification = "2"` + `lib.rs` `.plugin(tauri_plugin_notification::init())` + `capabilities/default.json` 加 `"notification:default"` |
+| **Android Tauri** | 同 poller → 同 plugin | NotificationManager + 通知 channel（`high_importance_reminders`）+ AlarmManager 精确定时（可选） | 同 Desktop + `AndroidManifest.xml` 加 `POST_NOTIFICATIONS` + `SCHEDULE_EXACT_ALARM` 权限 + 运行时申请（Android 13+） |
+
+### 3.6.5 跨端去重（D2 落地）
+
+任一端 dismiss 时：
+
+```http
+POST /api/reminders/:id/dismiss
+→ server: UPDATE reminder SET dismissed=true WHERE invitation_token=$1 AND dismissed=false
+```
+
+回值 200 即所有同 token 的 reminder 在三端下次轮询时不再出现。
+
+### 3.6.6 时区与精度（D3 落地）
+
+- store: `trigger_at = (start_at - lead_minutes).to_rfc3339()`（UTC）
+- render: `new Date(trigger_at).toLocaleString('zh-CN', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })`
+- 用户跨国/改时区：旧 reminder 显示可能偏移（不主动重算，符合"一次性事件，不补提醒"原则）
+
+### 3.6.7 测试策略
+
+**Unit（Rust）**：
+- `server/src/handlers/event.rs`：INSERT 事件 + reminder_lead_minutes=15 → 1 reminder 派生（assert trigger_at = start_at - 15min, kind='time', invitation_token 格式正确）
+- UPDATE lead 从 15→30 → 同 token reminder 更新（dispatched=false 不变）
+- UPDATE lead=0 → 同 token reminder 被删除
+- DELETE 事件 → reminder cascade 消失
+- `reminder_dispatcher::tick`：seed 2 reminder（一到期一未来）→ assert 过期那个 `dispatched=true`，未来的不动
+
+**E2E（Playwright）**：
+- 注册 → 创建事件 (start_at = now+2min, reminder_lead_minutes=1) → 等 90s → 轮询 reminder API → assert 新 reminder 已生成 + dispatched=true（dispatcher 兜底）
+
+**桌面/手动**：
+- Desktop: 创建事件 start_at = now+90s → 桌面右上角出现系统通知 → 点击聚焦窗口
+- Android: 模拟器同桌面（emulator 推送限制需 adb 调试桥）
+
+### 3.6.8 实施步骤（约 3 人/日）
+
+| #   | 任务                                       | 估算    | 备注                                                         |
+| --- | ---------------------------------------- | ----- | ---------------------------------------------------------- |
+| 1   | 服务端事件 reminder 派生 hook（INSERT/UPDATE 同 tx）         | 0.5 d | `server/src/handlers/event.rs` + `unit tests`              |
+| 2   | 服务端 reminder dispatcher + spawn              | 0.5 d | `server/src/reminder_dispatcher.rs` + main.rs 注册 + unit tests       |
+| 3   | Desktop Tauri plugin 接入 + Adapter.notifications | 0.5 d | `Cargo.toml` + `lib.rs` + `capabilities/default.json` + `tauri.ts` |
+| 4   | Android Tauri manifest 权限 + 通知 channel + 运行时申请      | 0.5 d | `AndroidManifest.xml` + Rust `#[cfg(android)]` init          |
+| 5   | Web Toast 组件 + Notification API + poller 集成       | 0.5 d | `ReminderToast.tsx` + `lib/notifications.ts` + App 挂载    |
+| 6   | E2E + Spec + commit                         | 0.5 d | Playwright + 本 spec 编辑                                   |
+
+### 3.6.9 不在范围（明确）
+
+- ❌ **iOS**（D4 = A；等 #10 远期，证书成本高）
+- ❌ **服务端推送通道**（Web Push / FCM / APNs）—— 客户端轮询足够 P0 验证；后续若要"app 关闭也能收"再单独排期（Phase 3+）
+- ❌ **批量/全天事件 reminder 合并**（留 #16 通话导入 + #18 AI 教练）
+- ❌ **提醒声音个性化**（#8 现状：默认系统提示音；不引入 asset 资源）
+- ❌ **日历导入/导出**（ICS 双向同步留 #9）
+- ❌ **重复事件 reminder**（recurring event 留 Phase 3+，当前 reminder 一次性 trigger）
+
+### 3.6.10 与 §3.5 节奏提醒的关系
+
+| 维度 | §3.5 cadence | §3.6 event |
+|---|---|---|
+| 触发 | 服务器 scheduler 小时级扫 contact 表 | 事件 INSERT/UPDATE hook |
+| kind | `cadence` | `time`（受 CHECK 约束） |
+| 关联 | contact_id 必填 | event_id 必填（contact_id 可选） |
+| 去重 token | `{user_id}:{contact_id}:{thr}` | `event:{event_id}:{lead}` |
+| 通道 | Web 端 ReminderPoller + CadencePoller | Web Toast + 三端原生通知（这次新加的） |
+
+**两条路径并行不冲突**：cadence 提醒"该联系张三了"，event 提醒"明天 3 点的会"。事件 derived reminder 由 §3.6 闭环，cadence 仍走 §3.5 dispatcher。
+
+---
+
 ## 4. 同步性能优化专项（P0 紧急，来自代码审查）
 
 ### 4.1 架构
@@ -561,6 +711,7 @@ Phase 2  护城河+可用    #4 关系图谱 ✅ + #1 头像 ✅ + #5 查找即�
 Phase 2.4 重要度清理     Contact.importance 3 档统一（low/medium/high 默认 low）+ 删 reminder 死字段（前置 §3.5）🟡 设计已批准 → 实施中（约 1.5 人/日，2026-08-09）
   │
 Phase 2.5 快速捕获中枢  §3.5 子系统（#13 语音 + #14 节奏 + #15 互动扩展）🟢 已实施（2026-08-10，6 个 commit，3 个 E2E 测试通过）
+Phase 2.6 事件提醒中枢  §3.6 子系统（#8 提醒 + event.reminder_lead_minutes 闭环 + 桌面/Android/Web 原生通知通道）🟡 设计已批准（2026-08-11），待实施（约 3 人/日）
   │
 Phase 3  变现+合规      #9 云选型 + #6 onboarding/套餐   ⬜ 待做
   │
@@ -682,6 +833,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 - ~~**🔴 P0 同步白名单断链（§5.7，最高性价比修复）**~~ **✅ 已修复（2026-08-09）**：`entity_link`/`media` 原未入 `server/src/handlers/sync.rs` kind 白名单（L147-166），push 时服务端落 `unknown entity kind` 拒绝 → #3 参与者（entity_link）与 #1 头像（media）的跨端同步不通。已按「2 行服务端白名单 + 1 行客户端表名别名（entity_link↔entity_links）+ round-trip 测试」方案修复并实测通过（push entity_link/media accepted，pull 复数 kind 闭环；`cargo test -p weavine --lib` 27 passed）。
 - **🟢 Contact 重要度清理（Phase 2.4 前置）已完成**：详见 §3.5.2 + §7.3。双栈 schema + business + server handler + UI 三档 + 删 reminder 死字段 + 测试改写全部落地。
 - **🟢 #13 / #14 / #15 子系统设计已实施完成（2026-08-10）**：详见 §3.5。6 个 commit（ef1b6bc→4d7a66c→5de12f3→0ebd54f→fc013a7），3 个 Playwright E2E 测试通过。前置：Phase 2.4 重要度清理已完成。
+- **🟡 #8 提醒声音已部分完成 + Phase 2.6 事件提醒中枢设计已批准（2026-08-11），进入实施**：详见 §3.6。前置：§3.5 已落地，reminder 表 + event.reminder_lead_minutes 字段已存在但缺自动派生 + 跨端原生通道。
 - **⚪ #2 / #6 / #9 / #10 / #16–#20** 仍 ⬜；密码哈希双轨技术债 §5-1 已核实无冲突。
 
 ### 9.3 估计完成度
@@ -689,7 +841,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 - 核心功能（#1/#3/#4/#5/#8/#11/#12）：**本地全功能已落地，跨端同步已闭环**（§5.7 修复）。
 - 不加权（按 12 项原生需求 + #13/#14/#15 子系统进度计）：约 **70% → 72%**（Phase 2.4 重要度清理设计中，未计入 ✅ 完成度）。
 - 加权（P0×4/P1×3/P2×2/P3×1）：约 **78% → 80%**。
-- 关键路径阻塞：§5.7 已修复（#3/#1 跨端已解锁）；Phase 2.4 重要度清理已完成；**Phase 2.5 §3.5 子系统已全部实施完成（2026-08-10）**；下一步排 #16–#20 与 #2/#6/#9/#10。
+- 关键路径阻塞：§5.7 已修复（#3/#1 跨端已解锁）；Phase 2.4 重要度清理已完成；Phase 2.5 §3.5 子系统已全部实施完成（2026-08-10）；**Phase 2.6 §3.6 事件提醒中枢设计已批准（2026-08-11），进入实施**；下一步排 #16–#20 与 #2/#6/#9/#10。
 
 ---
 
