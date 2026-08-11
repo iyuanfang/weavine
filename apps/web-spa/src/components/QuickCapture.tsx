@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
+import { recognizeSpeech, speechRecognitionAvailable } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
 const KIND_LABEL: Record<QuickKind, string> = {
@@ -65,6 +66,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [contactNames, setContactNames] = useState<string[]>([]);
+  const [listening, setListening] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
 
@@ -105,6 +107,19 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
   }, [text, contactNames, userId]);
+
+  const handleVoice = () => {
+    setListening(true);
+    recognizeSpeech()
+      .then((transcript) => {
+        setText(transcript);
+        inputRef.current?.focus();
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setListening(false));
+  };
 
   const submit = async () => {
     const trimmed = text.trim();
@@ -245,25 +260,58 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           </button>
         </div>
 
-        <textarea
-          ref={inputRef}
-          className="input-base"
-          rows={2}
-          placeholder="例：明天下午 3 点和张三开会，提醒我准备议程"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          style={{
-            resize: 'none',
-            lineHeight: 1.6,
-            minHeight: 56,
-          }}
-        />
+        <div style={{ position: 'relative' }}>
+          <textarea
+            ref={inputRef}
+            className="input-base"
+            rows={2}
+            placeholder="例：明天下午 3 点和张三开会，提醒我准备议程"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            style={{
+              resize: 'none',
+              lineHeight: 1.6,
+              minHeight: 56,
+              paddingRight: 44,
+            }}
+          />
+          {speechRecognitionAvailable() && (
+            <button
+              type="button"
+              onClick={handleVoice}
+              disabled={listening}
+              aria-label={listening ? '正在聆听' : '语音输入'}
+              title="语音输入"
+              style={{
+                position: 'absolute',
+                right: 8,
+                bottom: 8,
+                border: 'none',
+                background: 'var(--accent-soft, rgba(139,92,246,0.08))',
+                cursor: listening ? 'default' : 'pointer',
+                fontSize: 28,
+                lineHeight: 1,
+                padding: 10,
+                borderRadius: 12,
+                opacity: listening ? 0.6 : 1,
+              }}
+            >
+              {listening ? '🎙️' : '🎤'}
+            </button>
+          )}
+        </div>
+
+        {listening && (
+          <div style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
+            正在聆听… 请说话（需授权麦克风）
+          </div>
+        )}
 
         {error && (
           <div style={{ color: 'var(--danger, #dc2626)', fontSize: 'var(--text-sm)' }}>
