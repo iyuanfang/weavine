@@ -10,6 +10,112 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Event;
 
+/// Compute the RFC3339 trigger time for an event reminder:
+/// `trigger_at = start_at - lead_minutes`. Accepts RFC3339 or the
+/// space-separated `%Y-%m-%d %H:%M:%S` format used by `now_str()`.
+fn compute_trigger_at(start_at: &str, lead_minutes: i32) -> Option<String> {
+    if lead_minutes <= 0 {
+        return None;
+    }
+    let dt = chrono::DateTime::parse_from_rfc3339(start_at)
+        .map(|d| d.with_timezone(&chrono::Utc))
+        .ok()
+        .or_else(|| {
+            chrono::NaiveDateTime::parse_from_str(start_at, "%Y-%m-%d %H:%M:%S")
+                .ok()
+                .map(|n| n.and_utc())
+        })?;
+    Some((dt - chrono::Duration::minutes(i64::from(lead_minutes))).to_rfc3339())
+}
+
+/// Derive (or update) the `kind='time'` reminder row for an event.
+/// The `invitation_token` is `event:{event_id}:{lead_minutes}`, which is
+/// stable across server and client so both sides converge on one row.
+/// On UPDATE the existing row is reused (dispatch history preserved);
+/// when the lead is removed the matching reminder is deleted.
+async fn upsert_event_reminder(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: &str,
+    event_id: &str,
+    contact_id: Option<&str>,
+    start_at: &str,
+    lead_minutes: i32,
+    old_lead_minutes: Option<i32>,
+) -> Result<(), sqlx::Error> {
+    if lead_minutes <= 0 {
+        if let Some(old) = old_lead_minutes.filter(|&l| l > 0) {
+            let old_token = format!("event:{event_id}:{old}");
+            sqlx::query("DELETE FROM reminder WHERE invitation_token = $1")
+                .bind(&old_token)
+                .execute(&mut **tx)
+                .await?;
+        }
+        return Ok(());
+    }
+    let Some(trigger_at) = compute_trigger_at(start_at, lead_minutes) else {
+        return Ok(());
+    };
+    let new_token = format!("event:{event_id}:{lead_minutes}");
+    let old_token = old_lead_minutes
+        .filter(|&l| l > 0)
+        .map(|l| format!("event:{event_id}:{l}"));
+    let now = super::now_str();
+
+    let existing: Option<String> = if let Some(ot) = &old_token {
+        sqlx::query_scalar(
+            "SELECT id FROM reminder WHERE invitation_token = $1 AND deleted_at IS NULL LIMIT 1",
+        )
+        .bind(ot)
+        .fetch_optional(&mut **tx)
+        .await?
+    } else {
+        None
+    };
+    let existing: Option<String> = if existing.is_none() {
+        sqlx::query_scalar(
+            "SELECT id FROM reminder WHERE invitation_token = $1 AND deleted_at IS NULL LIMIT 1",
+        )
+        .bind(&new_token)
+        .fetch_optional(&mut **tx)
+        .await?
+    } else {
+        existing
+    };
+
+    match existing {
+        Some(rid) => {
+            sqlx::query(
+                "UPDATE reminder SET trigger_at = $1, invitation_token = $2, contact_id = $3, event_id = $4 \
+                 WHERE id = $5",
+            )
+            .bind(&trigger_at)
+            .bind(&new_token)
+            .bind(contact_id)
+            .bind(event_id)
+            .bind(&rid)
+            .execute(&mut **tx)
+            .await?;
+        }
+        None => {
+            let rid = uuid::Uuid::new_v4().to_string();
+            sqlx::query(
+                "INSERT INTO reminder (id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, invitation_token, created_at) \
+                 VALUES ($1,$2,$3,$4,$5,'time',false,false,$6,$7)",
+            )
+            .bind(&rid)
+            .bind(user_id)
+            .bind(contact_id)
+            .bind(event_id)
+            .bind(&trigger_at)
+            .bind(&new_token)
+            .bind(&now)
+            .execute(&mut **tx)
+            .await?;
+        }
+    }
+    Ok(())
+}
+
 const EVENT_SELECT: &str = "SELECT e.id, e.user_id, e.title, e.event_type, e.start_at, e.end_at, e.location, e.notes, \
      e.contact_id, e.project_id, e.reminder_lead_minutes::BIGINT AS reminder_lead_minutes, e.archived_at, e.created_at, e.updated_at, \
      c.nickname AS contact_nickname, p.title AS project_title \
@@ -165,6 +271,19 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
+    let lead = body.get("reminder_lead_minutes").and_then(|v| v.as_i64()).map(|n| n as i32);
+    if let Some(lead) = lead.filter(|&l| l > 0) {
+        let start_at = body.get("start_at").and_then(|v| v.as_str()).unwrap_or(&now);
+        let contact_id = if participant_ids.is_empty() {
+            body.get("contact_id").and_then(|v| v.as_str())
+        } else {
+            Some(participant_ids[0].as_str())
+        };
+        upsert_event_reminder(&mut tx, &auth, &id, contact_id, start_at, lead, None)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -222,6 +341,16 @@ pub async fn update(
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let old: Option<(Option<i32>, String)> = sqlx::query_as(
+        "SELECT reminder_lead_minutes, start_at FROM event WHERE id = $1 AND user_id = $2",
+    )
+    .bind(&id)
+    .bind(&auth)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (old_lead, old_start_at) = old.unwrap_or((None, String::new()));
 
     enum Bind<'a> {
         Text(&'a str),
@@ -303,6 +432,50 @@ pub async fn update(
             .execute(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    let body_lead = body.get("reminder_lead_minutes");
+    let lead_present = body_lead.is_some();
+    let new_lead: Option<i32> = body_lead.and_then(|v| v.as_i64()).map(|n| n as i32);
+    let new_start_at: Option<&str> = body.get("start_at").and_then(|v| v.as_str());
+    let lead_changed = lead_present && new_lead != old_lead;
+    let start_changed = new_start_at.is_some() && new_start_at != Some(old_start_at.as_str());
+    if lead_changed || start_changed {
+        let effective_lead = if lead_present { new_lead } else { old_lead };
+        let effective_start = new_start_at.unwrap_or(&old_start_at);
+        let contact_id: Option<String> = sqlx::query_as::<_, (Option<String>,)>(
+            "SELECT contact_id FROM event WHERE id = $1",
+        )
+        .bind(&id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .0;
+        match effective_lead {
+            Some(lead) if lead > 0 => {
+                upsert_event_reminder(
+                    &mut tx,
+                    &auth,
+                    &id,
+                    contact_id.as_deref(),
+                    effective_start,
+                    lead,
+                    old_lead,
+                )
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            }
+            _ => {
+                if let Some(old) = old_lead.filter(|&l| l > 0) {
+                    let old_token = format!("event:{id}:{old}");
+                    sqlx::query("DELETE FROM reminder WHERE invitation_token = $1")
+                        .bind(&old_token)
+                        .execute(&mut *tx)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                }
+            }
+        }
     }
 
     tx.commit()
@@ -574,4 +747,270 @@ pub async fn remove_participant(
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::NO_CONTENT, ()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compute_trigger_at, upsert_event_reminder};
+    use sqlx::PgPool;
+    use crate::handlers::now_str;
+
+    #[test]
+    fn test_compute_trigger_at_rfc3339() {
+        let result = compute_trigger_at("2026-08-15T10:00:00+00:00", 15);
+        assert_eq!(result, Some("2026-08-15T09:45:00+00:00".to_string()));
+    }
+
+    #[test]
+    fn test_compute_trigger_at_space_format() {
+        let result = compute_trigger_at("2026-08-15 10:00:00", 30);
+        assert_eq!(result, Some("2026-08-15T09:30:00+00:00".to_string()));
+    }
+
+    #[test]
+    fn test_compute_trigger_at_zero_lead() {
+        assert_eq!(compute_trigger_at("2026-08-15T10:00:00+00:00", 0), None);
+    }
+
+    #[test]
+    fn test_compute_trigger_at_negative_lead() {
+        assert_eq!(compute_trigger_at("2026-08-15T10:00:00+00:00", -5), None);
+    }
+
+    #[test]
+    fn test_compute_trigger_at_invalid_date() {
+        assert_eq!(compute_trigger_at("not-a-date", 15), None);
+    }
+
+    #[sqlx::test]
+    async fn test_upsert_event_reminder_creates_reminder(pool: PgPool) {
+        let user_id = uuid::Uuid::new_v4().to_string();
+        let contact_id = uuid::Uuid::new_v4().to_string();
+        let event_id = uuid::Uuid::new_v4().to_string();
+        let now = now_str();
+
+        sqlx::query("INSERT INTO user_account (id, email, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+            .bind(&user_id)
+            .bind(&format!("{}@test.com", &user_id[..8]))
+            .bind("fake_hash")
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO contact (id, user_id, nickname, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+            .bind(&contact_id)
+            .bind(&user_id)
+            .bind("Test Contact")
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO event (id, user_id, title, start_at, reminder_lead_minutes, created_at, updated_at) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        )
+        .bind(&event_id)
+        .bind(&user_id)
+        .bind("Test Event")
+        .bind("2026-08-15T10:00:00+00:00")
+        .bind(15i32)
+        .bind(&now)
+        .bind(&now)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut tx = pool.begin().await.unwrap();
+        upsert_event_reminder(
+            &mut tx,
+            &user_id,
+            &event_id,
+            Some(&contact_id),
+            "2026-08-15T10:00:00+00:00",
+            15,
+            None,
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let row: (String, String, Option<String>, String, i32) = sqlx::query_as(
+            "SELECT r.id, r.user_id, r.contact_id, r.invitation_token, \
+             CAST(EXTRACT(EPOCH FROM r.trigger_at::timestamptz) AS INTEGER) \
+             FROM reminder r WHERE r.event_id = $1",
+        )
+        .bind(&event_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(row.1, user_id);
+        assert_eq!(row.2, Some(contact_id.clone()));
+        assert_eq!(row.3, format!("event:{event_id}:15"));
+        assert_eq!(row.4, 1786787100);
+    }
+
+    #[sqlx::test]
+    async fn test_upsert_event_reminder_reuses_existing(pool: PgPool) {
+        let user_id = uuid::Uuid::new_v4().to_string();
+        let contact_id = uuid::Uuid::new_v4().to_string();
+        let event_id = uuid::Uuid::new_v4().to_string();
+        let now = now_str();
+
+        sqlx::query("INSERT INTO user_account (id, email, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+            .bind(&user_id)
+            .bind(&format!("{}@test.com", &user_id[..8]))
+            .bind("fake_hash")
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO contact (id, user_id, nickname, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+            .bind(&contact_id)
+            .bind(&user_id)
+            .bind("Test Contact")
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO event (id, user_id, title, start_at, reminder_lead_minutes, created_at, updated_at) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        )
+        .bind(&event_id)
+        .bind(&user_id)
+        .bind("Test Event")
+        .bind("2026-08-15T10:00:00+00:00")
+        .bind(15i32)
+        .bind(&now)
+        .bind(&now)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut tx = pool.begin().await.unwrap();
+        upsert_event_reminder(
+            &mut tx,
+            &user_id,
+            &event_id,
+            Some(&contact_id),
+            "2026-08-15T10:00:00+00:00",
+            15,
+            None,
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let mut tx = pool.begin().await.unwrap();
+        upsert_event_reminder(
+            &mut tx,
+            &user_id,
+            &event_id,
+            Some(&contact_id),
+            "2026-08-15T10:00:00+00:00",
+            15,
+            Some(15),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM reminder WHERE event_id = $1",
+        )
+        .bind(&event_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(count, 1, "must preserve dispatch history, not create duplicate");
+    }
+
+    #[sqlx::test]
+    async fn test_upsert_event_reminder_deletes_when_lead_removed(pool: PgPool) {
+        let user_id = uuid::Uuid::new_v4().to_string();
+        let contact_id = uuid::Uuid::new_v4().to_string();
+        let event_id = uuid::Uuid::new_v4().to_string();
+        let now = now_str();
+
+        sqlx::query("INSERT INTO user_account (id, email, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+            .bind(&user_id)
+            .bind(&format!("{}@test.com", &user_id[..8]))
+            .bind("fake_hash")
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO contact (id, user_id, nickname, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+            .bind(&contact_id)
+            .bind(&user_id)
+            .bind("Test Contact")
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
+            "INSERT INTO event (id, user_id, title, start_at, reminder_lead_minutes, created_at, updated_at) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        )
+        .bind(&event_id)
+        .bind(&user_id)
+        .bind("Test Event")
+        .bind("2026-08-15T10:00:00+00:00")
+        .bind(15i32)
+        .bind(&now)
+        .bind(&now)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut tx = pool.begin().await.unwrap();
+        upsert_event_reminder(
+            &mut tx,
+            &user_id,
+            &event_id,
+            Some(&contact_id),
+            "2026-08-15T10:00:00+00:00",
+            15,
+            None,
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let mut tx = pool.begin().await.unwrap();
+        upsert_event_reminder(
+            &mut tx,
+            &user_id,
+            &event_id,
+            Some(&contact_id),
+            "2026-08-15T10:00:00+00:00",
+            0,
+            Some(15),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM reminder WHERE event_id = $1 AND deleted_at IS NULL",
+        )
+        .bind(&event_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(count, 0, "reminder must be deleted when lead is removed");
+    }
 }
