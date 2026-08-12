@@ -300,10 +300,16 @@ jobs:
           mkdir -p android-out ~/.android
           echo "=== PWD ==="
           pwd
+          echo "=== gen/android top-level ==="
+          ls -la src-tauri/gen/android/ 2>&1 || true
+          echo "=== gen/android/app top-level ==="
+          ls -la src-tauri/gen/android/app/ 2>&1 || true
           echo "=== APK output dir listing ==="
           ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -80 || true
-          echo "=== anywhere under app/build ==="
-          find src-tauri/gen/android/app/build -name '*.apk' 2>&1 | head -20 || true
+          echo "=== anywhere under gen/android looking for *.apk ==="
+          find src-tauri/gen/android -name '*.apk' 2>&1 | head -40 || true
+          echo "=== anywhere in workspace looking for *.apk ==="
+          find . -path ./node_modules -prune -o -path ./.gradle -prune -o -name '*.apk' -print 2>&1 | head -40 || true
           if [ ! -f ~/.android/debug.keystore ]; then
             echo "Generating debug.keystore"
             keytool -genkey -v \
@@ -313,7 +319,7 @@ jobs:
               -storepass android -keypass android \
               -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
           fi
-          UNSIGNED=$(find src-tauri/gen/android/app/build -name '*-release-unsigned.apk' 2>/dev/null | head -1)
+          UNSIGNED=$(find src-tauri/gen/android -name '*-release-unsigned.apk' 2>/dev/null | head -1)
           if [ -n "$UNSIGNED" ]; then
             echo "Signing $UNSIGNED with debug keystore"
             BT="$ANDROID_HOME/build-tools/34.0.0"
@@ -329,14 +335,14 @@ jobs:
             rm android-out/app-unsigned-aligned.apk
           else
             echo "No -release-unsigned.apk found; falling back to any *-release.apk"
-            mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*-release.apk' 2>/dev/null)
+            mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*-release.apk' 2>/dev/null)
             if [ ${#FOUND_APKS[@]} -eq 0 ]; then
-              mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*.apk' 2>/dev/null)
+              mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*.apk' 2>/dev/null)
             fi
             if [ ${#FOUND_APKS[@]} -eq 0 ]; then
-              echo "ERROR: no APKs found anywhere under src-tauri/gen/android/app/build"
-              echo "Contents of src-tauri/gen/android/app/build:"
-              ls -laR src-tauri/gen/android/app/build 2>&1 | head -60 || true
+              echo "ERROR: no APKs found anywhere under src-tauri/gen/android"
+              echo "=== gradle build log tail ==="
+              tail -50 tauri-android-build.log 2>&1 || true
               exit 1
             fi
             echo "Found ${#FOUND_APKS[@]} APK(s) to copy:"
@@ -365,12 +371,14 @@ jobs:
           echo "Staged APKs:"
           ls -la android-out/
 
-      - name: Upload Android stage log on failure
+      - name: Upload Android build + stage logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-android-stage-log
-          path: android-stage.log
+          name: tauri-android-diagnostic
+          path: |
+            tauri-android-build.log
+            src-tauri/gen/android/app/build/outputs/apk/
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
