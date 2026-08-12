@@ -285,7 +285,10 @@ jobs:
       - name: Stage Android APK
         if: always() && steps.build.outcome == 'success'
         run: |
+          set -x
           mkdir -p android-out ~/.android
+          echo "=== APK output dir listing ==="
+          ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -40 || true
           # Ensure debug keystore exists (Gradle auto-creates it during build
           # on local machines but CI runners may not have one yet)
           if [ ! -f ~/.android/debug.keystore ]; then
@@ -300,7 +303,7 @@ jobs:
           # Tauri produces *-release-unsigned.apk (no signing config) — modern
           # Android refuses to install unsigned APKs, so sign with the debug
           # keystore.
-          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' | head -1)
+          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' 2>/dev/null | head -1)
           if [ -n "$UNSIGNED" ]; then
             echo "Signing $UNSIGNED with debug keystore"
             BT="$ANDROID_HOME/build-tools/34.0.0"
@@ -316,7 +319,33 @@ jobs:
             rm android-out/app-unsigned-aligned.apk
           else
             echo "No unsigned release APK found, copying all APKs as-is"
-            find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \;
+            # Copy any APK found under the outputs dir to android-out/, then
+            # re-sign any *-release.apk with the debug keystore (CI gradle
+            # builds sometimes emit a pre-signed release APK using a different
+            # debug keystore than the one we generate here, which Android
+            # refuses to install).
+            find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \; 2>&1 || {
+              echo "ERROR: no APKs found under src-tauri/gen/android/app/build/outputs/apk"
+              echo "Tried: src-tauri/gen/android/app/build/outputs/apk"
+              echo "PWD: $(pwd)"
+              exit 1
+            }
+            for apk in android-out/*-release.apk; do
+              if [ -f "$apk" ]; then
+                echo "Re-signing $apk with CI debug keystore for consistency"
+                BT="$ANDROID_HOME/build-tools/34.0.0"
+                mv "$apk" "${apk}.unsigned"
+                "$BT/zipalign" -p -f 4 "${apk}.unsigned" "${apk}.aligned"
+                "$BT/apksigner" sign \
+                  --ks ~/.android/debug.keystore \
+                  --ks-pass pass:android \
+                  --ks-key-alias androiddebugkey \
+                  --key-pass pass:android \
+                  --out "$apk" \
+                  "${apk}.aligned"
+                rm "${apk}.unsigned" "${apk}.aligned"
+              fi
+            done
           fi
           echo "Staged APKs:"
           ls -la android-out/
