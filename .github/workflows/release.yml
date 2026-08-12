@@ -274,11 +274,19 @@ jobs:
       - name: Build Tauri Android APK
         id: build
         run: |
-          # Build from inside src-tauri/gen/android so the gradle wrapper's
-          # working directory matches its location and outputs land in the
-          # expected src-tauri/gen/android/app/build/outputs/apk/ tree.
-          cd src-tauri/gen/android && ./gradlew assembleRelease 2>&1 | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          # Use cargo tauri android build (not bare ./gradlew assembleRelease)
+          # because cargo-tauri's CLI is the only thing that knows how to
+          # materialize tauri.settings.gradle + tauri.build.gradle.kts before
+          # invoking gradle. Bare gradlew fails with:
+          #   "Could not read script '.../tauri.settings.gradle' as it does not exist."
+          # Also: pipe through tee WITHOUT a trailing pipefail, then explicitly
+          # capture the gradle exit code via PIPESTATUS so a build failure
+          # propagates instead of being masked by tee's success.
+          set -o pipefail
+          cargo tauri android build --apk 2>&1 | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=$rc" >> $GITHUB_OUTPUT
+          exit $rc
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
