@@ -292,84 +292,78 @@ jobs:
       - name: Stage Android APK
         if: always() && steps.build.outcome == 'success'
         run: |
-          {
-            set -x
-            mkdir -p android-out ~/.android
-            echo "=== PWD ==="
-            pwd
-            echo "=== APK output dir listing ==="
-            ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -80 || true
-            echo "=== anywhere under app/build ==="
-            find src-tauri/gen/android/app/build -name '*.apk' 2>&1 | head -20 || true
-            # Ensure debug keystore exists (Gradle auto-creates it during build
-            # on local machines but CI runners may not have one yet)
-            if [ ! -f ~/.android/debug.keystore ]; then
-              echo "Generating debug.keystore"
-              keytool -genkey -v \
-                -keystore ~/.android/debug.keystore \
-                -alias androiddebugkey \
-                -keyalg RSA -keysize 2048 -validity 10000 \
-                -storepass android -keypass android \
-                -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+          # Run staging in a script so exit codes propagate. The previous
+          # `{ ...; } 2>&1 | tee` subshell lost exit codes from inside the
+          # group, causing silent failures when find returned no matches.
+          set -euo pipefail
+          set -x
+          mkdir -p android-out ~/.android
+          echo "=== PWD ==="
+          pwd
+          echo "=== APK output dir listing ==="
+          ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -80 || true
+          echo "=== anywhere under app/build ==="
+          find src-tauri/gen/android/app/build -name '*.apk' 2>&1 | head -20 || true
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "Generating debug.keystore"
+            keytool -genkey -v \
+              -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+          fi
+          UNSIGNED=$(find src-tauri/gen/android/app/build -name '*-release-unsigned.apk' 2>/dev/null | head -1)
+          if [ -n "$UNSIGNED" ]; then
+            echo "Signing $UNSIGNED with debug keystore"
+            BT="$ANDROID_HOME/build-tools/34.0.0"
+            "$BT/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
+            "$BT/apksigner" sign \
+              --ks ~/.android/debug.keystore \
+              --ks-pass pass:android \
+              --ks-key-alias androiddebugkey \
+              --key-pass pass:android \
+              --out android-out/Weavine_universal-release.apk \
+              android-out/app-unsigned-aligned.apk
+            "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
+            rm android-out/app-unsigned-aligned.apk
+          else
+            echo "No -release-unsigned.apk found; falling back to any *-release.apk"
+            mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*-release.apk' 2>/dev/null)
+            if [ ${#FOUND_APKS[@]} -eq 0 ]; then
+              mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*.apk' 2>/dev/null)
             fi
-            # Tauri produces *-release-unsigned.apk (no signing config) — modern
-            # Android refuses to install unsigned APKs, so sign with the debug
-            # keystore. Match by basename, not by full path, so the same logic
-            # works whether the apk is under universal/, x86_64/, arm64-v8a/,
-            # or any other abi / flavor directory.
-            UNSIGNED=$(find src-tauri/gen/android/app/build -name '*-release-unsigned.apk' 2>/dev/null | head -1)
-            if [ -n "$UNSIGNED" ]; then
-              echo "Signing $UNSIGNED with debug keystore"
-              BT="$ANDROID_HOME/build-tools/34.0.0"
-              "$BT/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
-              "$BT/apksigner" sign \
-                --ks ~/.android/debug.keystore \
-                --ks-pass pass:android \
-                --ks-key-alias androiddebugkey \
-                --key-pass pass:android \
-                --out android-out/Weavine_universal-release.apk \
-                android-out/app-unsigned-aligned.apk
-              "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
-              rm android-out/app-unsigned-aligned.apk
-            else
-              echo "No -release-unsigned.apk found; falling back to any *-release.apk"
-              # Look anywhere under build/ for *-release.apk, then *-debug.apk
-              mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*-release.apk' 2>/dev/null)
-              if [ ${#FOUND_APKS[@]} -eq 0 ]; then
-                mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*.apk' 2>/dev/null)
-              fi
-              if [ ${#FOUND_APKS[@]} -eq 0 ]; then
-                echo "ERROR: no APKs found anywhere under src-tauri/gen/android/app/build"
-                echo "Contents of src-tauri/gen/android/app/build:"
-                ls -laR src-tauri/gen/android/app/build 2>&1 | head -60 || true
-                exit 1
-              fi
-              echo "Found ${#FOUND_APKS[@]} APK(s) to copy:"
-              printf '  %s\n' "${FOUND_APKS[@]}"
-              for apk in "${FOUND_APKS[@]}"; do
-                cp -v "$apk" android-out/
-                case "$apk" in
-                  *-release.apk)
-                    echo "Re-signing $apk with CI debug keystore for consistency"
-                    BT="$ANDROID_HOME/build-tools/34.0.0"
-                    name=$(basename "$apk")
-                    mv "android-out/$name" "android-out/$name.unsigned"
-                    "$BT/zipalign" -p -f 4 "android-out/$name.unsigned" "android-out/$name.aligned"
-                    "$BT/apksigner" sign \
-                      --ks ~/.android/debug.keystore \
-                      --ks-pass pass:android \
-                      --ks-key-alias androiddebugkey \
-                      --key-pass pass:android \
-                      --out "android-out/$name" \
-                      "android-out/$name.aligned"
-                    rm "android-out/$name.unsigned" "android-out/$name.aligned"
-                    ;;
-                esac
-              done
+            if [ ${#FOUND_APKS[@]} -eq 0 ]; then
+              echo "ERROR: no APKs found anywhere under src-tauri/gen/android/app/build"
+              echo "Contents of src-tauri/gen/android/app/build:"
+              ls -laR src-tauri/gen/android/app/build 2>&1 | head -60 || true
+              exit 1
             fi
-            echo "Staged APKs:"
-            ls -la android-out/
-          } 2>&1 | tee android-stage.log
+            echo "Found ${#FOUND_APKS[@]} APK(s) to copy:"
+            printf '  %s\n' "${FOUND_APKS[@]}"
+            for apk in "${FOUND_APKS[@]}"; do
+              cp -v "$apk" android-out/
+              case "$apk" in
+                *-release.apk)
+                  echo "Re-signing $apk with CI debug keystore for consistency"
+                  BT="$ANDROID_HOME/build-tools/34.0.0"
+                  name=$(basename "$apk")
+                  mv "android-out/$name" "android-out/$name.unsigned"
+                  "$BT/zipalign" -p -f 4 "android-out/$name.unsigned" "android-out/$name.aligned"
+                  "$BT/apksigner" sign \
+                    --ks ~/.android/debug.keystore \
+                    --ks-pass pass:android \
+                    --ks-key-alias androiddebugkey \
+                    --key-pass pass:android \
+                    --out "android-out/$name" \
+                    "android-out/$name.aligned"
+                  rm "android-out/$name.unsigned" "android-out/$name.aligned"
+                  ;;
+              esac
+            done
+          fi
+          echo "Staged APKs:"
+          ls -la android-out/
 
       - name: Upload Android stage log on failure
         if: failure()
