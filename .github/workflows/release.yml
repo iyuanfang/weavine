@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install Rust toolchain (stable)
@@ -80,7 +80,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install Rust toolchain (stable)
@@ -161,7 +161,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install Rust toolchain (stable)
@@ -224,7 +224,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - uses: actions/setup-java@v4
@@ -298,8 +298,8 @@ jobs:
             echo "=== PWD ==="
             pwd
             echo "=== APK output dir listing ==="
-            ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -60 || true
-            echo "=== also check universal variant ==="
+            ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -80 || true
+            echo "=== anywhere under app/build ==="
             find src-tauri/gen/android/app/build -name '*.apk' 2>&1 | head -20 || true
             # Ensure debug keystore exists (Gradle auto-creates it during build
             # on local machines but CI runners may not have one yet)
@@ -314,8 +314,10 @@ jobs:
             fi
             # Tauri produces *-release-unsigned.apk (no signing config) — modern
             # Android refuses to install unsigned APKs, so sign with the debug
-            # keystore.
-            UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' 2>/dev/null | head -1)
+            # keystore. Match by basename, not by full path, so the same logic
+            # works whether the apk is under universal/, x86_64/, arm64-v8a/,
+            # or any other abi / flavor directory.
+            UNSIGNED=$(find src-tauri/gen/android/app/build -name '*-release-unsigned.apk' 2>/dev/null | head -1)
             if [ -n "$UNSIGNED" ]; then
               echo "Signing $UNSIGNED with debug keystore"
               BT="$ANDROID_HOME/build-tools/34.0.0"
@@ -330,26 +332,39 @@ jobs:
               "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
               rm android-out/app-unsigned-aligned.apk
             else
-              echo "No unsigned release APK found, copying all APKs as-is"
-              find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \; 2>&1 || {
-                echo "ERROR: no APKs found under src-tauri/gen/android/app/build/outputs/apk"
+              echo "No -release-unsigned.apk found; falling back to any *-release.apk"
+              # Look anywhere under build/ for *-release.apk, then *-debug.apk
+              mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*-release.apk' 2>/dev/null)
+              if [ ${#FOUND_APKS[@]} -eq 0 ]; then
+                mapfile -t FOUND_APKS < <(find src-tauri/gen/android/app/build -name '*.apk' 2>/dev/null)
+              fi
+              if [ ${#FOUND_APKS[@]} -eq 0 ]; then
+                echo "ERROR: no APKs found anywhere under src-tauri/gen/android/app/build"
+                echo "Contents of src-tauri/gen/android/app/build:"
+                ls -laR src-tauri/gen/android/app/build 2>&1 | head -60 || true
                 exit 1
-              }
-              for apk in android-out/*-release.apk; do
-                if [ -f "$apk" ]; then
-                  echo "Re-signing $apk with CI debug keystore for consistency"
-                  BT="$ANDROID_HOME/build-tools/34.0.0"
-                  mv "$apk" "${apk}.unsigned"
-                  "$BT/zipalign" -p -f 4 "${apk}.unsigned" "${apk}.aligned"
-                  "$BT/apksigner" sign \
-                    --ks ~/.android/debug.keystore \
-                    --ks-pass pass:android \
-                    --ks-key-alias androiddebugkey \
-                    --key-pass pass:android \
-                    --out "$apk" \
-                    "${apk}.aligned"
-                  rm "${apk}.unsigned" "${apk}.aligned"
-                fi
+              fi
+              echo "Found ${#FOUND_APKS[@]} APK(s) to copy:"
+              printf '  %s\n' "${FOUND_APKS[@]}"
+              for apk in "${FOUND_APKS[@]}"; do
+                cp -v "$apk" android-out/
+                case "$apk" in
+                  *-release.apk)
+                    echo "Re-signing $apk with CI debug keystore for consistency"
+                    BT="$ANDROID_HOME/build-tools/34.0.0"
+                    name=$(basename "$apk")
+                    mv "android-out/$name" "android-out/$name.unsigned"
+                    "$BT/zipalign" -p -f 4 "android-out/$name.unsigned" "android-out/$name.aligned"
+                    "$BT/apksigner" sign \
+                      --ks ~/.android/debug.keystore \
+                      --ks-pass pass:android \
+                      --ks-key-alias androiddebugkey \
+                      --key-pass pass:android \
+                      --out "android-out/$name" \
+                      "android-out/$name.aligned"
+                    rm "android-out/$name.unsigned" "android-out/$name.aligned"
+                    ;;
+                esac
               done
             fi
             echo "Staged APKs:"
