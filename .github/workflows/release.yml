@@ -37,10 +37,14 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Tauri app (Windows MSI)
+      - name: Build Tauri app (Windows NSIS)
         id: build
+        # Use NSIS instead of MSI: Tauri's WiX-based MSI bundling fails on
+        # windows-latest because the bundled WiX tools (light.exe) are often
+        # blocked by Windows Defender or fail to download completely.
+        # NSIS produces .exe installers that work the same way.
         run: |
-          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles nsis 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         shell: bash
         env:
@@ -57,11 +61,11 @@ jobs:
           name: tauri-build-log
           path: tauri-build.log
 
-      - name: Upload MSI installer
+      - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
-          name: weavine-windows-msi
-          path: target/release/bundle/msi/*
+          name: weavine-windows-nsis
+          path: target/release/bundle/nsis/*
           if-no-files-found: error
 
   build-linux:
@@ -270,7 +274,10 @@ jobs:
       - name: Build Tauri Android APK
         id: build
         run: |
-          cargo tauri android build --apk 2>&1 | tee tauri-android-build.log
+          # Build from inside src-tauri/gen/android so the gradle wrapper's
+          # working directory matches its location and outputs land in the
+          # expected src-tauri/gen/android/app/build/outputs/apk/ tree.
+          cd src-tauri/gen/android && ./gradlew assembleRelease 2>&1 | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
@@ -285,70 +292,76 @@ jobs:
       - name: Stage Android APK
         if: always() && steps.build.outcome == 'success'
         run: |
-          set -x
-          mkdir -p android-out ~/.android
-          echo "=== APK output dir listing ==="
-          ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -40 || true
-          # Ensure debug keystore exists (Gradle auto-creates it during build
-          # on local machines but CI runners may not have one yet)
-          if [ ! -f ~/.android/debug.keystore ]; then
-            echo "Generating debug.keystore"
-            keytool -genkey -v \
-              -keystore ~/.android/debug.keystore \
-              -alias androiddebugkey \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass android -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
-          fi
-          # Tauri produces *-release-unsigned.apk (no signing config) — modern
-          # Android refuses to install unsigned APKs, so sign with the debug
-          # keystore.
-          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' 2>/dev/null | head -1)
-          if [ -n "$UNSIGNED" ]; then
-            echo "Signing $UNSIGNED with debug keystore"
-            BT="$ANDROID_HOME/build-tools/34.0.0"
-            "$BT/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
-            "$BT/apksigner" sign \
-              --ks ~/.android/debug.keystore \
-              --ks-pass pass:android \
-              --ks-key-alias androiddebugkey \
-              --key-pass pass:android \
-              --out android-out/Weavine_universal-release.apk \
-              android-out/app-unsigned-aligned.apk
-            "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
-            rm android-out/app-unsigned-aligned.apk
-          else
-            echo "No unsigned release APK found, copying all APKs as-is"
-            # Copy any APK found under the outputs dir to android-out/, then
-            # re-sign any *-release.apk with the debug keystore (CI gradle
-            # builds sometimes emit a pre-signed release APK using a different
-            # debug keystore than the one we generate here, which Android
-            # refuses to install).
-            find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \; 2>&1 || {
-              echo "ERROR: no APKs found under src-tauri/gen/android/app/build/outputs/apk"
-              echo "Tried: src-tauri/gen/android/app/build/outputs/apk"
-              echo "PWD: $(pwd)"
-              exit 1
-            }
-            for apk in android-out/*-release.apk; do
-              if [ -f "$apk" ]; then
-                echo "Re-signing $apk with CI debug keystore for consistency"
-                BT="$ANDROID_HOME/build-tools/34.0.0"
-                mv "$apk" "${apk}.unsigned"
-                "$BT/zipalign" -p -f 4 "${apk}.unsigned" "${apk}.aligned"
-                "$BT/apksigner" sign \
-                  --ks ~/.android/debug.keystore \
-                  --ks-pass pass:android \
-                  --ks-key-alias androiddebugkey \
-                  --key-pass pass:android \
-                  --out "$apk" \
-                  "${apk}.aligned"
-                rm "${apk}.unsigned" "${apk}.aligned"
-              fi
-            done
-          fi
-          echo "Staged APKs:"
-          ls -la android-out/
+          {
+            set -x
+            mkdir -p android-out ~/.android
+            echo "=== PWD ==="
+            pwd
+            echo "=== APK output dir listing ==="
+            ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -60 || true
+            echo "=== also check universal variant ==="
+            find src-tauri/gen/android/app/build -name '*.apk' 2>&1 | head -20 || true
+            # Ensure debug keystore exists (Gradle auto-creates it during build
+            # on local machines but CI runners may not have one yet)
+            if [ ! -f ~/.android/debug.keystore ]; then
+              echo "Generating debug.keystore"
+              keytool -genkey -v \
+                -keystore ~/.android/debug.keystore \
+                -alias androiddebugkey \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -storepass android -keypass android \
+                -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+            fi
+            # Tauri produces *-release-unsigned.apk (no signing config) — modern
+            # Android refuses to install unsigned APKs, so sign with the debug
+            # keystore.
+            UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' 2>/dev/null | head -1)
+            if [ -n "$UNSIGNED" ]; then
+              echo "Signing $UNSIGNED with debug keystore"
+              BT="$ANDROID_HOME/build-tools/34.0.0"
+              "$BT/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
+              "$BT/apksigner" sign \
+                --ks ~/.android/debug.keystore \
+                --ks-pass pass:android \
+                --ks-key-alias androiddebugkey \
+                --key-pass pass:android \
+                --out android-out/Weavine_universal-release.apk \
+                android-out/app-unsigned-aligned.apk
+              "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
+              rm android-out/app-unsigned-aligned.apk
+            else
+              echo "No unsigned release APK found, copying all APKs as-is"
+              find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -exec cp -v {} android-out/ \; 2>&1 || {
+                echo "ERROR: no APKs found under src-tauri/gen/android/app/build/outputs/apk"
+                exit 1
+              }
+              for apk in android-out/*-release.apk; do
+                if [ -f "$apk" ]; then
+                  echo "Re-signing $apk with CI debug keystore for consistency"
+                  BT="$ANDROID_HOME/build-tools/34.0.0"
+                  mv "$apk" "${apk}.unsigned"
+                  "$BT/zipalign" -p -f 4 "${apk}.unsigned" "${apk}.aligned"
+                  "$BT/apksigner" sign \
+                    --ks ~/.android/debug.keystore \
+                    --ks-pass pass:android \
+                    --ks-key-alias androiddebugkey \
+                    --key-pass pass:android \
+                    --out "$apk" \
+                    "${apk}.aligned"
+                  rm "${apk}.unsigned" "${apk}.aligned"
+                fi
+              done
+            fi
+            echo "Staged APKs:"
+            ls -la android-out/
+          } 2>&1 | tee android-stage.log
+
+      - name: Upload Android stage log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-stage-log
+          path: android-stage.log
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
@@ -379,12 +392,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Upload Windows MSI to Release
+      - name: Upload Windows NSIS installer to Release
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --clobber \
-            artifacts/weavine-windows-msi/*.msi
+          find artifacts/weavine-windows-nsis -type f -name '*.exe' -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
