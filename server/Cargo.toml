@@ -4,6 +4,10 @@ version = "0.2.0"
 edition = "2021"
 license = "AGPL-3.0"
 
+[features]
+default = ["ocr"]
+ocr = ["dep:leptess"]
+
 [dependencies]
 weavine = { path = "../src-tauri", default-features = false, features = ["sqlx"] }
 argon2 = "0.5"
@@ -23,5 +27,5 @@ rand = "0.8"
 aes-gcm = "0.10"
 base64 = "0.22"
 sha2 = "0.10"
-leptess = "0.6"
+leptess = { version = "0.6", optional = true }
 tempfile = "3"

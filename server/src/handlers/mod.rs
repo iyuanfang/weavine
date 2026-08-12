@@ -8,6 +8,7 @@ pub mod event;
 pub mod graph;
 pub mod interaction;
 pub mod media;
+#[cfg(feature = "ocr")]
 pub mod ocr;
 pub mod project;
 pub mod project_contact;

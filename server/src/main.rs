@@ -97,7 +97,6 @@ async fn main() {
         .route("/api/media", post(handlers::media::upload).get(handlers::media::list_by_owner))
         .route("/api/media/:id", get(handlers::media::get_by_id).delete(handlers::media::delete))
         .route("/api/media/:id/blob", get(handlers::media::get_blob))
-        .route("/api/cards/extract", post(handlers::ocr::extract_card))
         // Interactions
         .route("/api/interactions", get(handlers::interaction::list).post(handlers::interaction::create))
         .route("/api/interactions/:id", get(handlers::interaction::get).put(handlers::interaction::update).delete(handlers::interaction::delete))
@@ -136,8 +135,14 @@ async fn main() {
 
     let files = Router::new().route("/files/*key", get(serve_file));
 
-    let app = api
-        .merge(files)
+    let mut app = api.merge(files);
+
+    #[cfg(feature = "ocr")]
+    {
+        app = app.merge(Router::new().route("/api/cards/extract", post(handlers::ocr::extract_card)));
+    }
+
+    let app = app
         // SPA fallback
         .fallback_service({
             let spa_dir =
