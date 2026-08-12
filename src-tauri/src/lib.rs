@@ -41,6 +41,10 @@ pub fn run() {
     use db::Database;
     use std::fs;
     use tauri::Emitter;
+    // tauri-plugin-global-shortcut is desktop-only (the crate root has
+    // `#![cfg(not(any(target_os = "android", target_os = "ios")))]`).
+    // Import ShortcutState only on desktop so the Android build compiles.
+    #[cfg(desktop)]
     use tauri_plugin_global_shortcut::ShortcutState;
     use tauri_plugin_notification;
 
