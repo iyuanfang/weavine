@@ -53,9 +53,9 @@ pub struct CreateContactBody {
     #[serde(default)]
     pub title: Option<String>,
 
-    #[schemars(description = "City.")]
+    #[schemars(description = "Mailing or business address (free text).")]
     #[serde(default)]
-    pub city: Option<String>,
+    pub address: Option<String>,
 
     #[schemars(description = "Email address.")]
     #[serde(default)]
@@ -101,9 +101,9 @@ pub struct UpdateContactFields {
     #[serde(default)]
     pub title: Option<String>,
 
-    #[schemars(description = "Replace the city.")]
+    #[schemars(description = "Replace the address.")]
     #[serde(default)]
-    pub city: Option<String>,
+    pub address: Option<String>,
 
     #[schemars(description = "Replace the email.")]
     #[serde(default)]
