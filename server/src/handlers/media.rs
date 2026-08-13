@@ -114,6 +114,7 @@ pub async fn upload(
     mut form: Multipart,
 ) -> Result<axum::Json<MediaResponse>, (StatusCode, String)> {
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
+    eprintln!("[media-upload] req auth={auth} device_id={device_id}");
 
     let mut kind: Option<String> = None;
     let mut owner_type: Option<String> = None;
@@ -152,6 +153,7 @@ pub async fn upload(
     let owner_id = owner_id.ok_or_else(|| (StatusCode::BAD_REQUEST, "missing owner_id".into()))?;
     let mime = mime.unwrap_or_else(|| "application/octet-stream".to_string());
     let blob = blob.ok_or_else(|| (StatusCode::BAD_REQUEST, "missing file".into()))?;
+    eprintln!("[media-upload] fields kind={kind} owner_type={owner_type} owner_id={owner_id} mime={mime} size={} bytes", blob.len());
 
     validate_kind(&kind)?;
     ensure_owner_authorized(&pool, &auth, &owner_type, &owner_id, false).await?;
@@ -168,6 +170,7 @@ pub async fn upload(
         .put(&auth, &kind, &owner_type, &owner_id, &mime, &blob)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    eprintln!("[media-upload] storage.put ok storage_key={}", storage_key.0);
 
     let mut tx = pool
         .begin()
@@ -203,6 +206,7 @@ pub async fn upload(
     tx.commit()
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    eprintln!("[media-upload] DB upsert ok media_id={} storage_key={}", row.id, row.storage_key);
 
     Ok(axum::Json(row.into()))
 }

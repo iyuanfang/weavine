@@ -1,5 +1,7 @@
 use axum::{
-    http::{header::CACHE_CONTROL, HeaderValue},
+    http::{header::CACHE_CONTROL, HeaderValue, Request},
+    middleware::{self, Next},
+    response::Response,
     routing::{delete, get, patch, post, put},
     Extension, Router,
 };
@@ -150,6 +152,7 @@ async fn main() {
             ServeDir::new(&spa_dir)
                 .fallback(ServeFile::new(format!("{}/index.html", spa_dir.trim_end_matches('/'))))
         })
+        .layer(axum::middleware::from_fn(log_requests))
         .layer(CorsLayer::permissive())
         .layer(Extension(storage))
         .with_state(pool);
@@ -180,4 +183,14 @@ async fn run_prune(pool: &PgPool) {
         Err(e) => eprintln!("[sync-prune] error: {e}"),
         Ok(_) => {}
     }
+}
+
+/// Log every incoming request (method + path) BEFORE auth runs, so we can
+/// see requests that fail with 401 at the auth layer (which never reach the
+/// handler-level logs in media.rs / storage.rs).
+async fn log_requests(req: Request<axum::body::Body>, next: Next) -> Response {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+    eprintln!("[req] {method} {uri}");
+    next.run(req).await
 }

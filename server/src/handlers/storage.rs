@@ -79,6 +79,7 @@ impl Storage for LocalFsStorage {
                 .map_err(|e| e.to_string())?;
         }
         fs::write(&path, bytes).await.map_err(|e| e.to_string())?;
+        eprintln!("[storage-put] wrote {} bytes -> {}", bytes.len(), path.display());
         Ok(StorageKey(key))
     }
 
@@ -130,5 +131,6 @@ pub async fn serve_file(
         "gif" => "image/gif",
         _ => "application/octet-stream",
     };
+    eprintln!("[serve-file] GET key={key} mime={mime}");
     storage.get_response(&StorageKey(key), mime).await
 }
