@@ -5,6 +5,59 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-08-13
+
+### Changed
+
+- **Contact `city` → `address`** across the whole stack. The field now holds
+  the full free-form location (street, city, postcode, country) instead of
+  just the city. vCard ADR parsing joins the relevant parts with `, ` and
+  drops empties; CSV import accepts `地址` / `address` / `addr` aliases.
+  - Server: idempotent migration `20260813000001_contact_address_rename.sql`
+    (rename only when `city` exists and `address` doesn't). Handlers,
+    `ContactWithRole`, and `INSERT`/`UPDATE` whitelists updated.
+  - Desktop: `Contact`, `CreateContactInput`, `UpdateContactInput`,
+    `business::contact` (row_to_contact / INSERT / UPDATE),
+    `migration.rs` SCHEMA_SQL + index rename guard, `sync::translate` push
+    columns, sync schema/test data, and three test fixtures.
+  - MCP: `CreateContactBody` / `UpdateContactFields` with new schemars
+    description.
+  - Web: types, ContactNew/Edit state and label, ContactDetail info fields,
+    ContactsList CSV import map, Settings, parseContacts.
+
+### Added
+
+- **Card image persistence** — after OCR + 创建联系人, the original card photo
+  is uploaded as `kind=card_image` media attached to the new contact.
+  Desktop exposes a new `save_card_image` tauri command that POSTs the image
+  to `/api/media`. Contact detail page renders a 名片 thumbnail; click
+  opens a full-size viewer (`CardImageViewModal`).
+- **Android camera on tap** — `<input type="file" capture="environment">`
+  on the card scanner, so Android opens the rear camera directly instead
+  of forcing the user to shoot then pick from the gallery.
+- **Modal CSS** — `.modal-backdrop`, `.modal`, `.button-primary`,
+  `.button-secondary`. The avatar crop modal had been rendering but was
+  invisible because these classes were never defined; uploading now works.
+
+### Improved
+
+- **AvatarCropModal rewritten** — CSS mask circular crop (no separate ring
+  div), 4-channel zoom (wheel / pinch / slider / +/- buttons), reset button,
+  live preview thumbnails at 88 / 40 / 32 px (so the user sees what each
+  surface actually looks like), wider modal (580px, maxWidth 92vw) so the
+  stage and preview column sit side by side. Single 保存头像 button. PNG
+  fallback when webp encoding returns null.
+- **Contact list avatar** — single `<Avatar>` component per row instead of
+  a 40×40 wrapper around a 32×32 Avatar, so the initial colour ring is
+  gone.
+
+### Internal
+
+- Server: `axum::middleware::from_fn(log_requests)` wraps every route so
+  401'd requests are visible in logs; `media.rs` and `storage.rs` add
+  structured request/field/DB trace lines that stay in for future upload
+  bisecting.
+
 ## [0.1.8] - 2026-07-04
 
 ### Fixed

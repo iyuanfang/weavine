@@ -6130,7 +6130,7 @@ dependencies = [
 
 [[package]]
 name = "weavine"
-version = "0.1.8"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -6161,7 +6161,7 @@ dependencies = [
 
 [[package]]
 name = "weavine-mcp"
-version = "0.1.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -6181,7 +6181,7 @@ dependencies = [
 
 [[package]]
 name = "weavine-server"
-version = "0.2.0"
+version = "1.0.1"
 dependencies = [
  "aes-gcm",
  "argon2",
