@@ -10,7 +10,7 @@ pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
         name: row.get(3)?,
         company: row.get(4)?,
         title: row.get(5)?,
-        city: row.get(6)?,
+        address: row.get(6)?,
         email: row.get(7)?,
         phone: row.get(8)?,
         wechat: row.get(9)?,
@@ -185,7 +185,7 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
 
     conn.execute(
         "INSERT INTO Contact \
-         (id, user_id, nickname, name, company, title, city, \
+         (id, user_id, nickname, name, company, title, address, \
           email, phone, wechat, notes, importance, \
           last_interaction_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
@@ -198,7 +198,7 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
             &input.name,
             &input.company,
             &input.title,
-            &input.city,
+            &input.address,
             &input.email,
             &input.phone,
             &input.wechat,
@@ -258,9 +258,9 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
         params.push(Box::new(title.clone()));
         param_idx += 1;
     }
-    if let Some(ref city) = input.city {
-        set_clauses.push(format!("city = ?{}", param_idx));
-        params.push(Box::new(city.clone()));
+    if let Some(ref address) = input.address {
+        set_clauses.push(format!("address = ?{}", param_idx));
+        params.push(Box::new(address.clone()));
         param_idx += 1;
     }
     if let Some(ref email) = input.email {

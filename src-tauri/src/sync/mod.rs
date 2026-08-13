@@ -509,7 +509,7 @@ mod tests {
                 name TEXT,
                 company TEXT,
                 title TEXT,
-                city TEXT,
+                address TEXT,
                 email TEXT,
                 phone TEXT,
                 wechat TEXT,
@@ -593,7 +593,7 @@ mod tests {
             let data = json!({
                 "id": format!("c{i}"), "user_id": "local-default",
                 "nickname": null, "name": format!("Person {i}"),
-                "company": null, "title": null, "city": null,
+                "company": null, "title": null, "address": null,
                 "email": null, "phone": null, "wechat": null,
                 "notes": null, "importance": null,
                 "last_interaction_at": null,

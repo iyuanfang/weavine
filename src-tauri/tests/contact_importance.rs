@@ -150,7 +150,7 @@ fn business_create_contact_default_importance_is_low() {
         name: Some("Alice".into()),
         company: None,
         title: None,
-        city: None,
+        address: None,
         email: None,
         phone: None,
         wechat: None,

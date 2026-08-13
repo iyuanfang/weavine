@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS "Contact" (
     "name" TEXT,
     "company" TEXT,
     "title" TEXT,
-    "city" TEXT,
+    "address" TEXT,
     "email" TEXT,
     "phone" TEXT,
     "wechat" TEXT,
@@ -230,7 +230,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "VerificationToken_identifier_token_key" ON "V
 CREATE INDEX IF NOT EXISTS "Contact_user_id_nickname_idx" ON "Contact"("user_id", "nickname");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_name_idx" ON "Contact"("user_id", "name");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_company_idx" ON "Contact"("user_id", "company");
-CREATE INDEX IF NOT EXISTS "Contact_user_id_city_idx" ON "Contact"("user_id", "city");
+CREATE INDEX IF NOT EXISTS "Contact_user_id_address_idx" ON "Contact"("user_id", "address");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_importance_idx" ON "Contact"("user_id", "importance");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_last_interaction_at_updated_at_idx" ON "Contact"("user_id", "last_interaction_at", "updated_at");
 CREATE UNIQUE INDEX IF NOT EXISTS "Contact_user_id_email_key" ON "Contact"("user_id", "email");
@@ -605,6 +605,19 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    // ── Phase 2.7 contact address rename (city → address) ───────
+    let address_rename_present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Contact') WHERE name='city'",
+        [],
+        |r| r.get(0),
+    )?;
+    if address_rename_present > 0 {
+        conn.execute(
+            "ALTER TABLE \"Contact\" RENAME COLUMN \"city\" TO \"address\"",
+            [],
+        )?;
+    }
+
     Ok(())
 }
 
@@ -708,7 +721,7 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "updated_at" DATETIME NOT NULL
         );"#,
         ["id"=>"id", "ownerId"=>"user_id", "nickname"=>"nickname", "name"=>"name",
-         "company"=>"company", "title"=>"title", "city"=>"city", "email"=>"email",
+         "company"=>"company", "title"=>"title", "city"=>"address", "email"=>"email",
          "phone"=>"phone", "wechat"=>"wechat", "notes"=>"notes", "importance"=>"importance",
          "reminderEnabled"=>"reminder_enabled", "reminderIntervalDays"=>"reminder_interval_days",
          "lastContactedAt"=>"last_interaction_at", "createdAt"=>"created_at", "updatedAt"=>"updated_at"]

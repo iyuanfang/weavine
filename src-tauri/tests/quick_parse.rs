@@ -9,7 +9,7 @@ fn contact(id: &str, name: &str) -> Contact {
         name: Some(name.into()),
         company: None,
         title: None,
-        city: None,
+        address: None,
         email: None,
         phone: None,
         wechat: None,
