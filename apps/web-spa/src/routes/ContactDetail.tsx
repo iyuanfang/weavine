@@ -7,11 +7,12 @@ import { useUserId } from '../lib/auth';
 import { Avatar } from '../components/Avatar';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { AvatarViewModal } from '../components/AvatarViewModal';
+import { CardImageViewModal } from '../components/CardImageViewModal';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { backTarget } from '../lib/backNavigation';
-import type { CreateInteractionInput } from '../lib/adapter/types';
+import type { CreateInteractionInput, MediaItem } from '../lib/adapter/types';
 
 const IMPORTANCE_LABELS: Record<string, string> = {
   normal: '普通',
@@ -77,6 +78,17 @@ export function ContactDetail() {
     enabled: !!userId,
   });
 
+  const cardImagesQuery = useQuery({
+    queryKey: ['media', 'card_image', 'contact', id],
+    queryFn: () =>
+      adapter.media.listByOwner({
+        kind: 'card_image',
+        owner_type: 'contact',
+        owner_id: id,
+      }),
+    enabled: !!id,
+  });
+
   const [interactionSummary, setInteractionSummary] = useState('');
   const [interactionChannel, setInteractionChannel] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -84,6 +96,13 @@ export function ContactDetail() {
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [viewingAvatar, setViewingAvatar] = useState(false);
+  const [viewingCard, setViewingCard] = useState(false);
+
+  const cardImages: MediaItem[] = cardImagesQuery.data ?? [];
+  const cardImageUrl = (m: MediaItem) =>
+    adapter.baseUrl
+      ? `${adapter.baseUrl}/files/${m.storage_key}`
+      : `/files/${m.storage_key}`;
 
   const createInteractionMutation = useMutation({
     mutationFn: (input: CreateInteractionInput) => adapter.interactions.create(input),
@@ -146,7 +165,9 @@ export function ContactDetail() {
   const onAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
+    console.log('[avatar-pick] onChange fired, file=', file ? `${file.name} type=${file.type} size=${file.size}` : 'NULL', 'contact.id=', contact.id);
     if (!file || !contact.id) return;
+    console.log('[avatar-pick] setCropFile -> opening crop modal');
     setCropFile(file);
   };
 
@@ -157,7 +178,8 @@ export function ContactDetail() {
     setAvatarError(null);
     try {
       const bytes = new Uint8Array(await blob.arrayBuffer());
-      await adapter.media.upload({
+      console.log('[avatar-upload] blob type=', blob.type, 'size=', bytes.byteLength, 'contact=', contact.id);
+      const resp = await adapter.media.upload({
         kind: 'avatar',
         owner_type: 'contact',
         owner_id: contact.id,
@@ -165,6 +187,7 @@ export function ContactDetail() {
         mime: blob.type || 'image/webp',
         filename: 'avatar.webp',
       });
+      console.log('[avatar-upload] response=', resp);
       await queryClient.invalidateQueries({ queryKey: ['contact', contact.id] });
     } catch (err) {
       console.error('avatar upload failed', err);
@@ -180,7 +203,7 @@ export function ContactDetail() {
     ['姓名', contact.name],
     ['公司', contact.company],
     ['职位', contact.title],
-    ['城市', contact.city],
+    ['地址', contact.address],
     ['邮箱', contact.email],
     ['电话', contact.phone],
     ['微信', contact.wechat],
@@ -312,6 +335,21 @@ export function ContactDetail() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+      )}
+
+      {cardImages.length > 0 && (
+        <section className="section">
+          <h2 className="section__title">名片</h2>
+          <div className="card" style={{ marginTop: 10, padding: 16 }}>
+            <img
+              src={cardImageUrl(cardImages[0])}
+              alt={`${displayName} 的名片`}
+              onClick={() => setViewingCard(true)}
+              style={{ maxWidth: 320, maxHeight: 220, borderRadius: 6, cursor: 'pointer' }}
+              data-testid="contact-card-image"
+            />
           </div>
         </section>
       )}
@@ -460,6 +498,14 @@ export function ContactDetail() {
           src={contactAvatarUrl}
           alt={displayName}
           onClose={() => setViewingAvatar(false)}
+        />
+      )}
+
+      {viewingCard && cardImages.length > 0 && (
+        <CardImageViewModal
+          src={cardImageUrl(cardImages[0])}
+          alt={`${displayName} 的名片`}
+          onClose={() => setViewingCard(false)}
         />
       )}
 

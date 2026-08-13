@@ -10,7 +10,7 @@ export interface ParsedContact {
   name?: string | null;
   company?: string | null;
   title?: string | null;
-  city?: string | null;
+  address?: string | null;
   email?: string | null;
   phone?: string | null;
   wechat?: string | null;
@@ -23,7 +23,7 @@ const CSV_HEADER_ALIASES: Record<keyof ParsedContact, string[]> = {
   name: ['姓名', '全名', 'name', 'full_name', 'fullname'],
   company: ['公司', 'company', 'org', 'organization', '组织'],
   title: ['职位', 'title', 'position', 'job', '职务'],
-  city: ['城市', 'city', 'location', '所在地'],
+  address: ['地址', 'address', 'addr', '城市', 'city', 'location', '所在地'],
   email: ['邮箱', 'email', 'mail', 'e-mail'],
   phone: ['电话', '手机', 'phone', 'mobile', 'tel', 'telephone'],
   wechat: ['微信', 'wechat', 'wx'],
@@ -212,11 +212,12 @@ function parseStructuredName(value: string): string {
   return [given, family].filter(Boolean).join(' ');
 }
 
-// RFC 6350 ADR: post-office-box;extended;street;locality;region;postal;country.
-// We only surface the locality as the "city" field.
-function parseAdrLocality(value: string): string {
+function parseAdrFull(value: string): string {
   const parts = value.split(';');
-  return (parts[3] || '').trim();
+  const human = [parts[2], parts[3], parts[4], parts[5], parts[6]]
+    .map(p => (p || '').trim())
+    .filter(p => p.length > 0);
+  return human.join(', ');
 }
 
 export function parseVCard(text: string): ParsedContact[] {
@@ -269,7 +270,7 @@ export function parseVCard(text: string): ParsedContact[] {
         current.title = parsed.value;
         break;
       case 'ADR':
-        current.city = parseAdrLocality(parsed.value);
+        current.address = parseAdrFull(parsed.value);
         break;
       case 'EMAIL':
         current.email = parsed.value;

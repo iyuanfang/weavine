@@ -492,16 +492,21 @@ export class HttpAdapter implements PRMAdapter {
       const token = getAccessToken();
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      console.log('[avatar-upload] fetch start: kind=', input.kind, 'owner_type=', input.owner_type, 'owner_id=', input.owner_id, 'mime=', input.mime, 'bytes=', input.bytes.byteLength, 'token=', token ? `present(${token.slice(0, 12)}…)` : 'MISSING');
       const resp = await fetch(
         buildUrl(this.baseUrl, '/api/media', 'POST'),
         { method: 'POST', headers, body: form },
       );
+      console.log('[avatar-upload] fetch done: status=', resp.status, resp.statusText);
       if (!resp.ok) {
         let msg = '';
         try { msg = await resp.text(); } catch { msg = ''; }
+        console.log('[avatar-upload] fetch failed body=', msg);
         throw new Error(`POST /api/media: ${resp.status} ${resp.statusText} — ${msg}`);
       }
-      return resp.json() as Promise<MediaItem>;
+      const data = (await resp.json()) as MediaItem;
+      console.log('[avatar-upload] fetch ok, media=', data);
+      return data;
     },
 
     url: async (id: string): Promise<string> => {

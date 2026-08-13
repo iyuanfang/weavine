@@ -6,7 +6,6 @@ import { Avatar } from '../components/Avatar';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import { avatarBg } from '../lib/contactColor';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { tagColor } from '../lib/tagColor';
 import {
@@ -183,7 +182,7 @@ export function ContactsList() {
         name: p.name ?? null,
         company: p.company ?? null,
         title: p.title ?? null,
-        city: p.city ?? null,
+        address: p.address ?? null,
         email: p.email ?? null,
         phone: p.phone ?? null,
         wechat: p.wechat ?? null,
@@ -522,12 +521,7 @@ function ContactRow({
         to={`/contacts/${c.id}?from=/contacts`}
         style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}
       >
-        <div
-          className="avatar avatar--sm"
-          style={{ background: avatarBg(displayName) }}
-        >
-          <Avatar name={displayName} src={avatarUrl} size={32} />
-        </div>
+        <Avatar name={displayName} src={avatarUrl} size={40} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>

@@ -42,7 +42,7 @@ export interface Contact {
   name: string | null;
   company: string | null;
   title: string | null;
-  city: string | null;
+  address: string | null;
   email: string | null;
   phone: string | null;
   wechat: string | null;
@@ -242,7 +242,7 @@ export interface CreateContactInput {
   name?: string | null;
   company?: string | null;
   title?: string | null;
-  city?: string | null;
+  address?: string | null;
   email?: string | null;
   phone?: string | null;
   wechat?: string | null;
@@ -278,7 +278,7 @@ export interface UpdateContactInput {
   name?: string | null;
   company?: string | null;
   title?: string | null;
-  city?: string | null;
+  address?: string | null;
   email?: string | null;
   phone?: string | null;
   wechat?: string | null;

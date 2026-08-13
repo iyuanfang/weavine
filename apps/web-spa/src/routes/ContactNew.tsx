@@ -25,18 +25,36 @@ export function ContactNew() {
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
-  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [wechat, setWechat] = useState('');
   const [notes, setNotes] = useState('');
   const [importance, setImportance] = useState<Importance>(DEFAULT_IMPORTANCE);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [cardImageFile, setCardImageFile] = useState<File | null>(null);
 
   const createMutation = useMutation({
     mutationFn: (input: CreateContactInput) => adapter.contacts.create(input),
-    onSuccess: (contact) => {
+    onSuccess: async (contact) => {
       queryClient.invalidateQueries({ queryKey: ['contacts', userId] });
+      if (cardImageFile) {
+        try {
+          const bytes = new Uint8Array(await cardImageFile.arrayBuffer());
+          await adapter.media.upload({
+            kind: 'card_image',
+            owner_type: 'contact',
+            owner_id: contact.id,
+            bytes,
+            mime: cardImageFile.type || 'image/png',
+            filename: cardImageFile.name || 'card.png',
+          });
+        } catch (e) {
+          console.error('save card image failed:', e);
+        } finally {
+          setCardImageFile(null);
+        }
+      }
       navigate(`/contacts/${contact.id}`);
     },
   });
@@ -50,7 +68,7 @@ export function ContactNew() {
       name: name.trim() || null,
       company: company.trim() || null,
       title: title.trim() || null,
-      city: city.trim() || null,
+      address: address.trim() || null,
       email: email.trim() || null,
       phone: phone.trim() || null,
       wechat: wechat.trim() || null,
@@ -64,13 +82,14 @@ export function ContactNew() {
     return <div className="loading">正在加载用户…</div>;
   }
 
-  const applyScanned = (f: ScannedFields) => {
+  const applyScanned = (file: File | null, f: ScannedFields) => {
+    if (file) setCardImageFile(file);
     if (f.name) setName(f.name);
     if (f.company) setCompany(f.company);
     if (f.title) setTitle(f.title);
     if (f.email) setEmail(f.email);
     if (f.phone && f.phone.length > 0) setPhone(f.phone.join(' / '));
-    if (f.address) setCity(f.address);
+    if (f.address) setAddress(f.address);
   };
 
   return (
@@ -147,12 +166,12 @@ export function ContactNew() {
                   />
                 </div>
                 <div>
-                  <label className="input-label">城市</label>
+                  <label className="input-label">地址</label>
                   <input
                     className="input-base"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    data-testid="contact-city"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    data-testid="contact-address"
                   />
                 </div>
               </div>

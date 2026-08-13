@@ -794,7 +794,7 @@ function BackupRestorePanel() {
           name: c.name ?? null,
           company: c.company ?? null,
           title: c.title ?? null,
-          city: c.city ?? null,
+          address: c.address ?? null,
           email: c.email ?? null,
           phone: c.phone ?? null,
           wechat: c.wechat ?? null,

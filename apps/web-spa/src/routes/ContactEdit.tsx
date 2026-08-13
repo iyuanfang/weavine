@@ -30,7 +30,7 @@ export function ContactEdit() {
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
-  const [city, setCity] = useState('');
+  const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [wechat, setWechat] = useState('');
@@ -46,7 +46,7 @@ export function ContactEdit() {
       setName(c.name ?? '');
       setCompany(c.company ?? '');
       setTitle(c.title ?? '');
-      setCity(c.city ?? '');
+      setAddress(c.address ?? '');
       setEmail(c.email ?? '');
       setPhone(c.phone ?? '');
       setWechat(c.wechat ?? '');
@@ -76,7 +76,7 @@ export function ContactEdit() {
       name: name.trim() || null,
       company: company.trim() || null,
       title: title.trim() || null,
-      city: city.trim() || null,
+      address: address.trim() || null,
       email: email.trim() || null,
       phone: phone.trim() || null,
       wechat: wechat.trim() || null,
@@ -159,11 +159,11 @@ export function ContactEdit() {
                   />
                 </div>
                 <div>
-                  <label className="input-label">城市</label>
+                  <label className="input-label">地址</label>
                   <input
                     className="input-base"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
                   />
                 </div>
               </div>
