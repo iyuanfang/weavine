@@ -76,3 +76,46 @@ pub async fn extract_card(
 
     serde_json::from_str::<OcrResult>(&body).map_err(|e| format!("parse ocr response: {e}"))
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn save_card_image(
+    db: State<'_, Database>,
+    contact_id: String,
+    image_base64: String,
+) -> Result<serde_json::Value, String> {
+    let (server_url, token) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        load_credentials(&conn)?
+    };
+
+    let bytes = B64.decode(image_base64.as_bytes())
+        .map_err(|e| format!("decode base64: {e}"))?;
+
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name("card.png")
+        .mime_str("image/png")
+        .map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new()
+        .text("kind", "card_image")
+        .text("owner_type", "contact")
+        .text("owner_id", contact_id)
+        .part("file", part);
+
+    let url = format!("{}/api/media", server_url.trim_end_matches('/'));
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .bearer_auth(&token)
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("upload request failed: {e}"))?;
+
+    let status = resp.status();
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        return Err(format!("upload failed ({}): {}", status, body));
+    }
+
+    serde_json::from_str::<serde_json::Value>(&body)
+        .map_err(|e| format!("parse upload response: {e}"))
+}

@@ -175,6 +175,7 @@ pub fn run() {
             media::get_media_data_url,
             media::delete_media,
             ocr::extract_card,
+        ocr::save_card_image,
             commands::sync::cloud_login,
             commands::sync::cloud_logout,
             commands::sync::cloud_sync_now,
