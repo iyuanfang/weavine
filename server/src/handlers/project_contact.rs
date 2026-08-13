@@ -17,7 +17,7 @@ struct ContactWithRole {
     name: Option<String>,
     company: Option<String>,
     title: Option<String>,
-    city: Option<String>,
+    address: Option<String>,
     email: Option<String>,
     phone: Option<String>,
     wechat: Option<String>,
@@ -37,7 +37,7 @@ pub async fn list(
 ) -> Result<Json<Vec<ProjectContactWithContact>>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, ContactWithRole>(
-        "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.city, c.email, c.phone, c.wechat, \
+        "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.address, c.email, c.phone, c.wechat, \
                 c.notes, c.importance, c.last_interaction_at, \
                 c.created_at, c.updated_at, pc.role, pc.added_at \
          FROM project_contact pc \
@@ -58,7 +58,7 @@ pub async fn list(
             name: r.name,
             company: r.company,
             title: r.title,
-            city: r.city,
+            address: r.address,
             email: r.email,
             phone: r.phone,
             wechat: r.wechat,

@@ -58,7 +58,7 @@ pub async fn list(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let query_sql = format!(
-        "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
+        "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
          notes, importance, last_interaction_at, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact \
@@ -103,7 +103,7 @@ pub async fn get(
 ) -> Result<Json<Contact>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut contact: Contact = sqlx::query_as(
-        "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
+        "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
          notes, importance, last_interaction_at, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact WHERE id = $1 AND user_id = $2",
@@ -148,7 +148,7 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query(
-        "INSERT INTO contact (id, user_id, nickname, name, company, title, city, email, phone, wechat, \
+        "INSERT INTO contact (id, user_id, nickname, name, company, title, address, email, phone, wechat, \
          notes, importance, created_at, updated_at) \
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
     )
@@ -158,7 +158,7 @@ pub async fn create(
     .bind(body.get("name").and_then(|v| v.as_str()))
     .bind(body.get("company").and_then(|v| v.as_str()))
     .bind(body.get("title").and_then(|v| v.as_str()))
-    .bind(body.get("city").and_then(|v| v.as_str()))
+    .bind(body.get("address").and_then(|v| v.as_str()))
     .bind(body.get("email").and_then(|v| v.as_str()))
     .bind(body.get("phone").and_then(|v| v.as_str()))
     .bind(body.get("wechat").and_then(|v| v.as_str()))
@@ -232,7 +232,7 @@ pub async fn update(
     if let Some(v) = body.get("nickname").and_then(|v| v.as_str()) {
         sets.push(format!("nickname = ${}", idx)); binds.push(Bind::Text(v)); idx += 1;
     }
-    for field in &["name", "company", "title", "city", "email", "phone", "wechat", "notes", "importance"] {
+    for field in &["name", "company", "title", "address", "email", "phone", "wechat", "notes", "importance"] {
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx)); binds.push(Bind::Text(v)); idx += 1;
         }
