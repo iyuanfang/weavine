@@ -53,6 +53,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           WINDOWS_CERT_FILE: ${{ secrets.WINDOWS_CERT_FILE }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          # Embedded at compile time via option_env!("WV_SERVICE_KEY") so the
+          # client can call cloud OCR/STT without per-user login. Optional —
+          # builds still succeed when the secret is unset; the client just
+          # returns "未登录云端" on cloud paths. See README "Cloud OCR & STT".
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'
@@ -122,6 +127,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'
@@ -186,6 +192,7 @@ jobs:
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'
@@ -289,6 +296,7 @@ jobs:
           exit $rc
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'

@@ -5,6 +5,43 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-08-14
+
+### Added
+
+- **Zero-login cloud OCR & STT** — the Tauri client can call the sync server
+  for business-card OCR and voice transcription without the user logging in.
+  Useful on platforms where local STT is broken (e.g. Android WebView) and as
+  a free, CPU-only alternative to paid APIs.
+  - Server: `handlers/voice.rs` (NEW, whisper.cpp `tiny` + symphonia + rubato,
+    ffmpeg subprocess fallback for unsupported containers), `handlers/auth.rs`
+    extended with `X-Service-Key` / `Bearer` service-key auth (constant-time
+    compare, no `user_account` row involved), `handlers/ocr.rs` accepts the
+    service key on `/api/cards/extract`.
+  - Vendored `whisper-rs-sys` 0.14.0 under `server/vendor/` with a workspace
+    `[patch.crates-io]` so the upstream bindgen step is skipped — the build
+    only needs the bundled `bindings.rs`.
+  - Tauri: `commands/voice.rs` (NEW `recognize_voice` command) plus a
+    user-key → runtime-config → `option_env!("WV_SERVICE_KEY")` → empty
+    fallback chain in `commands/ocr.rs` so a build without the env var still
+    works (degrades to "未登录云端" rather than failing).
+  - Desktop `QuickCapture` got a cloud-voice checkbox (localStorage
+    `weavine:voice:useCloud`); Android FAB now uses the cloud path by default.
+  - New docs: `scripts/install-whisper-model.sh`, `server/.env.example`
+    (all 14 env vars documented), README "Cloud OCR & STT (optional)" section
+    with privacy disclosure, `scripts/deploy-server.sh` now installs ffmpeg,
+    leptonica-devel, tesseract-devel + langpacks and builds with
+    `--features ocr,stt`.
+
+### Fixed
+
+- **Quick-capture contact linking** — when a quick-capture sentence mentioned
+  a contact's name, the parser used to set `search = Some("张三 李四")` so the
+  `LIKE '%张三 李四%'` filter never matched the single token and `contact_id`
+  stayed `NULL`. Switched to `search = None` (the parser already returns the
+  matched `contact_ids`); two regression tests added
+  (`commands::quick::tests`), both pass.
+
 ## [1.0.1] - 2026-08-13
 
 ### Changed
