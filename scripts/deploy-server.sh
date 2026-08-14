@@ -47,10 +47,13 @@ deploy() {
     $SSH "
         set -e
         if ! command -v ffmpeg >/dev/null 2>&1; then
-            echo 'installing ffmpeg...'
-            (yum install -y epel-release 2>/dev/null || dnf install -y epel-release 2>/dev/null) || true
-            (dnf install -y ffmpeg 2>/dev/null || yum install -y ffmpeg 2>/dev/null) \
-                || { echo 'ffmpeg install failed — see deploy docs'; exit 1; }
+            echo 'installing ffmpeg via static binary (johnvansickle.com)...'
+            cd /usr/local/bin
+            curl -sSL -o /tmp/ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+            tar -xJf /tmp/ffmpeg.tar.xz --strip-components=1 \
+                -C /usr/local/bin \
+                ffmpeg-*-amd64-static/ffmpeg ffmpeg-*-amd64-static/ffprobe
+            rm -f /tmp/ffmpeg.tar.xz
         fi
         ffmpeg -version 2>&1 | head -1
         # whisper tiny model (~75 MB, Apache-2.0). Idempotent.
