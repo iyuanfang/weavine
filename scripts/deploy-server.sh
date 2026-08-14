@@ -55,6 +55,14 @@ deploy() {
                 ffmpeg-*-amd64-static/ffmpeg ffmpeg-*-amd64-static/ffprobe
             rm -f /tmp/ffmpeg.tar.xz
         fi
+        # Tesseract + leptonica headers/libs for leptess to link against.
+        # Provides /usr/lib64/liblept.so + libtesseract.so (unversioned).
+        rpm -q leptonica-devel tesseract-devel >/dev/null 2>&1 \
+            || dnf install -y leptonica-devel tesseract-devel \
+                tesseract-langpack-chi_sim tesseract-langpack-chi_tra 2>&1 | tail -3
+        # TESSDATA_PREFIX tells leptess where to find .traineddata.
+        export TESSDATA_PREFIX=/usr/share/tesseract/tessdata
+        echo "tessdata: $(ls $TESSDATA_PREFIX/*.traineddata 2>/dev/null | xargs -n1 basename | tr "\n" " ")"
         ffmpeg -version 2>&1 | head -1
         # whisper tiny model (~75 MB, Apache-2.0). Idempotent.
         bash $REPO_REMOTE/scripts/install-whisper-model.sh
