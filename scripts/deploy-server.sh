@@ -59,10 +59,13 @@ deploy() {
 
     echo
     echo "═══ 3. pin prod-compatible deps + build on prod (glibc 2.32) ═══"
-    $SSH "cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && cargo build --release --locked --manifest-path server/Cargo.toml 2>&1 | tail -15"
+    # ocr + stt features enable cloud OCR (Tesseract via leptess) and cloud STT
+    # (whisper.cpp tiny). Without --features, these endpoints are not compiled
+    # in and /api/cards/extract + /api/voice/recognize return 404.
+    $SSH "cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && cargo build --release --locked --manifest-path server/Cargo.toml --features ocr,stt 2>&1 | tail -15"
 
     echo
-    echo "═══ 4. backup current + install ═══"
+    echo "═══ 5. backup current + install ═══"
     $SSH "
         set -e
         [ -f $BIN_REMOTE ] && mv -f $BIN_REMOTE $BIN_REMOTE.$ts_human.bak
@@ -72,7 +75,7 @@ deploy() {
     "
 
     echo
-    echo "═══ 5. restart systemd unit $SERVICE_NAME ═══"
+    echo "═══ 6. restart systemd unit $SERVICE_NAME ═══"
     $SSH "systemctl restart $SERVICE_NAME && sleep 3 && systemctl is-active $SERVICE_NAME"
 
     verify
@@ -80,7 +83,7 @@ deploy() {
 
 verify() {
     echo
-    echo "═══ 5. smoke tests ═══"
+    echo "═══ 6. smoke tests ═══"
 
     echo "--- (a) /api/health → OK ---"
     local health
