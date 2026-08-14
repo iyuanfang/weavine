@@ -1,3 +1,7 @@
+import { invoke } from '@tauri-apps/api/core';
+
+import { isTauri } from './adapter/tauri';
+
 interface SpeechRecognitionCtor {
   new (): SpeechRecognitionLike;
 }
@@ -19,6 +23,13 @@ interface SpeechRecognitionEventLike {
 
 export function isAndroid(): boolean {
   return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+}
+
+// Android WebView's webkitSpeechRecognition needs the Google STT service + network.
+// On an offline-first Tauri APK that's broken-by-design (permission granted, STT
+// silently fails). Re-enable when a native STT plugin ships.
+export function isAndroidTauri(): boolean {
+  return isAndroid() && isTauri;
 }
 
 function recognitionCtor(): SpeechRecognitionCtor | null {
@@ -66,4 +77,68 @@ export function recognizeSpeech(lang = 'zh-CN'): Promise<string> {
     };
     rec.start();
   });
+}
+
+// ── Cloud STT (Tauri → weavine-server whisper) ─────────────────
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(new Error('读取录音失败'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function pickRecorderMime(): string | null {
+  if (typeof MediaRecorder === 'undefined') return null;
+  const candidates = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
+  for (const type of candidates) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return null;
+}
+
+export function recordAudio(maxMs = 15000): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      reject(new Error('当前环境不支持录音'));
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        const mime = pickRecorderMime();
+        const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        const chunks: BlobPart[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          resolve(new Blob(chunks, { type: mime ?? 'audio/webm' }));
+        };
+        recorder.onerror = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          reject(new Error('录音失败'));
+        };
+        recorder.start();
+        window.setTimeout(() => {
+          if (recorder.state !== 'inactive') recorder.stop();
+        }, maxMs);
+      })
+      .catch(() => reject(new Error('无法访问麦克风')));
+  });
+}
+
+export async function recognizeCloud(audioBlob: Blob): Promise<string> {
+  if (!isTauri) {
+    throw new Error('云端语音识别仅在 Tauri 客户端可用');
+  }
+  const audioBase64 = await blobToBase64(audioBlob);
+  return invoke<string>('recognize_voice', { audio_base64: audioBase64 });
 }

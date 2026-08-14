@@ -3,6 +3,7 @@ use rusqlite::Connection;
 /// Keys for the `SyncState` key-value table.
 pub const KEY_SERVER_URL: &str = "server_url";
 pub const KEY_ACCESS_TOKEN: &str = "access_token";
+pub const KEY_SERVICE_KEY: &str = "service_key";
 pub const KEY_REFRESH_TOKEN: &str = "refresh_token";
 pub const KEY_DEVICE_ID: &str = "device_id";
 pub const KEY_USER_ID: &str = "user_id";
@@ -35,6 +36,12 @@ pub fn set(conn: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
 pub fn delete(conn: &Connection, key: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM SyncState WHERE key = ?1", [key])?;
     Ok(())
+}
+
+/// Set the cloud AI service key (voice/OCR) used when talking to the server.
+/// Empty values are allowed and simply disable authenticated AI requests.
+pub fn set_service_key(conn: &Connection, value: &str) -> rusqlite::Result<()> {
+    set(conn, KEY_SERVICE_KEY, value)
 }
 
 /// Check whether the desktop has been linked to a cloud account.

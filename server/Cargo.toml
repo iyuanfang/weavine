@@ -7,6 +7,9 @@ license = "AGPL-3.0"
 [features]
 default = ["ocr"]
 ocr = ["dep:leptess"]
+# Speech-to-text: whisper.cpp via whisper-rs (builds with cmake + a C++ compiler),
+# symphonia for audio demux/decode, rubato to resample to whisper's 16 kHz input.
+stt = ["dep:whisper-rs", "dep:symphonia", "dep:rubato"]
 
 [dependencies]
 weavine = { path = "../src-tauri", default-features = false, features = ["sqlx"] }
@@ -28,4 +31,13 @@ aes-gcm = "0.10"
 base64 = "0.22"
 sha2 = "0.10"
 leptess = { version = "0.6", optional = true }
+# NOTE: the spec mentions symphonia's `codec-opus` / `codec-webm` features, but
+# those do not exist in any *released* symphonia (0.5.x / 0.6.x) — Opus is an
+# empty placeholder crate upstream. Default features give us WebM/Matroska demux
+# (`mkv`), Ogg/Vorbis, PCM and WAV. MediaRecorder's WebM/Opus is decoded via the
+# `ffmpeg` subprocess fallback in handlers/voice.rs (symphonia handles the rest).
+symphonia = { version = "0.5", optional = true }
+# Sinc resampler only (no FFT resampler) — just enough to convert to 16 kHz.
+rubato = { version = "0.15", optional = true, default-features = false }
+whisper-rs = { version = "0.15", optional = true }
 tempfile = "3"

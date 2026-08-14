@@ -36,7 +36,7 @@ function readAsDataUrl(file: File): Promise<string> {
 async function callExtract(imageBase64: string): Promise<ScanResult> {
   if (isTauri) {
     const { invoke } = await import('@tauri-apps/api/core');
-    const r = await invoke<ScanResult>('extract_card', { imageBase64 });
+    const r = await invoke<ScanResult>('extract_card', { image_base64: imageBase64 });
     return r;
   }
   const m = imageBase64.match(/^data:([^;]+);base64,(.*)$/);

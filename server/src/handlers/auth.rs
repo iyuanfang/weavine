@@ -10,12 +10,21 @@ use jsonwebtoken::{decode, encode, Algorithm, Header, Validation};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use crate::handlers::JWT_KEYS;
 
 pub const ACCESS_TOKEN_TTL_SECS: u64 = 7 * 24 * 60 * 60;
 pub const REFRESH_TOKEN_TTL_SECS: u64 = 30 * 24 * 60 * 60;
 const MIN_PASSWORD_LEN: usize = 8;
+
+/// Shared zero-friction service key for the OCR/STT endpoints (feature
+/// `ocr`/`stt`). Loaded from `WV_SERVICE_KEY` once at startup by
+/// `init_service_key`; if unset, a random key is generated and logged.
+pub static SERVICE_KEY: OnceLock<String> = OnceLock::new();
+
+/// Synthetic user id returned for service-account requests. Not a real
+/// `user_account` row — OCR/voice handlers only check auth, never write.
+pub const SERVICE_USER_ID: &str = "service:weavine-default";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Claims {
@@ -193,6 +202,83 @@ pub async fn extract_auth_with_device(
         return Ok((claims.sub, claims.device_id));
     }
     Err((StatusCode::UNAUTHORIZED, "未登录".to_string()))
+}
+
+/// Load the shared service key from `WV_SERVICE_KEY`, or generate a random one
+/// and log it once. Call once from `main` before serving requests.
+pub fn init_service_key() {
+    let key = match std::env::var("WV_SERVICE_KEY") {
+        Ok(v) if !v.trim().is_empty() => v.trim().to_string(),
+        _ => {
+            let generated: String = rand::thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(48)
+                .map(char::from)
+                .collect();
+            eprintln!("[service-key] ==============================================");
+            eprintln!("[service-key] WV_SERVICE_KEY not set; generated ephemeral key:");
+            eprintln!("[service-key]   {generated}");
+            eprintln!("[service-key] Set WV_SERVICE_KEY in the environment to make it stable.");
+            eprintln!("[service-key] ==============================================");
+            generated
+        }
+    };
+    SERVICE_KEY.set(key).expect("SERVICE_KEY already initialized");
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// Service-account auth for the zero-friction OCR/STT endpoints.
+///
+/// Accepts the shared service key via `X-Service-Key` or
+/// `Authorization: Bearer <service-key>` and returns `SERVICE_USER_ID`
+/// (a synthetic id — no DB lookup or write happens).
+///
+/// Returns:
+/// - `Ok(Some(user_id))` — a valid service key was presented.
+/// - `Ok(None)` — no service credential was presented; callers may fall back
+///   to normal user auth (JWT / API key). A non-matching `Bearer` token is
+///   treated this way too, since it may be a real user JWT.
+/// - `Err(401)` — an `X-Service-Key` header was present but did not match.
+pub fn extract_auth_with_service(headers: &HeaderMap) -> Result<Option<String>, (StatusCode, String)> {
+    if let Some(raw) = headers.get("x-service-key").and_then(|v| v.to_str().ok()) {
+        let expected = SERVICE_KEY
+            .get()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "service key not loaded".to_string()))?;
+        if constant_time_eq(raw.as_bytes(), expected.as_bytes()) {
+            return Ok(Some(SERVICE_USER_ID.to_string()));
+        }
+        return Err((StatusCode::UNAUTHORIZED, "service key 无效".to_string()));
+    }
+    if let Some(token) = extract_bearer(headers) {
+        if let Some(expected) = SERVICE_KEY.get() {
+            if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
+                return Ok(Some(SERVICE_USER_ID.to_string()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Auth for the OCR/STT handlers: shared service key first, then normal user
+/// auth (JWT / API key).
+pub async fn extract_auth_service_or_user(
+    headers: &HeaderMap,
+    pool: &PgPool,
+) -> Result<String, (StatusCode, String)> {
+    if let Some(uid) = extract_auth_with_service(headers)? {
+        return Ok(uid);
+    }
+    extract_auth(headers, pool).await
 }
 
 fn verify_access(token: &str) -> Result<Claims, (StatusCode, String)> {

@@ -63,6 +63,8 @@ async fn main() {
     handlers::JWT_KEYS
         .set(auth_keys::Keys::from_env().expect("Failed to load JWT keys from PEM files"))
         .expect("JWT_KEYS already initialized");
+    // Shared service key for the zero-friction OCR/STT endpoints (WV_SERVICE_KEY).
+    handlers::auth::init_service_key();
 
     let api = Router::new()
         .route("/api/health", get(|| async { "OK" }))
@@ -142,6 +144,11 @@ async fn main() {
     #[cfg(feature = "ocr")]
     {
         app = app.merge(Router::new().route("/api/cards/extract", post(handlers::ocr::extract_card)));
+    }
+
+    #[cfg(feature = "stt")]
+    {
+        app = app.merge(Router::new().route("/api/voice/recognize", post(handlers::voice::recognize)));
     }
 
     let app = app

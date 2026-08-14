@@ -38,14 +38,42 @@ fn load_credentials(conn: &rusqlite::Connection) -> Result<(String, String), Str
     Ok((url, token))
 }
 
+fn load_service_key(conn: &rusqlite::Connection) -> String {
+    config::get(conn, config::KEY_SERVICE_KEY)
+        .ok()
+        .flatten()
+        .filter(|s| !s.is_empty())
+        .or_else(|| option_env!("WV_SERVICE_KEY").map(str::to_string))
+        .unwrap_or_default()
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn extract_card(
     db: State<'_, Database>,
     image_base64: String,
 ) -> Result<OcrResult, String> {
-    let (server_url, token) = {
+    let (server_url, mut req) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        load_credentials(&conn)?
+        let url = config::get(&conn, config::KEY_SERVER_URL)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "未连接云端".to_string())?;
+        let user_token = config::get(&conn, config::KEY_ACCESS_TOKEN)
+            .map_err(|e| e.to_string())?
+            .filter(|s| !s.is_empty());
+        if let Some(tok) = user_token {
+            let r = reqwest::Client::new().post(&url).bearer_auth(tok);
+            (url, r)
+        } else {
+            let key = load_service_key(&conn);
+            if key.is_empty() {
+                return Err("未登录云端".to_string());
+            }
+            let r = reqwest::Client::new()
+                .post(&url)
+                .header("X-Service-Key", &key)
+                .bearer_auth(&key);
+            (url, r)
+        }
     };
 
     let bytes = B64.decode(image_base64.as_bytes())
@@ -60,9 +88,7 @@ pub async fn extract_card(
         .part("file", part);
 
     let url = format!("{}/api/cards/extract", server_url.trim_end_matches('/'));
-    let resp = reqwest::Client::new()
-        .post(&url)
-        .bearer_auth(&token)
+    let resp = req
         .multipart(form)
         .send()
         .await

@@ -10,6 +10,8 @@ pub mod interaction;
 pub mod media;
 #[cfg(feature = "ocr")]
 pub mod ocr;
+#[cfg(feature = "stt")]
+pub mod voice;
 pub mod project;
 pub mod project_contact;
 pub mod quick;

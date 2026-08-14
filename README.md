@@ -83,6 +83,58 @@ Mechanics (server-side, PostgreSQL):
 
 This is deliberately simple. There is no CRDT, no vector clock, no "operational transform". If you need those, the project isn't for you (yet).
 
+## Cloud OCR & STT (optional)
+
+The Tauri client can call your `weavine-server` for **business-card OCR** and **voice transcription** without the user logging in. Useful on platforms where local STT is broken (e.g. Android WebView) and as a free, CPU-only alternative to paid APIs.
+
+### How it works
+
+- Tauri client embeds a shared **service key** at build time (`WV_SERVICE_KEY` env var passed to `cargo build`). All installs built with the same key can call OCR/STT against your server.
+- Server validates the key via `X-Service-Key` (or `Authorization: Bearer`) on `/api/cards/extract` and `/api/voice/recognize`. No `user_account` row involved.
+- OCR: [Tesseract](https://github.com/tesseract-ocr/tesseract) via `leptess` server-side, `chi_sim + chi_tra + eng` by default.
+- STT: [whisper.cpp](https://github.com/ggerganov/whisper.cpp) `tiny` model, runs on CPU (~1.5 s per 10 s of audio).
+
+### Server setup
+
+```bash
+# 1. ffmpeg (runtime dep — symphonia 0.5 lacks a released opus codec)
+yum install -y ffmpeg   # or apt/dnf equivalent on your distro
+
+# 2. Whisper model (~75 MB, Apache-2.0)
+scripts/install-whisper-model.sh
+# (override default path via DEST=/path/to/ggml-tiny.bin MODEL=ggml-base.en.bin)
+
+# 3. Configure
+cp server/.env.example server/.env
+$EDITOR server/.env
+#   set TESSDATA_PREFIX if not on a default path
+#   set WHISPER_MODEL if you used a non-default path
+#   set WV_SERVICE_KEY=<48-char base62>   # `openssl rand -base64 48 | tr -d '=+/' | cut -c1-48`
+
+# 4. Build with the stt feature
+cargo build --release --manifest-path server/Cargo.toml --features ocr,stt
+```
+
+### Client build (Tauri)
+
+```bash
+WV_SERVICE_KEY=<same-key-as-server> pnpm tauri build
+# OR for Android:
+WV_SERVICE_KEY=<same-key-as-server> cargo tauri android build --apk
+```
+
+If you skip `WV_SERVICE_KEY` at build time, the client returns "未登录云端" on every OCR/STT call — graceful degradation, no crash. Users can still log in normally and use per-user JWTs for OCR/STT.
+
+### Privacy
+
+**The operator of `weavine-server` sees every OCR image and every audio blob uploaded from any client holding the service key.** Even with the key in hand, no personally identifying info is required from the user, but the bytes themselves transit and are processed by your server. Self-hosters control this entirely. If you run the public instance at `weavine.financialagent.cc`, the operator agrees to process them only to return the result and not to retain them.
+
+There is currently **no rate limit or per-device quota** on the service-key path — it's a free compute pool. If you need to throttle, do it at your reverse proxy.
+
+### Disable the cloud features entirely
+
+If you don't want any Tauri client to be able to call OCR/STT without login, simply do not set `WV_SERVICE_KEY` on the server. Then the server rejects service-key auth, and only logged-in users with a per-user JWT can use those endpoints.
+
 ## Quick start
 
 ### Run the desktop app (development)

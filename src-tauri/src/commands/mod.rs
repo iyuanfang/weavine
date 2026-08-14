@@ -15,3 +15,4 @@ pub mod search;
 pub mod setting;
 pub mod sync;
 pub mod tag;
+pub mod voice;

@@ -7,7 +7,7 @@ use leptess::LepTess;
 use serde::Serialize;
 use std::sync::Arc;
 
-use super::auth::extract_auth_with_device;
+use super::auth::{extract_auth_with_device, extract_auth_with_service};
 
 fn tessdata_path() -> Option<std::path::PathBuf> {
     if let Ok(p) = std::env::var("TESSDATA_PREFIX") {
@@ -204,7 +204,13 @@ pub async fn extract_card(
     State(pool): State<Arc<sqlx::PgPool>>,
     mut form: Multipart,
 ) -> Result<axum::Json<OcrResult>, (StatusCode, String)> {
-    let (_auth, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
+    // Zero-friction auth: shared service key, else normal user auth. The
+    // service path uses a synthetic user id and never touches the DB.
+    let (_auth, _device_id) = match extract_auth_with_service(&headers) {
+        Ok(Some(uid)) => (uid, String::new()),
+        Ok(None) => extract_auth_with_device(&headers, pool.as_ref()).await?,
+        Err(e) => return Err(e),
+    };
 
     let mut image_bytes: Option<Bytes> = None;
     while let Some(field) = form.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {

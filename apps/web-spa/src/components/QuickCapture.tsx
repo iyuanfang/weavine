@@ -5,8 +5,19 @@ import { createPortal } from 'react-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
-import { recognizeSpeech, speechRecognitionAvailable } from '../lib/voice';
+import { isTauri } from '../lib/adapter/tauri';
+import { isAndroidTauri, recognizeCloud, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
+
+const USE_CLOUD_VOICE_KEY = 'weavine:voice:useCloud';
+
+function readUseCloudVoice(): boolean {
+  try {
+    return localStorage.getItem(USE_CLOUD_VOICE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 const KIND_LABEL: Record<QuickKind, string> = {
   event: '事件',
@@ -67,6 +78,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [contactNames, setContactNames] = useState<string[]>([]);
   const [listening, setListening] = useState(false);
+  const [useCloudVoice, setUseCloudVoice] = useState<boolean>(() => readUseCloudVoice());
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
 
@@ -110,16 +122,28 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
 
   const handleVoice = () => {
     setListening(true);
+    const done = (transcript: string) => {
+      setText(transcript);
+      inputRef.current?.focus();
+    };
+    const fail = (e: unknown) => {
+      setError(e instanceof Error ? e.message : String(e));
+    };
+    if (isAndroidTauri() || (isTauri && useCloudVoice)) {
+      recordAudio()
+        .then((blob) => recognizeCloud(blob))
+        .then(done)
+        .catch(fail)
+        .finally(() => setListening(false));
+      return;
+    }
     recognizeSpeech()
-      .then((transcript) => {
-        setText(transcript);
-        inputRef.current?.focus();
-      })
-      .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : String(e));
-      })
+      .then(done)
+      .catch(fail)
       .finally(() => setListening(false));
   };
+
+  const showCloudToggle = isTauri && speechRecognitionAvailable() && !isAndroidTauri();
 
   const submit = async () => {
     const trimmed = text.trim();
@@ -281,7 +305,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
               paddingRight: 44,
             }}
           />
-          {speechRecognitionAvailable() && (
+          {(isAndroidTauri() || speechRecognitionAvailable()) && (
             <button
               type="button"
               onClick={handleVoice}
@@ -311,6 +335,33 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           <div style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
             正在聆听… 请说话（需授权麦克风）
           </div>
+        )}
+
+        {showCloudToggle && (
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 'var(--text-sm)',
+              color: 'var(--muted)',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={useCloudVoice}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setUseCloudVoice(next);
+                try {
+                  localStorage.setItem(USE_CLOUD_VOICE_KEY, next ? '1' : '0');
+                } catch {}
+              }}
+            />
+            <span>使用云端语音（whisper · 需服务 key）</span>
+          </label>
         )}
 
         {error && (

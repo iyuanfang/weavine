@@ -37,7 +37,7 @@ fn dirs_data_dir_fallback() -> std::path::PathBuf {
 #[cfg(feature = "tauri")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use commands::{action, contact, diagnostic, event, interaction, media, ocr, project, project_contact, quick, reminder, search, setting, tag};
+    use commands::{action, contact, diagnostic, event, interaction, media, ocr, project, project_contact, quick, reminder, search, setting, tag, voice};
     use db::Database;
     use std::fs;
     use tauri::Emitter;
@@ -176,6 +176,7 @@ pub fn run() {
             media::delete_media,
             ocr::extract_card,
         ocr::save_card_image,
+            voice::recognize_voice,
             commands::sync::cloud_login,
             commands::sync::cloud_logout,
             commands::sync::cloud_sync_now,
