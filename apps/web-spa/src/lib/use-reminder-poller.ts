@@ -10,13 +10,58 @@ const VALID_SOUNDS: ReadonlyArray<ReminderSound> = ["default", "chime", "bell", 
 
 const POLL_INTERVAL_MS = 30_000;
 
+declare global {
+  interface Window {
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI__?: unknown;
+  }
+}
+
+function isTauri(): boolean {
+  return typeof window !== "undefined" && (
+    typeof window.__TAURI_INTERNALS__ !== "undefined" ||
+    typeof window.__TAURI__ !== "undefined"
+  );
+}
+
+function humanize(r: { kind: string; trigger_at: string }): string {
+  const when = new Date(r.trigger_at).toLocaleString();
+  if (r.kind === "event") return `日程提醒 · ${when}`;
+  if (r.kind === "action") return `待办提醒 · ${when}`;
+  return `提醒 · ${when}`;
+}
+
 export function useReminderPoller() {
   const adapter = useAdapter();
   const userId = useUserId();
 
   useEffect(() => {
     if (!userId) return;
+
+    if (isTauri()) {
+      let unlisten: (() => void) | null = null;
+      let cancelled = false;
+      (async () => {
+        try {
+          const { listen } = await import("@tauri-apps/api/event");
+          if (cancelled) return;
+          unlisten = await listen<Reminder>("weavine:reminder-fired", (event) => {
+            const r = event.payload;
+            if (!r) return;
+            window.dispatchEvent(new CustomEvent("weavine:reminder", { detail: r }));
+          });
+        } catch (e) {
+          console.warn("reminder poller: failed to subscribe to tauri event", e);
+        }
+      })();
+      return () => {
+        cancelled = true;
+        if (unlisten) unlisten();
+      };
+    }
+
     let timerId: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
 
     async function tick() {
       let sound: ReminderSound = "default";
@@ -58,14 +103,6 @@ export function useReminderPoller() {
       }
     }
 
-    function humanize(r: { kind: string; trigger_at: string; event_id?: string | null }): string {
-      const when = new Date(r.trigger_at).toLocaleString();
-      if (r.kind === "event") return `日程提醒 · ${when}`;
-      if (r.kind === "action") return `待办提醒 · ${when}`;
-      return `提醒 · ${when}`;
-    }
-
-    let cancelled = false;
     (async () => {
       await ensurePermission();
       if (cancelled) return;

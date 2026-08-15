@@ -1,7 +1,8 @@
 use crate::business;
+use crate::commands::notification;
 use crate::db::Database;
 use crate::models::*;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command(rename_all = "snake_case")]
 #[allow(clippy::too_many_arguments)]
@@ -31,20 +32,36 @@ pub fn list_events(
 
 #[tauri::command]
 pub fn create_event(
+    app: AppHandle,
     db: State<Database>,
     input: CreateEventInput,
 ) -> Result<Event, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::event::create(&conn, &input).map_err(|e| e.to_string())
+    let event = business::event::create(&conn, &input).map_err(|e| e.to_string())?;
+    let synced = business::reminder::sync_event_reminder(&conn, &event)
+        .map_err(|e| e.to_string())?;
+    drop(conn);
+    if let Some(r) = synced {
+        notification::schedule_for_reminder(&app, &r);
+    }
+    Ok(event)
 }
 
 #[tauri::command]
 pub fn update_event(
+    app: AppHandle,
     db: State<Database>,
     input: UpdateEventInput,
 ) -> Result<Event, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::event::update(&conn, &input).map_err(|e| e.to_string())
+    let event = business::event::update(&conn, &input).map_err(|e| e.to_string())?;
+    let synced = business::reminder::sync_event_reminder(&conn, &event)
+        .map_err(|e| e.to_string())?;
+    drop(conn);
+    if let Some(r) = synced {
+        notification::schedule_for_reminder(&app, &r);
+    }
+    Ok(event)
 }
 
 #[tauri::command]

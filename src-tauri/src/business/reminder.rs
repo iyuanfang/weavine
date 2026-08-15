@@ -194,24 +194,46 @@ impl Reminder {
     }
 }
 
-pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> rusqlite::Result<()> {
+pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> rusqlite::Result<Option<Reminder>> {
     conn.execute(
         "DELETE FROM Reminder WHERE event_id = ?1 AND kind = 'time'",
         rusqlite::params![event.id],
     )?;
-    if let Some(lead) = event.reminder_lead_minutes {
-        if lead <= 0 { return Ok(()); }
-        let start = chrono::DateTime::parse_from_rfc3339(&event.start_at)
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-        let trigger = start - chrono::Duration::minutes(lead);
-        let trigger_str = trigger.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-        let id = format!("auto-rem-{}", event.id);
-        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-        conn.execute(
-            "INSERT INTO Reminder (id, user_id, event_id, trigger_at, kind, dispatched, dismissed, created_at) \
-             VALUES (?1, ?2, ?3, ?4, 'time', 0, 0, ?5)",
-            rusqlite::params![id, event.user_id, event.id, trigger_str, now],
-        )?;
-    }
-    Ok(())
+    let lead = match event.reminder_lead_minutes {
+        Some(l) if l > 0 => l,
+        _ => return Ok(None),
+    };
+    let start = chrono::DateTime::parse_from_rfc3339(&event.start_at)
+        .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    let trigger = start - chrono::Duration::minutes(lead);
+    let trigger_str = trigger.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let id = format!("auto-rem-{}", event.id);
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    conn.execute(
+        "INSERT INTO Reminder (id, user_id, event_id, trigger_at, kind, dispatched, dismissed, created_at) \
+         VALUES (?1, ?2, ?3, ?4, 'time', 0, 0, ?5)",
+        rusqlite::params![&id, &event.user_id, &event.id, &trigger_str, &now],
+    )?;
+    let reminder = conn.query_row(
+        &format!("SELECT {REMINDER_COLS} FROM Reminder{REMINDER_JOIN} WHERE Reminder.id = ?1"),
+        rusqlite::params![&id],
+        row_to_reminder,
+    )?;
+    Ok(Some(reminder))
+}
+
+/// All dismissed=0, dispatched=0 reminders, ordered by trigger_at.
+pub fn list_pending(conn: &Connection) -> rusqlite::Result<Vec<Reminder>> {
+    let mut stmt = conn.prepare(
+        &format!(
+            "SELECT {REMINDER_COLS} FROM Reminder{REMINDER_JOIN} \
+             WHERE Reminder.dismissed = 0 AND Reminder.dispatched = 0 \
+             ORDER BY Reminder.trigger_at ASC"
+        ),
+    )?;
+    let reminders = stmt
+        .query_map([], row_to_reminder)?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(reminders)
 }

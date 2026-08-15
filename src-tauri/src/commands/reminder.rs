@@ -1,7 +1,8 @@
 use crate::business;
+use crate::commands::notification;
 use crate::db::Database;
 use crate::models::*;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn list_reminders(
@@ -26,20 +27,30 @@ pub fn list_reminders(
 
 #[tauri::command]
 pub fn create_reminder(
+    app: AppHandle,
     db: State<Database>,
     input: CreateReminderInput,
 ) -> Result<Reminder, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::reminder::create(&conn, &input).map_err(|e| e.to_string())
+    let r = business::reminder::create(&conn, &input).map_err(|e| e.to_string())?;
+    drop(conn);
+    notification::schedule_for_reminder(&app, &r);
+    Ok(r)
 }
 
 #[tauri::command]
 pub fn update_reminder(
+    app: AppHandle,
     db: State<Database>,
     input: UpdateReminderInput,
 ) -> Result<Reminder, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::reminder::update(&conn, &input).map_err(|e| e.to_string())
+    let r = business::reminder::update(&conn, &input).map_err(|e| e.to_string())?;
+    drop(conn);
+    if !r.dispatched && !r.dismissed {
+        notification::schedule_for_reminder(&app, &r);
+    }
+    Ok(r)
 }
 
 #[tauri::command]

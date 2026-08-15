@@ -42,7 +42,7 @@ pub fn run() {
     use commands::{action, contact, diagnostic, event, interaction, media, ocr, project, project_contact, quick, reminder, search, setting, tag, voice};
     use db::Database;
     use std::fs;
-    use tauri::Emitter;
+    use tauri::{Emitter, Manager};
     // tauri-plugin-global-shortcut is desktop-only (the crate root has
     // `#![cfg(not(any(target_os = "android", target_os = "ios")))]`).
     // Import ShortcutState only on desktop so the Android build compiles.
@@ -136,6 +136,9 @@ pub fn run() {
                 )?;
             }
             app.handle().plugin(tauri_plugin_notification::init())?;
+            let handle = app.handle().clone();
+            let db = handle.state::<crate::db::Database>();
+            commands::notification::startup_catch_up(&handle, db.inner());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -203,6 +206,8 @@ pub fn run() {
             commands::sync::cloud_status,
             commands::archive::archive_sweep,
             quick::quick_parse,
+            commands::notification::fire_notification,
+            commands::notification::schedule_notification,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
