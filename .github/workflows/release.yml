@@ -278,52 +278,17 @@ jobs:
           echo "=== last 5 lines of patched build.gradle.kts ==="
           tail -5 src-tauri/gen/android/app/build.gradle.kts
 
-      - name: Inject splits.abi config to produce per-ABI APKs
-        run: |
-          set -euo pipefail
-          F=src-tauri/gen/android/app/build.gradle.kts
-          python3 - <<'PY'
-          import re, sys
-          p = 'src-tauri/gen/android/app/build.gradle.kts'
-          s = open(p).read()
-          if 'splits {' in s:
-              print('splits already present, skipping')
-              sys.exit(0)
-          anchor = '    buildFeatures {\n        buildConfig = true\n    }'
-          insert = (
-              '\n    splits {\n'
-              '        abi {\n'
-              '            isEnable = true\n'
-              '            reset()\n'
-              '            include("arm64-v8a")\n'
-              '            isUniversalApk = false\n'
-              '        }\n'
-              '    }'
-          )
-          if anchor not in s:
-              print('ERROR: buildFeatures anchor not found, refusing to patch')
-              print('--- file content ---')
-              print(s)
-              sys.exit(1)
-          s = s.replace(anchor, anchor + insert, 1)
-          open(p, 'w').write(s)
-          print('=== patched build.gradle.kts tail (last 30 lines) ===')
-          print('\n'.join(s.splitlines()[-30:]))
-          PY
-
-      - name: Build Tauri Android APK
+      - name: Build Tauri Android APK (arm64-v8a only)
         id: build
         run: |
-          # Use cargo tauri android build (not bare ./gradlew assembleRelease)
-          # because cargo-tauri's CLI is the only thing that knows how to
-          # materialize tauri.settings.gradle + tauri.build.gradle.kts before
-          # invoking gradle. Bare gradlew fails with:
-          #   "Could not read script '.../tauri.settings.gradle' as it does not exist."
-          # Also: pipe through tee WITHOUT a trailing pipefail, then explicitly
-          # capture the gradle exit code via PIPESTATUS so a build failure
-          # propagates instead of being masked by tee's success.
+          # cargo tauri android build --split-per-abi --target aarch64 produces
+          # a single 22 MB APK with only arm64-v8a .so, vs the 80 MB universal
+          # APK with all four ABIs. --target is the Tauri-native way (do NOT
+          # also patch gradle's splits.abi or ndk.abiFilters — they conflict
+          # with the productFlavor setup RustPlugin.kt installs).
           set -o pipefail
-          cargo tauri android build --apk 2>&1 | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
+          cargo tauri android build --apk --split-per-abi --target aarch64 2>&1 \
+            | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
           rc=${PIPESTATUS[0]}
           echo "exit_code=$rc" >> $GITHUB_OUTPUT
           exit $rc
