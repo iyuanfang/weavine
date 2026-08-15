@@ -5,6 +5,29 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-08-15
+
+### Changed
+
+- **Reminder scheduling moved to Rust** — the JS 30 s polling loop
+  (`use-reminder-poller.ts`) is gone in Tauri builds. `create_event`,
+  `update_event`, `create_reminder`, and `update_reminder` now call
+  `commands::notification::schedule_for_reminder()` after writing the
+  row, which spawns a Tokio sleep task and fires the OS notification
+  through `tauri-plugin-notification` at `trigger_at`. CPU is idle
+  between triggers; no more wake-every-30-seconds.
+  - `claim_due_reminders()` runs at wake time to mark the row
+    `dispatched = 1` so the next startup catch-up does not duplicate.
+  - `startup_catch_up()` (called from `lib.rs::setup()`) reschedules
+    every pending reminder that was lost when the OS killed the app
+    between sleeps.
+  - Rust emits `weavine:reminder-fired` after each fire so the JS
+    in-app banner (CustomEvent `weavine:reminder`) still triggers
+    when the webview is foregrounded.
+- `use-reminder-poller.ts` now branches on `isTauri()`: Tauri builds
+  listen to the Rust event; browser standalone keeps the legacy
+  polling + Web Notification API path (Rust runtime not available).
+
 ## [1.0.3] - 2026-08-15
 
 ### Added
