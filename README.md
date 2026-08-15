@@ -135,6 +135,59 @@ There is currently **no rate limit or per-device quota** on the service-key path
 
 If you don't want any Tauri client to be able to call OCR/STT without login, simply do not set `WV_SERVICE_KEY` on the server. Then the server rejects service-key auth, and only logged-in users with a per-user JWT can use those endpoints.
 
+## Activation tracking
+
+The Tauri client (and the web SPA) register themselves with your `weavine-server` once per install and on every cloud call. This lets you count unique users — including anonymous ones who never logged in — and detect multi-device users.
+
+### How it works
+
+- The client mints a UUID v4 on first launch and writes it to `<data_dir>/install_id` (Tauri, `~/.local/share/com.weavine.desktop/`) or `localStorage` (web, `weavine:install_id`). The same UUID is sent as `X-Install-Id` on every cloud request.
+- The server upserts one row per install into `install_activation` (PK = `install_id`).
+- The same UUID becomes the `device_id` once the user logs in, so a JOIN on `user_id` between `devices` and `install_activation` reveals multi-device usage.
+- A first-launch `POST /api/activation/ping` fires 5s after startup, even if the user never uses a cloud feature. This is what catches pure-local users.
+
+### Schema
+
+```sql
+install_activation(
+  install_id   TEXT PRIMARY KEY,    -- UUID v4 from <data_dir>/install_id
+  first_seen_at, last_seen_at TEXT, -- rfc3339 timestamps
+  app_version   TEXT,                -- version at first launch
+  os, platform  TEXT,                -- 'darwin' | 'linux' | 'windows' | 'android' | 'web'
+  last_ip_hash  TEXT,                -- SHA-256(JWT_SECRET || ip), never raw
+  call_count    BIGINT,              -- increments on every OCR / voice / ping
+  last_event    TEXT                 -- 'launch' | 'ocr' | 'voice'
+)
+```
+
+### Querying
+
+`docs/activation.sql` has 10 ready-to-use queries (DAU/MAU, platform breakdown, multi-device users, anon-vs-logged-in funnel, etc.). A few one-liners:
+
+```sql
+-- Total installs ever
+SELECT COUNT(*) FROM install_activation;
+
+-- Logged-in users (active, not revoked)
+SELECT COUNT(DISTINCT user_id) FROM devices WHERE revoked_at IS NULL;
+
+-- Multi-device users
+SELECT COUNT(*) FROM (
+  SELECT user_id FROM devices WHERE revoked_at IS NULL
+  GROUP BY user_id HAVING COUNT(*) > 1
+) t;
+```
+
+### Privacy
+
+**The server only stores the SHA-256 hash of the client IP, salted with `JWT_SECRET`.** Raw IPs are never persisted. The `install_id` is a per-install UUID minted by the client itself — it is not derived from any hardware fingerprint, machine ID, browser fingerprint, or other device-specific signal. Wiping the app data dir (or `localStorage`) produces a fresh `install_id` on next launch, which defaults to "new install" semantics.
+
+There is no telemetry payload sent anywhere except to your own `weavine-server`. The `X-Install-Id` header is only sent to the server URL the user has explicitly configured; if the user has not configured a server, no request is made.
+
+### Disable activation tracking entirely
+
+If you don't want any client to register itself, simply don't set `WV_SERVICE_KEY` on the server AND block the `POST /api/activation/ping` endpoint at your reverse proxy. Clients that never fire a `X-Install-Id` header (older builds) will still get cloud OCR/STT if they're logged in, but you'll have no install data.
+
 ## Quick start
 
 ### Run the desktop app (development)
