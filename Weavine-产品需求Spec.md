@@ -1,6 +1,6 @@
 # Weavine 产品蓝图（Product Blueprint / Spec）
 
-> 版本：**v1.1（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-11 — §3.5 + §3.6 两个子系统全部实施完成（Phase 2.5/2.6 关闭）：Ctrl+K 快速捕获 + 节奏提醒 + 事件开始提醒 + 跨端原生通知通道（桌面/Android/Web）全部接通；QuickFab APK 端隐藏等待原生 STT** ｜ 状态：核心功能已落地 + Phase 2 子系统全部完成；P2/P3 与 #16–#20 待排期
+> 版本：**v1.2（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-15 — v1.0.3/v1.0.4 落地：(1) §3.6 提醒架构重构：客户端 30s 轮询删除，Rust 端 Tokio sleep + 系统通知接管，零持续 CPU；(2) §11.5 新增：激活跟踪 + per-install device_key，全漏斗使用统计，未登录用户也能计数** ｜ 状态：核心功能已落地 + Phase 2 子系统全部完成；P2/P3 与 #16–#20 待排期
 > **产品蓝图（唯一权威）**：本文档是 Weavine 的**唯一产品蓝图**。所有需求设计、状态调整、平台策略、中国特性、技术债均回写此处，不再创建独立 spec 文件。文档结构一旦建立保持稳定，后续只追加章节、不重排结构。
 > **维护约定（living spec）**：本文档为活文档。每次需求变动须回写本节并更新上方「最近更新」日期；对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下，与 spec 编号（#1–#20）一一对应，便于持续跟踪。
 > **拍板溯源**：§3.5 子系统设计的所有关键决策（解析引擎选型、节奏模型、范围、Android 验证方式）来源于 2026-08-09 brainstorming 会话，详见各小节顶部加粗的「拍板结论」标注。
@@ -476,32 +476,48 @@ invitation_token = "{user_id}:{contact_id}:{threshold_day}"  // 确定性生成
 
 ## 3.6 事件开始提醒与跨端原生通知（Event Reminder & Cross-Platform Native Notifications）
 
-> **拍板结论（2026-08-11）**：
-> - **D1 = A**：事件 INSERT/UPDATE 时服务端即时派生 reminder 写入 reminder 表（kind='time'，event_id FK；trigger_at = start_at − reminder_lead_minutes）；dispatcher 每 60s 仅扫描 reminder 表，不再回头算 event。
+> **拍板结论（2026-08-15，v1.0.4 修订）**：
+> - **D1 = A**：事件 INSERT/UPDATE 时**客户端**即时派生 reminder 写入本地 reminder 表（kind='time'，event_id FK；trigger_at = start_at − reminder_lead_minutes），并在同一调用栈里 schedule_for_reminder。
 > - **D2 = A**：多端各弹一次，共享 dismissed 状态——任一端调用 `POST /api/reminders/:id/dismiss` 即把 invitation_token 对应的全部 reminder 标记 dismissed（用 `event:{event_id}:{lead}` 作为 token 内容寻址）。
 > - **D3 = A**：保持现状——store UTC（TEXT），前端 toLocaleString 按本地时区显示。reminder_lead_minutes 是整数分钟，无夏令时歧义。
 > - **D4 = A**：本轮只做 Web + 桌面（Tauri macOS/Windows/Linux）+ Android APK，iOS 留 #10 远期。
+> - **D5 = B**（**v1.0.4 推翻**）：Tauri 端不再轮询 reminder 表；`schedule_for_reminder` 在 Rust 里 spawn 一个 `tokio::sleep(trigger_at - now - 5s)` 任务，到点调 `tauri-plugin-notification` 的系统 API（Android NotificationManager / WinRT / NSUserNotification / libnotify），同时 `claim_due_reminders` 标 `dispatched=true`、发 `weavine:reminder-fired` event 给前端做 in-app banner。Browser standalone（`isTauri() == false`）继续走 30s 轮询 + Web Notification API（Rust runtime 不可用）。
+> - **D6 = A**（v1.0.4 新增）：`startup_catch_up()` 在 `lib.rs::setup()` 里跑，list 所有 `dispatched=false AND dismissed=false` 的 reminder，重新 schedule。处理 "Android 在 sleep 期间被 OS 杀掉" 的漏发。
 > - **事件 reminder_lead_minutes 默认值**：0 = 不提醒；> 0 时按整数分钟派生。QuickCapture 已接 reminder_lead_minutes 字段（schema 已就绪）。
 > - **kind 复用**：`reminder_kind_check` 当前约束 `('time','cadence')`；事件派生用 `kind='time'`，靠 `event_id` FK 与 invitation_token 区分。**不扩枚举**，避免再次迁移。
 
-### 3.6.1 架构（4 段流水线）
+### 3.6.1 架构（v1.0.4 — Rust scheduler 取代客户端轮询）
 
 ```
 [事件 INSERT/UPDATE（reminder_lead_minutes>0）]
-        ↓ service-side hook（同一 tx）
+        ↓ client-side hook（同一调用栈，sync_event_reminder）
 [reminder INSERT kind='time' event_id=... trigger_at=start_at-lead invitation_token=event:{id}:{lead}]
         ↓
-[ReminderPoller 客户端]
-  ├─ Web（localhost/HTTPS）→ adapter.reminders.list() 每 30s → in-app Toast + 浏览器 Notification API
-  ├─ Desktop Tauri → adapter.reminders.list() 每 30s → tauri-plugin-notification 系统通知（UNUserNotificationCenter/WinRT/libnotify）
-  └─ Android Tauri APK → adapter.reminders.list() 每 30s → tauri-plugin-notification（NotificationManager + 通知 channel）
-        ↓ 用户点击/dismiss
-[POST /api/reminders/:id/dismiss] → server 按 invitation_token 同 token 全部置 dismissed=true
-        ↓
-[下次 list() 自动排除 dismissed=true]
+[schedule_for_reminder(Rust)]
+  ├─ spawn sleep(trigger_at - now - 5s)
+  ├─ 到点：claim_due_reminders()  →  标 dispatched=true
+  ├─ tauri-plugin-notification.show()  →  OS NotificationManager / WinRT / libnotify / NSUserNotification
+  └─ emit("weavine:reminder-fired", r)  →  JS dispatch CustomEvent('weavine:reminder')
+                                            →  App.tsx 显示 in-app banner
+
+[启动时 startup_catch_up]
+  list_pending() → 对每条 reminder 重新 schedule_for_reminder
+  (覆盖"OS 杀进程→sleep 中断→漏发"场景)
+
+[Web SPA standalone / 浏览器直接打开]
+  use-reminder-poller setInterval(tick, 30s) + Web Notification API
+  (Rust runtime 不存在，保留 v1.0.3 老路径)
+
+[任一端用户点击/dismiss]
+POST /api/reminders/:id/dismiss → server 按 invitation_token 同 token 全部置 dismissed=true
+                                    ↓
+                            下次 list() 自动排除 dismissed=true
 ```
 
-**Server-side dispatcher fallback**：客户端全部离线/未启动时，server dispatcher 每 60s 把过期 reminder 标 `dispatched=true`（防止累积），但不负责推送——纯客户端责任。这保证恢复在线时不会回弹历史未送达项。
+**为什么不再轮询**（v1.0.4 决策依据）：
+- 30s 轮询每秒醒一次 CPU，Android 上耗电；且 poller 和 Rust sleep 任务可能双发（Rust 已 mark dispatched，但 poller 因 race condition 没看到，导致同一 reminder 弹两次）。
+- Rust `tokio::sleep` 在睡眠期是 0 持续开销，OS 调度器只在 trigger_at 唤醒，到点精度 ±5s。
+- 用户改 reminder_lead_minutes → `sync_event_reminder` DELETE 旧 + INSERT 新 → schedule 新任务；旧 sleep 任务在 trigger_at 醒来调 `claim_due_reminders`，**因为行已被 DELETE**，自然不重复发。
 
 ### 3.6.2 数据模型（无新表，复用 reminder）
 
@@ -525,19 +541,36 @@ deleted_at      text NULL
 --   idx_reminder_invitation_token(invitation_token) WHERE invitation_token IS NOT NULL
 ```
 
-### 3.6.3 服务端实现
+### 3.6.3 服务端实现（v1.0.4 — 派生从 server 移到 client）
 
-**A. 事件 reminder 派生（`server/src/handlers/event.rs`）**
+**A. 事件 reminder 派生（`src-tauri/src/business/reminder.rs::sync_event_reminder`）**
 
-`create`/`update` handler 同事务内追加：
+`commands::event::create_event` / `update_event` 同调用栈内追加：
 
 | 情况 | 派生动作 |
 |---|---|
 | INSERT `reminder_lead_minutes > 0` + `start_at` 存在 | INSERT reminder: kind='time', event_id, trigger_at=start_at-lead, invitation_token=`event:{event_id}:{lead}` |
-| UPDATE `reminder_lead_minutes`/`start_at` 变化 | UPSERT 同 token 的 reminder（保留 dispatched 历史）；lead=0 或 NULL 时 DELETE |
+| UPDATE `reminder_lead_minutes`/`start_at` 变化 | DELETE 旧 reminder (kind='time', event_id=...) 后 INSERT 新；lead=0 或 NULL 时只 DELETE |
 | 事件 DELETE/archived | DELETE 同 token 的 reminder（cascade 由 FK 接管） |
 
-**B. Reminder dispatcher（新增 `server/src/reminder_dispatcher.rs`）**
+**B. 客户端 dispatcher（`src-tauri/src/commands/notification.rs`）**
+
+```rust
+pub fn schedule_for_reminder(app: &AppHandle, r: &Reminder)        // 公开 API
+pub fn schedule_notification(app: AppHandle, args: ScheduleArgs)   // #[tauri::command]
+pub fn startup_catch_up(app: &AppHandle, db: &Database)             // setup() 调用
+fn fire(app: &AppHandle, title: &str, body: &str) -> Result<(), String>  // OS API 封装
+```
+
+`schedule_notification` 流程：
+1. 计算 `delay = trigger_at - now`，如果 `delay > 5s`：`tokio::sleep(delay - 5s)`
+2. 醒来调 `business::reminder::claim_due_reminders(&conn)`：SELECT 所有 `dispatched=false AND dismissed=false AND trigger_at <= now()`，批量标 `dispatched=true`。**这一步同时回收旧 sleep 任务"过期但还没标 dispatched"的行**。
+3. 对每条 reminder 调 `app.notification().builder().title().body().show()` → 系统 API
+4. `app.emit("weavine:reminder-fired", &r)` → JS CustomEvent → in-app banner
+
+**C. Server-side dispatcher（`server/src/reminder_dispatcher.rs` — 仍保留作为兜底）**
+
+v1.0.4 起 client 是主路径，server 端 dispatcher 只在"多端共享 reminder 状态需要 server 知道哪些已 dispatched"场景下作用：
 
 ```rust
 const REMINDER_DISPATCH_INTERVAL_SECS: u64 = 60;
@@ -545,17 +578,19 @@ pub async fn tick_reminder_dispatch_async(now: DateTime<Utc>, pool: &PgPool) -> 
 pub fn spawn_reminder_dispatcher(pool: Arc<PgPool>);
 ```
 
-每 60s：`SELECT id, invitation_token FROM reminder WHERE dispatched=false AND dismissed=false AND deleted_at IS NULL AND trigger_at <= now()` → 标 `dispatched=true`。只标记，不推送——推送是客户端责任（避免中心化推送服务的复杂度）。
+每 60s：把过期 reminder 标 `dispatched=true`（防止 server 端累积未清理项）。客户端不依赖这条路径——纯 server 端 hygiene。
 
 `server/src/main.rs:56` 在 `spawn_cadence_scheduler(pool.clone())` 旁边追加一行。
 
-### 3.6.4 三端原生通道
+### 3.6.4 三端原生通道（v1.0.4）
 
 | 端 | 触发路径 | 系统 API | 实施组件 |
 |---|---|---|---|
-| **Web** | `use-reminder-poller.ts` 每 30s 拉 `/api/reminders` → 新出现的 `dispatched=false` → Toast 组件 + 浏览器 `Notification` API（需用户授权） | W3C Notification API + Service Worker（可选） | `apps/web-spa/src/components/ReminderToast.tsx`（新）+ `lib/notifications.ts`（封装） |
-| **Desktop Tauri** | 同 poller → `TauriAdapter.notifications.show({ title, body })` → `tauri-plugin-notification` invoke | macOS UNUserNotificationCenter / Windows Toast XML / Linux libnotify | `Cargo.toml` 加 `tauri-plugin-notification = "2"` + `lib.rs` `.plugin(tauri_plugin_notification::init())` + `capabilities/default.json` 加 `"notification:default"` |
-| **Android Tauri** | 同 poller → 同 plugin | NotificationManager + 通知 channel（`high_importance_reminders`）+ AlarmManager 精确定时（可选） | 同 Desktop + `AndroidManifest.xml` 加 `POST_NOTIFICATIONS` + `SCHEDULE_EXACT_ALARM` 权限 + 运行时申请（Android 13+） |
+| **Web SPA (Tauri 包装)** | Rust `schedule_for_reminder` → sleep → `tauri-plugin-notification` | macOS UNUserNotificationCenter / Windows Toast XML / Linux libnotify / Android NotificationManager | 已有：`tauri-plugin-notification = "2"`（default `tauri` feature）+ `lib.rs` `.plugin(...)` + `capabilities/default.json` 加 `"notification:default"` |
+| **Web SPA (浏览器 standalone)** | `use-reminder-poller.ts` `isTauri()=false` 分支 → setInterval(30s) → `Notification` API + in-app toast | W3C Notification API | 已有：`lib/notifications.ts` + `lib/use-reminder-poller.ts` |
+| **Desktop Tauri (mac/Win/Linux)** | 同 Web Tauri 路径 | macOS UNUserNotificationCenter / Windows Toast XML / Linux libnotify | 同 Web Tauri |
+| **Android Tauri APK** | 同 Web Tauri 路径 | NotificationManager + channel（`high_importance_reminders`）+ 运行时 POST_NOTIFICATIONS 申请（Android 13+） | 已有：`AndroidManifest.xml` 加 `POST_NOTIFICATIONS` + `SCHEDULE_EXACT_ALARM` 权限；Tauri capability 已授权 |
+| **iOS** | ❌ 不在范围（D4 = A；等 #10 远期） | — | — |
 
 ### 3.6.5 跨端去重（D2 落地）
 
@@ -983,6 +1018,82 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | #18 | 引荐洞察         | P2  | 依赖 #4 图谱                 |
 | #19 | 机会看板         | P3  | pipeline 追踪              |
 | #20 | AI 教练 + 消息起草 | P3  | 需 server 重模型；合规边界明确      |
+
+---
+
+## 11.5 激活跟踪 + per-install device_key（v1.0.3 落地，2026-08-15）
+
+**目标**：把"多少人用了 Weavine"从"只看付费 / 登录用户"扩到"全漏斗：安装→首次使用→30 天留存→登录→付费"。未登录用户也应该在统计里——否则 P0/P1 优化只盯付费用户会严重误导。
+
+**原理**：每个 Tauri / Web SPA 客户端在首次启动时（5 s 延迟，避免抢 boot）向 `POST /api/activation/ping` 注册一个客户端自己生成的 UUID v4 (`install_id`)，存在 `<data_dir>/install_id`（Tauri）或 `localStorage[weavine:install_id]`（SPA）。后续每次 OCR / 语音调用把 `X-Install-Id` + `X-Client-Platform` + `X-Client-OS` + `X-App-Version` 一起带上，server 在 `handlers/ocr.rs` / `handlers/voice.rs` 里 `record_activation_hook` 增 `call_count` + 改 `last_event`。
+
+### 11.5.1 数据模型
+
+**`install_activation` 表**（migration `20260814000001` + `20260820000001`）：
+
+| 字段 | 类型 | 用途 |
+|---|---|---|
+| `install_id` | TEXT PK | 客户端生成 UUID v4 |
+| `first_seen_at` / `last_seen_at` | TEXT | ISO8601 UTC |
+| `app_version` | TEXT | `"1.0.4"` |
+| `os` | TEXT | `"darwin"` / `"windows"` / `"linux"` / `"android"` |
+| `platform` | TEXT CHECK (`desktop|android|web`) | 运行时类型 |
+| `last_ip_hash` | TEXT | `SHA-256(JWT_SECRET || ip)`，**原始 IP 不存** |
+| `call_count` / `last_event` | INTEGER / TEXT | OCR/voice 调用计数 + 最近一次事件类型 |
+| `device_key` | TEXT UNIQUE partial idx | server-minted 32-char hex，替代共享 `WV_SERVICE_KEY` |
+| `plan` / `daily_ocr_count` / `daily_voice_count` / `daily_reset_at` / `revoked_at` | 预留给 quota 体系 | v1.0.4 未启用，schema 已就绪省一次 migration |
+
+### 11.5.2 客户端 → server headers（每次 cloud 调用）
+
+```
+X-Device-Key:     <32-char hex>          // server 验证 install_activation.device_key
+X-Install-Id:     <UUID v4>              // record_activation_hook 用
+X-Client-Platform: desktop|android|web   // 进程检测
+X-Client-OS:      <os name string>
+X-App-Version:    <weavine version>
+```
+
+### 11.5.3 鉴权优先级（取代 v1.0.2 的 `extract_auth`）
+
+```
+extract_endpoint_auth() -> EndpointAuth
+  = AnonymousDevice { install_id }  // X-Device-Key 命中 install_activation.device_key
+  | User { user_id, device_id }     // JWT 或 API key 有效
+  | ServiceKey                      // X-Service-Key == WV_SERVICE_KEY (dev / CI only)
+```
+
+顺序：`X-Device-Key` → `Authorization: Bearer ...` / `X-Api-Key` → `X-Service-Key`。
+
+匿名用户调 OCR / voice 不需要登录，server 通过 `device_key` 知道是哪个 install。`register()` / `login()` 后同一 `install_id` 变成 `devices.id`，所以 `JOIN install_activation ON install_id = devices.id` 直接出"一个用户 N 个设备"的漏斗。
+
+### 11.5.4 隐私红线（README "Activation tracking" 节）
+
+- 原始 IP **永不落库**，只存 `SHA-256(JWT_SECRET || ip)`（不可逆，跨 install 不可关联）。
+- `install_id` 是客户端 UUID v4，**零指纹**——不基于 machine-id / browser fingerprint / 屏幕分辨率 / IMEI / IDFA。
+- 客户端**只**向用户配置的 server URL 发，不会向任何第三方打点。
+- 用户可随时关：删 `<data_dir>/install_id` + `<data_dir>/device_key`，或清 `localStorage[weavine:install_id|weavine:device_key]`——下次启动 = 新 install。
+
+### 11.5.5 关键查询（`docs/activation.sql` 共 10 条）
+
+- DAU / MAU 唯一安装数
+- 三端平台分布
+- 多设备用户漏斗（1 个 user_id 对应 N 个 install）
+- 匿名→已登录 cohort 转化率
+- 每日 quota 计数（plan enforcement 用，schema 已就绪）
+
+### 11.5.6 拍板记录（2026-08-14 brainstorming）
+
+- **Q1 怎么识别"同一用户多端"？** → `install_id` 同时作为 `devices.id` PK，登录时合并。
+- **Q2 OCR / voice 是否走同一套？** → 是，server 端 `record_activation_hook` 同源。
+- **Q3 是否仍需 `WV_SERVICE_KEY`？** → 仅作 dev / CI / 单元测试 fallback，prod 客户端走 `device_key`。
+- **Q4 quota 怎么落？** → `install_activation.daily_ocr_count` / `daily_voice_count` + `daily_reset_at`，v1.0.4 schema 已加，**业务未启用**——留到 v1.1.x 上限流时启用。
+
+### 11.5.7 不在范围（明确）
+
+- ❌ 用户行为分析（点击流 / 浏览路径）——不是产品定位，留给外部 BI 工具
+- ❌ 推送通知到达率统计——后续若 #3 / §3.6 接 server 推送再排
+- ❌ 多 server 端聚合（每个 weavine-server 部署自己的统计）——单租户定位无需
+- ❌ 删除 install_activation 行（用户卸载 app）——只是 `last_seen_at` 不再更新，30 天后可清理
 
 ---
 
