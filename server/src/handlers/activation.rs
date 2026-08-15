@@ -149,7 +149,7 @@ pub async fn ping(
             last_event = 'launch',
             last_ip_hash = EXCLUDED.last_ip_hash
         RETURNING
-            COALESCE(install_activation.first_seen_at, EXCLUDED.last_seen_at),
+            install_activation.first_seen_at,
             install_activation.call_count
         "#,
     )
