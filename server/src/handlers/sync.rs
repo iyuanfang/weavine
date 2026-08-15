@@ -265,11 +265,18 @@ pub async fn push(
                                 .collect()
                         })
                         .unwrap_or_default();
-                    let update_set = keys
+                    let mut update_clauses: Vec<String> = keys
                         .iter()
                         .map(|k| format!("{k} = EXCLUDED.{k}"))
-                        .collect::<Vec<_>>()
-                        .join(", ");
+                        .collect();
+                    if table == "reminder" {
+                        for k in &["dispatched", "dismissed"] {
+                            if let Some(pos) = update_clauses.iter().position(|c| c.starts_with(&format!("{k} ="))) {
+                                update_clauses[pos] = format!("{k} = reminder.{k} OR EXCLUDED.{k}");
+                            }
+                        }
+                    }
+                    let update_set = update_clauses.join(", ");
 
                     let sql = format!(
                         "INSERT INTO {} SELECT * FROM jsonb_populate_record(NULL::{}, $1::jsonb) \
