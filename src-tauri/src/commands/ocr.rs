@@ -80,11 +80,15 @@ pub async fn extract_card(
     let platform = crate::install_id::platform_str();
     let os = crate::install_id::os_str();
     let app_version = env!("CARGO_PKG_VERSION").to_string();
+    let device_key = crate::install_id::get_or_create_device_key();
     let mut req = req
         .header("X-Install-Id", &install_id)
         .header("X-Client-Platform", platform)
         .header("X-Client-OS", os)
         .header("X-App-Version", app_version);
+    if let Some(k) = device_key {
+        req = req.header("X-Device-Key", k);
+    }
 
     let bytes = B64.decode(image_base64.as_bytes())
         .map_err(|e| format!("decode base64: {e}"))?;

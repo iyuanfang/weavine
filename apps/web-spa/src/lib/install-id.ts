@@ -4,6 +4,7 @@
 // in the server's `devices` table once the user logs in.
 
 const STORAGE_KEY = 'weavine:install_id';
+const DEVICE_KEY_STORAGE_KEY = 'weavine:device_key';
 
 function isValid(id: string): boolean {
   if (!id || id.length > 64) return false;
@@ -25,6 +26,25 @@ export function getOrCreateInstallId(): string {
     // Best-effort: still return the in-memory id for this session.
   }
   return id;
+}
+
+export function getDeviceKey(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const existing = window.localStorage.getItem(DEVICE_KEY_STORAGE_KEY);
+    if (existing && isValid(existing)) return existing;
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+export function saveDeviceKey(key: string): void {
+  if (typeof window === 'undefined') return;
+  if (!isValid(key)) return;
+  try {
+    window.localStorage.setItem(DEVICE_KEY_STORAGE_KEY, key);
+  } catch {}
 }
 
 function cryptoUUID(): string {
@@ -63,12 +83,15 @@ export function osStr(): string {
 }
 
 export function installHeaders(appVersion: string): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     'X-Install-Id': getOrCreateInstallId(),
     'X-Client-Platform': platformStr(),
     'X-Client-OS': osStr(),
     'X-App-Version': appVersion,
   };
+  const dk = getDeviceKey();
+  if (dk) headers['X-Device-Key'] = dk;
+  return headers;
 }
 
 const SERVER_URL_KEY = 'weavine:server_url';
@@ -121,15 +144,16 @@ export function fireFirstLaunchPing(appVersion: string): void {
     keepalive: true,
   })
     .then((r) => {
-      if (r.ok) {
-        try {
-          window.localStorage.setItem(FIRED_KEY, '1');
-        } catch {
-          // ignore
-        }
+      if (!r.ok) return null;
+      try {
+        window.localStorage.setItem(FIRED_KEY, '1');
+      } catch {}
+      return r.json();
+    })
+    .then((v) => {
+      if (v && typeof v.device_key === 'string') {
+        saveDeviceKey(v.device_key);
       }
     })
-    .catch(() => {
-      // ignore
-    });
+    .catch(() => {});
 }

@@ -89,8 +89,9 @@ The Tauri client can call your `weavine-server` for **business-card OCR** and **
 
 ### How it works
 
-- Tauri client embeds a shared **service key** at build time (`WV_SERVICE_KEY` env var passed to `cargo build`). All installs built with the same key can call OCR/STT against your server.
-- Server validates the key via `X-Service-Key` (or `Authorization: Bearer`) on `/api/cards/extract` and `/api/voice/recognize`. No `user_account` row involved.
+- Each install gets a **per-install API key** (`device_key`) minted by the server on first `POST /api/activation/ping`. The client persists it (Tauri: `<data_dir>/device_key`, web: `localStorage[weavine:device_key]`) and sends it on every cloud call as `X-Device-Key`. The server validates it against `install_activation.device_key`. No `user_account` row involved for anonymous calls.
+- For dev / CI, a shared **service key** (`WV_SERVICE_KEY` env var passed to `cargo build`) is still recognized via `X-Service-Key` (or `Authorization: Bearer`) on `/api/cards/extract` and `/api/voice/recognize`. Disable it on production by simply not setting `WV_SERVICE_KEY` on the server.
+- Logged-in users can also call OCR/voice with their per-user JWT or API key — same endpoints, different auth header.
 - OCR: [Tesseract](https://github.com/tesseract-ocr/tesseract) via `leptess` server-side, `chi_sim + chi_tra + eng` by default.
 - STT: [whisper.cpp](https://github.com/ggerganov/whisper.cpp) `tiny` model, runs on CPU (~1.5 s per 10 s of audio).
 
@@ -118,9 +119,15 @@ cargo build --release --manifest-path server/Cargo.toml --features ocr,stt
 ### Client build (Tauri)
 
 ```bash
-WV_SERVICE_KEY=<same-key-as-server> pnpm tauri build
+# Per-install device_key is automatic — the client mints it on first launch
+# and the server validates it on every cloud call. No `WV_SERVICE_KEY` needed.
+pnpm tauri build
+
 # OR for Android:
-WV_SERVICE_KEY=<same-key-as-server> cargo tauri android build --apk
+cargo tauri android build --apk
+
+# For dev / CI you can also accept the shared service key as a fallback:
+WV_SERVICE_KEY=<same-key-as-server> pnpm tauri build
 ```
 
 If you skip `WV_SERVICE_KEY` at build time, the client returns "未登录云端" on every OCR/STT call — graceful degradation, no crash. Users can still log in normally and use per-user JWTs for OCR/STT.
@@ -137,26 +144,40 @@ If you don't want any Tauri client to be able to call OCR/STT without login, sim
 
 ## Activation tracking
 
-The Tauri client (and the web SPA) register themselves with your `weavine-server` once per install and on every cloud call. This lets you count unique users — including anonymous ones who never logged in — and detect multi-device users.
+The Tauri client (and the web SPA) register themselves with your `weavine-server` once per install and on every cloud call. This lets you count unique users — including anonymous ones who never logged in — and detect multi-device users. Each install also gets a unique API key (`device_key`) used for anonymous OCR/voice calls without needing a shared service key.
 
 ### How it works
 
 - The client mints a UUID v4 on first launch and writes it to `<data_dir>/install_id` (Tauri, `~/.local/share/com.weavine.desktop/`) or `localStorage` (web, `weavine:install_id`). The same UUID is sent as `X-Install-Id` on every cloud request.
-- The server upserts one row per install into `install_activation` (PK = `install_id`).
+- The server upserts one row per install into `install_activation` (PK = `install_id`) and returns a unique 32-char hex `device_key` in the response.
+- The client persists the `device_key` to `<data_dir>/device_key` (Tauri) or `localStorage[weavine:device_key]` (web) and sends it on every cloud call as `X-Device-Key`. This is the per-install credential used for anonymous OCR/voice.
 - The same UUID becomes the `device_id` once the user logs in, so a JOIN on `user_id` between `devices` and `install_activation` reveals multi-device usage.
 - A first-launch `POST /api/activation/ping` fires 5s after startup, even if the user never uses a cloud feature. This is what catches pure-local users.
+
+### Auth precedence (OCR/voice)
+
+1. **`X-Device-Key`** — anonymous per-install key. Validated against `install_activation.device_key`. Preferred for anonymous users.
+2. **`X-API-Key` / `Authorization: Bearer wvk_…`** — per-user API key.
+3. **`Authorization: Bearer <jwt>`** — logged-in user.
+4. **`X-Service-Key` / `Authorization: Bearer <service-key>`** — dev / CI override. Suppress on production.
 
 ### Schema
 
 ```sql
 install_activation(
-  install_id   TEXT PRIMARY KEY,    -- UUID v4 from <data_dir>/install_id
-  first_seen_at, last_seen_at TEXT, -- rfc3339 timestamps
-  app_version   TEXT,                -- version at first launch
-  os, platform  TEXT,                -- 'darwin' | 'linux' | 'windows' | 'android' | 'web'
-  last_ip_hash  TEXT,                -- SHA-256(JWT_SECRET || ip), never raw
-  call_count    BIGINT,              -- increments on every OCR / voice / ping
-  last_event    TEXT                 -- 'launch' | 'ocr' | 'voice'
+  install_id         TEXT PRIMARY KEY,    -- UUID v4 from <data_dir>/install_id
+  first_seen_at, last_seen_at TEXT,       -- rfc3339 timestamps
+  app_version         TEXT,                -- version at first launch
+  os, platform        TEXT,                -- 'darwin' | 'linux' | 'windows' | 'android' | 'web'
+  last_ip_hash        TEXT,                -- SHA-256(JWT_SECRET || ip), never raw
+  call_count          BIGINT,              -- increments on every OCR / voice / ping
+  last_event          TEXT,                -- 'launch' | 'ocr' | 'voice'
+  device_key          TEXT UNIQUE,         -- 32-char hex, minted on first ping
+  plan                TEXT,                -- 'free' (default) | 'trial' | 'pro' (1.0.4+)
+  daily_ocr_count     INT,                 -- today's OCR calls (1.0.4+)
+  daily_voice_count   INT,                 -- today's voice calls (1.0.4+)
+  daily_reset_at      TEXT,                -- counter window start (1.0.4+)
+  revoked_at          TEXT                 -- NULL = active; soft-revoke an install
 )
 ```
 
@@ -176,17 +197,22 @@ SELECT COUNT(*) FROM (
   SELECT user_id FROM devices WHERE revoked_at IS NULL
   GROUP BY user_id HAVING COUNT(*) > 1
 ) t;
+
+-- Revoke a specific install without dropping its history
+UPDATE install_activation SET revoked_at = now() WHERE device_key = '...';
 ```
 
 ### Privacy
 
 **The server only stores the SHA-256 hash of the client IP, salted with `JWT_SECRET`.** Raw IPs are never persisted. The `install_id` is a per-install UUID minted by the client itself — it is not derived from any hardware fingerprint, machine ID, browser fingerprint, or other device-specific signal. Wiping the app data dir (or `localStorage`) produces a fresh `install_id` on next launch, which defaults to "new install" semantics.
 
-There is no telemetry payload sent anywhere except to your own `weavine-server`. The `X-Install-Id` header is only sent to the server URL the user has explicitly configured; if the user has not configured a server, no request is made.
+The `device_key` is similarly a 122-bit random UUID; losing it just means the client can no longer make anonymous cloud calls until the next `POST /api/activation/ping` re-mints one (the server returns the same key on subsequent pings as long as `install_id` matches).
+
+There is no telemetry payload sent anywhere except to your own `weavine-server`. The `X-Install-Id` and `X-Device-Key` headers are only sent to the server URL the user has explicitly configured; if the user has not configured a server, no request is made.
 
 ### Disable activation tracking entirely
 
-If you don't want any client to register itself, simply don't set `WV_SERVICE_KEY` on the server AND block the `POST /api/activation/ping` endpoint at your reverse proxy. Clients that never fire a `X-Install-Id` header (older builds) will still get cloud OCR/STT if they're logged in, but you'll have no install data.
+Block the `POST /api/activation/ping` endpoint at your reverse proxy. Clients that never fire a `X-Install-Id` header (older builds) will still get cloud OCR/STT if they're logged in, but you'll have no install data.
 
 ## Quick start
 

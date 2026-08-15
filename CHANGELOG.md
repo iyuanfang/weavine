@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-install `device_key`** — replaces the shared `WV_SERVICE_KEY` model
+  for the anonymous OCR/voice path. Each install gets a unique 32-char
+  hex key minted by the server on the first `POST /api/activation/ping`
+  and persisted to `<data_dir>/device_key` (Tauri) or
+  `localStorage[weavine:device_key]` (web). The client sends it on
+  every cloud call as `X-Device-Key`. The server validates it against
+  `install_activation.device_key` (CREATE UNIQUE INDEX partial on
+  `WHERE device_key IS NOT NULL`).
+  - Forward-looking columns also added to `install_activation`:
+    `plan`, `daily_ocr_count`, `daily_voice_count`, `daily_reset_at`,
+    `revoked_at`. No code uses them yet but adding them now saves a
+    1.0.4 migration.
+  - New server helper `extract_endpoint_auth()` returns
+    `EndpointAuth::AnonymousDevice { install_id }` /
+    `EndpointAuth::User { user_id, device_id }` /
+    `EndpointAuth::ServiceKey`. Order: `X-Device-Key` → JWT/API key →
+    `X-Service-Key`. Shared `WV_SERVICE_KEY` is kept as a dev/CI override
+    so unit tests and e2e scripts keep working without per-install setup.
+  - Tauri: `install_id::get_or_create_device_key()` reads
+    `<data_dir>/device_key`, mints a fresh UUID v4 hex if missing.
+    `spawn_first_launch_ping()` now awaits the response and persists
+    the server-minted key. `commands/ocr.rs` and `commands/voice.rs`
+    add `X-Device-Key` to the request.
+  - Web SPA: `lib/install-id.ts` adds `getDeviceKey()` /
+    `saveDeviceKey()` (localStorage), `installHeaders()` adds
+    `X-Device-Key` when present, `fireFirstLaunchPing()` writes
+    the response's `device_key` into localStorage.
+  - README "Activation tracking" section updated to describe the new
+    `X-Device-Key` flow and the migration path.
+
 - **Activation tracking** — every Tauri / web install registers itself with
   `weavine-server` so anonymous users (the people who never log in) become
   visible in the product's usage stats. The same UUID becomes the
@@ -30,8 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     clients. Validates install_id (≤ 64 chars, `[A-Za-z0-9-]` only).
   - 10 ready-to-use SQL queries in `docs/activation.sql` (DAU/MAU,
     platform breakdown, multi-device funnel, anon → logged-in cohort).
-  - README "Activation tracking" section with schema, queries, privacy
-    disclosure, and how to disable entirely.
 
 ### Fixed
 

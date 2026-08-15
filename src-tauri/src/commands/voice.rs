@@ -58,6 +58,9 @@ pub async fn recognize_voice(
         .header("X-Client-Platform", crate::install_id::platform_str())
         .header("X-Client-OS", crate::install_id::os_str())
         .header("X-App-Version", env!("CARGO_PKG_VERSION"));
+    if let Some(k) = crate::install_id::get_or_create_device_key() {
+        req = req.header("X-Device-Key", k);
+    }
 
     let resp = req
         .send()
