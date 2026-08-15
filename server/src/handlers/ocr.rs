@@ -207,7 +207,16 @@ pub async fn extract_card(
     let _auth = match extract_endpoint_auth(&headers, pool.as_ref()).await? {
         EndpointAuth::ServiceKey => "service:weavine-default".to_string(),
         EndpointAuth::User { user_id, .. } => user_id,
-        EndpointAuth::AnonymousDevice { install_id } => install_id,
+        EndpointAuth::AnonymousDevice { install_id } => {
+            let q = super::activation::check_and_bump_quota(&install_id, pool.as_ref(), "ocr").await?;
+            if q.count > q.limit {
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    format!("daily ocr quota exceeded ({}/{})", q.count - 1, q.limit),
+                ));
+            }
+            install_id
+        }
     };
     super::activation::record_activation_hook(&headers, pool.as_ref(), "ocr").await;
 

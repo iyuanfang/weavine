@@ -22,6 +22,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -33,6 +34,18 @@ const MAX_INSTALL_ID_LEN: usize = 64;
 const MAX_VERSION_LEN: usize = 32;
 const MAX_OS_LEN: usize = 32;
 const MAX_PLATFORM_LEN: usize = 16;
+
+const FREE_DAILY_LIMIT: i32 = 20;
+const TRIAL_DAILY_LIMIT: i32 = 50;
+const PRO_DAILY_LIMIT: i32 = 1_000_000;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct QuotaStatus {
+    pub plan: String,
+    pub count: i32,
+    pub limit: i32,
+    pub reset_at: Option<String>,
+}
 const MAX_EVENT_LEN: usize = 16;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -245,5 +258,85 @@ pub async fn record_activation_hook(
     .bind(event)
     .execute(pool)
     .await;
+}
+
+/// Bumps the anonymous device's daily counter and returns the current
+/// quota state. Caller checks `count < limit` to gate the call.
+pub async fn check_and_bump_quota(
+    install_id: &str,
+    pool: &PgPool,
+    event: &str,
+) -> Result<QuotaStatus, (StatusCode, String)> {
+    let now = Utc::now();
+    let now_str = now_rfc3339();
+    let reset_threshold = now - Duration::hours(24);
+
+    let row: Option<(String, i32, i32, Option<String>)> = sqlx::query_as(
+        r#"
+        SELECT plan, daily_ocr_count, daily_voice_count, daily_reset_at
+        FROM install_activation
+        WHERE install_id = $1 AND revoked_at IS NULL
+        FOR UPDATE
+        "#,
+    )
+    .bind(install_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("quota lookup: {e}")))?;
+
+    let Some((plan, ocr_count, voice_count, reset_at)) = row else {
+        return Err((StatusCode::UNAUTHORIZED, "install not registered".into()));
+    };
+
+    let stale = match reset_at.as_deref() {
+        Some(s) => DateTime::parse_from_rfc3339(s)
+            .map(|t| t.with_timezone(&Utc) < reset_threshold)
+            .unwrap_or(true),
+        None => true,
+    };
+
+    let limit = match plan.as_str() {
+        "pro" => PRO_DAILY_LIMIT,
+        "trial" => TRIAL_DAILY_LIMIT,
+        _ => FREE_DAILY_LIMIT,
+    };
+
+    let (count_before, count_after): (i32, i32) = if stale {
+        (0, 1)
+    } else {
+        let current = if event == "voice" { voice_count } else { ocr_count };
+        (current, current + 1)
+    };
+
+    let allowed = count_before < limit;
+    let new_reset_at = if stale { Some(now_str.clone()) } else { reset_at.clone() };
+
+    let _ = sqlx::query(
+        r#"
+        UPDATE install_activation SET
+            daily_ocr_count = CASE WHEN $3 = 'ocr' AND $4 THEN 1
+                                   WHEN $3 = 'ocr' THEN daily_ocr_count + 1
+                                   ELSE daily_ocr_count END,
+            daily_voice_count = CASE WHEN $3 = 'voice' AND $4 THEN 1
+                                     WHEN $3 = 'voice' THEN daily_voice_count + 1
+                                     ELSE daily_voice_count END,
+            daily_reset_at = $5
+        WHERE install_id = $1 AND revoked_at IS NULL
+        "#,
+    )
+    .bind(install_id)
+    .bind(plan.as_str())
+    .bind(event)
+    .bind(stale)
+    .bind(new_reset_at.as_deref().unwrap_or(&now_str))
+    .execute(pool)
+    .await;
+
+    Ok(QuotaStatus {
+        plan,
+        count: count_after,
+        limit,
+        reset_at: new_reset_at,
+    })
 }
 
