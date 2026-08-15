@@ -6,6 +6,8 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import { buildRouterObjects } from './routes-config';
 import { App } from './App';
+import { fireFirstLaunchPing } from './lib/install-id';
+import pkg from '../package.json';
 
 // Tauri 2 WebViews boot at http(s)://tauri.localhost/ (see
 // tauri-2.11.5/src/manager/mod.rs:787). routes-config has no '/' route — it was
@@ -39,3 +41,5 @@ createRoot(rootEl).render(
     </App>
   </StrictMode>,
 );
+
+setTimeout(() => fireFirstLaunchPing(pkg.version), 5000);

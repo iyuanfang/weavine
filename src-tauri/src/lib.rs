@@ -120,6 +120,24 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(database)
+        .setup(|app| {
+            install_id::spawn_first_launch_ping(app.handle().clone());
+            #[cfg(desktop)]
+            {
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_shortcuts(["CommandOrControl+K"])?
+                        .with_handler(|app, _shortcut, event| {
+                            if event.state == ShortcutState::Pressed {
+                                let _ = app.emit("ctrl-k-pressed", ());
+                            }
+                        })
+                        .build(),
+                )?;
+            }
+            app.handle().plugin(tauri_plugin_notification::init())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             contact::list_contacts,
             contact::create_contact,
@@ -186,23 +204,6 @@ pub fn run() {
             commands::archive::archive_sweep,
             quick::quick_parse,
         ])
-        .setup(|app| {
-            #[cfg(desktop)]
-            {
-                app.handle().plugin(
-                    tauri_plugin_global_shortcut::Builder::new()
-                        .with_shortcuts(["CommandOrControl+K"])?
-                        .with_handler(|app, _shortcut, event| {
-                            if event.state == ShortcutState::Pressed {
-                                let _ = app.emit("ctrl-k-pressed", ());
-                            }
-                        })
-                        .build(),
-                )?;
-            }
-            app.handle().plugin(tauri_plugin_notification::init())?;
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

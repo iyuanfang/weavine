@@ -76,3 +76,43 @@ pub fn os_str() -> &'static str {
         std::env::consts::OS
     }
 }
+
+/// Fires a single `POST /api/activation/ping` 5 seconds after `setup()` to
+/// register this install in the server's `install_activation` table, even
+/// if the user never uses a cloud feature. Skipped silently when no server
+/// URL is configured. Best-effort: any failure is logged and ignored.
+#[cfg(feature = "tauri")]
+pub fn spawn_first_launch_ping(app: tauri::AppHandle) {
+    use tauri::Manager;
+    let server_url = {
+        let db = match app.try_state::<crate::db::Database>() {
+            Some(db) => db,
+            None => return,
+        };
+        let conn = match db.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        match crate::sync::config::get(&conn, crate::sync::config::KEY_SERVER_URL) {
+            Ok(Some(s)) if !s.is_empty() => s,
+            _ => return,
+        }
+    };
+    let url = format!("{}/api/activation/ping", server_url.trim_end_matches('/'));
+    let install_id = get_or_create();
+    let body = serde_json::json!({
+        "install_id": install_id,
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "os": os_str(),
+        "platform": platform_str(),
+    });
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        let _ = reqwest::Client::new()
+            .post(&url)
+            .json(&body)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await;
+    });
+}

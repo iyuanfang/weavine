@@ -28,14 +28,13 @@ export function getOrCreateInstallId(): string {
 }
 
 function cryptoUUID(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c && typeof c.randomUUID === 'function') {
+    return c.randomUUID();
   }
-  // Fallback for very old browsers (no crypto.randomUUID).
-  // Compatible with the same UUID v4 layout the server expects.
   const bytes = new Uint8Array(16);
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    crypto.getRandomValues(bytes);
+  if (c && typeof c.getRandomValues === 'function') {
+    c.getRandomValues(bytes);
   } else {
     for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
   }
@@ -70,4 +69,67 @@ export function installHeaders(appVersion: string): Record<string, string> {
     'X-Client-OS': osStr(),
     'X-App-Version': appVersion,
   };
+}
+
+const SERVER_URL_KEY = 'weavine:server_url';
+const DEFAULT_SERVER_URL = 'https://weavine.financialagent.cc';
+
+export function getServerUrl(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const stored = window.localStorage.getItem(SERVER_URL_KEY);
+    if (stored && stored.trim()) return stored.trim();
+  } catch {
+    // localStorage may be blocked
+  }
+  return DEFAULT_SERVER_URL;
+}
+
+export function setServerUrl(url: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SERVER_URL_KEY, url.trim());
+  } catch {
+    // ignore
+  }
+}
+
+const FIRED_KEY = 'weavine:activation_ping_fired';
+
+/// Fires the first-launch ping once per install. Idempotent: backed by
+/// localStorage flag. Best-effort: any failure is ignored.
+export function fireFirstLaunchPing(appVersion: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (window.localStorage.getItem(FIRED_KEY)) return;
+  } catch {
+    // ignore
+  }
+  const url = getServerUrl();
+  if (!url) return;
+  const endpoint = `${url.replace(/\/+$/, '')}/api/activation/ping`;
+  const body = {
+    install_id: getOrCreateInstallId(),
+    app_version: appVersion,
+    os: osStr(),
+    platform: platformStr(),
+  };
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive: true,
+  })
+    .then((r) => {
+      if (r.ok) {
+        try {
+          window.localStorage.setItem(FIRED_KEY, '1');
+        } catch {
+          // ignore
+        }
+      }
+    })
+    .catch(() => {
+      // ignore
+    });
 }
