@@ -5,6 +5,41 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-08-15
+
+### Added
+
+- **Activation tracking** — every Tauri / web install registers itself with
+  `weavine-server` so anonymous users (the people who never log in) become
+  visible in the product's usage stats. The same UUID becomes the
+  `device_id` after login, so a JOIN between `install_activation` and
+  `devices` reveals multi-device users.
+  - Server: new table `install_activation` (migration
+    `20260814000001_install_activation.sql`) + `POST /api/activation/ping`
+    handler + `record_activation_hook` called from `handlers/ocr.rs` and
+    `handlers/voice.rs` after auth. IP stored as `SHA-256(JWT_SECRET || ip)`
+    only — raw IP is never persisted.
+  - Tauri: `install_id::get_or_create()` mints a UUID v4 on first launch
+    and stores it in `<data_dir>/install_id`; `setup()` spawns a 5 s delayed
+    `POST /api/activation/ping` so even pure-local users are counted.
+  - Web SPA: `lib/install-id.ts` mirrors the Tauri logic against
+    `localStorage[weavine:install_id]`; `fireFirstLaunchPing()` fires once
+    after first render, idempotent.
+  - Auth: `register()` and `login()` now use `device.install_id` as the
+    `devices.id` PK when present, falling back to a fresh UUID v4 for older
+    clients. Validates install_id (≤ 64 chars, `[A-Za-z0-9-]` only).
+  - 10 ready-to-use SQL queries in `docs/activation.sql` (DAU/MAU,
+    platform breakdown, multi-device funnel, anon → logged-in cohort).
+  - README "Activation tracking" section with schema, queries, privacy
+    disclosure, and how to disable entirely.
+
+### Fixed
+
+- `INSERT ... ON CONFLICT ... RETURNING` clause no longer references
+  `EXCLUDED` (which is only valid in the `SET` clause). Caught by the
+  prod smoke test — the table itself was the new assembly, only the
+  `POST /api/activation/ping` SQL was wrong.
+
 ## [1.0.2] - 2026-08-14
 
 ### Added
