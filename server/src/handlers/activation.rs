@@ -48,6 +48,9 @@ pub struct ActivationPingResp {
     pub ok: bool,
     pub first_seen_at: String,
     pub call_count: i64,
+    /// Per-install API key. Minted on first call, persisted on subsequent
+    /// calls. Empty if the row already had a key (rare — server restart).
+    pub device_key: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,20 +139,23 @@ pub async fn ping(
     let ip = client_ip(&headers, "0.0.0.0");
     let ip_hash = ip_hash_for(&ip);
     let now = now_rfc3339();
+    let new_key = uuid::Uuid::new_v4().simple().to_string();
 
-    let row: (String, i64) = sqlx::query_as(
+    let row: (String, String, i64) = sqlx::query_as(
         r#"
         INSERT INTO install_activation
             (install_id, first_seen_at, last_seen_at, app_version, os, platform,
-             last_ip_hash, call_count, last_event)
-        VALUES ($1, $2, $2, $3, $4, $5, $6, 1, 'launch')
+             last_ip_hash, call_count, last_event, device_key)
+        VALUES ($1, $2, $2, $3, $4, $5, $6, 1, 'launch', $7)
         ON CONFLICT (install_id) DO UPDATE SET
             last_seen_at = EXCLUDED.last_seen_at,
             call_count = install_activation.call_count + 1,
             last_event = 'launch',
             last_ip_hash = EXCLUDED.last_ip_hash
+            -- device_key is NOT updated on conflict (preserved)
         RETURNING
             install_activation.first_seen_at,
+            install_activation.device_key,
             install_activation.call_count
         "#,
     )
@@ -159,6 +165,7 @@ pub async fn ping(
     .bind(&body.os)
     .bind(&body.platform)
     .bind(&ip_hash)
+    .bind(&new_key)
     .fetch_one(pool.as_ref())
     .await
     .map_err(|e| {
@@ -173,7 +180,8 @@ pub async fn ping(
     Ok(Json(ActivationPingResp {
         ok: true,
         first_seen_at: row.0,
-        call_count: row.1,
+        call_count: row.2,
+        device_key: row.1,
     }))
 }
 

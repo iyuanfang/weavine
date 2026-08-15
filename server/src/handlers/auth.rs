@@ -299,6 +299,86 @@ pub async fn extract_auth_service_or_user(
     extract_auth(headers, pool).await
 }
 
+#[derive(Debug, Clone)]
+pub enum EndpointAuth {
+    /// Anonymous via X-Device-Key. install_id is the row's PK.
+    AnonymousDevice { install_id: String },
+    /// Logged-in user via JWT or API key.
+    User { user_id: String, device_id: String },
+    /// Shared service key (dev / CI). Synthetic id, no DB lookup.
+    ServiceKey,
+}
+
+const MAX_DEVICE_KEY_LEN: usize = 64;
+
+/// Auth for OCR/voice endpoints. Order:
+/// 1. `X-Device-Key` — anonymous per-install key, validated against
+///    `install_activation.device_key`. Preferred for anonymous users.
+/// 2. JWT / API key — logged-in user (unchanged from before).
+/// 3. `X-Service-Key` / `Bearer <service-key>` — dev / CI override.
+///
+/// Returns `EndpointAuth` describing which path matched.
+pub async fn extract_endpoint_auth(
+    headers: &HeaderMap,
+    pool: &PgPool,
+) -> Result<EndpointAuth, (StatusCode, String)> {
+    if let Some(k) = headers.get("x-device-key").and_then(|v| v.to_str().ok()) {
+        if k.is_empty() || k.len() > MAX_DEVICE_KEY_LEN {
+            return Err((StatusCode::UNAUTHORIZED, "invalid X-Device-Key".into()));
+        }
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT install_id FROM install_activation
+             WHERE device_key = $1 AND revoked_at IS NULL",
+        )
+        .bind(k)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("device_key lookup: {e}"),
+            )
+        })?;
+        return match row {
+            Some((install_id,)) => Ok(EndpointAuth::AnonymousDevice { install_id }),
+            None => Err((
+                StatusCode::UNAUTHORIZED,
+                "X-Device-Key 无效或已吊销".into(),
+            )),
+        };
+    }
+
+    if let Some(uid) = extract_auth_with_service(headers)? {
+        let _ = uid;
+        return Ok(EndpointAuth::ServiceKey);
+    }
+
+    if let Some(raw_key) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+        let user_id = lookup_api_key(raw_key, pool).await?;
+        return Ok(EndpointAuth::User {
+            user_id,
+            device_id: String::new(),
+        });
+    }
+    if let Some(token) = extract_bearer(headers) {
+        if token.starts_with("wvk_") {
+            let user_id = lookup_api_key(&token, pool).await?;
+            return Ok(EndpointAuth::User {
+                user_id,
+                device_id: String::new(),
+            });
+        }
+        let claims = verify_access(&token)
+            .map_err(|_| (StatusCode::UNAUTHORIZED, "token 无效或已过期".to_string()))?;
+        return Ok(EndpointAuth::User {
+            user_id: claims.sub,
+            device_id: claims.device_id,
+        });
+    }
+
+    Err((StatusCode::UNAUTHORIZED, "未登录".to_string()))
+}
+
 fn verify_access(token: &str) -> Result<Claims, (StatusCode, String)> {
     let keys = JWT_KEYS
         .get()

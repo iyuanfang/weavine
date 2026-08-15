@@ -16,8 +16,8 @@ use axum::{
 use serde::Serialize;
 use std::sync::{Arc, OnceLock};
 use tokio::io::AsyncWriteExt;
+use super::auth::{extract_endpoint_auth, EndpointAuth};
 
-use super::auth;
 use whisper_rs::{
     get_lang_str, FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
 };
@@ -74,7 +74,11 @@ pub async fn recognize(
     State(pool): State<Arc<sqlx::PgPool>>,
     mut form: Multipart,
 ) -> Result<axum::Json<RecognizeResult>, (StatusCode, String)> {
-    let _auth = auth::extract_auth_service_or_user(&headers, pool.as_ref()).await?;
+    let _auth = match extract_endpoint_auth(&headers, pool.as_ref()).await? {
+        EndpointAuth::ServiceKey => "service:weavine-default".to_string(),
+        EndpointAuth::User { user_id, .. } => user_id,
+        EndpointAuth::AnonymousDevice { install_id } => install_id,
+    };
     super::activation::record_activation_hook(&headers, pool.as_ref(), "voice").await;
 
     let mut audio_bytes: Option<Bytes> = None;

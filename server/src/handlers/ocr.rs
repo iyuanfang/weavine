@@ -7,7 +7,7 @@ use leptess::LepTess;
 use serde::Serialize;
 use std::sync::Arc;
 
-use super::auth::{extract_auth_with_device, extract_auth_with_service};
+use super::auth::{extract_endpoint_auth, EndpointAuth};
 
 fn tessdata_path() -> Option<std::path::PathBuf> {
     if let Ok(p) = std::env::var("TESSDATA_PREFIX") {
@@ -204,12 +204,10 @@ pub async fn extract_card(
     State(pool): State<Arc<sqlx::PgPool>>,
     mut form: Multipart,
 ) -> Result<axum::Json<OcrResult>, (StatusCode, String)> {
-    // Zero-friction auth: shared service key, else normal user auth. The
-    // service path uses a synthetic user id and never touches the DB.
-    let (_auth, _device_id) = match extract_auth_with_service(&headers) {
-        Ok(Some(uid)) => (uid, String::new()),
-        Ok(None) => extract_auth_with_device(&headers, pool.as_ref()).await?,
-        Err(e) => return Err(e),
+    let _auth = match extract_endpoint_auth(&headers, pool.as_ref()).await? {
+        EndpointAuth::ServiceKey => "service:weavine-default".to_string(),
+        EndpointAuth::User { user_id, .. } => user_id,
+        EndpointAuth::AnonymousDevice { install_id } => install_id,
     };
     super::activation::record_activation_hook(&headers, pool.as_ref(), "ocr").await;
 
