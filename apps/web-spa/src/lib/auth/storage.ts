@@ -1,6 +1,10 @@
 // Auth token storage for the web SPA.
 // Stores access + refresh JWTs in localStorage; cleared = logout.
 
+import { osStr, getOrCreateInstallId } from '../install-id';
+import pkg from '../../../package.json';
+
+const APP_VERSION = pkg.version;
 const ACCESS_KEY = 'weavine.access_token';
 const REFRESH_KEY = 'weavine.refresh_token';
 const USER_KEY = 'weavine.user_id';
@@ -69,7 +73,12 @@ export async function login(
     body: JSON.stringify({
       email,
       password,
-      device: { name: 'web', os: 'browser', app_version: '0.2.0' },
+      device: {
+        name: 'web',
+        os: osStr(),
+        app_version: APP_VERSION,
+        install_id: getOrCreateInstallId(),
+      },
     }),
   });
   if (!resp.ok) {
@@ -103,7 +112,12 @@ export async function register(
     body: JSON.stringify({
       email,
       password,
-      device: { name: 'web', os: 'browser', app_version: '0.2.0' },
+      device: {
+        name: 'web',
+        os: osStr(),
+        app_version: APP_VERSION,
+        install_id: getOrCreateInstallId(),
+      },
     }),
   });
   if (!resp.ok) {

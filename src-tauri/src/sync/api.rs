@@ -17,6 +17,7 @@ pub struct DeviceInfo {
     pub name: String,
     pub os: String,
     pub app_version: String,
+    pub install_id: String,
 }
 
 #[derive(Deserialize)]
@@ -114,6 +115,7 @@ pub async fn login(server_url: &str, email: &str, password: &str) -> anyhow::Res
             name: "Weavine Desktop".to_string(),
             os: std::env::consts::OS.to_string(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            install_id: crate::install_id::get_or_create(),
         },
     };
     let resp = c

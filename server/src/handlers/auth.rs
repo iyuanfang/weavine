@@ -40,6 +40,24 @@ pub struct DeviceInfo {
     pub name: String,
     pub os: String,
     pub app_version: String,
+    /// UUID v4 minted by the client on first launch and stored under
+    /// `<data_dir>/install_id`. The server uses this as the `device_id`
+    /// PK in the `devices` table so the same install can be tracked
+    /// across both anonymous cloud calls (install_activation) and
+    /// logged-in device rows (devices). Optional for backward
+    /// compatibility — when missing, the server falls back to a
+    /// freshly generated UUID.
+    #[serde(default)]
+    pub install_id: Option<String>,
+}
+
+fn device_id_from(info: &DeviceInfo) -> String {
+    info.install_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && s.len() <= 64)
+        .map(str::to_string)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
 }
 
 #[derive(Deserialize)]
@@ -368,7 +386,7 @@ pub async fn register(
     }
 
     let user_id = uuid::Uuid::new_v4().to_string();
-    let device_id = uuid::Uuid::new_v4().to_string();
+    let device_id = device_id_from(&body.device);
     let pwhash = hash(body.password.as_bytes(), DEFAULT_COST)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("hash: {e}")))?;
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
@@ -479,7 +497,7 @@ pub async fn login(
         return Err((StatusCode::UNAUTHORIZED, "邮箱或密码错误".into()));
     }
 
-    let device_id = uuid::Uuid::new_v4().to_string();
+    let device_id = device_id_from(&body.device);
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
     let mut tx = pool
