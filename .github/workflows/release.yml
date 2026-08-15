@@ -242,7 +242,7 @@ jobs:
       - name: Install Rust toolchain (stable) with Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+          targets: aarch64-linux-android
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -277,6 +277,39 @@ jobs:
             | base64 -d >> src-tauri/gen/android/app/build.gradle.kts
           echo "=== last 5 lines of patched build.gradle.kts ==="
           tail -5 src-tauri/gen/android/app/build.gradle.kts
+
+      - name: Inject splits.abi config to produce per-ABI APKs
+        run: |
+          set -euo pipefail
+          F=src-tauri/gen/android/app/build.gradle.kts
+          python3 - <<'PY'
+          import re, sys
+          p = 'src-tauri/gen/android/app/build.gradle.kts'
+          s = open(p).read()
+          if 'splits {' in s:
+              print('splits already present, skipping')
+              sys.exit(0)
+          anchor = '    buildFeatures {\n        buildConfig = true\n    }'
+          insert = (
+              '\n    splits {\n'
+              '        abi {\n'
+              '            isEnable = true\n'
+              '            reset()\n'
+              '            include("arm64-v8a")\n'
+              '            isUniversalApk = false\n'
+              '        }\n'
+              '    }'
+          )
+          if anchor not in s:
+              print('ERROR: buildFeatures anchor not found, refusing to patch')
+              print('--- file content ---')
+              print(s)
+              sys.exit(1)
+          s = s.replace(anchor, anchor + insert, 1)
+          open(p, 'w').write(s)
+          print('=== patched build.gradle.kts tail (last 30 lines) ===')
+          print('\n'.join(s.splitlines()[-30:]))
+          PY
 
       - name: Build Tauri Android APK
         id: build
@@ -335,25 +368,34 @@ jobs:
               -storepass android -keypass android \
               -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
           fi
-          UNSIGNED=$(find src-tauri/gen/android -name '*-release-unsigned.apk' 2>/dev/null | head -1)
-          if [ -n "$UNSIGNED" ]; then
-            echo "Signing $UNSIGNED with debug keystore"
-            BT="$ANDROID_HOME/build-tools/34.0.0"
-            "$BT/zipalign" -p -f 4 "$UNSIGNED" android-out/app-unsigned-aligned.apk
-            "$BT/apksigner" sign \
-              --ks ~/.android/debug.keystore \
-              --ks-pass pass:android \
-              --ks-key-alias androiddebugkey \
-              --key-pass pass:android \
-              --out android-out/Weavine_universal-release.apk \
-              android-out/app-unsigned-aligned.apk
-            "$BT/apksigner" verify android-out/Weavine_universal-release.apk && echo "Signature verified OK"
-            rm android-out/app-unsigned-aligned.apk
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          mapfile -t UNSIGNED < <(find src-tauri/gen/android -name '*-release-unsigned.apk' 2>/dev/null | sort)
+          if [ ${#UNSIGNED[@]} -gt 0 ]; then
+            echo "Found ${#UNSIGNED[@]} unsigned APK(s) to sign:"
+            printf '  %s\n' "${UNSIGNED[@]}"
+            for u in "${UNSIGNED[@]}"; do
+              # Extract ABI segment from filename: app-<abi>-release-unsigned.apk
+              # or app-universal-release-unsigned.apk -> 'universal'
+              fname=$(basename "$u")
+              ABI=$(echo "$fname" | sed -E 's|^app-(.+)-release-unsigned\.apk$|\1|')
+              OUT=android-out/Weavine_${ABI}-release.apk
+              echo "  ${ABI}: zipalign + apksigner -> $OUT"
+              "$BT/zipalign" -p -f 4 "$u" android-out/${ABI}-aligned.apk
+              "$BT/apksigner" sign \
+                --ks ~/.android/debug.keystore \
+                --ks-pass pass:android \
+                --ks-key-alias androiddebugkey \
+                --key-pass pass:android \
+                --out "$OUT" \
+                android-out/${ABI}-aligned.apk
+              "$BT/apksigner" verify "$OUT" && echo "    ${ABI}: signature verified OK"
+              rm -f android-out/${ABI}-aligned.apk
+            done
           else
             echo "No -release-unsigned.apk found; falling back to any *-release.apk"
-            mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*-release.apk' 2>/dev/null)
+            mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*-release.apk' 2>/dev/null | sort)
             if [ ${#FOUND_APKS[@]} -eq 0 ]; then
-              mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*.apk' 2>/dev/null)
+              mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*.apk' 2>/dev/null | sort)
             fi
             if [ ${#FOUND_APKS[@]} -eq 0 ]; then
               echo "ERROR: no APKs found anywhere under src-tauri/gen/android"
@@ -368,7 +410,6 @@ jobs:
               case "$apk" in
                 *-release.apk)
                   echo "Re-signing $apk with CI debug keystore for consistency"
-                  BT="$ANDROID_HOME/build-tools/34.0.0"
                   name=$(basename "$apk")
                   mv "android-out/$name" "android-out/$name.unsigned"
                   "$BT/zipalign" -p -f 4 "android-out/$name.unsigned" "android-out/$name.aligned"
