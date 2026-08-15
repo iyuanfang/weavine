@@ -29,7 +29,7 @@ fn tessdata_path() -> Option<std::path::PathBuf> {
 fn tess_langs() -> &'static str {
     match std::env::var("TESS_LANGS") {
         Ok(v) if !v.is_empty() => Box::leak(v.into_boxed_str()),
-        _ => "chi_sim+chi_tra+eng",
+        _ => "chi_sim+eng",
     }
 }
 
