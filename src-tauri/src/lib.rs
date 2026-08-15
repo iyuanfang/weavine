@@ -1,9 +1,11 @@
 pub mod boot_log;
 pub mod business;
 pub mod cadence;
+
 #[cfg(feature = "tauri")]
 pub mod commands;
 pub mod db;
+pub mod install_id;
 pub mod migration;
 pub mod models;
 pub mod project_template;

@@ -53,6 +53,11 @@ pub async fn recognize_voice(
             .header("X-Service-Key", &service_key)
             .bearer_auth(&service_key);
     }
+    req = req
+        .header("X-Install-Id", crate::install_id::get_or_create())
+        .header("X-Client-Platform", crate::install_id::platform_str())
+        .header("X-Client-OS", crate::install_id::os_str())
+        .header("X-App-Version", env!("CARGO_PKG_VERSION"));
 
     let resp = req
         .send()

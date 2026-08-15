@@ -1,4 +1,5 @@
 pub mod action;
+pub mod activation;
 pub mod api_key;
 pub mod archive;
 pub mod auth;

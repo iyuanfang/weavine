@@ -74,6 +74,8 @@ async fn main() {
         .route("/api/auth/refresh", post(handlers::auth::refresh))
         .route("/api/auth/logout", post(handlers::auth::logout))
         .route("/api/auth/me", get(handlers::auth::me))
+        // Activation tracking (anonymous, no auth required)
+        .route("/api/activation/ping", post(handlers::activation::ping))
         // Diagnostic
         .route("/api/diagnostic/user", get(handlers::diagnostic::user))
         .route("/api/diagnostic/startup", get(handlers::diagnostic::startup))

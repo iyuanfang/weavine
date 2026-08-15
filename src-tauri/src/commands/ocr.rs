@@ -52,7 +52,7 @@ pub async fn extract_card(
     db: State<'_, Database>,
     image_base64: String,
 ) -> Result<OcrResult, String> {
-    let (server_url, mut req) = {
+    let (server_url, req) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let url = config::get(&conn, config::KEY_SERVER_URL)
             .map_err(|e| e.to_string())?
@@ -75,6 +75,16 @@ pub async fn extract_card(
             (url, r)
         }
     };
+
+    let install_id = crate::install_id::get_or_create();
+    let platform = crate::install_id::platform_str();
+    let os = crate::install_id::os_str();
+    let app_version = env!("CARGO_PKG_VERSION").to_string();
+    let mut req = req
+        .header("X-Install-Id", &install_id)
+        .header("X-Client-Platform", platform)
+        .header("X-Client-OS", os)
+        .header("X-App-Version", app_version);
 
     let bytes = B64.decode(image_base64.as_bytes())
         .map_err(|e| format!("decode base64: {e}"))?;

@@ -211,6 +211,7 @@ pub async fn extract_card(
         Ok(None) => extract_auth_with_device(&headers, pool.as_ref()).await?,
         Err(e) => return Err(e),
     };
+    super::activation::record_activation_hook(&headers, pool.as_ref(), "ocr").await;
 
     let mut image_bytes: Option<Bytes> = None;
     while let Some(field) = form.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {

@@ -75,6 +75,7 @@ pub async fn recognize(
     mut form: Multipart,
 ) -> Result<axum::Json<RecognizeResult>, (StatusCode, String)> {
     let _auth = auth::extract_auth_service_or_user(&headers, pool.as_ref()).await?;
+    super::activation::record_activation_hook(&headers, pool.as_ref(), "voice").await;
 
     let mut audio_bytes: Option<Bytes> = None;
     while let Some(field) = form
