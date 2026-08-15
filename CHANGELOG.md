@@ -5,6 +5,45 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-08-15
+
+### Changed
+
+- **Per-install OCR/voice quota enforcement** — `install_activation`
+  gained `daily_ocr_count`, `daily_voice_count`, and `daily_reset_at`
+  columns. Anonymous-device-key calls (`POST /api/cards/extract`,
+  `POST /api/voice/recognize`) now check the quota and return
+  `429 daily ocr quota exceeded (count/limit)` once the per-day
+  cap is hit. User JWTs and `X-Service-Key` (dev/CI) bypass the cap.
+  Limits: FREE=20/day, TRIAL=50/day, PRO=1,000,000/day. Reset window
+  is a rolling 24 h after `daily_reset_at`. Auto-creates the
+  columns on first call so old activation rows from v1.0.3 still
+  work.
+- **Drop default `chi_tra` from OCR language set** — `tess_langs()`
+  default changed from `chi_sim+chi_tra+eng` to `chi_sim+eng`.
+  `chi_tra.traineddata` (57 MB) removed from
+  `/usr/share/tesseract/tessdata` on prod. Operators can still
+  load it via `TESS_LANGS=chi_sim+chi_tra+eng` if they need it.
+- **Monotonic merge for `reminder.dispatched` and `dismissed`** —
+  server-side `POST /api/sync/push` rewrite the `ON CONFLICT` clause
+  for the reminder table so dispatched/dismissed state is merged
+  with `OR` instead of last-writer-wins. Once a reminder fires on
+  any device, it stays fired on every device; once it is dismissed,
+  it stays dismissed. All other reminder columns still use plain
+  `EXCLUDED.col`.
+- **Per-ABI APK splits — 80 MB → ~20 MB** — Android build now emits
+  three APKs (arm64-v8a / armeabi-v7a / x86_64) instead of one
+  universal APK. The Rust toolchain target list in `release.yml` is
+  trimmed from 4 to 3 ABIs; the staging script signs all per-ABI
+  APKs and names them `Weavine_<abi>-release.apk`. Universal APK
+  is dropped (x86 already excluded since no real Android devices
+  ship that ABI). CI injects `splits { abi { ... } }` into
+  `build.gradle.kts` after the stable `buildFeatures { ... }` anchor
+  on every run; the patch is idempotent.
+  - arm64-v8a (most physical Android devices): ~22 MB
+  - armeabi-v7a (32-bit budget devices): ~17 MB
+  - x86_64 (emulator / Chromebook): ~21 MB
+
 ## [1.0.4] - 2026-08-15
 
 ### Changed
