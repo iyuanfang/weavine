@@ -5,6 +5,13 @@ use tauri::State;
 use crate::db::Database;
 use crate::sync::config;
 
+fn strip_data_url_prefix(s: &str) -> &str {
+    match s.find(',') {
+        Some(i) => s[i + 1..].trim_start(),
+        None => s,
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OcrFields {
     pub name: Option<String>,
@@ -86,7 +93,7 @@ pub async fn extract_card(
         .header("X-Client-OS", os)
         .header("X-App-Version", app_version);
 
-    let bytes = B64.decode(image_base64.as_bytes())
+    let bytes = B64.decode(strip_data_url_prefix(&image_base64).as_bytes())
         .map_err(|e| format!("decode base64: {e}"))?;
 
     let part = reqwest::multipart::Part::bytes(bytes)
@@ -123,7 +130,7 @@ pub async fn save_card_image(
         load_credentials(&conn)?
     };
 
-    let bytes = B64.decode(image_base64.as_bytes())
+    let bytes = B64.decode(strip_data_url_prefix(&image_base64).as_bytes())
         .map_err(|e| format!("decode base64: {e}"))?;
 
     let part = reqwest::multipart::Part::bytes(bytes)
