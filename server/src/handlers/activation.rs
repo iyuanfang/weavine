@@ -35,7 +35,7 @@ const MAX_VERSION_LEN: usize = 32;
 const MAX_OS_LEN: usize = 32;
 const MAX_PLATFORM_LEN: usize = 16;
 
-const FREE_DAILY_LIMIT: i32 = 20;
+const FREE_DAILY_LIMIT: i32 = 100;
 const TRIAL_DAILY_LIMIT: i32 = 50;
 const PRO_DAILY_LIMIT: i32 = 1_000_000;
 

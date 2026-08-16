@@ -69,7 +69,8 @@ pub async fn extract_card(
         (url, user_token, service_key)
     };
 
-    let mut req = reqwest::Client::new().post(&server_url);
+    let url = format!("{}/api/cards/extract", server_url.trim_end_matches('/'));
+    let mut req = reqwest::Client::new().post(&url);
     if let Some(tok) = user_token {
         req = req.bearer_auth(tok);
     } else if !service_key.is_empty() {
