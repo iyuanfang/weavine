@@ -44,6 +44,23 @@ pub fn set_service_key(conn: &Connection, value: &str) -> rusqlite::Result<()> {
     set(conn, KEY_SERVICE_KEY, value)
 }
 
+/// Built-in default server URL used when the user has not configured one
+/// (fresh install, before login). Self-hosters can override at build time
+/// via `WV_DEFAULT_SERVER_URL=<url>` passed to `cargo build`.
+pub fn default_server_url() -> &'static str {
+    option_env!("WV_DEFAULT_SERVER_URL").unwrap_or("https://weavine.financialagent.cc")
+}
+
+/// Resolve the effective server URL: stored value if non-empty, else the
+/// built-in default. Anonymous cloud paths (OCR / voice / activation ping)
+/// use this so they keep working before the user has logged in.
+pub fn effective_server_url(conn: &Connection) -> String {
+    match get(conn, KEY_SERVER_URL) {
+        Ok(Some(s)) if !s.is_empty() => s,
+        _ => default_server_url().to_string(),
+    }
+}
+
 /// Check whether the desktop has been linked to a cloud account.
 pub fn is_linked(conn: &Connection) -> rusqlite::Result<bool> {
     Ok(get(conn, KEY_SERVER_URL)?.is_some() && get(conn, KEY_ACCESS_TOKEN)?.is_some())

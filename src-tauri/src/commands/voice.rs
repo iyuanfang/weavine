@@ -29,9 +29,7 @@ pub async fn recognize_voice(
 ) -> Result<String, String> {
     let (server_url, service_key) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let url = config::get(&conn, config::KEY_SERVER_URL)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "未连接云端".to_string())?;
+        let url = config::effective_server_url(&conn);
         (url, load_service_key(&conn))
     };
 
@@ -52,15 +50,17 @@ pub async fn recognize_voice(
         req = req
             .header("X-Service-Key", &service_key)
             .bearer_auth(&service_key);
+    } else {
+        let k = crate::install_id::ensure_device_key_registered(&server_url)
+            .await
+            .ok_or_else(|| "未登录云端".to_string())?;
+        req = req.header("X-Device-Key", k);
     }
     req = req
         .header("X-Install-Id", crate::install_id::get_or_create())
         .header("X-Client-Platform", crate::install_id::platform_str())
         .header("X-Client-OS", crate::install_id::os_str())
         .header("X-App-Version", env!("CARGO_PKG_VERSION"));
-    if let Some(k) = crate::install_id::get_or_create_device_key() {
-        req = req.header("X-Device-Key", k);
-    }
 
     let resp = req
         .send()

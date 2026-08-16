@@ -52,43 +52,39 @@ pub async fn extract_card(
     db: State<'_, Database>,
     image_base64: String,
 ) -> Result<OcrResult, String> {
-    let (server_url, req) = {
+    let (server_url, user_token, service_key) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let url = config::get(&conn, config::KEY_SERVER_URL)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "未连接云端".to_string())?;
+        let url = config::effective_server_url(&conn);
         let user_token = config::get(&conn, config::KEY_ACCESS_TOKEN)
             .map_err(|e| e.to_string())?
             .filter(|s| !s.is_empty());
-        if let Some(tok) = user_token {
-            let r = reqwest::Client::new().post(&url).bearer_auth(tok);
-            (url, r)
-        } else {
-            let key = load_service_key(&conn);
-            if key.is_empty() {
-                return Err("未登录云端".to_string());
-            }
-            let r = reqwest::Client::new()
-                .post(&url)
-                .header("X-Service-Key", &key)
-                .bearer_auth(&key);
-            (url, r)
-        }
+        let service_key = load_service_key(&conn);
+        (url, user_token, service_key)
     };
+
+    let mut req = reqwest::Client::new().post(&server_url);
+    if let Some(tok) = user_token {
+        req = req.bearer_auth(tok);
+    } else if !service_key.is_empty() {
+        req = req
+            .header("X-Service-Key", &service_key)
+            .bearer_auth(&service_key);
+    } else {
+        let k = crate::install_id::ensure_device_key_registered(&server_url)
+            .await
+            .ok_or_else(|| "未登录云端".to_string())?;
+        req = req.header("X-Device-Key", k);
+    }
 
     let install_id = crate::install_id::get_or_create();
     let platform = crate::install_id::platform_str();
     let os = crate::install_id::os_str();
     let app_version = env!("CARGO_PKG_VERSION").to_string();
-    let device_key = crate::install_id::get_or_create_device_key();
-    let mut req = req
+    let req = req
         .header("X-Install-Id", &install_id)
         .header("X-Client-Platform", platform)
         .header("X-Client-OS", os)
         .header("X-App-Version", app_version);
-    if let Some(k) = device_key {
-        req = req.header("X-Device-Key", k);
-    }
 
     let bytes = B64.decode(image_base64.as_bytes())
         .map_err(|e| format!("decode base64: {e}"))?;
@@ -101,7 +97,6 @@ pub async fn extract_card(
         .text("kind", "card_image")
         .part("file", part);
 
-    let url = format!("{}/api/cards/extract", server_url.trim_end_matches('/'));
     let resp = req
         .multipart(form)
         .send()

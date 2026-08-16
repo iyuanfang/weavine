@@ -108,6 +108,42 @@ pub fn get_or_create_device_key() -> Option<String> {
     Some(k)
 }
 
+/// Synchronous anonymous activation: returns the cached server-minted
+/// `device_key` if available, otherwise hits `POST /api/activation/ping`
+/// and persists the server-issued key. Use this from cloud paths that
+/// must work on a brand-new install before the 5 s first-launch ping has
+/// completed — without it the server rejects anonymous calls (no
+/// `X-Device-Key` matches yet in `install_activation.device_key`).
+///
+/// Best-effort: on any failure (network, timeout, parse), returns
+/// `Option::None` and the caller should surface the underlying cloud
+/// error to the user.
+pub async fn ensure_device_key_registered(server_url: &str) -> Option<String> {
+    if let Some(k) = read_existing_device_key() {
+        return Some(k);
+    }
+    let install_id = get_or_create();
+    let url = format!("{}/api/activation/ping", server_url.trim_end_matches('/'));
+    let body = serde_json::json!({
+        "install_id": install_id,
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "os": os_str(),
+        "platform": platform_str(),
+    });
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .ok()?;
+    let text = resp.text().await.ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let k = v.get("device_key").and_then(|x| x.as_str())?;
+    save_device_key(k);
+    Some(k.to_string())
+}
+
 pub fn save_device_key(key: &str) {
     if key.is_empty() || key.len() > 64 {
         return;
@@ -133,13 +169,14 @@ pub fn os_str() -> &'static str {
         std::env::consts::OS
     }
 }
-
 /// Fires a single `POST /api/activation/ping` 5 seconds after `setup()` to
 /// register this install in the server's `install_activation` table, even
-/// if the user never uses a cloud feature. Skipped silently when no server
-/// URL is configured. Best-effort: any failure is logged and ignored. The
-/// response carries the device_key, which is persisted to
-/// `<data_dir>/device_key` for subsequent cloud calls.
+/// if the user never uses a cloud feature. Uses the effective server URL
+/// (stored value, or the built-in default for fresh installs) so anonymous
+/// OCR / voice callers can still obtain a `device_key` before login.
+/// Best-effort: any failure is logged and ignored. The response carries the
+/// device_key, which is persisted to `<data_dir>/device_key` for subsequent
+/// cloud calls.
 #[cfg(feature = "tauri")]
 pub fn spawn_first_launch_ping(app: tauri::AppHandle) {
     use tauri::Manager;
@@ -152,10 +189,7 @@ pub fn spawn_first_launch_ping(app: tauri::AppHandle) {
             Ok(c) => c,
             Err(_) => return,
         };
-        match crate::sync::config::get(&conn, crate::sync::config::KEY_SERVER_URL) {
-            Ok(Some(s)) if !s.is_empty() => s,
-            _ => return,
-        }
+        crate::sync::config::effective_server_url(&conn)
     };
     let url = format!("{}/api/activation/ping", server_url.trim_end_matches('/'));
     let install_id = get_or_create();
