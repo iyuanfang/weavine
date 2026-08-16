@@ -5,6 +5,45 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2026-08-16
+
+### Fixed
+
+- **OCR 405 Method Not Allowed on Windows v1.0.7** —
+  `src-tauri/src/commands/ocr.rs::extract_card` was POSTing to
+  the bare `server_url` (e.g. `https://weavine.financialagent.cc`)
+  instead of `https://weavine.financialagent.cc/api/cards/extract`.
+  nginx's default root route only accepts GET, so the multipart
+  POST was rejected with `405 Method Not Allowed` and the OCR
+  call surfaced as
+  `ocr failed (405): <html>nginx/1.28.2`. The fix routes through
+  `format!("{}/api/cards/extract", server_url.trim_end_matches('/'))`
+  — same pattern `recognize_voice` and `save_card_image` already
+  use. Verified locally with `cargo check -p weavine` (clean,
+  only pre-existing warnings).
+
+### Changed
+
+- **Removed `使用云端语音` toggle on Windows desktop Tauri** —
+  `apps/web-spa/src/components/QuickCapture.tsx` no longer shows
+  the cloud-voice checkbox. Windows Tauri now always uses the
+  Edge WebView2 native `webkitSpeechRecognition` (Microsoft STT,
+  free, offline-capable). Only Android Tauri continues to use
+  cloud whisper (forced — `isAndroidTauri()` returns true there
+  and the Android WebView's webkitSpeechRecognition is
+  broken-by-design per `apps/web-spa/src/lib/voice.ts:28-30`).
+  Removed: `USE_CLOUD_VOICE_KEY` localStorage key, `useCloudVoice`
+  state, the checkbox row, and `showCloudToggle` conditional.
+  Browser standalone mode is unaffected (always used Web Speech
+  API).
+- **`FREE_DAILY_LIMIT` 20 → 100** — per-install OCR + voice
+  quota for the FREE plan is now 100 calls/day. `TRIAL_DAILY_LIMIT`
+  stays at 50, `PRO_DAILY_LIMIT` stays at 1,000,000. User JWTs and
+  `X-Service-Key` continue to bypass the cap. The quota check
+  lives in `server/src/handlers/activation.rs::check_and_bump_quota`
+  and is enforced by `extract_card` and `recognize_voice` only
+  on the anonymous device-key path.
+
 ## [1.0.7] - 2026-08-16
 
 ### Added
