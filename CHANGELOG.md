@@ -5,6 +5,29 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2026-08-16
+
+### Added
+
+- **Re-OCR an existing contact from the detail page** — the
+  contact detail page (`/contacts/:id`) now has a `📷 重新拍名片`
+  button in the top action bar. Clicking it opens a modal that
+  reuses the existing `CardScanner` component, runs OCR on a new
+  card photo, and shows a per-field confirmation form
+  (`RescanCardModal`) listing each parsed field next to its
+  current value (`当前：xxx / 新值：yyy`). Default all checked;
+  unchecking a row keeps the existing value. On confirm, the
+  contact is patched via `PUT /api/contacts/:id` with only the
+  picked fields and the new image is uploaded via
+  `POST /api/media` with `kind=card_image`. Existing card images
+  are kept (the upload adds a new row, never replaces in place),
+  so the previous scan stays in the history.
+  - Server is unchanged: `PUT /api/contacts/:id` already accepts
+    partial updates (`server/src/handlers/contact.rs:203` builds
+    the UPDATE clause dynamically from present JSON fields), and
+    `POST /api/media` already accepts `kind=card_image` against
+    any `owner_id`.
+
 ## [1.0.6] - 2026-08-15
 
 ### Fixed
