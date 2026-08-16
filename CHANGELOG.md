@@ -5,6 +5,37 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-08-15
+
+### Fixed
+
+- **Windows fresh-install OCR / voice "未连接云端"** — the Tauri
+  desktop binary previously read `KEY_SERVER_URL` from the local
+  SQLite `config` table only, so a brand-new install with no login
+  would fail OCR (`commands/ocr.rs::extract_card`) and voice
+  (`commands/voice.rs::recognize_voice`) with `未连接云端` until the
+  user logged in via Settings. The web SPA already hard-coded
+  `https://weavine.financialagent.cc` as a default; the desktop
+  binary now does the same.
+  - `sync/config.rs` gained `default_server_url()` (reads
+    `option_env!("WV_DEFAULT_SERVER_URL")` for self-host builds,
+    falls back to `https://weavine.financialagent.cc`) and
+    `effective_server_url(conn)` (stored value or default).
+  - `install_id.rs::spawn_first_launch_ping` now uses
+    `effective_server_url` so the first-launch activation ping
+    still fires on a fresh install.
+- **First-launch `device_key` 5 s race** — the previous
+  `spawn_first_launch_ping` waited 5 s before POSTing
+  `/api/activation/ping`. Any OCR / voice call inside that window
+  sent a client-minted `X-Device-Key` the server didn't recognize,
+  and the server rejected it with `401 anonymous device not
+  registered`. The desktop commands now call a new
+  `install_id::ensure_device_key_registered(server_url)` on the
+  anonymous path, which posts to `/api/activation/ping`
+  synchronously and persists the server-issued `device_key` to
+  `<data_dir>/device_key` before continuing. Subsequent calls in
+  the same session reuse the persisted key.
+
 ## [1.0.5] - 2026-08-15
 
 ### Changed
