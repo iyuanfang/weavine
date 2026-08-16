@@ -28,7 +28,7 @@ pub async fn parse(
 
     let contacts: Vec<Contact> = if !req.contact_names.is_empty() {
         sqlx::query_as::<_, Contact>(
-            "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, \
+            "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
              notes, importance, last_interaction_at, created_at, updated_at, \
              avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, \
              avatar_height::BIGINT AS avatar_height, avatar_alt_text \
