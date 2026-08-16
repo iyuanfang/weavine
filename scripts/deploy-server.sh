@@ -62,7 +62,7 @@ deploy() {
                 tesseract-langpack-chi_sim tesseract-langpack-eng 2>&1 | tail -3
         # TESSDATA_PREFIX tells leptess where to find .traineddata.
         export TESSDATA_PREFIX=/usr/share/tesseract/tessdata
-        echo "tessdata: $(ls $TESSDATA_PREFIX/*.traineddata 2>/dev/null | xargs -n1 basename | tr "\n" " ")"
+        ls \$TESSDATA_PREFIX/*.traineddata 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ' | sed 's/^/tessdata: /' || echo 'tessdata: (none)'
         ffmpeg -version 2>&1 | head -1
         # whisper tiny model (~75 MB, Apache-2.0). Idempotent.
         bash $REPO_REMOTE/scripts/install-whisper-model.sh
