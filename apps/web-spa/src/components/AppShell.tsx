@@ -164,7 +164,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }}
           >
             <span>
-              📦 <strong>v1.0.8 新增</strong>：名片 OCR 扫描、语音输入、更新联系人头像、增加快速记录等。
+              📦 <strong>v1.0.8 新增</strong>：名片 OCR 扫描、语音输入、联系人头像、快速记录等。
             </span>
             <button
               type="button"
