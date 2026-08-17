@@ -29,5 +29,5 @@ use crate::auth_keys::Keys;
 pub static JWT_KEYS: OnceLock<Keys> = OnceLock::new();
 
 pub fn now_str() -> String {
-    chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string()
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }

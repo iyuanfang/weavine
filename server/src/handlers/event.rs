@@ -11,8 +11,8 @@ use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Event;
 
 /// Compute the RFC3339 trigger time for an event reminder:
-/// `trigger_at = start_at - lead_minutes`. Accepts RFC3339 or the
-/// space-separated `%Y-%m-%d %H:%M:%S` format used by `now_str()`.
+/// `trigger_at = start_at - lead_minutes`. Accepts RFC3339 (clients)
+/// or legacy space-separated `%Y-%m-%d %H:%M:%S` input.
 fn compute_trigger_at(start_at: &str, lead_minutes: i32) -> Option<String> {
     if lead_minutes <= 0 {
         return None;

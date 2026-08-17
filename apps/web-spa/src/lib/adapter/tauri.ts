@@ -68,7 +68,7 @@ import type {
 type UserIdPayload = { user_id?: string | null; [k: string]: unknown };
 
 export class TauriAdapter implements PRMAdapter {
-  baseUrl = '';
+  baseUrl = 'files://localhost';
   private userIdReady: Promise<string>;
 
   constructor() {

@@ -120,6 +120,39 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(database)
+        .register_uri_scheme_protocol("files", |_ctx, request| {
+            use tauri::http::{Response, StatusCode};
+            let path = request.uri().path().to_string();
+            let key = path.trim_start_matches("/files/");
+            let Ok(base) = commands::media::data_dir() else {
+                return Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Vec::new())
+                    .unwrap();
+            };
+            let full = base.join(key);
+            // Guard against path traversal: resolved path must stay under base.
+            if !full.starts_with(&base) {
+                return Response::builder()
+                    .status(StatusCode::FORBIDDEN)
+                    .body(Vec::new())
+                    .unwrap();
+            }
+            match std::fs::read(&full) {
+                Ok(bytes) => {
+                    let ext = full.extension().and_then(|e| e.to_str()).unwrap_or("");
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header("Content-Type", commands::media::mime_from_ext(ext))
+                        .body(bytes)
+                        .unwrap()
+                }
+                Err(_) => Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Vec::new())
+                    .unwrap(),
+            }
+        })
         .setup(|app| {
             install_id::spawn_first_launch_ping(app.handle().clone());
             #[cfg(desktop)]

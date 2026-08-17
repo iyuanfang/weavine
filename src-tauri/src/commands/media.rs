@@ -16,7 +16,7 @@ pub struct AvatarResult {
     pub data_url: String,
 }
 
-fn data_dir() -> Result<PathBuf, String> {
+pub(crate) fn data_dir() -> Result<PathBuf, String> {
     let dir = dirs::data_dir().ok_or_else(|| "no data dir".to_string())?;
     let p = dir.join("Weavine").join("avatars");
     fs::create_dir_all(&p).map_err(|e| e.to_string())?;
@@ -50,6 +50,16 @@ fn ext_from_mime(mime: &str) -> &'static str {
         "image/webp" => "webp",
         "image/gif" => "gif",
         _ => "bin",
+    }
+}
+
+pub(crate) fn mime_from_ext(ext: &str) -> &'static str {
+    match ext.to_ascii_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "application/octet-stream",
     }
 }
 
@@ -135,7 +145,7 @@ fn upsert_media(
             |r| Ok((r.get(0)?,)),
         )
         .ok();
-    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     if let Some((id,)) = existing {
         conn.execute(
             "UPDATE \"Media\" SET mime=?1, size_bytes=?2, sha256=?3, filename=?4, storage_key=?5, updated_at=?6 \
@@ -201,6 +211,16 @@ pub fn upload_avatar(
         Some(&storage_key),
         &storage_key,
     )?;
+    // Mirror the server-side sync_contact_avatar trigger: the avatar Media
+    // row must be reflected on Contact so the contact list/detail render
+    // the image (avatarUrlFor reads contact.avatar_storage_key).
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    conn.execute(
+        "UPDATE \"Contact\" SET avatar_storage_key=?1, avatar_mime=?2, updated_at=?3 \
+         WHERE id=?4",
+        params![&storage_key, &mime, &now, &contact_id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(AvatarResult {
         media,
         data_url: data_url,
@@ -223,7 +243,8 @@ pub fn get_avatar(
         )
         .ok();
     let Some((filename,)) = row else { return Ok(None) };
-    let path = data_dir()?.join(&user_id).join(&filename);
+    // The Media.filename column stores the full storage_key (see upsert_media).
+    let path = data_dir()?.join(&filename);
     let bytes = fs::read(&path).map_err(|e| e.to_string())?;
     let mime = match path.extension().and_then(|s| s.to_str()) {
         Some("png") => "image/png",
@@ -257,10 +278,17 @@ pub fn delete_avatar(
     let Some((storage_key,)) = row else { return Ok(()) };
     let path = data_dir()?.join(&storage_key);
     let _ = fs::remove_file(&path);
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     conn.execute(
-        "UPDATE \"Media\" SET deleted_at = datetime('now') WHERE user_id=?1 \
-         AND kind='avatar' AND owner_type='contact' AND owner_id=?2",
-        params![&user_id, &contact_id],
+        "UPDATE \"Media\" SET deleted_at = ?1 WHERE user_id=?2 \
+         AND kind='avatar' AND owner_type='contact' AND owner_id=?3",
+        params![&now, &user_id, &contact_id],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE \"Contact\" SET avatar_storage_key=NULL, avatar_mime=NULL, updated_at=?1 \
+         WHERE id=?2",
+        params![&now, &contact_id],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -333,9 +361,10 @@ pub fn delete_media(
     let Some((storage_key,)) = row else { return Ok(()) };
     let path = data_dir()?.join(&storage_key);
     let _ = fs::remove_file(&path);
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     conn.execute(
-        "UPDATE \"Media\" SET deleted_at = datetime('now') WHERE id=?1",
-        params![&media_id],
+        "UPDATE \"Media\" SET deleted_at = ?1 WHERE id=?2",
+        params![&now, &media_id],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
