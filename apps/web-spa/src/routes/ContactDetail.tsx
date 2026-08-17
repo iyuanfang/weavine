@@ -230,6 +230,8 @@ export function ContactDetail() {
           display: 'flex',
           alignItems: 'center',
           gap: 20,
+          flexWrap: 'wrap',
+          rowGap: 16,
         }}
       >
         <div
@@ -282,7 +284,7 @@ export function ContactDetail() {
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}>
           <Link to={back.href} className="btn btn-ghost">
             {back.label}
           </Link>
