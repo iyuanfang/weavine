@@ -17,7 +17,8 @@ pub struct AvatarResult {
 }
 
 pub(crate) fn data_dir() -> Result<PathBuf, String> {
-    let dir = dirs::data_dir().ok_or_else(|| "no data dir".to_string())?;
+    let dir = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from(".").join("com.weavine.desktop"));
     let p = dir.join("Weavine").join("avatars");
     fs::create_dir_all(&p).map_err(|e| e.to_string())?;
     Ok(p)

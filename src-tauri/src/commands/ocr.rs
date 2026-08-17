@@ -126,10 +126,40 @@ pub async fn save_card_image(
     contact_id: String,
     image_base64: String,
 ) -> Result<serde_json::Value, String> {
-    let (server_url, token) = {
+    let (server_url, user_token, service_key) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        load_credentials(&conn)?
+        let url = config::effective_server_url(&conn);
+        let user_token = config::get(&conn, config::KEY_ACCESS_TOKEN)
+            .map_err(|e| e.to_string())?
+            .filter(|s| !s.is_empty());
+        let service_key = load_service_key(&conn);
+        (url, user_token, service_key)
     };
+
+    let url = format!("{}/api/media", server_url.trim_end_matches('/'));
+    let mut req = reqwest::Client::new().post(&url);
+    if let Some(tok) = user_token {
+        req = req.bearer_auth(tok);
+    } else if !service_key.is_empty() {
+        req = req
+            .header("X-Service-Key", &service_key)
+            .bearer_auth(&service_key);
+    } else {
+        let k = crate::install_id::ensure_device_key_registered(&server_url)
+            .await
+            .ok_or_else(|| "未登录云端".to_string())?;
+        req = req.header("X-Device-Key", k);
+    }
+
+    let install_id = crate::install_id::get_or_create();
+    let platform = crate::install_id::platform_str();
+    let os = crate::install_id::os_str();
+    let app_version = env!("CARGO_PKG_VERSION").to_string();
+    let req = req
+        .header("X-Install-Id", &install_id)
+        .header("X-Client-Platform", platform)
+        .header("X-Client-OS", os)
+        .header("X-App-Version", app_version);
 
     let bytes = B64.decode(strip_data_url_prefix(&image_base64).as_bytes())
         .map_err(|e| format!("decode base64: {e}"))?;
@@ -144,10 +174,7 @@ pub async fn save_card_image(
         .text("owner_id", contact_id)
         .part("file", part);
 
-    let url = format!("{}/api/media", server_url.trim_end_matches('/'));
-    let resp = reqwest::Client::new()
-        .post(&url)
-        .bearer_auth(&token)
+    let resp = req
         .multipart(form)
         .send()
         .await
