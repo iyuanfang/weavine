@@ -343,3 +343,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New tables columns `archivedAt` on `Action`, `Event`, `"Project"` with matching indexes (idempotent migration).
 - New module `business/archive_sweep.rs` + `handlers/archive.rs` + `/api/archive/{summary,counts,list,unarchive-one,bulk-unarchive}` endpoints.
 - Tauri `search` command signature extended with `include_archived: Option<bool>` (default `true`).
+
+## [1.0.15] - 2026-08-17
+
+### Fixed
+
+- **Android v1.0.14 安装即闪退** — v1.0.14 新增的 `MainActivity.kt` Kotlin 补丁试图用 `setWebViewClient` + `setWebChromeClient` 拦截 `onShowFileChooser`，但 wry 0.55.1 在 `android_setup` 阶段（`main_pipe.rs:288`）已经用自身的 `RustWebChromeClient` 注册了 chrome client；后注册的回调被覆盖。同时 wry 在 `WryActivity.onCreate` 之外二次创建 `RustWebChromeClient` 会触发 `registerForActivityResult` → `IllegalStateException: LifecycleOwners must call register before they are STARTED`（wry `mod.rs:134` 注释明确警告）。结果：v1.0.14 APK 启动时 100% 闪退。v1.0.15 完全移除 Kotlin 补丁，回退到 wry 默认行为；OEM 麦克风权限修复需要 fork wry 源码，超出当前范围，临时搁置。
+- 同步清理：删除 `src-tauri/android-patch/` 整个目录；删除 `release.yml` 中 `cp MainActivity.kt` 步骤，替换为 `Verify default MainActivity is in place`（仅校验 wry 默认产物存在）。`release.yml` 的 `frontendDist` 与 `RECORD_AUDIO` 两个 sed 注释块保留不动。
+
+## [1.0.14] - 2026-08-17
+
+### ⚠️ 此版本 Android 安装即闪退，请跳过 — 使用 v1.0.15。
+
+### Fixed
+
+- **Android 头像保存 "no data dir"** (`0d62983`) — `commands/media.rs::data_dir()` 调 `dirs::data_dir()`，Android 上 Tauri 未设置 `XDG_DATA_HOME`，返回 `None`。改为 `lib.rs::dirs_data_dir_fallback` 同样的回退（`<cwd>/com.weavine.desktop`）。
+- **Android 麦克风权限没有系统对话框** (`0d62983`) — `WebChromeClient` 在 wry 创建时被覆盖，权限请求进不到 OEM 默认路径。引入 `MainActivity.kt` Kotlin 补丁 + `release.yml` 拷贝步骤 — **但补丁与 wry 0.55.1 的 `RustWebChromeClient` 初始化时序冲突（见 v1.0.15）**，因此该 fix 在用户设备上失败；正式修复在 v1.0.15。
+
+## [1.0.13] - 2026-08-17
+
+### Fixed
+
+- **Windows 编辑联系人 → 重新 OCR → 确认更新 报错"未连接云端"** — `commands/ocr.rs::save_card_image` 走 `load_credentials()`（需要 `KEY_SERVER_URL` + `KEY_ACCESS_TOKEN` 同时存在），但匿名 device_key 路径缺失，与 `extract_card` 的 fallback 链不对齐。改为统一鉴权链：user_token → service_key → device_key，与 `extract_card` 行为一致。
+- **Windows 头像更换 不报错但头像没变** — `lib/avatarUrl.ts` 改为 `avatarUrlFor(key)` 生成 `<src>?v=<hash>` cache buster；storage_key 每次上传本就不同（`{sha16}-{uuid}.ext`），因此这是 belt-and-suspenders，主要防御 CDN/proxy 缓存命中。
+- **Android "无法访问麦克风；请在系统设置中授予应用麦克风权限" — 没有系统权限对话框** — `cargo tauri android init` 在 CI 每次重新生成 `AndroidManifest.xml`，v1.0.12 的 `RECORD_AUDIO` 编辑被清掉。改用 `release.yml` 注入 `sed` 步骤（与现有 `build.gradle.kts` 补丁同样的模式）。
+- **Android 更换头像 最后报错 "no data dir"** — 同 v1.0.14 root cause，`commands/media.rs` 加 Android fallback。
