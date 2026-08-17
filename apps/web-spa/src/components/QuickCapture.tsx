@@ -133,7 +133,11 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
 
   const submit = async () => {
     const trimmed = text.trim();
-    if (!trimmed || !userId) return;
+    if (!trimmed) return;
+    if (!userId) {
+      setError('本地用户尚未就绪，请稍候再试');
+      return;
+    }
     try {
       const p = parsed ?? (await parseQuick(trimmed, contactNames, userId));
       const summary = p.summary || trimmed;

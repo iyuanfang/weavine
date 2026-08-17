@@ -4,6 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { TagPicker } from '../components/TagPicker';
+import { RescanCardModal } from '../components/RescanCardModal';
+import type { ScannedFields } from '../components/CardScanner';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import {
@@ -38,6 +40,7 @@ export function ContactEdit() {
   const [importance, setImportance] = useState<Importance>(DEFAULT_IMPORTANCE);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [rescanOpen, setRescanOpen] = useState(false);
 
   useEffect(() => {
     if (contactQuery.data && !hydrated) {
@@ -65,6 +68,36 @@ export function ContactEdit() {
       navigate('/contacts');
     },
   });
+
+
+  const handleRescanConfirm = async (input: {
+    picked: Partial<Record<'name' | 'company' | 'title' | 'email' | 'phone' | 'address', boolean>>;
+    scanned: ScannedFields;
+    file: File | null;
+  }) => {
+    const { picked, scanned, file } = input;
+    if (picked.name && scanned.name) setName(scanned.name);
+    if (picked.company && scanned.company) setCompany(scanned.company);
+    if (picked.title && scanned.title) setTitle(scanned.title);
+    if (picked.email && scanned.email) setEmail(scanned.email);
+    if (picked.phone && scanned.phone && scanned.phone.length > 0) {
+      setPhone(scanned.phone.join(' / '));
+    }
+    if (picked.address && scanned.address) setAddress(scanned.address);
+    if (file) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await adapter.media.upload({
+        kind: 'card_image',
+        owner_type: 'contact',
+        owner_id: id,
+        bytes,
+        mime: file.type || 'image/png',
+        filename: file.name || 'card.png',
+      });
+      await queryClient.invalidateQueries({ queryKey: ['media', 'card_image', 'contact', id] });
+    }
+    setRescanOpen(false);
+  };
 
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -118,7 +151,17 @@ export function ContactEdit() {
 
       <form onSubmit={handleSubmit}>
         <section className="section">
-          <h2 className="section__title">基本信息</h2>
+          <div className="section__header">
+            <h2 className="section__title">基本信息</h2>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setRescanOpen(true)}
+              data-testid="contact-rescan-btn"
+            >
+              📷 重新拍名片
+            </button>
+          </div>
           <div className="card" style={{ marginTop: 10 }}>
             <div style={{ display: 'grid', gap: 14 }}>
               <div>
@@ -254,6 +297,14 @@ export function ContactEdit() {
           </button>
         </div>
       </form>
+
+      {rescanOpen && contactQuery.data && (
+        <RescanCardModal
+          contact={contactQuery.data}
+          onClose={() => setRescanOpen(false)}
+          onConfirm={handleRescanConfirm}
+        />
+      )}
     </div>
   );
 }

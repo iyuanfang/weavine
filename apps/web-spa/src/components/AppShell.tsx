@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 import { isTauri } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
@@ -27,9 +27,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading: userLoading } = useLocalUser();
   const { open: openQuickCapture } = useQuickCapture();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [showArchiveTip, setShowArchiveTip] = useState(() => {
+  const [showReleaseTip, setShowReleaseTip] = useState(() => {
     if (typeof localStorage === 'undefined') return false;
-    return localStorage.getItem('archive-tip-dismissed') !== '1';
+    return localStorage.getItem('v108-tip-dismissed') !== '1';
   });
 
   useEffect(() => {
@@ -146,7 +146,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="app-shell__main">
-        {showArchiveTip && (
+        {showReleaseTip && (
           <div
             className="card"
             role="note"
@@ -164,19 +164,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             }}
           >
             <span>
-              📦 <strong>v0.1.7 新增 自动归档</strong>。
-              已完成超过 1 天的待办、已结束的日程、收尾超过 7 天的项目会自动归档到
-              <Link to="/archive" style={{ marginLeft: 4 }}>
-                /archive
-              </Link>
-              。
+              📦 <strong>v1.0.8 新增</strong>：名片 OCR 扫描、语音输入、更新联系人头像等。
             </span>
             <button
               type="button"
               className="btn btn-sm"
               onClick={() => {
-                localStorage.setItem('archive-tip-dismissed', '1');
-                setShowArchiveTip(false);
+                localStorage.setItem('v108-tip-dismissed', '1');
+                setShowReleaseTip(false);
               }}
               aria-label="关闭提示"
               style={{ flexShrink: 0 }}

@@ -8,8 +8,6 @@ import { Avatar } from '../components/Avatar';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { AvatarViewModal } from '../components/AvatarViewModal';
 import { CardImageViewModal } from '../components/CardImageViewModal';
-import { RescanCardModal } from '../components/RescanCardModal';
-import type { ScannedFields } from '../components/CardScanner';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import { avatarUrlFor } from '../lib/avatarUrl';
@@ -99,7 +97,6 @@ export function ContactDetail() {
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const [viewingCard, setViewingCard] = useState(false);
-  const [rescanOpen, setRescanOpen] = useState(false);
 
   const cardImages: MediaItem[] = cardImagesQuery.data ?? [];
   const cardImageUrl = (m: MediaItem) =>
@@ -143,45 +140,6 @@ export function ContactDetail() {
     }
   };
 
-  const handleRescanConfirm = async (input: {
-    picked: Partial<Record<'name' | 'company' | 'title' | 'email' | 'phone' | 'address', boolean>>;
-    scanned: ScannedFields;
-    file: File | null;
-  }) => {
-    const { picked, scanned, file } = input;
-    const patch: Record<string, string | null> = {};
-    if (picked.name && scanned.name) patch.name = scanned.name;
-    if (picked.company && scanned.company) patch.company = scanned.company;
-    if (picked.title && scanned.title) patch.title = scanned.title;
-    if (picked.email && scanned.email) patch.email = scanned.email;
-    if (picked.phone && scanned.phone && scanned.phone.length > 0) {
-      patch.phone = scanned.phone.join(' / ');
-    }
-    if (picked.address && scanned.address) patch.address = scanned.address;
-
-    if (Object.keys(patch).length === 0 && !file) {
-      throw new Error('请至少选择一个字段或换一张名片图片');
-    }
-
-    if (Object.keys(patch).length > 0) {
-      await adapter.contacts.update({ id, ...patch });
-    }
-    if (file) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await adapter.media.upload({
-        kind: 'card_image',
-        owner_type: 'contact',
-        owner_id: id,
-        bytes,
-        mime: file.type || 'image/png',
-        filename: file.name || 'card.png',
-      });
-    }
-    await queryClient.invalidateQueries({ queryKey: ['contact', id] });
-    await queryClient.invalidateQueries({ queryKey: ['media', 'card_image', 'contact', id] });
-    setRescanOpen(false);
-  };
-
   if (contactQuery.isLoading) {
     return <div className="loading">加载中</div>;
   }
@@ -221,6 +179,10 @@ export function ContactDetail() {
     try {
       const bytes = new Uint8Array(await blob.arrayBuffer());
       console.log('[avatar-upload] blob type=', blob.type, 'size=', bytes.byteLength, 'contact=', contact.id);
+      if (bytes.byteLength === 0) {
+        setAvatarError('裁剪结果为空，请重新选择图片');
+        return;
+      }
       const resp = await adapter.media.upload({
         kind: 'avatar',
         owner_type: 'contact',
@@ -233,7 +195,9 @@ export function ContactDetail() {
       await queryClient.invalidateQueries({ queryKey: ['contact', contact.id] });
     } catch (err) {
       console.error('avatar upload failed', err);
-      setAvatarError(err instanceof Error ? err.message : '头像上传失败');
+      // Tauri v2 rejects with the raw Rust error string (not an Error
+      // instance) — surface it so the real cause is visible.
+      setAvatarError(err instanceof Error ? err.message : String(err));
     } finally {
       setAvatarUploading(false);
     }
@@ -339,14 +303,6 @@ export function ContactDetail() {
           <Link to={`/contacts/${id}/graph`} className="btn btn-secondary" data-testid="contact-graph-link">
             🕸️ 关系图
           </Link>
-          <button
-            type="button"
-            onClick={() => setRescanOpen(true)}
-            className="btn btn-secondary"
-            data-testid="contact-rescan-btn"
-          >
-            📷 重新拍名片
-          </button>
           <Link
             to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
             className="btn btn-secondary"
@@ -564,14 +520,6 @@ export function ContactDetail() {
           file={cropFile}
           onCancel={() => setCropFile(null)}
           onConfirm={onCropConfirm}
-        />
-      )}
-
-      {rescanOpen && (
-        <RescanCardModal
-          contact={contact}
-          onClose={() => setRescanOpen(false)}
-          onConfirm={handleRescanConfirm}
         />
       )}
     </div>
