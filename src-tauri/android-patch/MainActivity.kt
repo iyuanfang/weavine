@@ -13,6 +13,7 @@ import android.webkit.JsResult
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebChromeClient.CustomViewCallback
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
@@ -99,7 +100,7 @@ private class WeavineWebChromeClient(
     delegate.onPermissionRequest(request)
   }
 
-  override fun onShowCustomView(view: View, callback: android.webkit.CustomViewCallback) {
+  override fun onShowCustomView(view: View, callback: CustomViewCallback) {
     delegate.onShowCustomView(view, callback)
   }
 
@@ -134,7 +135,7 @@ private class WeavineWebChromeClient(
 
   override fun onShowFileChooser(
     webView: WebView,
-    filePathCallback: ValueCallback<Array<Uri>>,
+    filePathCallback: ValueCallback<Array<Uri?>?>,
     fileChooserParams: android.webkit.WebChromeClient.FileChooserParams
   ): Boolean {
     return delegate.onShowFileChooser(webView, filePathCallback, fileChooserParams)
