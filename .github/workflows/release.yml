@@ -295,6 +295,22 @@ jobs:
             head -10 "$MANIFEST"
           fi
 
+      - name: Patch MainActivity with mic-permission short-circuit
+        # `cargo tauri android init` regenerates MainActivity.kt from the
+        # template. We swap in src-tauri/android-patch/MainActivity.kt which
+        # subclasses RustWebChromeClient and short-circuits
+        # onPermissionRequest: when RECORD_AUDIO is already granted at the
+        # system level (e.g. after the user's first grant), we call
+        # request.grant() synchronously instead of going through
+        # permissionLauncher.launch(). The latter races on some OEM WebViews
+        # and ends up calling grant() after the listener slot is clobbered,
+        # so getUserMedia() then fails with NotAllowedError.
+        run: |
+          DEST=src-tauri/gen/android/app/src/main/java/com/weavine/desktop/MainActivity.kt
+          cp src-tauri/android-patch/MainActivity.kt "$DEST"
+          echo "=== patched MainActivity.kt (head 5) ==="
+          head -5 "$DEST"
+
       - name: Build Tauri Android APK (arm64-v8a only)
         id: build
         run: |

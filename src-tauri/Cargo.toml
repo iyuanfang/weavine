@@ -1,6 +1,6 @@
 [package]
 name = "weavine"
-version = "1.0.13"
+version = "1.0.14"
 edition = "2021"
 default-run = "weavine"
 license = "AGPL-3.0"

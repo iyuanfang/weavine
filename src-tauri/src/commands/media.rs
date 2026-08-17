@@ -17,11 +17,72 @@ pub struct AvatarResult {
 }
 
 pub(crate) fn data_dir() -> Result<PathBuf, String> {
-    let dir = dirs::data_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from(".").join("com.weavine.desktop"));
-    let p = dir.join("Weavine").join("avatars");
-    fs::create_dir_all(&p).map_err(|e| e.to_string())?;
-    Ok(p)
+    let base = media_base_dir();
+    fs::create_dir_all(&base).map_err(|e| format!("create {}: {e}", base.display()))?;
+    Ok(base)
+}
+
+// Mirrors db::get_db_path() so the files:// protocol handler and upload
+// resolve to the same directory tree.
+fn media_base_dir() -> PathBuf {
+    #[cfg(target_os = "android")]
+    {
+        std::env::var("HOME")
+            .ok()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/data/user/0"))
+            .join("com.weavine.desktop")
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        dirs::data_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("com.weavine.desktop")
+    }
+}
+
+fn legacy_base_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("Weavine")
+        .join("avatars")
+}
+
+// One-shot migration for the v1.0.x → v1.0.14 path rename. Idempotent.
+pub(crate) fn migrate_legacy_avatars() {
+    let legacy = legacy_base_dir();
+    let new = match data_dir() {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+    if !legacy.exists() {
+        return;
+    }
+    copy_dir_recursive(&legacy, &new);
+}
+
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) {
+    let entries = match fs::read_dir(src) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let src_path = entry.path();
+        let file_name = match entry.file_name().into_string() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let dst_path = dst.join(&file_name);
+        if src_path.is_dir() {
+            let _ = fs::create_dir_all(&dst_path);
+            copy_dir_recursive(&src_path, &dst_path);
+        } else if !dst_path.exists() {
+            if let Some(parent) = dst_path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = fs::copy(&src_path, &dst_path);
+        }
+    }
 }
 
 fn row_to_media(r: &rusqlite::Row) -> rusqlite::Result<Media> {
@@ -369,4 +430,120 @@ pub fn delete_media(
     )
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
+
+    static SEQ: AtomicUsize = AtomicUsize::new(0);
+    // XDG_DATA_HOME is process-global, so concurrent tests would race on
+    // `std::env::set_var`. Gate every set/reset through this lock.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn sandbox_root() -> PathBuf {
+        let n = SEQ.fetch_add(1, Ordering::Relaxed);
+        let pid = std::process::id();
+        std::env::temp_dir().join(format!("weavine-media-test-{pid}-{n}"))
+    }
+
+    fn with_xdg<F: FnOnce()>(sandbox: &PathBuf, f: F) {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let prev = std::env::var_os("XDG_DATA_HOME");
+        std::env::set_var("XDG_DATA_HOME", sandbox);
+        f();
+        match prev {
+            Some(v) => std::env::set_var("XDG_DATA_HOME", v),
+            None => std::env::remove_var("XDG_DATA_HOME"),
+        }
+        let _ = std::fs::remove_dir_all(sandbox);
+    }
+
+    #[test]
+    fn data_dir_resolves_to_com_weavine_desktop_and_is_writable() {
+        let sandbox = sandbox_root();
+        with_xdg(&sandbox, || {
+            let dir = data_dir().expect("data_dir should succeed");
+            eprintln!("TEST debug: data_dir={:?}, sandbox={:?}", dir, sandbox);
+            assert!(dir.is_dir(), "data_dir must create the directory");
+            assert!(
+                dir.starts_with(&sandbox),
+                "data_dir should be under sandbox ({:?}), got: {:?}",
+                sandbox,
+                dir
+            );
+            assert!(
+                dir.ends_with("com.weavine.desktop"),
+                "data_dir should live under com.weavine.desktop, got: {}",
+                dir.display()
+            );
+            assert!(
+                !dir.to_string_lossy().contains("Weavine"),
+                "data_dir must NOT carry the legacy Weavine/avatars suffix"
+            );
+            let probe = dir.join("probe.txt");
+            std::fs::write(&probe, b"ok").expect("data_dir must be writable");
+            assert_eq!(std::fs::read(&probe).unwrap(), b"ok");
+        });
+    }
+
+    #[test]
+    fn migrate_legacy_avatars_copies_files_idempotently() {
+        let sandbox = sandbox_root();
+        with_xdg(&sandbox, || {
+            let legacy = sandbox.join("Weavine").join("avatars");
+            let legacy_user = legacy.join("user_abc").join("avatar").join("contact").join("c1");
+            std::fs::create_dir_all(&legacy_user).unwrap();
+            std::fs::write(legacy_user.join("u1.webp"), b"binary-bytes-1").unwrap();
+            std::fs::write(legacy_user.join("u2.webp"), b"binary-bytes-2").unwrap();
+
+            migrate_legacy_avatars();
+
+            let new = data_dir().unwrap();
+            let new_user = new.join("user_abc").join("avatar").join("contact").join("c1");
+            assert!(new_user.join("u1.webp").exists(), "u1 must be copied");
+            assert!(new_user.join("u2.webp").exists(), "u2 must be copied");
+            assert_eq!(
+                std::fs::read(new_user.join("u1.webp")).unwrap(),
+                b"binary-bytes-1"
+            );
+
+            std::fs::write(legacy_user.join("u3.webp"), b"binary-bytes-3").unwrap();
+            migrate_legacy_avatars();
+            assert!(
+                new_user.join("u3.webp").exists(),
+                "u3 must be copied on second call"
+            );
+            std::fs::write(legacy_user.join("u1.webp"), b"DIFFERENT").unwrap();
+            migrate_legacy_avatars();
+            assert_eq!(
+                std::fs::read(new_user.join("u1.webp")).unwrap(),
+                b"binary-bytes-1",
+                "existing new file must NOT be overwritten"
+            );
+        });
+    }
+
+    #[test]
+    fn upload_and_protocol_paths_agree() {
+        let sandbox = sandbox_root();
+        with_xdg(&sandbox, || {
+            let (_path, storage_key) =
+                write_avatar_file("user_abc", "c_xyz", "webp", b"round-trip").unwrap();
+            let base = data_dir().unwrap();
+            let resolved = base.join(&storage_key);
+            assert!(resolved.exists(), "upload path must exist on disk");
+            assert_eq!(std::fs::read(&resolved).unwrap(), b"round-trip");
+
+            let protocol_url_path = format!("/files/{storage_key}");
+            let key_from_url = protocol_url_path.trim_start_matches("/files/");
+            let resolved_from_url = base.join(key_from_url);
+            assert_eq!(
+                resolved, resolved_from_url,
+                "upload path and protocol URL must resolve identically"
+            );
+        });
+    }
 }

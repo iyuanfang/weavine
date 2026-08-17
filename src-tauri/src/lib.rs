@@ -118,6 +118,10 @@ pub fn run() {
         sync::spawn_periodic(db::get_db_path(), 300);
     }
 
+    // Pull any avatars from the legacy <appdata>/Weavine/avatars/ tree into
+    // the new com.weavine.desktop/ tree. Idempotent; skipped on first install.
+    commands::media::migrate_legacy_avatars();
+
     tauri::Builder::default()
         .manage(database)
         .register_uri_scheme_protocol("files", |_ctx, request| {
