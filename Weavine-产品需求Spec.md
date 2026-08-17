@@ -1,6 +1,6 @@
 # Weavine 产品蓝图（Product Blueprint / Spec）
 
-> 版本：**v1.2（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-15 — v1.0.3/v1.0.4 落地：(1) §3.6 提醒架构重构：客户端 30s 轮询删除，Rust 端 Tokio sleep + 系统通知接管，零持续 CPU；(2) §11.5 新增：激活跟踪 + per-install device_key，全漏斗使用统计，未登录用户也能计数** ｜ 状态：核心功能已落地 + Phase 2 子系统全部完成；P2/P3 与 #16–#20 待排期
+> 版本：**v1.2（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-17 — v1.0.9 P0 修复 sweep**：(1) **P0-a 同步游标饿死** —— `commands/media.rs` `updated_at` 空格格式 `%Y-%m-%d %H:%M:%S` 与全栈 Z 格式 `%Y-%m-%dT%H:%M:%S%.3fZ` 混用 → 全局游标 `KEY_LAST_PUSHED_AT` 一旦推到 Z 行,后续空格格式 media 行 string-cmp 永远 `<` 游标,media 永不重推。已统一为 Z 格式。(2) **P0-b 桌面 avatar write-back** —— `upload_avatar`/`delete_avatar` 不更新 `Contact.avatar_storage_key`(服务端有 trigger 镜像,桌面无),已加手动写回镜像 `Contact` 行 + 修复 `get_avatar` 路径 user_id 双 join bug。(3) **桌面头像/名片图渲染** —— `register_uri_scheme_protocol("files")` 接管 `files://localhost/files/{key}` 请求,从 `data_dir()` 服务;`TauriAdapter.baseUrl='files://localhost'` 让所有 `avatarUrlFor`/`cardImageUrl` 命中协议。(4) **server `now_str()` Z 统一** —— `handlers/mod.rs:32` 改为 Z 格式,server↔client LWW 比较一致;`archive_sweep`/`archive`/`cadence_server`/`activation` 的 `DateTime::parse_from_rfc3339` 不再因 server 写空格失败。(5) **QuickCapture 静默失败** —— `submit()` `if (!userId) return;` 改为显式 `setError('本地用户尚未就绪')`,E2E quick-capture ×3 全绿。(6) **ContactDetail avatar 错误透出** —— `err instanceof Error ? err.message : String(err)`,Tauri v2 invoke 拒绝时返 raw Rust string 不再吞成通用文案。(7) **Re-OCR 入口从 ContactDetail 移到 ContactEdit** —— 扫描结果填入表单由用户确认(§7 Q9 拍板 2026-08-17)。**§11.5.6 Q4 部分启用**:FREE quota 20→100/天,TRIAL 50,PRO 不限,仅匿名 device_key 路径生效。**状态:v1.0.9 已发布(tag v1.0.9,commit e38762f,2026-08-17,Phase 2.7 bugfix sweep 全部落地);P2/P3 与 #16–#20 待排期**
 > **产品蓝图（唯一权威）**：本文档是 Weavine 的**唯一产品蓝图**。所有需求设计、状态调整、平台策略、中国特性、技术债均回写此处，不再创建独立 spec 文件。文档结构一旦建立保持稳定，后续只追加章节、不重排结构。
 > **维护约定（living spec）**：本文档为活文档。每次需求变动须回写本节并更新上方「最近更新」日期；对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下，与 spec 编号（#1–#20）一一对应，便于持续跟踪。
 > **拍板溯源**：§3.5 子系统设计的所有关键决策（解析引擎选型、节奏模型、范围、Android 验证方式）来源于 2026-08-09 brainstorming 会话，详见各小节顶部加粗的「拍板结论」标注。
@@ -169,13 +169,13 @@ relation_type × role 枚举:
 - OCR 可端侧或云端，注意隐私。
   **依赖**：无。**验收**：上传名片可提取主要字段；确认后正确入库。（已实现：server leptess OCR handler + 桌面 `extract_card` + web `CardScanner` 集成到新建联系人，中文姓名优先）
 
-#### ○ #1 头像（✅ 已实现，2026-08-09 复查；跨端同步已闭环 §5.7）
+#### ○ #1 头像（✅ 已实现，2026-08-09 复查；2026-08-17 v1.0.9 补齐桌面渲染：files:// 协议 + 桌面 avatar_storage_key write-back）
 
 **目标/价值**：提升辨识度，直接支撑 #4 图谱可读性。
 
 - 联系人与用户均可设头像；列表/详情/图谱节点均展示。
 - 支持上传 + 首字母/色块兜底；移动端可调用相机。
-  **依赖**：无（#4 强烈建议先有）。**验收**：可上传/更换头像；在列表与图谱节点正确显示。（已实现：Media 表 + `/api/media` 上传 + 裁剪 modal + server 持久化 + 图谱节点头像 + 首字母兜底；跨端同步已闭环 §5.7）
+  **依赖**：无（#4 强烈建议先有）。**验收**：可上传/更换头像；在列表与图谱节点正确显示。（已实现：Media 表 + `/api/media` 上传 + 裁剪 modal + server 持久化 + 图谱节点头像 + 首字母兜底；跨端同步已闭环 §5.7；**v1.0.9 补齐桌面渲染**：`upload_avatar`/`delete_avatar` 显式回写 `Contact.avatar_storage_key`/`avatar_mime`(桌面无 DB trigger,手动镜像)；`get_avatar` 路径修 user_id 双 join bug；Tauri 注册 `files://` 自定义协议 + `TauriAdapter.baseUrl='files://localhost'` 解决桌面 WebView `/files/{key}` 404 问题）
 
 #### ○ #13 手机端语音快速捕获（🟢 已实施，详见 §3.5）
 
@@ -357,6 +357,8 @@ fn classify_kind(s: &str) -> (Kind, f32) {
 - 全屏面板（同上），底部多一个麦克风按钮
 - **长按麦克风** → 录音 → 转文字（**Tauri 原生 plugin**：`tauri-plugin-android-speechrecognition` + `android.permission.RECORD_AUDIO` + `SpeechRecognizer.createSpeechRecognizer`；非 Web Speech API，因 Android WebView 不支持）→ 自动填入输入框
 
+> **v1.0.9 UX 变更**：名片扫描 / 重新拍名片入口从 `ContactDetail`（只读查看页）移到 `ContactEdit`（编辑页）。理由：扫描结果是草稿，须用户确认入库（详见 §7 Q9 拍板）。`ContactDetail` 顶部 `📷 重新拍名片` 按钮 v1.0.9 移除。QuickCapture 提交逻辑 v1.0.9 修复：`submit()` 在 `userId` 尚未加载时由静默 return 改为显式错误 `setError('本地用户尚未就绪')`。
+
 ### 3.5.5 #14 节奏触发
 
 **拍板**：高(亲密)= 14 天，中(重要)= 45 天，低(普通)= 不提醒。**owner = 端上 first-party（B2）** —— 桌面/Android 各自 SQLite 算本地、Server 算为 Web。同一 `CadenceEngine` trait 抽象，两套实现（sqlx::PgPool + rusqlite::Connection）。
@@ -443,6 +445,7 @@ invitation_token = "{user_id}:{contact_id}:{threshold_day}"  // 确定性生成
 
 - Web Ctrl+K → 输入 → 解析预览 → 创建日程 → 验证日历显示
 - 桌面麦克风（E2E 不能测，手动验证）
+- **v1.0.9 加固**：QuickCapture `submit()` 在 `userId` 尚未就绪时不再静默返回，改为 `setError('本地用户尚未就绪')`，覆盖 `quick-capture.spec.mts` ×3 全绿。
 
 **Android**（模拟器）：
 
@@ -732,6 +735,8 @@ POST /api/reminders/:id/dismiss
 6. **鉴权 RS256 接入** —— **2026-08-09 已核实：已接入**。`server/src/auth_keys.rs` 用 `EncodingKey::from_rsa_pem`/`DecodingKey::from_rsa_pem` 从 PEM 加载，`auth.rs` `verify_access`/`issue_access_token` 均显式 `Algorithm::RS256`。运行时为 RS256，非 HS256。（注：桌面端 Tauri 进程内的 `jwt_secret()` 走 env HS256——那是本地模拟实现，与云端 RS256 不冲突。）
 7. **【2026-08-09 审计新增·P0·已修复 ✅】同步白名单遗漏 `entity_link`/`media`**：原 `server/src/handlers/sync.rs` 的 kind 白名单（L147-166）仅含 contact/tag/project/event/action/interaction/reminder/setting/contact_tag/project_contact，**不含 `entity_link` 与 `media`**——push 时服务端落入 `unknown entity kind` 分支拒绝 → 事件参与者（entity_link）与头像（media）无法跨端同步，且每轮同步稳定产生 conflict。另：PG 表名 `entity_links`（复数）与客户端 `entity_link`（单数）不一致，pull 方向同样失败。**2026-08-09 已修复并 round-trip 实测通过**：①服务端白名单补 `"entity_link" => "entity_links"`、`"media" => "media"`,UPDATED_AT_TABLES 追加 `media`;②客户端 `kind_to_sqlite_table` 加复数别名 `entity_links → EntityLink` + `canonical_kind` 归一;③`push_columns("media")` 补 `storage_key/width/height/alt_text`(此前缺列导致 not-null violation 是另一半根因);④`apply_change` 用 canonical kind 走映射;⑤实测:push entity_link/media 均 accepted,pull 返回复数 `entity_links` kind 完整闭环;⑥`cargo test -p weavine --lib` 27 passed。**P0 阻塞已解除。**
 
+8. **【2026-08-17 v1.0.9 修复纪要·P0 sweep·全部已修复 ✅】**：详见 header「最近更新」一行 + §6 Phase 2.7。修复要点：(1) **`commands/media.rs` `updated_at` 格式 P0-a** —— 桌面 `upsert_media` / `delete_avatar` / `delete_media` 全用 `%Y-%m-%d %H:%M:%S` 空格格式,全局游标 `KEY_LAST_PUSHED_AT` 是字符串 max,空格 ASCII(0x20) < `T`(0x54),一旦推到 Z 行后续空格 media 行 string-cmp 永远 `<` 游标饿死。改为 Z 格式 `%Y-%m-%dT%H:%M:%S%.3fZ` 与全栈对齐。(2) **桌面 `upload_avatar` / `delete_avatar` 缺 Contact 镜像 P0-b** —— `Media` 行已 upsert 但 `Contact.avatar_storage_key` 未更新,桌面无 DB trigger(server 端有 `sync_contact_avatar` trigger,桌面无对应物)。手动镜像 `Contact` 行 + 修 `get_avatar` `data_dir()?.join(&user_id).join(&filename)` 路径 bug(filename 列实际存的就是 storage_key,导致双 join)。(3) **桌面头像 / 名片图渲染路径缺失** —— `avatarUrlFor(contact, { baseUrl: '' })` 在桌面 WebView 返回 `/files/{key}` 相对 URL,Tauri 无 `/files/` handler → 404 → 兜底 initials。注册 `register_uri_scheme_protocol("files")` 接管 `files://localhost/files/{key}` 从 `data_dir()` 服务,`TauriAdapter.baseUrl='files://localhost'` 让所有 `avatarUrlFor` / `cardImageUrl` 命中协议。Web 端不动(server `/files/` 路由正常)。(4) **`server now_str()` Z 统一** —— `handlers/mod.rs:32` 改 Z 格式;之前 server 写空格、client 写 Z,`sync.rs` LWW string-cmp 不可靠;同时 `archive_sweep`/`archive`/`cadence_server`/`activation` 用 `DateTime::parse_from_rfc3339` 解析 server 自己的 `updated_at` 字串,空格格式直接 fail。auth.rs 故意不改(refresh_token expiry 自洽且与跨端同步无关)。(5) **QuickCapture 静默失败** —— `submit()` 早 return 路径 `if (!trimmed || !userId) return;` 在 `useUserId()` 未解析时吞掉,改为两步检查,userId 空时 `setError('本地用户尚未就绪')`。(6) **ContactDetail avatar 错误吞成通用文案** —— Tauri v2 `invoke` 拒绝时返 raw Rust `String` 不在 `Error` 实例上,`err instanceof Error ? err.message : '头像上传失败'` 第二分支吞噬真因。改为 `String(err)` 透出,加空字节防御。(7) **Re-OCR 入口位置 UX 决策** —— 从 `ContactDetail`(只读查看页) 移到 `ContactEdit`(编辑页),详见 §7 Q9。
+
 ---
 
 ## 6. 实施路线图（合并两条路线）
@@ -747,6 +752,8 @@ Phase 2.4 重要度清理     Contact.importance 3 档统一（low/medium/high �
   │
 Phase 2.5 快速捕获中枢  §3.5 子系统（#13 语音 + #14 节奏 + #15 互动扩展）🟢 已实施（2026-08-10，6 个 commit，3 个 E2E 测试通过）
 Phase 2.6 事件提醒中枢  §3.6 子系统（#8 提醒 + event.reminder_lead_minutes 闭环 + 桌面/Android/Web 原生通知通道）🟢 已实施（2026-08-11，3 个 commit，2 个 E2E 测试通过，桌面/桌面/Android/Web 全通道接入）
+  │
+Phase 2.7 bugfix sweep  v1.0.9 P0 修复纪要（§5.8）🟢 已发布（2026-08-17，tag v1.0.9，commit e38762f，6 文件变更，11/11 e2e 全绿）
   │
 Phase 3  变现+合规      #9 云选型 + #6 onboarding/套餐   ⬜ 待做
   │
@@ -771,6 +778,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 6. **#2 合影头像**隐私授权机制如何合规？
 7. ~~**§5 密码哈希**统一为 bcrypt 还是 argon2？~~ —— 已于 2026-08-09 核实无冲突，bcrypt 双栈一致（argon2 仅用于 API key）。
 8. ~~**§5.7 同步白名单修复**~~ —— ✅ 已于 2026-08-09 完成（服务端白名单补 entity_link/media + 客户端表名别名 + round-trip 实测），#3/#1 跨端已解锁。
+9. **【2026-08-17 拍板】Re-OCR 入口位置**：从 `ContactDetail`（查看页）移到 `ContactEdit`（编辑页）。理由：OCR 扫描结果是草稿，须填入表单由用户确认入库，查看页是只读不保存表单。`ContactDetail` 顶部 `📷 重新拍名片` 按钮 v1.0.9 移除，`ContactEdit` 基本信息标题旁新增同款按钮。
 
 ### 7.1 §3.5 拍板记录（2026-08-09 brainstorming）
 
@@ -819,14 +827,14 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | #12 | 多端同步 + 性能优化     | P0  | ✅ F1–F6 已落地；§5.7 白名单断链已修复（entity_link/media 跨端已通）          |
 | #4  | 关系图谱可视化         | P1  | ✅ 已实现（schema + endpoint + ContactGraph SVG + E2E）              |
 | #5  | 查找即新建           | P1  | ✅ 已实现（SearchablePicker emptyState CTA）                         |
-| #11 | 名片提取联系人         | P1  | ✅ 已实现（leptess 真集成 + CardScanner + E2E）                     |
-| #1  | 头像              | P1  | ✅ 已实现（crop + graph 节点 + server 持久化）；跨端同步已闭环 §5.7       |
+| #11 | 名片提取联系人         | P1  | ✅ 已实现（leptess 真集成 + CardScanner + E2E）；**v1.0.9 重新拍名片入口从 `ContactDetail`（查看页）移到 `ContactEdit`（编辑页）**（§7 Q9） |
+| #1  | 头像              | P1  | ✅ 已实现（crop + graph 节点 + server 持久化）；跨端同步已闭环 §5.7；**v1.0.9 补齐桌面渲染**：`upload_avatar`/`delete_avatar` 写回 `Contact.avatar_storage_key`、修 `get_avatar` 路径双 join bug、注册 `files://` 协议 + `TauriAdapter.baseUrl='files://localhost'` |
 | #9  | 云服务器选型          | P2  | ⬜                                                            |
 | #6  | Onboarding + 套餐 | P2  | ⬜（暂缓）                                                        |
 | #8  | 提醒声音            | P3  | ✅ 已实现（Settings + poller + WebAudio）                          |
 | #10 | 移动端小模型 MCP      | P3  | ⬜                                                            |
 | #2  | 合影取头像           | P3  | ⬜                                                            |
-| #13 | 手机端语音快速捕获       | P1  | 🟢 已实施（Web Speech API + QuickFab，详见 §3.5）；Android 降级为手动输入 |
+| #13 | 手机端语音快速捕获       | P1  | 🟢 已实施（Web Speech API + QuickFab，详见 §3.5）；Android 降级为手动输入；**v1.0.9 修复 QuickCapture `submit()` `userId` 未就绪时静默 return → 显式 `setError('本地用户尚未就绪')`**（e2e quick-capture ×3 全绿） |
 
 **中国特性新增需求（2026-08-09，详见 §11；每日摘要已排除）：**
 
@@ -1041,7 +1049,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | `last_ip_hash` | TEXT | `SHA-256(JWT_SECRET || ip)`，**原始 IP 不存** |
 | `call_count` / `last_event` | INTEGER / TEXT | OCR/voice 调用计数 + 最近一次事件类型 |
 | `device_key` | TEXT UNIQUE partial idx | server-minted 32-char hex，替代共享 `WV_SERVICE_KEY` |
-| `plan` / `daily_ocr_count` / `daily_voice_count` / `daily_reset_at` / `revoked_at` | 预留给 quota 体系 | v1.0.4 未启用，schema 已就绪省一次 migration |
+| `plan` / `daily_ocr_count` / `daily_voice_count` / `daily_reset_at` / `revoked_at` | 预留给 quota 体系 | **v1.0.9 部分启用**：FREE 100/天，TRIAL 50/天，PRO 不限；仅匿名 `device_key` 路径走 quota，登录用户 / `SERVICE_KEY` 不限；常量见 `server/src/handlers/activation.rs` |
 
 ### 11.5.2 客户端 → server headers（每次 cloud 调用）
 
@@ -1086,7 +1094,7 @@ extract_endpoint_auth() -> EndpointAuth
 - **Q1 怎么识别"同一用户多端"？** → `install_id` 同时作为 `devices.id` PK，登录时合并。
 - **Q2 OCR / voice 是否走同一套？** → 是，server 端 `record_activation_hook` 同源。
 - **Q3 是否仍需 `WV_SERVICE_KEY`？** → 仅作 dev / CI / 单元测试 fallback，prod 客户端走 `device_key`。
-- **Q4 quota 怎么落？** → `install_activation.daily_ocr_count` / `daily_voice_count` + `daily_reset_at`，v1.0.4 schema 已加，**业务未启用**——留到 v1.1.x 上限流时启用。
+- **Q4 quota 怎么落？** → `install_activation.daily_ocr_count` / `daily_voice_count` + `daily_reset_at`，v1.0.4 schema 已加；**v1.0.9 部分启用：FREE 100 次/天，TRIAL 50 次/天，PRO 不限。仅匿名 `device_key` 路径走 quota，登录用户 / `SERVICE_KEY` 不限。**详细常量见 `server/src/handlers/activation.rs`。
 
 ### 11.5.7 不在范围（明确）
 
