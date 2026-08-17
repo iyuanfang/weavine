@@ -11,7 +11,7 @@ import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 const KIND_LABEL: Record<QuickKind, string> = {
   event: '事件',
   action: '待办',
-  interaction: '联系',
+  interaction: '互动',
 };
 
 const KIND_ICON: Record<QuickKind, string> = {
@@ -67,6 +67,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [contactNames, setContactNames] = useState<string[]>([]);
   const [listening, setListening] = useState(false);
+  const [selectedKind, setSelectedKind] = useState<QuickKind | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
 
@@ -96,10 +97,12 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       parseQuick(trimmed, contactNames, userId)
         .then((p) => {
           setParsed(p);
+          setSelectedKind(p.kind);
           setError(null);
         })
         .catch((e: unknown) => {
           setParsed(null);
+          setSelectedKind(null);
           setError(e instanceof Error ? e.message : String(e));
         });
     }, 250);
@@ -142,7 +145,8 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       const p = parsed ?? (await parseQuick(trimmed, contactNames, userId));
       const summary = p.summary || trimmed;
       const now = new Date().toISOString();
-      switch (p.kind) {
+      const effectiveKind: QuickKind = selectedKind ?? p.kind;
+      switch (effectiveKind) {
         case 'event':
           await adapter.events.create({
             user_id: userId,
@@ -181,6 +185,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
 
   const preview = useMemo(() => {
     if (!parsed) return null;
+    const effectiveKind: QuickKind = selectedKind ?? parsed.kind;
     return (
       <div
         style={{
@@ -193,15 +198,26 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           gap: 6,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <select
+            value={effectiveKind}
+            onChange={(e) => setSelectedKind(e.target.value as QuickKind)}
+            aria-label="类型"
+            data-testid="quick-kind-select"
             style={{
               fontWeight: 600,
               fontSize: 'var(--text-base)',
+              padding: '4px 8px',
+              borderRadius: 6,
+              border: '1px solid var(--border)',
+              background: 'var(--surface, #fff)',
+              cursor: 'pointer',
             }}
           >
-            {KIND_ICON[parsed.kind]} {KIND_LABEL[parsed.kind]}
-          </span>
+            <option value="event">{KIND_ICON.event} {KIND_LABEL.event}</option>
+            <option value="interaction">{KIND_ICON.interaction} {KIND_LABEL.interaction}</option>
+            <option value="action">{KIND_ICON.action} {KIND_LABEL.action}</option>
+          </select>
           <span
             style={{
               fontSize: 'var(--text-sm)',
@@ -216,7 +232,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
         <PreviewRow label="摘要" value={parsed.summary} />
       </div>
     );
-  }, [parsed]);
+  }, [parsed, selectedKind]);
 
   return createPortal(
     <div

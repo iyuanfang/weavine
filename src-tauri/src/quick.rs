@@ -39,7 +39,7 @@ const KIND_KEYWORDS_INTERACTION: &[&str] = &[
     "coffee", "喝咖啡", "见面", "联系",
 ];
 
-fn classify_kind(s: &str) -> (Kind, f32) {
+fn classify_kind(s: &str, due: Option<DateTime<Utc>>, now: DateTime<Utc>) -> (Kind, f32) {
     let event_hits = KIND_KEYWORDS_EVENT.iter().filter(|k| s.contains(*k)).count();
     let action_hits = KIND_KEYWORDS_ACTION.iter().filter(|k| s.contains(*k)).count();
     let interaction_hits = KIND_KEYWORDS_INTERACTION.iter().filter(|k| s.contains(*k)).count();
@@ -47,6 +47,19 @@ fn classify_kind(s: &str) -> (Kind, f32) {
     if max == 0 {
         return (Kind::Action, 0.6);
     }
+
+    // Time tie-breaker: future = schedule (event), past = interaction log.
+    // Applies ONLY to interaction-keyword inputs ("吃饭"/"聊"/"通话"): they're social
+    // and need disambiguation by time. Event-keyword inputs ("开会"/"会议") stay as
+    // event regardless of time — a past meeting is still a past event, not interaction.
+    // "明天下午和张三吃饭" parses due = tomorrow afternoon → future → upgrade to event.
+    // "上周和张三吃饭" parses due = last week → past → keep as interaction.
+    if let Some(d) = due {
+        if interaction_hits > 0 && event_hits == 0 && d > now {
+            return (Kind::Event, 0.85);
+        }
+    }
+
     if event_hits == max {
         (Kind::Event, 0.9)
     } else if action_hits == max {
@@ -262,8 +275,8 @@ fn compute_confidence(has_due: bool, contact_score: f32, kind_score: f32) -> f32
 }
 
 pub fn parse(input: &str, contacts: &[Contact], now: DateTime<Utc>) -> QuickItem {
-    let (kind, kind_score) = classify_kind(input);
     let due = chrono_parse(input, now);
+    let (kind, kind_score) = classify_kind(input, due, now);
     let (contact_id, contact_match_score) = match_contact(input, contacts)
         .map(|(id, score)| (Some(id), score))
         .unwrap_or((None, 0.0));
@@ -288,5 +301,52 @@ impl Kind {
             Self::Action => "action",
             Self::Interaction => "interaction",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn now() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 8, 17, 10, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn future_interaction_keyword_upgrades_to_event() {
+        let item = parse("明天下午和张三吃饭", &[], now());
+        assert_eq!(item.kind, Kind::Event, "future+吃饭 should be event, got {:?}", item.kind);
+    }
+
+    #[test]
+    fn past_interaction_keyword_keeps_interaction() {
+        let item = parse("上周和张三吃饭", &[], now());
+        assert_eq!(item.kind, Kind::Interaction, "past+吃饭 should be interaction");
+    }
+
+    #[test]
+    fn future_event_keyword_stays_event() {
+        let item = parse("明天开会", &[], now());
+        assert_eq!(item.kind, Kind::Event);
+    }
+
+    #[test]
+    fn past_event_keyword_stays_event() {
+        // Past meetings are still events, not interactions.
+        let item = parse("上周开会", &[], now());
+        assert_eq!(item.kind, Kind::Event);
+    }
+
+    #[test]
+    fn no_time_interaction_keyword_stays_interaction() {
+        let item = parse("和张三吃饭", &[], now());
+        assert_eq!(item.kind, Kind::Interaction);
+    }
+
+    #[test]
+    fn no_time_event_keyword_stays_event() {
+        let item = parse("开会", &[], now());
+        assert_eq!(item.kind, Kind::Event);
     }
 }

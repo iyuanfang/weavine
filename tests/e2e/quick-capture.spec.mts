@@ -49,7 +49,9 @@ test.describe('QuickCapture (Ctrl+K panel)', () => {
 
     await page.locator('textarea[placeholder*="例"]').fill('周五下午 3 点和 E2E 快记开会');
     await page.waitForTimeout(500);
-    await expect(page.getByText('事件')).toBeVisible();
+    const kindSelect = page.getByTestId('quick-kind-select');
+    await expect(kindSelect).toBeVisible();
+    await expect(kindSelect).toHaveValue('event');
 
     await page.getByRole('button', { name: '记录', exact: true }).click();
     await expect(page.getByText('已记录 ✓', { exact: true })).toBeVisible();
@@ -90,7 +92,9 @@ test.describe('QuickCapture (Ctrl+K panel)', () => {
 
     await page.locator('textarea[placeholder*="例"]').fill('和 E2E 用户吃饭聊天');
     await page.waitForTimeout(500);
-    await expect(page.getByText('💬 联系')).toBeVisible();
+    const kindSelect2 = page.getByTestId('quick-kind-select');
+    await expect(kindSelect2).toBeVisible();
+    await expect(kindSelect2).toHaveValue('interaction');
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: '快速记录' })).toBeHidden();
@@ -99,7 +103,38 @@ test.describe('QuickCapture (Ctrl+K panel)', () => {
     await api.dispose();
   });
 
-  test('panel closes on Escape', async ({ browser }) => {
+  test('future 吃饭 → event (time tie-breaker)', async ({ browser }) => {
+    const api = await request.newContext({ baseURL: SERVER_BASE });
+    const stamp = Date.now();
+    const session = await register(api, `qf-${stamp}@e2e.local`, 'qf-e2e-pw-12345');
+
+    const ctx = await browser.newContext();
+    await ctx.addInitScript(({ token, refresh, uid }: any) => {
+      localStorage.setItem('weavine.access_token', token);
+      localStorage.setItem('weavine.refresh_token', refresh);
+      localStorage.setItem('weavine.user_id', uid);
+    }, { token: session.access_token, refresh: session.refresh_token, uid: session.user_id });
+    const page = await ctx.newPage();
+
+    await page.goto(`${SPA_BASE}/`);
+    await page.waitForSelector('.app-shell__brand-text', { timeout: 15000 });
+
+    await page.keyboard.press('Control+k');
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('dialog', { name: '快速记录' })).toBeVisible();
+
+    await page.locator('textarea[placeholder*="例"]').fill('明天下午和张三吃饭');
+    await page.waitForTimeout(500);
+    const sel = page.getByTestId('quick-kind-select');
+    await expect(sel).toBeVisible();
+    await expect(sel).toHaveValue('event');
+
+    await page.keyboard.press('Escape');
+    await ctx.close();
+    await api.dispose();
+  });
+
+test('panel closes on Escape', async ({ browser }) => {
     const api = await request.newContext({ baseURL: SERVER_BASE });
     const stamp = Date.now();
     const session = await register(api, `qcl-${stamp}@e2e.local`, 'qcl-e2e-pw-12345');
