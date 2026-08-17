@@ -5,22 +5,26 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.webkit.PermissionRequest
 import android.webkit.WebView
+import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
 
-// WeavineMainActivity — replaces the auto-generated MainActivity.kt produced by
+// MainActivity — replaces the auto-generated MainActivity.kt produced by
 // `cargo tauri android init`. CI copies this file into
 // src-tauri/gen/android/app/src/main/java/com/weavine/desktop/MainActivity.kt
-// after init, so the override survives the regen.
+// after init, so the override survives the regen. The class name MUST stay
+// `MainActivity` because AndroidManifest.xml's <activity android:name=
+// ".MainActivity"> references it directly — renaming to e.g.
+// `WeavineMainActivity` breaks the APK build with "MainActivity not found".
 //
 // Why we need it:
 //
-// Tauri/Wry's stock RustWebChromeClient.onPermissionRequest always routes the
-// request through `permissionLauncher.launch(permissions)` even when the
-// Android system permission is already granted (e.g. after the user grants
-// RECORD_AUDIO on first use). On some OEM WebViews (MIUI / EMUI / OriginOS)
-// the launcher call returns asynchronously and the `permissionListener` slot
-// can be clobbered, causing getUserMedia() to fail with NotAllowedError even
-// though the user did grant.
+// Tauri/Wry's stock RustWebChromeClient.onPermissionRequest always routes
+// the request through `permissionLauncher.launch(permissions)` even when
+// the Android system permission is already granted (e.g. after the user
+// grants RECORD_AUDIO on first use). On some OEM WebViews (MIUI / EMUI /
+// OriginOS) the launcher call returns asynchronously and the
+// `permissionListener` slot can be clobbered, causing getUserMedia() to
+// fail with NotAllowedError even though the user did grant.
 //
 // The fix in WeavineWebChromeClient below:
 //   - subclasses RustWebChromeClient,
@@ -28,7 +32,7 @@ import androidx.core.app.ActivityCompat
 //   - if already granted, calls `request.grant(resources)` synchronously
 //     without going through the launcher,
 //   - otherwise delegates to the same launcher-based flow.
-class WeavineMainActivity : TauriActivity() {
+class MainActivity : TauriActivity() {
 
   override fun onCreate(savedInstanceState: android.os.Bundle?) {
     enableEdgeToEdge()
@@ -41,7 +45,7 @@ class WeavineMainActivity : TauriActivity() {
   }
 }
 
-private class WeavineWebChromeClient(activity: WryActivity) : RustWebChromeClient(activity) {
+private class WeavineWebChromeClient(private val activity: WryActivity) : RustWebChromeClient(activity) {
 
   override fun onPermissionRequest(request: PermissionRequest) {
     val resources = request.resources
@@ -61,7 +65,7 @@ private class WeavineWebChromeClient(activity: WryActivity) : RustWebChromeClien
     }
 
     val alreadyGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      needed.all { ActivityCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+      needed.all { ActivityCompat.checkSelfPermission(activity, it) == PackageManager.PERMISSION_GRANTED }
     } else true
 
     if (alreadyGranted) {
