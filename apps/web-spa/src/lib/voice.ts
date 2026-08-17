@@ -131,7 +131,19 @@ export function recordAudio(maxMs = 15000): Promise<Blob> {
           if (recorder.state !== 'inactive') recorder.stop();
         }, maxMs);
       })
-      .catch(() => reject(new Error('无法访问麦克风')));
+      .catch((e: unknown) => {
+        const name = (e as { name?: string } | null)?.name ?? '';
+        const msg = e instanceof Error ? e.message : String(e ?? '');
+        if (name === 'NotAllowedError' || /permission/i.test(msg)) {
+          reject(new Error('无法访问麦克风：请在系统设置中授予应用麦克风权限'));
+          return;
+        }
+        if (name === 'NotFoundError') {
+          reject(new Error('无法访问麦克风：未检测到麦克风设备'));
+          return;
+        }
+        reject(new Error(`无法访问麦克风（${name || 'unknown'}）：${msg || '未知错误'}`));
+      });
   });
 }
 

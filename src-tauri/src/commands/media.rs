@@ -180,7 +180,7 @@ fn upsert_media(
     }
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn upload_avatar(
     db: tauri::State<Database>,
     user_id: String,
@@ -227,7 +227,7 @@ pub fn upload_avatar(
     })
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_avatar(
     db: tauri::State<Database>,
     user_id: String,
@@ -260,7 +260,7 @@ pub fn get_avatar(
     )))
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_avatar(
     db: tauri::State<Database>,
     user_id: String,
@@ -294,7 +294,7 @@ pub fn delete_avatar(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_media_by_owner(
     db: tauri::State<Database>,
     user_id: String,

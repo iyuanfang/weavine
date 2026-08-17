@@ -53,20 +53,20 @@ export function QuickFab({ onOpen }: Props) {
       onClick={handleTap}
       disabled={busy}
       aria-label="语音快速记录"
-      style={{
+style={{
         position: 'fixed',
         right: 20,
-        bottom: 20,
+        bottom: 72,
         zIndex: 99990,
-        width: 56,
-        height: 56,
+        width: 44,
+        height: 44,
         borderRadius: '50%',
         border: 'none',
         cursor: 'pointer',
         background: 'var(--accent, #8b5cf6)',
         color: '#fff',
-        fontSize: 24,
-        boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+        fontSize: 20,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.22)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
