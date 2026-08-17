@@ -4,6 +4,7 @@ pub mod contact;
 pub mod diagnostic;
 pub mod event;
 pub mod interaction;
+pub mod install_id;
 pub mod notification;
 pub mod params;
 pub mod project;

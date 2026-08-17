@@ -73,11 +73,15 @@ export class TauriAdapter implements PRMAdapter {
 
   constructor() {
     this.userIdReady = invoke<LocalUser>('get_local_user')
-      .then((u) => u.id)
-      .catch((err) => {
-        throw new Error(
-          `TauriAdapter: failed to load local user: ${String(err)}`,
-        );
+      .then((u) => (u?.id ? u.id : null))
+      .catch(() => null)
+      .then((id) => {
+        if (id) return id;
+        return invoke<string>('get_install_id').catch((err) => {
+          throw new Error(
+            `TauriAdapter: failed to resolve user_id (no local user and get_install_id failed): ${String(err)}`,
+          );
+        });
       });
   }
 

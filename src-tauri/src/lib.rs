@@ -39,7 +39,7 @@ fn dirs_data_dir_fallback() -> std::path::PathBuf {
 #[cfg(feature = "tauri")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use commands::{action, contact, diagnostic, event, interaction, media, ocr, project, project_contact, quick, reminder, search, setting, tag, voice};
+    use commands::{action, contact, diagnostic, event, install_id as cmd_install_id, interaction, media, ocr, project, project_contact, quick, reminder, search, setting, tag, voice};
     use db::Database;
     use std::fs;
     use tauri::{Emitter, Manager};
@@ -215,6 +215,7 @@ pub fn run() {
             search::search,
             diagnostic::get_startup_info,
             diagnostic::get_local_user,
+            cmd_install_id::get_install_id,
             project::list_projects,
             project::create_project,
             project::update_project,
