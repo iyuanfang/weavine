@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Android 语音点击无反应** — 两处客户端问题：① `QuickFab.tsx` 语音失败被静默吞掉（`catch` 里 `onOpen('')` 打开空面板），现在改为在面板中显示具体错误信息（权限拒绝/空录音/网络错误），空录音 blob 单独报"录音为空"；② `voice.ts` 的 `recordAudio` 在 Android WebView 上 MediaRecorder 立即启动会捕获静音（音频管线未就绪），改为延迟 200ms 再 `recorder.start()` 让管线预热（注意不要 stop 音轨做"热身"——那会杀掉麦克风导致空 blob），并为 MediaRecorder 构造/启动增加 try/catch 错误提示。服务器端链路（上传 → ffmpeg → whisper）已通过生产 API 验证正常。
 
+## [1.0.19] - 2026-08-18
+
+### Added
+
+- **Android 本地语音识别（sherpa-onnx Whisper tiny multilingual）** — 取代 v1.0.18 的"服务端 whisper.cpp" 链路。Android Tauri 包内嵌 sherpa-onnx ONNX Runtime（构建脚本下载预编译 static archive），首次使用语音时从 GitHub release 下载约 30 MB 多语言模型（约 75 MB 解压，支持中文 + 英文 + 97 其他语言）到 `<data_dir>/whisper-tiny/`，之后本地推理，零服务器往返。录音用 WebView AudioContext 解码到 16 kHz 单声道 Float32，传到 Rust 命令 `recognize_voice_local` 调 sherpa-onnx 转写，全程离线、不挤服务器 2 核 semaphore。桌面端（Windows / macOS / Linux）继续走服务端云识别。
+
+### Technical
+
+- 新增 `src-tauri/src/voice_local.rs`（gated `#[cfg(target_os = "android")]`）+ `src-tauri/src/commands/voice_local.rs`（提供 `check_voice_model` / `download_voice_model` / `recognize_voice_local` 三个 Tauri command，事件 `voice-model-download-progress` 推送下载/解压进度）
+- `apps/web-spa/src/lib/voice.ts` 新增 `recognizeLocal` / `checkVoiceModel` / `downloadVoiceModel` API；`isAndroidTauri` 路径改走本地链路，桌面浏览器继续 `webkitSpeechRecognition`
+- `QuickFab.tsx` 和 `QuickCapture.tsx` 新增下载进度显示（FAB 显示百分比，Capture 显示"下载语音模型：download 47%"）
+- `src-tauri/Cargo.toml` 新增 `sherpa-onnx`（android-only）、`bzip2`、`tar`；`sqlx` features 扩展为 `macros + derive + postgres + uuid + chrono` 以支持 server 编译
+
 ## [1.0.17] - 2026-08-18
 
 ### Fixed

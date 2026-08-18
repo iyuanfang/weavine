@@ -12,6 +12,7 @@ pub mod project_template;
 pub mod quick;
 pub mod sync;
 pub mod tag_color;
+pub mod voice_local;
 
 #[cfg(feature = "tauri")]
 use std::sync::OnceLock;
@@ -238,6 +239,9 @@ pub fn run() {
             ocr::extract_card,
         ocr::save_card_image,
             voice::recognize_voice,
+            commands::voice_local::check_voice_model,
+            commands::voice_local::download_voice_model,
+            commands::voice_local::recognize_voice_local,
             commands::sync::cloud_login,
             commands::sync::cloud_logout,
             commands::sync::cloud_sync_now,

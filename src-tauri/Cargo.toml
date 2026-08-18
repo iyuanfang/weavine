@@ -1,6 +1,6 @@
 [package]
 name = "weavine"
-version = "1.0.18"
+version = "1.0.19"
 edition = "2021"
 default-run = "weavine"
 license = "AGPL-3.0"
@@ -44,10 +44,19 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 anyhow = "1"
 regex = "1"
 fuzzy-matcher = "0.3"
+bzip2 = "0.5"
+tar = "0.4"
 
 # sqlx: optional — only activated when server crate depends with features= ["sqlx"]
 # Provides FromRow derive for models without pulling in runtime deps.
-sqlx = { version = "0.8", optional = true, default-features = false, features = ["macros"] }
+sqlx = { version = "0.8", optional = true, default-features = false, features = ["macros", "derive", "postgres", "uuid", "chrono"] }
+
+# On-device speech recognition on Android via sherpa-onnx (SenseVoice).
+# The 230 MB model is downloaded on first voice use, not bundled in the APK.
+# Build-script downloads sherpa-onnx's prebuilt static archive; no system
+# ONNX Runtime required.
+[target.'cfg(target_os = "android")'.dependencies]
+sherpa-onnx = { version = "1.13", default-features = false }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

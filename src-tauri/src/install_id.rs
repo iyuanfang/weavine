@@ -29,6 +29,21 @@ fn install_id_path() -> Option<PathBuf> {
     Some(dir.join("install_id"))
 }
 
+/// Returns the per-user app data directory used for persistent files
+/// (install_id, device_key, on-device voice model, …). Creates it if
+/// missing.
+pub fn data_dir() -> PathBuf {
+    let dir = install_id_path()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| {
+            dirs::data_dir()
+                .map(|d| d.join("com.weavine.desktop"))
+                .unwrap_or_else(|| PathBuf::from("."))
+        });
+    fs::create_dir_all(&dir).ok();
+    dir
+}
+
 fn read_existing() -> Option<String> {
     let path = install_id_path()?;
     let body = fs::read_to_string(&path).ok()?;

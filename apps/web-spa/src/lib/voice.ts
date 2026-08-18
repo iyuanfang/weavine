@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 import { isTauri } from './adapter/tauri';
 
@@ -188,4 +189,109 @@ export async function recognizeCloud(audioBlob: Blob): Promise<string> {
   }
   const audioBase64 = await blobToBase64(audioBlob);
   return invoke<string>('recognize_voice', { audio_base64: audioBase64 });
+}
+
+// ── Local on-device STT (Android only, sherpa-onnx Whisper tiny) ──
+// The 30 MB Whisper-tiny multilingual model is downloaded on first use
+// (see commands/voice_local.rs). Audio is decoded in WebView at 16 kHz mono
+// Float32 and shipped to the Rust side which runs inference on-device.
+
+export interface VoiceModelStatus {
+  ready: boolean;
+  /** Total bytes expected to be downloaded (~30 MB tar.bz2). */
+  downloadBytes?: number;
+  /** Path to model dir on disk when ready. */
+  modelDir?: string;
+  /** Reason if not ready. */
+  error?: string;
+}
+
+export function checkVoiceModel(): Promise<VoiceModelStatus> {
+  return invoke<VoiceModelStatus>('check_voice_model');
+}
+
+export interface ModelDownloadProgress {
+  downloadedBytes: number;
+  totalBytes: number;
+  /** Stage: 'download' | 'extract' | 'done' | 'error' */
+  stage: 'download' | 'extract' | 'done' | 'error';
+  message?: string;
+}
+
+export async function downloadVoiceModel(
+  onProgress?: (p: ModelDownloadProgress) => void,
+): Promise<void> {
+  let unlisten: UnlistenFn | undefined;
+  if (onProgress) {
+    unlisten = await listen<ModelDownloadProgress>('voice-model-download-progress', (event) => {
+      onProgress(event.payload);
+    });
+  }
+  try {
+    await invoke<void>('download_voice_model');
+  } finally {
+    if (unlisten) unlisten();
+  }
+}
+
+/**
+ * Decode any recorded audio Blob to 16 kHz mono Float32 PCM and ship it
+ * to the Rust recognizer. The Rust side accepts raw little-endian f32
+ * bytes via `Vec<u8>` reinterpret.
+ */
+async function decodeToPcm16kMono(blob: Blob): Promise<ArrayBuffer> {
+  const arrayBuf = await blob.arrayBuffer();
+  const Ctor: typeof AudioContext | undefined =
+    typeof window !== 'undefined'
+      ? (window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
+      : undefined;
+  if (!Ctor) throw new Error('当前环境不支持本地语音识别（缺少 AudioContext）');
+  const ctx = new Ctor({ sampleRate: 16000 });
+  try {
+    const decoded = await ctx.decodeAudioData(arrayBuf.slice(0));
+    const channelCount = decoded.numberOfChannels;
+    const length = decoded.length;
+    const out = new Float32Array(length);
+    if (channelCount === 1) {
+      out.set(decoded.getChannelData(0));
+    } else {
+      for (let ch = 0; ch < channelCount; ch++) {
+        const data = decoded.getChannelData(ch);
+        for (let i = 0; i < length; i++) out[i] += data[i];
+      }
+      for (let i = 0; i < length; i++) out[i] /= channelCount;
+    }
+    // Browsers always store Float32 as little-endian, matching the
+    // platform Rust expects via `bytemuck::cast_slice::<u8, f32>`.
+    return out.buffer;
+  } finally {
+    void ctx.close();
+  }
+}
+
+export async function recognizeLocal(audioBlob: Blob): Promise<string> {
+  if (!isTauri) {
+    throw new Error('本地语音识别仅在 Tauri 客户端可用');
+  }
+  if (audioBlob.size === 0) {
+    throw new Error('录音为空，请重试');
+  }
+  const pcmBuf = await decodeToPcm16kMono(audioBlob);
+  const samples = new Uint8Array(pcmBuf);
+  return invoke<string>('recognize_voice_local', {
+    pcm_base64: arrayBufferToBase64(samples.buffer),
+  });
+}
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(
+      null,
+      Array.from(bytes.subarray(i, i + chunk)),
+    );
+  }
+  return btoa(binary);
 }

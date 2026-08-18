@@ -18,3 +18,4 @@ pub mod setting;
 pub mod sync;
 pub mod tag;
 pub mod voice;
+pub mod voice_local;

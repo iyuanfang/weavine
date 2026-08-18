@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
-import { beginVoice, endVoice, isAndroidTauri, recognizeCloud, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
+import { beginVoice, checkVoiceModel, downloadVoiceModel, endVoice, isAndroidTauri, ModelDownloadProgress, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
 const KIND_LABEL: Record<QuickKind, string> = {
@@ -68,6 +68,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [contactNames, setContactNames] = useState<string[]>([]);
   const [listening, setListening] = useState(false);
   const [selectedKind, setSelectedKind] = useState<QuickKind | null>(null);
+  const [voiceDownload, setVoiceDownload] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
 
@@ -126,11 +127,29 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       endVoice();
     };
     if (isAndroidTauri()) {
+      const onProgress = (p: ModelDownloadProgress) => {
+        const pct = p.totalBytes > 0 ? Math.round((p.downloadedBytes / p.totalBytes) * 100) : null;
+        setVoiceDownload(`下载语音模型：${p.stage} ${pct ?? ''}%`);
+      };
       recordAudio()
-        .then((blob) => recognizeCloud(blob))
+        .then(async (blob) => {
+          const status = await checkVoiceModel();
+          if (!status.ready) {
+            setVoiceDownload('正在准备语音模型...');
+            await downloadVoiceModel(onProgress);
+            setVoiceDownload(null);
+          }
+          return recognizeLocal(blob);
+        })
         .then(done)
-        .catch(fail)
-        .finally(release);
+        .catch((e: unknown) => {
+          setVoiceDownload(null);
+          fail(e);
+        })
+        .finally(() => {
+          setVoiceDownload(null);
+          release();
+        });
       return;
     }
     recognizeSpeech()
@@ -341,6 +360,12 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
             </button>
           )}
         </div>
+
+        {voiceDownload && (
+          <div style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
+            {voiceDownload}
+          </div>
+        )}
 
         {listening && (
           <div style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
