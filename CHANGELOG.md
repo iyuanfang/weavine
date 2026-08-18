@@ -5,6 +5,12 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.20] - 2026-08-18
+
+### Fixed
+
+- **Android 端 on-device ASR 重新构建 (v1.0.19 因 cargo check 编译错误未发布成功)** — v1.0.19 标签回退到 v1.0.18 后，重新整理 cherry-pick 4 个提交到 b76a957 上：① `feat(android): on-device Whisper tiny STT via sherpa-onnx` ② `sherpa-onnx features=shared + Whisper struct fields (tail_paddings: i32) + JSON camelCase` ③ `URL sherpa-onnx-whisper-tiny.tar.bz2 + int8 文件名 + REQUIRED_FILES slice (替换未定义的 MODEL_FILE)` ④ `build.rs pin libc++_shared + onnxruntime + sherpa-onnx-c-api`（dylib link，防 Rust 默认 libc++_static 与预编译 .so 冲突）。完整功能同 v1.0.19 changelog 描述。
+
 ## [1.0.18] - 2026-08-18
 
 ### Fixed
