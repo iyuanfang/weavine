@@ -18,9 +18,11 @@ export function AvatarViewModal({ src, alt, onClose }: AvatarViewModalProps) {
           style={{
             display: 'block',
             width: '100%',
-            maxWidth: 480,
+            maxWidth: 288,
             height: 'auto',
-            borderRadius: 12,
+            borderRadius: '50%',
+            aspectRatio: '1 / 1',
+            objectFit: 'cover',
           }}
         />
       </div>

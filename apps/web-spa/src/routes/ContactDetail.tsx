@@ -247,6 +247,7 @@ export function ContactDetail() {
             accept="image/png,image/jpeg,image/webp,image/gif"
             style={{ display: 'none' }}
             onChange={onAvatarChange}
+            onClick={(e) => e.stopPropagation()}
           />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>

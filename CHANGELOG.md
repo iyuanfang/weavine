@@ -5,6 +5,17 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.16] - 2026-08-18
+
+### Changed
+
+- **头像裁剪改为微信式交互**（Windows / Android / Web 三端同步）— `AvatarCropModal.tsx` 重写：裁剪圆圈固定居中不再可拖动，改为**拖动底图**调整位置、滚轮/双指捏合/滑杆缩放底图（1x–4x）。圆圈尺寸固定（150px 半径），移除三个预览小图，模态与控件宽度统一。与微信头像裁剪一致，手机上单手拖动更顺手。
+- **大图查看 modal 显示为圆形** — `AvatarViewModal.tsx`：图片改为 `borderRadius: 50%` + `aspectRatio: 1/1` + `objectFit: cover`（原来是方形大图），与全端圆形头像显示一致。
+
+### Fixed
+
+- **点击"更换头像"同时弹出大图查看 modal** — 隐藏文件选择 input 嵌套在头像 div 内，`fileInput.click()` 冒泡触发父级 `onClick` 打开 `AvatarViewModal`。修复：input 加 `onClick` 阻止冒泡（`ContactDetail.tsx`）。
+
 ## [1.0.8] - 2026-08-16
 
 ### Fixed
