@@ -1,4 +1,4 @@
-const CACHE = 'weavine-v2';
+const CACHE = 'weavine-v3';
 
 const PRECACHE_URLS = [
   '/',
@@ -17,23 +17,14 @@ const PRECACHE_URLS = [
   '/logo.svg',
 ];
 
-const API_PATHS = [
-  '/actions',
-  '/contacts',
-  '/events',
-  '/tags',
-  '/interactions',
-  '/reminders',
-  '/settings',
-  '/search',
-  '/auth',
-  '/diagnostic',
-];
-
+// All backend endpoints live under /api/. v2 only checked paths like
+// `/contacts` (the SPA route name), which fails to match `/api/contacts/:id`
+// — so GET /api/contacts/:id was being routed through the cache-then-network
+// handler and served stale responses from the cache. Result: invalidating
+// React Query for ['contact', id] kept returning the old avatar_storage_key,
+// so the avatar never updated. Always bypass /api/ now.
 function isApiRequest(url) {
-  return API_PATHS.some(
-    (p) => url.pathname === p || url.pathname.startsWith(p + '/'),
-  );
+  return url.pathname.startsWith('/api/');
 }
 
 // ── Install ──────────────────────────────────────────
