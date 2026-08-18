@@ -502,6 +502,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload Windows NSIS installer to Release
+        # TEMP: disabled with build-windows during Android NDK debugging.
+        if: false
         run: |
           find artifacts/weavine-windows-nsis -type f -name '*.exe' -print0 | \
             xargs -0 gh release upload "${{ github.ref_name }}" \
@@ -511,6 +513,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload Linux artifacts to Release
+        # TEMP: disabled with build-linux during Android NDK debugging.
+        if: false
         run: |
           # actions/upload-artifact@v4 preserves relative paths
           find artifacts/weavine-linux -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 | \
@@ -521,6 +525,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload macOS artifacts to Release
+        # TEMP: disabled with build-macos during Android NDK debugging.
+        if: false
         run: |
           find artifacts/weavine-macos -type f \( -name '*.dmg' -o -name '*.app' \) -print0 | \
             xargs -0 gh release upload "${{ github.ref_name }}" \
