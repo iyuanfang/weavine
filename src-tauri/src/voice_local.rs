@@ -62,6 +62,7 @@ pub fn model_status() -> ModelStatus {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelStatus {
     pub ready: bool,
     pub model_path: String,
@@ -124,7 +125,7 @@ fn build_recognizer(dir: &Path) -> Result<OfflineRecognizer, String> {
         decoder: Some(decoder),
         language: Some("auto".into()),
         task: Some("transcribe".into()),
-        tail_paddings: Some(0),
+        tail_paddings: 0,
         ..Default::default()
     };
     config.model_config.tokens = Some(tokens);

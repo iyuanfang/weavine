@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter, Manager, Window};
 const MODEL_TARBZ2_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny-2024-09-12.tar.bz2";
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalRecognizeResult {
     pub text: String,
     pub lang: String,

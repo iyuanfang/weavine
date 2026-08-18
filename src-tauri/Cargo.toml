@@ -56,7 +56,7 @@ sqlx = { version = "0.8", optional = true, default-features = false, features = 
 # Build-script downloads sherpa-onnx's prebuilt static archive; no system
 # ONNX Runtime required.
 [target.'cfg(target_os = "android")'.dependencies]
-sherpa-onnx = { version = "1.13", default-features = false }
+sherpa-onnx = { version = "1.13", default-features = false, features = ["shared"] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
