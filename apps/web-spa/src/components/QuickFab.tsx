@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { isAndroidTauri, recognizeCloud, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
+import { beginVoice, endVoice, isAndroidTauri, recognizeCloud, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
 
 interface Props {
   onOpen: (initialText: string) => void;
@@ -13,6 +13,10 @@ export function QuickFab({ onOpen }: Props) {
   const handleTap = () => {
     setBusy(true);
     if (isAndroidTauri()) {
+      if (!beginVoice()) {
+        setBusy(false);
+        return;
+      }
       setListening(true);
       recordAudio()
         .then((blob) => {
@@ -30,6 +34,7 @@ export function QuickFab({ onOpen }: Props) {
         .finally(() => {
           setListening(false);
           setBusy(false);
+          endVoice();
         });
       return;
     }

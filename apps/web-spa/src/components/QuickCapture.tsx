@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
-import { isAndroidTauri, recognizeCloud, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
+import { beginVoice, endVoice, isAndroidTauri, recognizeCloud, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
 const KIND_LABEL: Record<QuickKind, string> = {
@@ -112,6 +112,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   }, [text, contactNames, userId]);
 
   const handleVoice = () => {
+    if (!beginVoice()) return;
     setListening(true);
     const done = (transcript: string) => {
       setText(transcript);
@@ -120,18 +121,22 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
     const fail = (e: unknown) => {
       setError(e instanceof Error ? e.message : String(e));
     };
+    const release = () => {
+      setListening(false);
+      endVoice();
+    };
     if (isAndroidTauri()) {
       recordAudio()
         .then((blob) => recognizeCloud(blob))
         .then(done)
         .catch(fail)
-        .finally(() => setListening(false));
+        .finally(release);
       return;
     }
     recognizeSpeech()
       .then(done)
       .catch(fail)
-      .finally(() => setListening(false));
+      .finally(release);
   };
 
   const submit = async () => {

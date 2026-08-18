@@ -9,9 +9,6 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    # TEMP (v1.0.18 debug): disabled while fixing "Android NDK invalid" CI
-    # failure. Re-enable by deleting this line once Android builds green.
-    if: false
 
     steps:
       - uses: actions/checkout@v4
@@ -78,8 +75,6 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    # TEMP: disabled during Android NDK debugging, see build-windows.
-    if: false
 
     steps:
       - uses: actions/checkout@v4
@@ -162,8 +157,6 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
-    # TEMP: disabled during Android NDK debugging, see build-windows.
-    if: false
 
     steps:
       - uses: actions/checkout@v4
@@ -479,8 +472,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    # TEMP: only build-android enabled during NDK debugging.
-    needs: [build-android]
+    needs: [build-windows, build-linux, build-macos, build-android]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -502,8 +494,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload Windows NSIS installer to Release
-        # TEMP: disabled with build-windows during Android NDK debugging.
-        if: false
         run: |
           find artifacts/weavine-windows-nsis -type f -name '*.exe' -print0 | \
             xargs -0 gh release upload "${{ github.ref_name }}" \
@@ -513,8 +503,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload Linux artifacts to Release
-        # TEMP: disabled with build-linux during Android NDK debugging.
-        if: false
         run: |
           # actions/upload-artifact@v4 preserves relative paths
           find artifacts/weavine-linux -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 | \
@@ -525,8 +513,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload macOS artifacts to Release
-        # TEMP: disabled with build-macos during Android NDK debugging.
-        if: false
         run: |
           find artifacts/weavine-macos -type f \( -name '*.dmg' -o -name '*.app' \) -print0 | \
             xargs -0 gh release upload "${{ github.ref_name }}" \

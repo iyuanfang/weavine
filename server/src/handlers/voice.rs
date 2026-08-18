@@ -32,6 +32,14 @@ pub struct RecognizeResult {
 
 static WHISPER: OnceLock<WhisperContext> = OnceLock::new();
 
+/// Serializes whisper inference. Each request spawns a blocking thread that
+/// uses `set_n_threads` (see `transcribe`); on a small (2-core) box, running
+/// several of those in parallel makes every request slower than the nginx
+/// proxy timeout, which surfaces as 504 Gateway Timeout to clients. We cap the
+/// concurrency at 2 and fail fast with 503 instead of letting requests pile up.
+static RECOGNIZE_SEM: std::sync::LazyLock<tokio::sync::Semaphore> =
+    std::sync::LazyLock::new(|| tokio::sync::Semaphore::new(2));
+
 fn model_path() -> std::path::PathBuf {
     std::env::var("WHISPER_MODEL")
         .map(std::path::PathBuf::from)
@@ -89,6 +97,16 @@ pub async fn recognize(
         }
     };
     super::activation::record_activation_hook(&headers, pool.as_ref(), "voice").await;
+
+    let _permit = match RECOGNIZE_SEM.try_acquire() {
+        Ok(p) => p,
+        Err(_) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                "语音识别繁忙，请稍后重试".to_string(),
+            ))
+        }
+    };
 
     let mut audio_bytes: Option<Bytes> = None;
     while let Some(field) = form
@@ -349,7 +367,7 @@ async fn transcribe(pcm: Vec<f32>) -> Result<(String, String), (StatusCode, Stri
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_detect_language(true);
         params.set_language(None);
-        params.set_n_threads(4);
+        params.set_n_threads(2);
         params.set_print_special(false);
         params.set_print_progress(false);
         params.set_print_realtime(false);

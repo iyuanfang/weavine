@@ -32,6 +32,21 @@ export function isAndroidTauri(): boolean {
   return isAndroid() && isTauri;
 }
 
+let voiceInFlight = false;
+
+// Global lock so QuickFab and QuickCapture can't run two recordings at once.
+// Android's whisper round-trip takes 20s+ on a 2-core server; a second,
+// overlapping request would just pile up server-side and 504.
+export function beginVoice(): boolean {
+  if (voiceInFlight) return false;
+  voiceInFlight = true;
+  return true;
+}
+
+export function endVoice(): void {
+  voiceInFlight = false;
+}
+
 function recognitionCtor(): SpeechRecognitionCtor | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as {
