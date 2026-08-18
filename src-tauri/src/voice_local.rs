@@ -18,9 +18,13 @@ use std::sync::{Arc, OnceLock};
 use crate::install_id;
 
 pub const MODEL_DIR_NAME: &str = "whisper-tiny";
-pub const ENCODER_FILE: &str = "tiny-encoder.onnx";
-pub const DECODER_FILE: &str = "tiny-decoder.onnx";
+pub const ENCODER_FILE: &str = "tiny-encoder.int8.onnx";
+pub const DECODER_FILE: &str = "tiny-decoder.int8.onnx";
 pub const TOKENS_FILE: &str = "tokens.txt";
+
+/// Files the tar archive must unpack into `model_dir()`. Anything else
+/// (source archives, READMEs, sample audio) is skipped on extract.
+pub const REQUIRED_FILES: &[&str] = &[ENCODER_FILE, DECODER_FILE, TOKENS_FILE];
 
 pub fn model_dir() -> PathBuf {
     install_id::data_dir().join(MODEL_DIR_NAME)

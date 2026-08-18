@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, Window};
 
-const MODEL_TARBZ2_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny-2024-09-12.tar.bz2";
+const MODEL_TARBZ2_URL: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,9 +68,7 @@ pub async fn download_voice_model(
                 .file_name()
                 .and_then(|s| s.to_str())
                 .unwrap_or("");
-            if file_name != voice_local::MODEL_FILE
-                && file_name != voice_local::TOKENS_FILE
-            {
+            if !voice_local::REQUIRED_FILES.contains(&file_name) {
                 continue;
             }
             let components: Vec<_> = path.components().collect();
