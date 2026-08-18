@@ -67,8 +67,19 @@ import type {
 
 type UserIdPayload = { user_id?: string | null; [k: string]: unknown };
 
+// Tauri v2 serves custom URI scheme protocols from different origins per platform:
+//   macOS/Linux (WKWebView/webkitgtk): files://localhost/<path>
+//   Windows (WebView2) & Android (WebView): http://files.localhost/<path>
+// The Rust handler is registered in src-tauri/src/lib.rs (register_uri_scheme_protocol("files"))
+// and expects the "/files/<key>" path prefix on every platform.
+function filesBaseUrl(): string {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  if (/Android|Windows/i.test(ua)) return 'http://files.localhost';
+  return 'files://localhost';
+}
+
 export class TauriAdapter implements PRMAdapter {
-  baseUrl = 'files://localhost';
+  baseUrl = filesBaseUrl();
   private userIdReady: Promise<string>;
 
   constructor() {

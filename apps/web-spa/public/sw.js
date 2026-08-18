@@ -1,4 +1,4 @@
-const CACHE = 'weavine-v3';
+const CACHE = 'weavine-v4';
 
 const PRECACHE_URLS = [
   '/',

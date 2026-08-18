@@ -285,15 +285,19 @@ jobs:
         # WebView's navigator.mediaDevices.getUserMedia() can show the system
         # permission dialog. Without this, voice capture fails immediately with
         # NotAllowedError and there is no recovery path inside the app.
+        # MODIFY_AUDIO_SETTINGS + CAMERA accompany it for full mic/camera capture.
         run: |
           MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
-          if grep -q "android.permission.RECORD_AUDIO" "$MANIFEST"; then
-            echo "RECORD_AUDIO already present, skipping"
-          else
-            sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />|' "$MANIFEST"
-            echo "=== patched manifest ==="
-            head -10 "$MANIFEST"
-          fi
+          for PERM in RECORD_AUDIO MODIFY_AUDIO_SETTINGS CAMERA; do
+            if grep -q "android.permission.$PERM" "$MANIFEST"; then
+              echo "$PERM already present, skipping"
+            else
+              sed -i "s|<uses-permission android:name=\"android.permission.INTERNET\" />|<uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.$PERM\" />|" "$MANIFEST"
+              echo "added $PERM"
+            fi
+          done
+          echo "=== patched manifest ==="
+          head -12 "$MANIFEST"
 
       - name: Verify default MainActivity is in place
         run: |

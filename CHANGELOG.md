@@ -5,6 +5,14 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.17] - 2026-08-18
+
+### Fixed
+
+- **Windows / Android 头像图片无法加载** — Tauri v2 自定义 URI scheme 各平台 origin 不同：macOS/Linux（WKWebView/webkitgtk）为 `files://localhost/<path>`，而 Windows（WebView2）与 Android（WebView）为 `http://files.localhost/<path>`。`tauri.ts` 新增 `filesBaseUrl()` 按 `navigator.userAgent` 平台判断返回正确 baseUrl，修复两端头像/媒体图加载。
+- **Android 录音/拍照权限不全** — release.yml Android 构建 patch 步骤从仅 RECORD_AUDIO 改为 for 循环依次补齐 RECORD_AUDIO / MODIFY_AUDIO_SETTINGS / CAMERA（各自检查已存在则跳过），保证 AndroidManifest 权限完整，语音捕获与相机拍照可用。
+- **Service Worker 缓存版本升级** — `sw.js` CACHE 从 weavine-v3 升到 weavine-v4，强制客户端丢弃旧缓存获取新前端资源。
+
 ## [1.0.16] - 2026-08-18
 
 ### Changed
