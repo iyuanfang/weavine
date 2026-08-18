@@ -112,14 +112,20 @@ export function recordAudio(maxMs = 15000): Promise<Blob> {
     navigator.mediaDevices
       .getUserMedia({ audio: true })
       .then((stream) => {
-        // Android WebView needs a short warm-up for the audio pipeline to
-        // initialize. Starting the recorder immediately captures silence.
-        stream.getTracks().forEach((t) => t.stop());
-        return stream;
-      })
-      .then((stream) => {
+        // Android WebView's audio pipeline needs a moment to initialize;
+        // starting the recorder immediately can capture a short silent lead-in.
+        // NOTE: do NOT stop the tracks as a "warm-up" — that kills the mic
+        // and the recorder ends up with a dead stream (no data, empty blob,
+        // server returns "empty audio"). Instead, delay recorder.start().
         const mime = pickRecorderMime();
-        const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        let recorder: MediaRecorder;
+        try {
+          recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        } catch (e) {
+          stream.getTracks().forEach((t) => t.stop());
+          reject(new Error(`录音初始化失败（${e instanceof Error ? e.message : String(e)}）`));
+          return;
+        }
         const chunks: BlobPart[] = [];
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) chunks.push(e.data);
@@ -132,7 +138,15 @@ export function recordAudio(maxMs = 15000): Promise<Blob> {
           stream.getTracks().forEach((t) => t.stop());
           reject(new Error('录音失败'));
         };
-        recorder.start();
+        // Delay start so the audio pipeline warms up without dropping samples.
+        window.setTimeout(() => {
+          try {
+            recorder.start();
+          } catch (e) {
+            stream.getTracks().forEach((t) => t.stop());
+            reject(new Error(`录音启动失败：${e instanceof Error ? e.message : String(e)}`));
+          }
+        }, 200);
         window.setTimeout(() => {
           if (recorder.state !== 'inactive') recorder.stop();
         }, maxMs);

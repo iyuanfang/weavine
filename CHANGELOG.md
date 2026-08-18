@@ -5,6 +5,12 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.18] - 2026-08-18
+
+### Fixed
+
+- **Android 语音点击无反应** — 两处客户端问题：① `QuickFab.tsx` 语音失败被静默吞掉（`catch` 里 `onOpen('')` 打开空面板），现在改为在面板中显示具体错误信息（权限拒绝/空录音/网络错误），空录音 blob 单独报"录音为空"；② `voice.ts` 的 `recordAudio` 在 Android WebView 上 MediaRecorder 立即启动会捕获静音（音频管线未就绪），改为延迟 200ms 再 `recorder.start()` 让管线预热（注意不要 stop 音轨做"热身"——那会杀掉麦克风导致空 blob），并为 MediaRecorder 构造/启动增加 try/catch 错误提示。服务器端链路（上传 → ffmpeg → whisper）已通过生产 API 验证正常。
+
 ## [1.0.17] - 2026-08-18
 
 ### Fixed
