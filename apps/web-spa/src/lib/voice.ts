@@ -112,6 +112,12 @@ export function recordAudio(maxMs = 15000): Promise<Blob> {
     navigator.mediaDevices
       .getUserMedia({ audio: true })
       .then((stream) => {
+        // Android WebView needs a short warm-up for the audio pipeline to
+        // initialize. Starting the recorder immediately captures silence.
+        stream.getTracks().forEach((t) => t.stop());
+        return stream;
+      })
+      .then((stream) => {
         const mime = pickRecorderMime();
         const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
         const chunks: BlobPart[] = [];

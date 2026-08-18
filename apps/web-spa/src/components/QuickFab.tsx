@@ -15,12 +15,17 @@ export function QuickFab({ onOpen }: Props) {
     if (isAndroidTauri()) {
       setListening(true);
       recordAudio()
-        .then((blob) => recognizeCloud(blob))
+        .then((blob) => {
+          if (blob.size === 0) throw new Error('录音为空，请重试');
+          return recognizeCloud(blob);
+        })
         .then((transcript) => {
           onOpen(transcript);
         })
-        .catch(() => {
-          onOpen('');
+        .catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error('[voice] recording failed:', msg);
+          onOpen(msg);
         })
         .finally(() => {
           setListening(false);
