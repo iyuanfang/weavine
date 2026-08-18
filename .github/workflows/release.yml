@@ -309,6 +309,22 @@ jobs:
           echo "=== MainActivity.kt (head 5) ==="
           head -5 "$DEST"
 
+      # GitHub runner images pre-install a newer NDK and export NDK_HOME /
+      # ANDROID_NDK_HOME pointing at it. tauri-cli picks up those env vars
+      # and then resolves CARGO_TARGET_*_ANDROID_LINKER against the newer
+      # NDK, whose toolchain layout differs → gradle fails within seconds
+      # ("Failed to assemble APK", BUILD FAILED in 30s). Pin the env vars to
+      # the NDK version setup-android installed so the build is reproducible.
+      - name: Pin NDK version
+        run: |
+          PINNED="$ANDROID_HOME/ndk/26.1.10909125"
+          echo "ANDROID_NDK_HOME=$PINNED" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$PINNED" >> "$GITHUB_ENV"
+          echo "=== NDK directories present ==="
+          ls -1 "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(none)"
+          echo "=== pinned NDK toolchain ==="
+          ls "$PINNED/toolchains/llvm/prebuilt/linux-x86_64/bin/" 2>/dev/null | grep -c "aarch64-linux-android" || echo "0"
+
       - name: Build Tauri Android APK (arm64-v8a only)
         id: build
         run: |
