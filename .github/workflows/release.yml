@@ -252,11 +252,14 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Setup Android SDK
+        # NOTE: setup-android@v3 dropped api-level/build-tools-version/ndk-version
+        # (those were v2 inputs). The v3 way is the `packages` list — without
+        # an explicit `ndk;26.1.10909125` here the runner image's preinstalled
+        # NDK version drifts (29.x observed) and tauri-cli resolves a linker
+        # that does not exist → "Android NDK invalid".
         uses: android-actions/setup-android@v3
         with:
-          api-level: 34
-          build-tools-version: '34.0.0'
-          ndk-version: '26.1.10909125'
+          packages: 'platform-tools build-tools;34.0.0 ndk;26.1.10909125'
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -324,17 +327,22 @@ jobs:
       # the NDK version setup-android installed so the build is reproducible.
       - name: Pin NDK version
         run: |
-          PINNED="$ANDROID_HOME/ndk/26.1.10909125"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          PINNED="$SDK/ndk/26.1.10909125"
           if [ ! -d "$PINNED" ]; then
-            echo "FATAL: pinned NDK missing at $PINNED"
-            echo "=== NDK directories present ==="
-            ls -1 "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(none)"
+            echo "NOT at \$SDK ($SDK) — searching filesystem (maxdepth 7)..."
+            PINNED=$(find / -maxdepth 7 -type d -name "26.1.10909125" 2>/dev/null | head -1)
+          fi
+          if [ -z "$PINNED" ] || [ ! -d "$PINNED" ]; then
+            echo "FATAL: pinned NDK 26.1.10909125 not found"
+            echo "ANDROID_HOME=$ANDROID_HOME ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+            ls -1 "$SDK/ndk/" 2>/dev/null || echo "(no ndk dir under $SDK)"
             exit 1
           fi
           echo "ANDROID_NDK_HOME=$PINNED" >> "$GITHUB_ENV"
           echo "NDK_HOME=$PINNED" >> "$GITHUB_ENV"
           echo "=== NDK directories present ==="
-          ls -1 "$ANDROID_HOME/ndk/" 2>/dev/null || echo "(none)"
+          ls -1 "$(dirname "$PINNED")/" 2>/dev/null || echo "(none)"
           echo "=== pinned NDK toolchain ==="
           ls "$PINNED/toolchains/llvm/prebuilt/linux-x86_64/bin/" 2>/dev/null | grep -c "aarch64-linux-android" || echo "0"
 
@@ -393,7 +401,8 @@ jobs:
               -storepass android -keypass android \
               -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
           fi
-          BT="$ANDROID_HOME/build-tools/34.0.0"
+          BT_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          BT="$BT_SDK/build-tools/34.0.0"
           mapfile -t UNSIGNED < <(find src-tauri/gen/android -name '*-release-unsigned.apk' 2>/dev/null | sort)
           if [ ${#UNSIGNED[@]} -gt 0 ]; then
             echo "Found ${#UNSIGNED[@]} unsigned APK(s) to sign:"
