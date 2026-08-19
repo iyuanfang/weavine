@@ -490,6 +490,16 @@ jobs:
               esac
             done
           fi
+          # Both flavors stage APKs with the same filename (Weavine_${ABI}-release.apk).
+          # Without a flavor suffix, `gh release upload --clobber` in the release job
+          # would silently overwrite the cloud APK with the local APK. Rename per
+          # flavor so each upload is a distinct release asset.
+          echo "=== renaming APKs with flavor suffix ==="
+          for apk in android-out/Weavine_*-release.apk; do
+            [ -f "$apk" ] || continue
+            base=$(basename "$apk" .apk)
+            mv -v "$apk" "android-out/${base}_${{ matrix.flavor }}.apk"
+          done
           echo "Staged APKs:"
           ls -la android-out/
 
