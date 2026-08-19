@@ -159,6 +159,13 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Canonical app data dir, resolved before any command that needs
+            // install_id / device_key / voice model paths runs. On Android
+            // `app.path().app_data_dir()` returns `/data/user/0/<app_id>`,
+            // which is the only writable location on the platform.
+            if let Ok(app_data_dir) = app.path().app_data_dir() {
+                install_id::set_app_data_dir(app_data_dir);
+            }
             install_id::spawn_first_launch_ping(app.handle().clone());
             #[cfg(desktop)]
             {

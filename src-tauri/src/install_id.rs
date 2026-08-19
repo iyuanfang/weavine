@@ -10,9 +10,35 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+/// Canonical app data directory resolved from `app.path().app_data_dir()`
+/// in `lib.rs::run()`'s `setup()`. Set on every platform; on Android it
+/// points at `/data/user/0/com.weavine.desktop/...` (the Tauri runtime
+/// guarantee), avoiding the brittle `$HOME` env var that the previous
+/// implementation relied on. On Android, `HOME` is often `/` (which is
+/// read-only) or unset, so any path rooted in `$HOME` produced
+/// `Read-only file system (os error 30)` when the voice model tried to
+/// write its first chunk.
+static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Initialize the canonical app data directory once at startup. Called from
+/// `lib.rs::run()` setup with the result of `app.path().app_data_dir()`.
+pub fn set_app_data_dir(path: PathBuf) {
+    let _ = APP_DATA_DIR.set(path);
+}
+
+pub fn app_data_dir() -> Option<PathBuf> {
+    APP_DATA_DIR.get().cloned()
+}
 
 #[cfg(not(target_os = "android"))]
 fn install_id_path() -> Option<PathBuf> {
+    if let Some(base) = app_data_dir() {
+        let dir = base.join("install_id").parent()?.to_path_buf();
+        fs::create_dir_all(&dir).ok()?;
+        return Some(dir.join("install_id"));
+    }
     let dir = dirs::data_dir()?.join("com.weavine.desktop");
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("install_id"))
@@ -20,11 +46,16 @@ fn install_id_path() -> Option<PathBuf> {
 
 #[cfg(target_os = "android")]
 fn install_id_path() -> Option<PathBuf> {
-    // Android uses $HOME/com.weavine.desktop/files/ (set by the Tauri
-    // runtime). We don't pull `dirs` here to avoid path layout surprises.
-    let dir = std::env::var("HOME")
-        .ok()
-        .map(|h| PathBuf::from(h).join("com.weavine.desktop").join("files"))?;
+    // Prefer the Tauri-resolved app data dir (always correct on Android).
+    // Falls back to a manual construction of `/data/user/0/<app_id>/files`
+    // matching what the previous HOME-based path was trying to express, in
+    // case setup() runs after install_id is queried somewhere.
+    if let Some(base) = app_data_dir() {
+        let dir = base.join("files");
+        fs::create_dir_all(&dir).ok()?;
+        return Some(dir.join("install_id"));
+    }
+    let dir = PathBuf::from("/data/user/0/com.weavine.desktop/files");
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("install_id"))
 }
@@ -33,6 +64,11 @@ fn install_id_path() -> Option<PathBuf> {
 /// (install_id, device_key, on-device voice model, …). Creates it if
 /// missing.
 pub fn data_dir() -> PathBuf {
+    if let Some(base) = app_data_dir() {
+        let dir = base.join("files");
+        let _ = fs::create_dir_all(&dir);
+        return dir;
+    }
     let dir = install_id_path()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| {
@@ -78,6 +114,11 @@ pub fn get_or_create() -> String {
 
 #[cfg(not(target_os = "android"))]
 fn device_key_path() -> Option<PathBuf> {
+    if let Some(base) = app_data_dir() {
+        let dir = base.join("files");
+        fs::create_dir_all(&dir).ok()?;
+        return Some(dir.join("device_key"));
+    }
     let dir = dirs::data_dir()?.join("com.weavine.desktop");
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("device_key"))
@@ -85,9 +126,12 @@ fn device_key_path() -> Option<PathBuf> {
 
 #[cfg(target_os = "android")]
 fn device_key_path() -> Option<PathBuf> {
-    let dir = std::env::var("HOME")
-        .ok()
-        .map(|h| PathBuf::from(h).join("com.weavine.desktop").join("files"))?;
+    if let Some(base) = app_data_dir() {
+        let dir = base.join("files");
+        fs::create_dir_all(&dir).ok()?;
+        return Some(dir.join("device_key"));
+    }
+    let dir = PathBuf::from("/data/user/0/com.weavine.desktop/files");
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("device_key"))
 }

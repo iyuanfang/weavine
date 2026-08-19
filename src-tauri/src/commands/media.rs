@@ -25,13 +25,12 @@ pub(crate) fn data_dir() -> Result<PathBuf, String> {
 // Mirrors db::get_db_path() so the files:// protocol handler and upload
 // resolve to the same directory tree.
 fn media_base_dir() -> PathBuf {
+    if let Some(base) = crate::install_id::app_data_dir() {
+        return base;
+    }
     #[cfg(target_os = "android")]
     {
-        std::env::var("HOME")
-            .ok()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/data/user/0"))
-            .join("com.weavine.desktop")
+        PathBuf::from("/data/user/0/com.weavine.desktop")
     }
     #[cfg(not(target_os = "android"))]
     {
