@@ -40,10 +40,25 @@ fn copy_native_libs_to_tauri_jni_libs() {
         }
     };
 
-    let profile_dir = manifest_dir
-        .join("target")
-        .join(&target_triple)
-        .join(&profile);
+    // Cargo's target/ lives at the workspace root (or wherever CARGO_TARGET_DIR
+    // points), NOT inside the manifest_dir (src-tauri/). Walk OUT_DIR's
+    // ancestors to find it the same way sherpa-onnx-sys's own build.rs does.
+    let target_root = std::env::var("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .ok()
+        .or_else(|| {
+            std::env::var("OUT_DIR")
+                .ok()
+                .map(std::path::PathBuf::from)
+                .and_then(|out| {
+                    out.ancestors()
+                        .find(|p| p.file_name() == Some(std::ffi::OsStr::new("target")))
+                        .map(|p| p.to_path_buf())
+                })
+        })
+        .unwrap_or_else(|| manifest_dir.parent().unwrap().join("target"));
+
+    let profile_dir = target_root.join(&target_triple).join(&profile);
     let jni_libs_dst = manifest_dir
         .join("gen")
         .join("android")
