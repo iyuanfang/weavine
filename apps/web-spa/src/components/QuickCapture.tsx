@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
-import { beginVoice, checkVoiceModel, downloadVoiceModel, endVoice, isAndroidTauri, ModelDownloadProgress, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
+import { beginVoice, checkVoiceModel, downloadVoiceModel, endVoice, isAndroidTauri, ModelDownloadProgress, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
 const KIND_LABEL: Record<QuickKind, string> = {
@@ -127,29 +127,40 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       endVoice();
     };
     if (isAndroidTauri()) {
-      const onProgress = (p: ModelDownloadProgress) => {
-        const pct = p.totalBytes > 0 ? Math.round((p.downloadedBytes / p.totalBytes) * 100) : null;
-        setVoiceDownload(`下载语音模型：${p.stage} ${pct ?? ''}%`);
-      };
-      recordAudio()
-        .then(async (blob) => {
-          const status = await checkVoiceModel();
-          if (!status.ready) {
-            setVoiceDownload('正在准备语音模型...');
-            await downloadVoiceModel(onProgress);
+      // Two APK flavors: `voice-local` uses sherpa-onnx on-device;
+      // `voice-cloud` POSTs to /api/voice/recognize. Both share the same
+      // recording pipeline; only the recognizer call differs.
+      if (voiceMode() === 'local') {
+        const onProgress = (p: ModelDownloadProgress) => {
+          const pct = p.totalBytes > 0 ? Math.round((p.downloadedBytes / p.totalBytes) * 100) : null;
+          setVoiceDownload(`下载语音模型：${p.stage} ${pct ?? ''}%`);
+        };
+        recordAudio()
+          .then(async (blob) => {
+            const status = await checkVoiceModel();
+            if (!status.ready) {
+              setVoiceDownload('正在准备语音模型...');
+              await downloadVoiceModel(onProgress);
+              setVoiceDownload(null);
+            }
+            return recognizeLocal(blob);
+          })
+          .then(done)
+          .catch((e: unknown) => {
             setVoiceDownload(null);
-          }
-          return recognizeLocal(blob);
-        })
-        .then(done)
-        .catch((e: unknown) => {
-          setVoiceDownload(null);
-          fail(e);
-        })
-        .finally(() => {
-          setVoiceDownload(null);
-          release();
-        });
+            fail(e);
+          })
+          .finally(() => {
+            setVoiceDownload(null);
+            release();
+          });
+      } else {
+        recordAudio()
+          .then(async (blob) => recognizeCloud(blob))
+          .then(done)
+          .catch(fail)
+          .finally(release);
+      }
       return;
     }
     recognizeSpeech()

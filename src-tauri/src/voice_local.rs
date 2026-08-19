@@ -8,9 +8,12 @@
 //! `commands::voice_local::download_voice_model`) and cached in the app's
 //! data dir.
 //!
-//! Compiled on all platforms so the `check_voice_model` and
-//! `download_voice_model` commands can be defined everywhere; the heavy
-//! `sherpa_onnx` dependency is only linked on Android (see Cargo.toml).
+//! The entire module is gated on the `voice-local` Cargo feature so the
+//! cloud-flavor Android APK can be built without pulling in sherpa-onnx
+//! or its ~30 MB of native libraries. See Cargo.toml for the feature
+//! matrix.
+
+#![cfg(feature = "voice-local")]
 
 use std::path::{PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -20,7 +23,11 @@ use crate::install_id;
 pub const MODEL_DIR_NAME: &str = "whisper-tiny";
 pub const ENCODER_FILE: &str = "tiny-encoder.int8.onnx";
 pub const DECODER_FILE: &str = "tiny-decoder.int8.onnx";
-pub const TOKENS_FILE: &str = "tokens.txt";
+// k2-fsa/sherpa-onnx ships the tokens file as `tiny-tokens.txt`, not
+// `tokens.txt`. The previous constant was wrong — download would succeed
+// but `model_status()` always returned `ready: false`, leaving the user
+// with a downloaded model that the recognizer refused to load.
+pub const TOKENS_FILE: &str = "tiny-tokens.txt";
 
 /// Files the tar archive must unpack into `model_dir()`. Anything else
 /// (source archives, READMEs, sample audio) is skipped on extract.

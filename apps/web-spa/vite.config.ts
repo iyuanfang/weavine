@@ -5,9 +5,20 @@ import react from '@vitejs/plugin-react';
 // on macOS/Windows/Android). Otherwise base: '/' for Web SPA deep-link hard-reload.
 const isTauri = !!process.env.TAURI_BUILD;
 
+// Voice-recognition backend selector. pnpm filters process.env when spawning
+// subprocesses, so VITE_VOICE_MODE set on the parent shell never reaches
+// vite's transform phase. Statically baking it via `define` works on every
+// platform (Windows / macOS / Linux) regardless of which shell launched pnpm.
+//   cloud (default) — Android voice POSTs to server /api/voice/recognize
+//   local           — Android voice runs sherpa-onnx on-device
+const voiceMode = process.env.VITE_VOICE_MODE === 'local' ? 'local' : 'cloud';
+
 export default defineConfig({
   plugins: [react()],
   base: isTauri ? './' : '/',
+  define: {
+    'import.meta.env.VITE_VOICE_MODE': JSON.stringify(voiceMode),
+  },
   server: {
     port: 5181,
     strictPort: true,
@@ -18,9 +29,6 @@ export default defineConfig({
         target: 'http://127.0.0.1:3000',
         changeOrigin: true,
       },
-      // Avatar / media files are stored on the server backend (Storage trait).
-      // Forward /files/* to the server so <img src="/files/..."> resolves in the
-      // browser dev SPA (which is served from Vite on :5181, not :3000).
       '/files': {
         target: 'http://127.0.0.1:3000',
         changeOrigin: true,

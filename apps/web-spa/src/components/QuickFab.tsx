@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { beginVoice, checkVoiceModel, downloadVoiceModel, endVoice, isAndroidTauri, ModelDownloadProgress, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable } from '../lib/voice';
+import { beginVoice, checkVoiceModel, downloadVoiceModel, endVoice, isAndroidTauri, ModelDownloadProgress, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
 
 interface Props {
   onOpen: (initialText: string) => void;
@@ -31,14 +31,21 @@ export function QuickFab({ onOpen }: Props) {
         return;
       }
       setListening(true);
-      recordAudio()
-        .then((blob) => {
-          if (blob.size === 0) throw new Error('录音为空，请重试');
-          return ensureModelAndRecognize(blob, (p) => {
-            setDownloadStage(p.stage);
-            setDownloadPct(p.totalBytes > 0 ? (p.downloadedBytes / p.totalBytes) * 100 : null);
+      // Two APK flavors: `voice-local` runs sherpa-onnx on-device;
+      // `voice-cloud` POSTs to /api/voice/recognize on the server.
+      const onAndroid = voiceMode() === 'local'
+        ? recordAudio().then(async (blob) => {
+            if (blob.size === 0) throw new Error('录音为空，请重试');
+            return ensureModelAndRecognize(blob, (p) => {
+              setDownloadStage(p.stage);
+              setDownloadPct(p.totalBytes > 0 ? (p.downloadedBytes / p.totalBytes) * 100 : null);
+            });
+          })
+        : recordAudio().then(async (blob) => {
+            if (blob.size === 0) throw new Error('录音为空，请重试');
+            return recognizeCloud(blob);
           });
-        })
+      onAndroid
         .then((transcript) => {
           onOpen(transcript);
         })

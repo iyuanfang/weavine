@@ -33,6 +33,28 @@ export function isAndroidTauri(): boolean {
   return isAndroid() && isTauri;
 }
 
+/**
+ * Which voice-recognition backend this build ships with. Set at build time
+ * via Vite's `VITE_VOICE_MODE` env var (one of `cloud` | `local`). The two
+ * values map to the two Android APK flavors:
+ *
+ *   cloud  — small APK, no sherpa-onnx, voice → server /api/voice/recognize.
+ *            Default. `cargo tauri android build --apk` produces this.
+ *   local  — large APK with sherpa-onnx .so + Whisper tiny multilingual
+ *            bundled as a resource. Voice runs entirely on-device.
+ *            `cargo tauri android build --apk --features voice-local
+ *             --config src-tauri/tauri.local.conf.json`.
+ *
+ * On non-Android platforms the value is irrelevant (the Web Speech API is
+ * used regardless); we still expose the field for type uniformity.
+ */
+export type VoiceMode = 'cloud' | 'local';
+
+export function voiceMode(): VoiceMode {
+  const raw = (import.meta.env.VITE_VOICE_MODE ?? 'cloud') as string;
+  return raw === 'local' ? 'local' : 'cloud';
+}
+
 let voiceInFlight = false;
 
 // Global lock so QuickFab and QuickCapture can't run two recordings at once.

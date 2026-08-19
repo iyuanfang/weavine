@@ -18,4 +18,5 @@ pub mod setting;
 pub mod sync;
 pub mod tag;
 pub mod voice;
+#[cfg(feature = "voice-local")]
 pub mod voice_local;

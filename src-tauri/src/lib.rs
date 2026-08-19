@@ -12,6 +12,7 @@ pub mod project_template;
 pub mod quick;
 pub mod sync;
 pub mod tag_color;
+#[cfg(feature = "voice-local")]
 pub mod voice_local;
 
 #[cfg(feature = "tauri")]
@@ -246,8 +247,11 @@ pub fn run() {
             ocr::extract_card,
         ocr::save_card_image,
             voice::recognize_voice,
+            #[cfg(feature = "voice-local")]
             commands::voice_local::check_voice_model,
+            #[cfg(feature = "voice-local")]
             commands::voice_local::download_voice_model,
+            #[cfg(feature = "voice-local")]
             commands::voice_local::recognize_voice_local,
             commands::sync::cloud_login,
             commands::sync::cloud_logout,

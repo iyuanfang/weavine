@@ -1,3 +1,5 @@
+#![cfg(feature = "voice-local")]
+
 use crate::voice_local;
 use base64::Engine;
 use serde::Serialize;

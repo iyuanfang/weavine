@@ -220,6 +220,15 @@ jobs:
           if-no-files-found: error
 
   build-android:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two flavors ship from the same source tree:
+        #   cloud — small APK (~15 MB), no sherpa-onnx deps; Android voice
+        #           POSTs to the server's /api/voice/recognize. Default.
+        #   local — large APK (~130 MB), sherpa-onnx + Whisper tiny bundled;
+        #           voice runs entirely on-device.
+        flavor: [cloud, local]
     runs-on: ubuntu-latest
 
     steps:
@@ -268,7 +277,16 @@ jobs:
         run: cargo install tauri-cli --version "^2" --locked
 
       - name: Generate Android project
-        run: cargo tauri android init
+        # The Android scaffold's package directory follows tauri.conf.json >
+        # identifier. For the `local` flavor we override to use
+        # tauri.local.conf.json (identifier com.weavine.desktop.local) so
+        # both APKs can be installed side-by-side.
+        run: |
+          if [ "${{ matrix.flavor }}" = "local" ]; then
+            cargo tauri android init --ci -c src-tauri/tauri.local.conf.json
+          else
+            cargo tauri android init --ci
+          fi
 
       - name: Inject frontendDist assets into Gradle config
         # src-tauri/gen/android/ is gitignored, so we patch build.gradle.kts
@@ -304,7 +322,12 @@ jobs:
 
       - name: Verify default MainActivity is in place
         run: |
-          DEST=src-tauri/gen/android/app/src/main/java/com/weavine/desktop/MainActivity.kt
+          if [ "${{ matrix.flavor }}" = "local" ]; then
+            PKG="com/weavine/desktop/local"
+          else
+            PKG="com/weavine/desktop"
+          fi
+          DEST=src-tauri/gen/android/app/src/main/java/$PKG/MainActivity.kt
           if [ ! -f "$DEST" ]; then
             echo "FATAL: $DEST missing — cargo tauri android init did not produce it"
             exit 1
@@ -339,17 +362,32 @@ jobs:
           echo "=== pinned NDK toolchain ==="
           ls "$PINNED/toolchains/llvm/prebuilt/linux-x86_64/bin/" 2>/dev/null | grep -c "aarch64-linux-android" || echo "0"
 
-      - name: Build Tauri Android APK (arm64-v8a only)
+      - name: Build Tauri Android APK (arm64-v8a only, ${{ matrix.flavor }} flavor)
         id: build
         run: |
           # cargo tauri android build --split-per-abi --target aarch64 produces
-          # a single 22 MB APK with only arm64-v8a .so, vs the 80 MB universal
+          # a single APK with only arm64-v8a .so, vs the 80 MB universal
           # APK with all four ABIs. --target is the Tauri-native way (do NOT
           # also patch gradle's splits.abi or ndk.abiFilters — they conflict
           # with the productFlavor setup RustPlugin.kt installs).
+          #
+          # The `local` flavor additionally enables Cargo's voice-local
+          # feature (linking sherpa-onnx), uses tauri.local.conf.json (so
+          # the resulting APK has identifier com.weavine.desktop.local and
+          # bundles src-tauri/resources/whisper-tiny/ as an Android asset),
+          # and sets VITE_VOICE_MODE=local so the JS side knows to skip the
+          # network recognizer path.
           set -o pipefail
-          cargo tauri android build --apk --split-per-abi --target aarch64 2>&1 \
-            | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
+          if [ "${{ matrix.flavor }}" = "local" ]; then
+            cargo tauri android build \
+              --apk --split-per-abi --target aarch64 \
+              --features voice-local \
+              --config src-tauri/tauri.local.conf.json 2>&1 \
+              | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
+          else
+            cargo tauri android build --apk --split-per-abi --target aarch64 2>&1 \
+              | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
+          fi
           rc=${PIPESTATUS[0]}
           echo "exit_code=$rc" >> $GITHUB_OUTPUT
           exit $rc
@@ -467,7 +505,7 @@ jobs:
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: weavine-android
+          name: weavine-android-${{ matrix.flavor }}
           path: android-out/*.apk
           if-no-files-found: error
 
@@ -521,11 +559,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Upload Android APK to Release
+      - name: Upload Android APKs to Release
         run: |
-          find artifacts/weavine-android -type f -name '*.apk' -print0 | \
-            xargs -0 gh release upload "${{ github.ref_name }}" \
-              --repo "${{ github.repository }}" \
-              --clobber
+          # Both flavors upload here — cloud (small, no sherpa-onnx) and
+          # local (large, with sherpa-onnx + bundled Whisper tiny). Users
+          # pick whichever matches their needs.
+          for art in weavine-android-cloud weavine-android-local; do
+            if [ -d "artifacts/$art" ]; then
+              find "artifacts/$art" -type f -name '*.apk' -print0 | \
+                xargs -0 gh release upload "${{ github.ref_name }}" \
+                  --repo "${{ github.repository }}" \
+                  --clobber
+            fi
+          done
         env:
           GH_TOKEN: ${{ github.token }}
