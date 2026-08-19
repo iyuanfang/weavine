@@ -127,18 +127,17 @@ fn download_prebuilt_libs(
     let extracted_dir = cache_root.join(archive_stem);
     let lib_dir = extracted_dir.join("lib");
 
-    if lib_dir.is_dir() {
+    if lib_dir.is_dir() && dir_has_so_files(&lib_dir) {
         return Ok(lib_dir);
     }
 
-    // Android archives use jniLibs/{abi}/ instead of lib/. Check both.
     let android_lib_dir = extracted_dir.join("jniLibs").join(android_abi(target_arch));
-    if android_lib_dir.is_dir() {
+    if android_lib_dir.is_dir() && dir_has_so_files(&android_lib_dir) {
         return Ok(android_lib_dir);
     }
 
     let flat_android_lib_dir = cache_root.join("jniLibs").join(android_abi(target_arch));
-    if flat_android_lib_dir.is_dir() {
+    if flat_android_lib_dir.is_dir() && dir_has_so_files(&flat_android_lib_dir) {
         return Ok(flat_android_lib_dir);
     }
 
@@ -199,12 +198,12 @@ fn download_prebuilt_libs(
         let android_lib_dir = extracted_dir
             .join("jniLibs")
             .join(android_abi(target_arch));
-        if android_lib_dir.is_dir() {
+        if android_lib_dir.is_dir() && dir_has_so_files(&android_lib_dir) {
             eprintln!("Downloaded sherpa-onnx Android libs to {}", android_lib_dir.display());
             return Ok(android_lib_dir);
         }
         let flat_android_lib_dir = cache_root.join("jniLibs").join(android_abi(target_arch));
-        if flat_android_lib_dir.is_dir() {
+        if flat_android_lib_dir.is_dir() && dir_has_so_files(&flat_android_lib_dir) {
             eprintln!("Downloaded sherpa-onnx Android libs to {}", flat_android_lib_dir.display());
             return Ok(flat_android_lib_dir);
         }
@@ -218,6 +217,16 @@ fn download_prebuilt_libs(
     eprintln!("Downloaded sherpa-onnx libs to {}", extracted_dir.display());
 
     Ok(lib_dir)
+}
+
+fn dir_has_so_files(dir: &Path) -> bool {
+    fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .any(|e| e.file_name().to_string_lossy().contains(".so"))
+        })
+        .unwrap_or(false)
 }
 
 /// Map a Rust target architecture to the Android ABI directory name used
