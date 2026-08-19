@@ -137,7 +137,7 @@ fn build_recognizer(dir: &Path) -> Result<OfflineRecognizer, String> {
     config.model_config.provider = Some("cpu".into());
 
     OfflineRecognizer::create(&config)
-        .map_err(|e| format!("failed to build whisper recognizer: {e}"))
+        .ok_or_else(|| "failed to build whisper recognizer".to_string())
 }
 
 #[cfg(target_os = "android")]
