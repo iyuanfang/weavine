@@ -7,3 +7,4 @@ members = ["src-tauri", "server", "weavine-mcp"]
 # leptess's bindgen 0.49 -> clang-sys 0.28 (both declare links = "clang").
 [patch.crates-io]
 whisper-rs-sys = { path = "server/vendor/whisper-rs-sys" }
+sherpa-onnx-sys = { path = "src-tauri/vendor/sherpa-onnx-sys-1.13.5-android-layout-fix" }
