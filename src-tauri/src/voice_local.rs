@@ -22,6 +22,13 @@ use std::path::PathBuf;
 
 use crate::install_id;
 
+#[cfg(target_os = "android")]
+use std::path::Path;
+#[cfg(target_os = "android")]
+use std::sync::{Arc, OnceLock};
+#[cfg(target_os = "android")]
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig};
+
 pub const MODEL_DIR_NAME: &str = "sense-voice";
 pub const MODEL_FILE: &str = "model.int8.onnx";
 pub const TOKENS_FILE: &str = "tokens.txt";
@@ -97,12 +104,6 @@ pub fn transcribe(_samples: &[f32]) -> Result<(String, String), String> {
 }
 
 // --- Android-only recognizer singleton. ---
-
-#[cfg(target_os = "android")]
-use std::path::Path;
-
-#[cfg(target_os = "android")]
-use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig};
 
 /// Process-wide singleton recognizer. Loading the SenseVoice int8 model
 /// (~228 MB) takes a couple of seconds on a mid-range Android device, so we
