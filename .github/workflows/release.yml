@@ -640,9 +640,19 @@ jobs:
 
       - name: Create Release
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --generate-notes
+          # Idempotent: `gh release create` errors out if a release with the
+          # same tag already exists (e.g. when an Android job in the matrix
+          # pushes the same tag twice in a re-run, or when a prior CI run
+          # created the release and a force-push triggered this run again).
+          # In that case the asset upload steps below already use --clobber,
+          # so we just want to skip the create and let uploads proceed.
+          if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists, skipping create (uploads will overwrite assets)"
+          else
+            gh release create "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --generate-notes
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
 
