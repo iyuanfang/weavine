@@ -224,10 +224,13 @@ jobs:
       fail-fast: false
       matrix:
         # Two flavors ship from the same source tree:
-        #   cloud — small APK (~15 MB), no sherpa-onnx deps; Android voice
+        #   cloud — small APK (~25 MB), no sherpa-onnx deps; Android voice
         #           POSTs to the server's /api/voice/recognize. Default.
-        #   local — large APK (~130 MB), sherpa-onnx + Whisper tiny bundled;
-        #           voice runs entirely on-device.
+        #   local — large APK (~250 MB), sherpa-onnx + SenseVoice int8 model
+        #           bundled as an Android asset (extracted to the app data
+        #           dir at first launch via android_assets.rs); voice runs
+        #           entirely on-device. There is no download fallback — the
+        #           model ships with the APK.
         flavor: [cloud, local]
     runs-on: ubuntu-latest
 
@@ -362,6 +365,28 @@ jobs:
           echo "=== pinned NDK toolchain ==="
           ls "$PINNED/toolchains/llvm/prebuilt/linux-x86_64/bin/" 2>/dev/null | grep -c "aarch64-linux-android" || echo "0"
 
+      # The local-flavor APK bundles the SenseVoice model under
+      # src-tauri/resources/sense-voice/ via tauri.local.conf.json::bundle.resources.
+      # Model archive is ~228 MB — too big for git, and the developer's
+      # network is often unreliable. Fetch + extract here so the Android
+      # build step has the files ready for Tauri's resource bundler.
+      - name: Download SenseVoice model (local flavor)
+        if: matrix.flavor == 'local'
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/resources/sense-voice
+          curl -fSL --retry 5 --retry-delay 5 --connect-timeout 30 \
+            -o /tmp/sv.tar.bz2 \
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
+          tar -xjf /tmp/sv.tar.bz2 -C /tmp/
+          mv /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx \
+             src-tauri/resources/sense-voice/model.int8.onnx
+          mv /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/tokens.txt \
+             src-tauri/resources/sense-voice/tokens.txt
+          rm -rf /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 /tmp/sv.tar.bz2
+          echo "=== SenseVoice files staged ==="
+          ls -la src-tauri/resources/sense-voice/
+
       - name: Build Tauri Android APK (arm64-v8a only, ${{ matrix.flavor }} flavor)
         id: build
         run: |
@@ -374,9 +399,10 @@ jobs:
           # The `local` flavor additionally enables Cargo's voice-local
           # feature (linking sherpa-onnx), uses tauri.local.conf.json (so
           # the resulting APK has identifier com.weavine.desktop.local and
-          # bundles src-tauri/resources/whisper-tiny/ as an Android asset),
-          # and sets VITE_VOICE_MODE=local so the JS side knows to skip the
-          # network recognizer path.
+          # bundles src-tauri/resources/sense-voice/ as an Android asset —
+          # files are extracted to the app data dir at first launch by
+          # android_assets.rs), and sets VITE_VOICE_MODE=local so the JS
+          # side knows to skip the network recognizer path.
           set -o pipefail
           if [ "${{ matrix.flavor }}" = "local" ]; then
             cargo tauri android build \
@@ -572,8 +598,8 @@ jobs:
       - name: Upload Android APKs to Release
         run: |
           # Both flavors upload here — cloud (small, no sherpa-onnx) and
-          # local (large, with sherpa-onnx + bundled Whisper tiny). Users
-          # pick whichever matches their needs.
+          # local (large, with sherpa-onnx + bundled SenseVoice model).
+          # Users pick whichever matches their needs.
           for art in weavine-android-cloud weavine-android-local; do
             if [ -d "artifacts/$art" ]; then
               find "artifacts/$art" -type f -name '*.apk' -print0 | \

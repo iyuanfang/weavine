@@ -1,13 +1,15 @@
-//! On-device speech recognition for Android via sherpa-onnx (Whisper tiny).
+//! On-device speech recognition for Android via sherpa-onnx (SenseVoice).
 //!
 //! Used by `recognize_voice_local` instead of `recognize_voice` so that
 //! voice input on Android never hits the cloud, which would otherwise pile
-//! up server-side and 504 under load. The Whisper tiny multilingual model
-//! (~75 MB extracted) supports Chinese and English out of the box. On the
-//! local-flavor APK it ships pre-bundled under `assets/whisper-tiny/` (see
-//! `tauri.local.conf.json::bundle.resources`); on a hypothetical stripped
-//! build the code falls back to downloading the tar.bz2 from k2-fsa's
-//! GitHub release (see `commands::voice_local::download_voice_model`).
+//! up server-side and 504 under load. The SenseVoice small int8 model
+//! (`model.int8.onnx`, ~228 MB) supports Chinese and English out of the box
+//! with automatic language detection. On the local-flavor APK it ships
+//! pre-bundled under `assets/sense-voice/` (see
+//! `tauri.local.conf.json::bundle.resources`) and is extracted to the app
+//! data dir at startup by `android_assets::extract_sense_voice_to_data_dir()`
+//! (see `lib.rs` setup). There is deliberately NO download fallback — the
+//! model is always bundled, so `model_dir()` is the single source of truth.
 //!
 //! The entire module is gated on the `voice-local` Cargo feature so the
 //! cloud-flavor Android APK can be built without pulling in sherpa-onnx
@@ -16,57 +18,23 @@
 
 #![cfg(feature = "voice-local")]
 
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::path::PathBuf;
 
 use crate::install_id;
 
-pub const MODEL_DIR_NAME: &str = "whisper-tiny";
-pub const ENCODER_FILE: &str = "tiny-encoder.int8.onnx";
-pub const DECODER_FILE: &str = "tiny-decoder.int8.onnx";
-// k2-fsa/sherpa-onnx ships the tokens file as `tiny-tokens.txt`, not
-// `tokens.txt`. The previous constant was wrong — download would succeed
-// but `model_status()` always returned `ready: false`, leaving the user
-// with a downloaded model that the recognizer refused to load.
-pub const TOKENS_FILE: &str = "tiny-tokens.txt";
+pub const MODEL_DIR_NAME: &str = "sense-voice";
+pub const MODEL_FILE: &str = "model.int8.onnx";
+pub const TOKENS_FILE: &str = "tokens.txt";
 
-/// Files the tar archive must unpack into `model_dir()`. Anything else
-/// (source archives, READMEs, sample audio) is skipped on extract.
-pub const REQUIRED_FILES: &[&str] = &[ENCODER_FILE, DECODER_FILE, TOKENS_FILE];
-
-/// Populated by `lib.rs` setup() with the path of the bundled model dir
-/// (`app.path().resource_dir().join("whisper-tiny")`) when the local-flavor
-/// APK ships with the model pre-installed. When this is set AND contains
-/// all three required files, `model_dir()` returns it directly and the
-/// runtime never hits `download_voice_model`. On a build without bundled
-/// resources the lock stays empty and the historical download path runs.
-static BUNDLED_MODEL_DIR: OnceLock<PathBuf> = OnceLock::new();
-
-pub fn set_bundled_model_dir(path: PathBuf) {
-    let _ = BUNDLED_MODEL_DIR.set(path);
-}
-
-fn has_all_model_files(dir: &Path) -> bool {
-    dir.join(ENCODER_FILE).is_file()
-        && dir.join(DECODER_FILE).is_file()
-        && dir.join(TOKENS_FILE).is_file()
-}
+/// Files that must exist in `model_dir()` for the recognizer to be ready.
+pub const REQUIRED_FILES: &[&str] = &[MODEL_FILE, TOKENS_FILE];
 
 pub fn model_dir() -> PathBuf {
-    if let Some(bundled) = BUNDLED_MODEL_DIR.get() {
-        if has_all_model_files(bundled) {
-            return bundled.clone();
-        }
-    }
     install_id::data_dir().join(MODEL_DIR_NAME)
 }
 
-pub fn encoder_path() -> PathBuf {
-    model_dir().join(ENCODER_FILE)
-}
-
-pub fn decoder_path() -> PathBuf {
-    model_dir().join(DECODER_FILE)
+pub fn model_path() -> PathBuf {
+    model_dir().join(MODEL_FILE)
 }
 
 pub fn tokens_path() -> PathBuf {
@@ -75,24 +43,23 @@ pub fn tokens_path() -> PathBuf {
 
 pub fn model_status() -> ModelStatus {
     let dir = model_dir();
-    let encoder = encoder_path();
-    let decoder = decoder_path();
+    let model = model_path();
     let tokens = tokens_path();
-    if !dir.exists() || !encoder.exists() || !decoder.exists() || !tokens.exists() {
+    if !dir.exists() || !model.exists() || !tokens.exists() {
         return ModelStatus {
             ready: false,
-            model_path: encoder.to_string_lossy().into_owned(),
+            model_path: model.to_string_lossy().into_owned(),
             dir_path: dir.to_string_lossy().into_owned(),
             size_bytes: 0,
         };
     }
-    let encoder_size = std::fs::metadata(&encoder).map(|m| m.len()).unwrap_or(0);
-    let decoder_size = std::fs::metadata(&decoder).map(|m| m.len()).unwrap_or(0);
+    let model_size = std::fs::metadata(&model).map(|m| m.len()).unwrap_or(0);
+    let tokens_size = std::fs::metadata(&tokens).map(|m| m.len()).unwrap_or(0);
     ModelStatus {
         ready: true,
-        model_path: encoder.to_string_lossy().into_owned(),
+        model_path: model.to_string_lossy().into_owned(),
         dir_path: dir.to_string_lossy().into_owned(),
-        size_bytes: encoder_size + decoder_size,
+        size_bytes: model_size + tokens_size,
     }
 }
 
@@ -105,11 +72,11 @@ pub struct ModelStatus {
     pub size_bytes: u64,
 }
 
-/// Run Whisper tiny on 16 kHz mono PCM f32 samples. The caller is responsible
+/// Run SenseVoice on 16 kHz mono PCM f32 samples. The caller is responsible
 /// for resampling to 16 kHz and downmixing to mono. Returns `(text, language)`
-/// — language comes from the recognizer's language hint (we pass `"auto"` so
-/// Whisper picks zh/en automatically); falls back to `"auto"` if the model
-/// doesn't expose a language field.
+/// — SenseVoice emits `<|zh|>` / `<|en|>` markers in its output tokens, but
+/// the `OfflineRecognizerResult` struct doesn't expose a parsed language
+/// field, so we report `"auto"` and let the caller decide if that's enough.
 #[cfg(target_os = "android")]
 pub fn transcribe(samples: &[f32]) -> Result<(String, String), String> {
     let recognizer = get_recognizer()?;
@@ -118,12 +85,8 @@ pub fn transcribe(samples: &[f32]) -> Result<(String, String), String> {
     recognizer.decode(&stream);
     let result = stream
         .get_result()
-        .ok_or_else(|| "whisper returned no result".to_string())?;
+        .ok_or_else(|| "sense-voice returned no result".to_string())?;
     let text = result.text.trim().to_string();
-    // Whisper doesn't emit per-segment language markers like SenseVoice's
-    // `<|zh|>` tokens. The `OfflineRecognizerResult` doesn't carry a language
-    // field either, so we report the configured hint ("auto") and let the
-    // caller decide if that's enough.
     let lang = "auto".to_string();
     Ok((text, lang))
 }
@@ -136,37 +99,36 @@ pub fn transcribe(_samples: &[f32]) -> Result<(String, String), String> {
 // --- Android-only recognizer singleton. ---
 
 #[cfg(target_os = "android")]
-use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineWhisperModelConfig};
+use std::path::Path;
 
-/// Process-wide singleton recognizer. Loading the Whisper tiny models
-/// (encoder + decoder) takes a couple of seconds on a mid-range Android
-/// device, so we load once on first use and reuse. The `OfflineRecognizer`
-/// is `Send + Sync` and sherpa-onnx runs inference on a thread pool —
-/// we don't need to serialize calls.
+#[cfg(target_os = "android")]
+use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig};
+
+/// Process-wide singleton recognizer. Loading the SenseVoice int8 model
+/// (~228 MB) takes a couple of seconds on a mid-range Android device, so we
+/// load once on first use and reuse. The `OfflineRecognizer` is `Send + Sync`
+/// and sherpa-onnx runs inference on a thread pool — we don't need to
+/// serialize calls.
 #[cfg(target_os = "android")]
 static RECOGNIZER: OnceLock<Result<Arc<OfflineRecognizer>, String>> = OnceLock::new();
 
 #[cfg(target_os = "android")]
 fn build_recognizer(dir: &Path) -> Result<OfflineRecognizer, String> {
-    let encoder = dir.join(ENCODER_FILE).to_string_lossy().into_owned();
-    let decoder = dir.join(DECODER_FILE).to_string_lossy().into_owned();
+    let model = dir.join(MODEL_FILE).to_string_lossy().into_owned();
     let tokens = dir.join(TOKENS_FILE).to_string_lossy().into_owned();
 
     let mut config = OfflineRecognizerConfig::default();
-    config.model_config.whisper = OfflineWhisperModelConfig {
-        encoder: Some(encoder),
-        decoder: Some(decoder),
+    config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
+        model: Some(model.into()),
         language: Some("auto".into()),
-        task: Some("transcribe".into()),
-        tail_paddings: 0,
-        ..Default::default()
+        use_itn: true,
     };
-    config.model_config.tokens = Some(tokens);
-    config.model_config.num_threads = 2;
+    config.model_config.tokens = Some(tokens.into());
     config.model_config.provider = Some("cpu".into());
+    config.model_config.num_threads = 2;
 
     OfflineRecognizer::create(&config)
-        .ok_or_else(|| "failed to build whisper recognizer".to_string())
+        .ok_or_else(|| "failed to build sense-voice recognizer".to_string())
 }
 
 #[cfg(target_os = "android")]
@@ -175,12 +137,9 @@ pub fn get_recognizer() -> Result<Arc<OfflineRecognizer>, String> {
         return cached.clone();
     }
     let dir = model_dir();
-    if !dir.join(ENCODER_FILE).exists()
-        || !dir.join(DECODER_FILE).exists()
-        || !dir.join(TOKENS_FILE).exists()
-    {
+    if !dir.join(MODEL_FILE).exists() || !dir.join(TOKENS_FILE).exists() {
         return Err(format!(
-            "whisper model not installed at {} — call download_voice_model first",
+            "sense-voice model not installed at {} — the bundled model was not extracted",
             dir.display()
         ));
     }

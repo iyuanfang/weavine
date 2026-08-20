@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
-import { beginVoice, checkVoiceModel, downloadVoiceModel, endVoice, isAndroidTauri, ModelDownloadProgress, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
+import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
 const KIND_LABEL: Record<QuickKind, string> = {
@@ -68,7 +68,6 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [contactNames, setContactNames] = useState<string[]>([]);
   const [listening, setListening] = useState(false);
   const [selectedKind, setSelectedKind] = useState<QuickKind | null>(null);
-  const [voiceDownload, setVoiceDownload] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
 
@@ -131,27 +130,19 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       // `voice-cloud` POSTs to /api/voice/recognize. Both share the same
       // recording pipeline; only the recognizer call differs.
       if (voiceMode() === 'local') {
-        const onProgress = (p: ModelDownloadProgress) => {
-          const pct = p.totalBytes > 0 ? Math.round((p.downloadedBytes / p.totalBytes) * 100) : null;
-          setVoiceDownload(`下载语音模型：${p.stage} ${pct ?? ''}%`);
-        };
         recordAudio()
           .then(async (blob) => {
             const status = await checkVoiceModel();
             if (!status.ready) {
-              setVoiceDownload('正在准备语音模型...');
-              await downloadVoiceModel(onProgress);
-              setVoiceDownload(null);
+              throw new Error(status.error ?? '语音模型尚未就绪，请稍后重试');
             }
             return recognizeLocal(blob);
           })
           .then(done)
           .catch((e: unknown) => {
-            setVoiceDownload(null);
             fail(e);
           })
           .finally(() => {
-            setVoiceDownload(null);
             release();
           });
       } else {
@@ -371,12 +362,6 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
             </button>
           )}
         </div>
-
-        {voiceDownload && (
-          <div style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
-            {voiceDownload}
-          </div>
-        )}
 
         {listening && (
           <div style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>

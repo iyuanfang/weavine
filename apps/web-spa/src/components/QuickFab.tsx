@@ -1,18 +1,15 @@
 import { useState } from 'react';
 
-import { beginVoice, checkVoiceModel, downloadVoiceModel, endVoice, isAndroidTauri, ModelDownloadProgress, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
+import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
 
 interface Props {
   onOpen: (initialText: string) => void;
 }
 
-async function ensureModelAndRecognize(
-  blob: Blob,
-  onProgress: (p: ModelDownloadProgress) => void,
-): Promise<string> {
+async function ensureModelAndRecognize(blob: Blob): Promise<string> {
   const status = await checkVoiceModel();
   if (!status.ready) {
-    await downloadVoiceModel(onProgress);
+    throw new Error(status.error ?? '语音模型尚未就绪，请稍后重试');
   }
   return recognizeLocal(blob);
 }
@@ -20,8 +17,6 @@ async function ensureModelAndRecognize(
 export function QuickFab({ onOpen }: Props) {
   const [listening, setListening] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [downloadPct, setDownloadPct] = useState<number | null>(null);
-  const [downloadStage, setDownloadStage] = useState<string | null>(null);
 
   const handleTap = () => {
     setBusy(true);
@@ -36,10 +31,7 @@ export function QuickFab({ onOpen }: Props) {
       const onAndroid = voiceMode() === 'local'
         ? recordAudio().then(async (blob) => {
             if (blob.size === 0) throw new Error('录音为空，请重试');
-            return ensureModelAndRecognize(blob, (p) => {
-              setDownloadStage(p.stage);
-              setDownloadPct(p.totalBytes > 0 ? (p.downloadedBytes / p.totalBytes) * 100 : null);
-            });
+            return ensureModelAndRecognize(blob);
           })
         : recordAudio().then(async (blob) => {
             if (blob.size === 0) throw new Error('录音为空，请重试');
@@ -57,8 +49,6 @@ export function QuickFab({ onOpen }: Props) {
         .finally(() => {
           setListening(false);
           setBusy(false);
-          setDownloadPct(null);
-          setDownloadStage(null);
           endVoice();
         });
       return;
@@ -81,8 +71,6 @@ export function QuickFab({ onOpen }: Props) {
         setBusy(false);
       });
   };
-
-  const showDownload = downloadStage === 'download' || downloadStage === 'extract';
 
   return (
     <button
@@ -109,11 +97,7 @@ style={{
         justifyContent: 'center',
       }}
     >
-      {showDownload
-        ? `${Math.round(downloadPct ?? 0)}%`
-        : listening
-          ? '🎙️'
-          : '⚡'}
+      {listening ? '🎙️' : '⚡'}
     </button>
   );
 }

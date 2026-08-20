@@ -63,23 +63,25 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 anyhow = "1"
 regex = "1"
 fuzzy-matcher = "0.3"
-bzip2 = "0.5"
-tar = "0.4"
 
 # sqlx: optional — only activated when server crate depends with features= ["sqlx"]
 # Provides FromRow derive for models without pulling in runtime deps.
 sqlx = { version = "0.8", optional = true, default-features = false, features = ["macros", "derive", "postgres", "uuid", "chrono"] }
 
-# On-device speech recognition on Android via sherpa-onnx (Whisper tiny).
+# On-device speech recognition on Android via sherpa-onnx (SenseVoice).
 # Only enabled when building the `voice-local` flavor (see [features]).
 # The vendored 1.13.5 build.rs drops libsherpa-onnx-c-api.so and friends
 # into target/{triple}/{profile}/; src-tauri/build.rs then copies them
 # into gen/android/.../jniLibs/{abi}/ so Gradle packages them into the APK.
-# The Whisper tiny multilingual model is bundled via bundle.resources
-# (see tauri.local.conf.json); a download fallback still lives in
-# commands::voice_local for older builds without the resource.
+# The SenseVoice int8 model is bundled via bundle.resources
+# (see tauri.local.conf.json) and extracted to the app data dir at startup
+# by android_assets::extract_sense_voice_to_data_dir() — there is no
+# download fallback.
 [target.'cfg(target_os = "android")'.dependencies]
 sherpa-onnx = { version = "1.13", optional = true, default-features = false, features = ["shared"] }
+# JNI + Android context access for android_assets.rs (AssetManager extraction).
+jni = "0.21"
+ndk-context = "0.1"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

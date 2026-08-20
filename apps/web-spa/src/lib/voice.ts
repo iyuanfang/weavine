@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 import { isTauri } from './adapter/tauri';
 
@@ -213,15 +212,16 @@ export async function recognizeCloud(audioBlob: Blob): Promise<string> {
   return invoke<string>('recognize_voice', { audio_base64: audioBase64 });
 }
 
-// ── Local on-device STT (Android only, sherpa-onnx Whisper tiny) ──
-// The 30 MB Whisper-tiny multilingual model is downloaded on first use
-// (see commands/voice_local.rs). Audio is decoded in WebView at 16 kHz mono
-// Float32 and shipped to the Rust side which runs inference on-device.
+// ── Local on-device STT (Android only, sherpa-onnx SenseVoice) ──
+// The SenseVoice int8 model (~228 MB) ships pre-bundled in the local-flavor
+// APK under `assets/sense-voice/` and is extracted to the app data dir at
+// startup by `android_assets::extract_sense_voice_to_data_dir()` (see
+// `lib.rs` setup). There is no download path — `check_voice_model` reports
+// readiness and `recognize_voice_local` runs inference on-device. Audio is
+// decoded in WebView at 16 kHz mono Float32 and shipped to the Rust side.
 
 export interface VoiceModelStatus {
   ready: boolean;
-  /** Total bytes expected to be downloaded (~30 MB tar.bz2). */
-  downloadBytes?: number;
   /** Path to model dir on disk when ready. */
   modelDir?: string;
   /** Reason if not ready. */
@@ -230,30 +230,6 @@ export interface VoiceModelStatus {
 
 export function checkVoiceModel(): Promise<VoiceModelStatus> {
   return invoke<VoiceModelStatus>('check_voice_model');
-}
-
-export interface ModelDownloadProgress {
-  downloadedBytes: number;
-  totalBytes: number;
-  /** Stage: 'download' | 'extract' | 'done' | 'error' */
-  stage: 'download' | 'extract' | 'done' | 'error';
-  message?: string;
-}
-
-export async function downloadVoiceModel(
-  onProgress?: (p: ModelDownloadProgress) => void,
-): Promise<void> {
-  let unlisten: UnlistenFn | undefined;
-  if (onProgress) {
-    unlisten = await listen<ModelDownloadProgress>('voice-model-download-progress', (event) => {
-      onProgress(event.payload);
-    });
-  }
-  try {
-    await invoke<void>('download_voice_model');
-  } finally {
-    if (unlisten) unlisten();
-  }
 }
 
 /**

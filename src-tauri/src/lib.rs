@@ -13,6 +13,8 @@ pub mod quick;
 pub mod sync;
 pub mod tag_color;
 #[cfg(feature = "voice-local")]
+pub mod android_assets;
+#[cfg(feature = "voice-local")]
 pub mod voice_local;
 
 #[cfg(feature = "tauri")]
@@ -194,19 +196,19 @@ pub fn run() {
             if let Ok(app_data_dir) = app.path().app_data_dir() {
                 install_id::set_app_data_dir(app_data_dir);
             }
-            // Local-flavor APK ships the Whisper-tiny model pre-bundled under
-            // `assets/whisper-tiny/` (see tauri.local.conf.json::bundle.resources).
-            // Point voice_local at the bundled dir so `model_dir()` / `model_status()`
-            // skip the ~100 MB GitHub download entirely.
+            // Local-flavor APK ships the SenseVoice model pre-bundled under
+            // `assets/sense-voice/` (see tauri.local.conf.json::bundle.resources).
+            // Tauri 2 stores those files in Android's AssetManager, not on the
+            // filesystem, so extract them to the app data dir once at startup —
+            // `voice_local::model_dir()` / `model_status()` then see a real path.
             #[cfg(feature = "voice-local")]
             {
-                if let Ok(resource_dir) = app.path().resource_dir() {
-                    let bundled = resource_dir.join("whisper-tiny");
-                    if bundled.join(voice_local::ENCODER_FILE).is_file()
-                        && bundled.join(voice_local::DECODER_FILE).is_file()
-                        && bundled.join(voice_local::TOKENS_FILE).is_file()
-                    {
-                        voice_local::set_bundled_model_dir(bundled);
+                match android_assets::extract_sense_voice_to_data_dir() {
+                    Ok(()) => eprintln!("[weavine] sense-voice model extracted to data dir"),
+                    Err(e) => {
+                        let msg = format!("sense-voice model extraction failed: {e}");
+                        eprintln!("[weavine] {msg}");
+                        STARTUP_ERROR.set(msg).ok();
                     }
                 }
             }
@@ -292,8 +294,6 @@ pub fn run() {
             voice::recognize_voice,
             #[cfg(feature = "voice-local")]
             commands::voice_local::check_voice_model,
-            #[cfg(feature = "voice-local")]
-            commands::voice_local::download_voice_model,
             #[cfg(feature = "voice-local")]
             commands::voice_local::recognize_voice_local,
             commands::sync::cloud_login,

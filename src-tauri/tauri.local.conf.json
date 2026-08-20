@@ -33,7 +33,7 @@
     "active": true,
     "targets": ["app"],
     "resources": {
-      "resources/whisper-tiny/": "whisper-tiny/"
+      "resources/sense-voice/": "sense-voice/"
     },
     "icon": [
       "icons/32x32.png",
