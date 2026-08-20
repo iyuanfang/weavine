@@ -1,7 +1,7 @@
-//! Speech-to-text via sherpa-onnx (SenseVoice).
+//! Speech-to-text via whisper.cpp (whisper-rs).
 //!
 //! `POST /api/voice/recognize` (feature `stt`): accepts a multipart audio file,
-//! decodes it to 16 kHz mono PCM f32, runs SenseVoice, returns `{ text, lang }`.
+//! decodes it to 16 kHz mono PCM f32, runs whisper, returns `{ text, lang }`.
 //!
 //! Auth is zero-friction: the shared service key (`WV_SERVICE_KEY`, or a random
 //! one logged at startup) via `X-Service-Key` / `Authorization: Bearer`, or a
@@ -14,13 +14,12 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use serde::Serialize;
-use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use tokio::io::AsyncWriteExt;
 use super::auth::{extract_endpoint_auth, EndpointAuth};
 
-use sherpa_onnx::{
-    OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig,
+use whisper_rs::{
+    get_lang_str, FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
 };
 
 const TARGET_RATE: u32 = 16000;
@@ -31,70 +30,50 @@ pub struct RecognizeResult {
     pub lang: String,
 }
 
-/// Process-wide singleton recognizer. Loading the SenseVoice model
-/// (model.int8.onnx) takes a few seconds on server start, so we load
-/// once on first use and reuse. The `OfflineRecognizer` is `Send + Sync`
-/// and sherpa-onnx runs inference on a thread pool — we don't need to
-/// serialize calls, but we still cap concurrent requests with the semaphore
-/// below to avoid runaway CPU on small boxes.
-static RECOGNIZER: OnceLock<Result<Arc<OfflineRecognizer>, String>> = OnceLock::new();
+static WHISPER: OnceLock<WhisperContext> = OnceLock::new();
 
-/// Cap concurrent recognitions at 2. SenseVoice is CPU-heavy; running
-/// several in parallel on a small (2-core) box makes every request slower
-/// than the nginx proxy timeout, which surfaces as 504 Gateway Timeout
-/// to clients. We fail fast with 503 instead of letting requests pile up.
+/// Serializes whisper inference. Each request spawns a blocking thread that
+/// uses `set_n_threads` (see `transcribe`); on a small (2-core) box, running
+/// several of those in parallel makes every request slower than the nginx
+/// proxy timeout, which surfaces as 504 Gateway Timeout to clients. We cap the
+/// concurrency at 2 and fail fast with 503 instead of letting requests pile up.
 static RECOGNIZE_SEM: std::sync::LazyLock<tokio::sync::Semaphore> =
     std::sync::LazyLock::new(|| tokio::sync::Semaphore::new(2));
 
-fn model_dir() -> std::path::PathBuf {
-    std::env::var("SENSEVOICE_MODEL_DIR")
+fn model_path() -> std::path::PathBuf {
+    std::env::var("WHISPER_MODEL")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::PathBuf::from("/var/lib/weavine/models/sense-voice/"))
+        .unwrap_or_else(|_| std::path::PathBuf::from("/var/lib/weavine/models/ggml-tiny.bin"))
 }
 
-fn build_recognizer(dir: &Path) -> Result<OfflineRecognizer, String> {
-    let model = dir.join("model.int8.onnx").to_string_lossy().into_owned();
-    let tokens = dir.join("tokens.txt").to_string_lossy().into_owned();
-
-    let mut config = OfflineRecognizerConfig::default();
-    config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
-        model: Some(model.into()),
-        language: Some("auto".into()),
-        use_itn: true,
-    };
-    config.model_config.tokens = Some(tokens.into());
-    config.model_config.provider = Some("cpu".into());
-    config.model_config.num_threads = 4;
-
-    OfflineRecognizer::create(&config)
-        .ok_or_else(|| "failed to build sense-voice recognizer".to_string())
-}
-
-fn get_recognizer() -> Result<&'static Arc<OfflineRecognizer>, (StatusCode, String)> {
-    if let Some(cached) = RECOGNIZER.get() {
-        return match cached {
-            Ok(r) => Ok(r),
-            Err(e) => Err((StatusCode::SERVICE_UNAVAILABLE, e.clone())),
-        };
+fn get_whisper() -> Result<&'static WhisperContext, (StatusCode, String)> {
+    if let Some(ctx) = WHISPER.get() {
+        return Ok(ctx);
     }
-    let dir = model_dir();
-    if !dir.join("model.int8.onnx").exists() {
+    let path = model_path();
+    if !path.exists() {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             format!(
-                "SenseVoice model not found at '{}'. Place model.int8.onnx and tokens.txt in that directory.",
-                dir.display()
+                "whisper model not found at '{}'. Download a ggml model and set WHISPER_MODEL, e.g.:\n  curl -L -o {0} https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+                path.display()
             ),
         ));
     }
-    let built = build_recognizer(&dir).map(Arc::new);
-    let result = RECOGNIZER.get_or_init(|| built.clone());
-    match result {
-        Ok(r) => {
-            println!("[voice] sense-voice recognizer loaded: {}", dir.display());
-            Ok(r)
+    let path_str = path.to_string_lossy().into_owned();
+    let ctx = WhisperContext::new_with_params(&path_str, WhisperContextParameters::default())
+        .map_err(|e| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!("failed to load whisper model '{}': {e}", path.display()),
+            )
+        })?;
+    match WHISPER.set(ctx) {
+        Ok(()) => {
+            println!("[voice] whisper model loaded: {}", path.display());
+            Ok(WHISPER.get().expect("just set"))
         }
-        Err(e) => Err((StatusCode::SERVICE_UNAVAILABLE, e.clone())),
+        Err(_) => Ok(WHISPER.get().expect("set by racing task")),
     }
 }
 
@@ -376,24 +355,41 @@ async fn decode_with_ffmpeg(data: &[u8]) -> Result<Vec<f32>, (StatusCode, String
     Ok(pcm)
 }
 
-/// Run SenseVoice on 16 kHz mono PCM f32. CPU-bound, so it runs on a blocking
+/// Run whisper on 16 kHz mono PCM f32. CPU-bound, so it runs on a blocking
 /// thread. Returns `(text, language_code)`.
 async fn transcribe(pcm: Vec<f32>) -> Result<(String, String), (StatusCode, String)> {
     tokio::task::spawn_blocking(move || {
-        let recognizer = get_recognizer()?;
-        let stream = recognizer.create_stream();
-        stream.accept_waveform(16_000, &pcm);
-        recognizer.decode(&stream);
-        let result = stream
-            .get_result()
-            .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "recognizer returned no result".to_string()))?;
-        let text = result.text.trim().to_string();
-        // SenseVoice embeds language info in the text as `<|zh|>` / `<|en|>` tokens.
-        // We strip them here so the JS side sees clean text. The language field
-        // is reported as "auto" since the model handles detection internally.
-        let lang = "auto".to_string();
-        Ok((text, lang))
+        let ctx = get_whisper()?;
+        let mut state = ctx.create_state().map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("create whisper state: {e}"))
+        })?;
+
+        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        params.set_detect_language(true);
+        params.set_language(None);
+        params.set_n_threads(2);
+        params.set_print_special(false);
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_timestamps(false);
+        params.set_max_len(0);
+
+        state.full(params, &pcm).map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("whisper inference failed: {e}"))
+        })?;
+
+        let mut text = String::new();
+        let n = state.full_n_segments();
+        for i in 0..n {
+            if let Some(seg) = state.get_segment(i) {
+                if let Ok(t) = seg.to_str() {
+                    text.push_str(t);
+                }
+            }
+        }
+        let lang = get_lang_str(state.full_lang_id_from_state()).unwrap_or("unknown").to_string();
+        Ok((text.trim().to_string(), lang))
     })
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("recognizer task failed: {e}")))?
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("whisper task failed: {e}")))?
 }
