@@ -30,13 +30,13 @@ fn media_base_dir() -> PathBuf {
     }
     #[cfg(target_os = "android")]
     {
-        PathBuf::from("/data/user/0/com.weavine.desktop")
+        PathBuf::from("/data/user/0").join(crate::android_data_dir_name())
     }
     #[cfg(not(target_os = "android"))]
     {
         dirs::data_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("com.weavine.desktop")
+            .join(crate::android_data_dir_name())
     }
 }
 

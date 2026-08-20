@@ -39,7 +39,7 @@ fn install_id_path() -> Option<PathBuf> {
         fs::create_dir_all(&dir).ok()?;
         return Some(dir.join("install_id"));
     }
-    let dir = dirs::data_dir()?.join("com.weavine.desktop");
+    let dir = dirs::data_dir()?.join(crate::android_data_dir_name());
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("install_id"))
 }
@@ -55,7 +55,7 @@ fn install_id_path() -> Option<PathBuf> {
         fs::create_dir_all(&dir).ok()?;
         return Some(dir.join("install_id"));
     }
-    let dir = PathBuf::from("/data/user/0/com.weavine.desktop/files");
+    let dir = PathBuf::from("/data/user/0").join(crate::android_data_dir_name()).join("files");
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("install_id"))
 }
@@ -73,7 +73,7 @@ pub fn data_dir() -> PathBuf {
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| {
             dirs::data_dir()
-                .map(|d| d.join("com.weavine.desktop"))
+                .map(|d| d.join(crate::android_data_dir_name()))
                 .unwrap_or_else(|| PathBuf::from("."))
         });
     fs::create_dir_all(&dir).ok();
@@ -119,7 +119,7 @@ fn device_key_path() -> Option<PathBuf> {
         fs::create_dir_all(&dir).ok()?;
         return Some(dir.join("device_key"));
     }
-    let dir = dirs::data_dir()?.join("com.weavine.desktop");
+    let dir = dirs::data_dir()?.join(crate::android_data_dir_name());
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("device_key"))
 }
@@ -131,7 +131,7 @@ fn device_key_path() -> Option<PathBuf> {
         fs::create_dir_all(&dir).ok()?;
         return Some(dir.join("device_key"));
     }
-    let dir = PathBuf::from("/data/user/0/com.weavine.desktop/files");
+    let dir = PathBuf::from("/data/user/0").join(crate::android_data_dir_name()).join("files");
     fs::create_dir_all(&dir).ok()?;
     Some(dir.join("device_key"))
 }

@@ -31,11 +31,38 @@ pub(crate) fn startup_error() -> Option<String> {
     None
 }
 
+/// Returns the Android app data dir name for the current build flavor.
+///
+/// The two Android APK flavors have different `tauri.conf.json::identifier`
+/// values — `com.weavine.desktop` for the cloud flavor and
+/// `com.weavine.desktop.local` for the local (on-device sherpa-onnx) flavor.
+/// Android sandboxes each app's data under `/data/user/0/<identifier>/`, so
+/// any code that derives the data dir from a hardcoded string MUST pick the
+/// right one per flavor. Using the wrong value causes `Connection::open` to
+/// fail with permission errors, the app falls back to an in-memory DB, the
+/// seed user is never created, and `get_local_user` errors forever — the
+/// JS UI then sticks on the "正在加载用户…" splash.
+///
+/// Always available (not gated to `target_os = "android"`) because
+/// `dirs::data_dir().join(...)` call sites run on every target; on
+/// non-Android only the cloud-flavor identifier is ever correct because
+/// the `voice-local` feature is Android-only.
+pub(crate) fn android_data_dir_name() -> &'static str {
+    #[cfg(all(target_os = "android", feature = "voice-local"))]
+    {
+        "com.weavine.desktop.local"
+    }
+    #[cfg(not(all(target_os = "android", feature = "voice-local")))]
+    {
+        "com.weavine.desktop"
+    }
+}
+
 #[cfg(feature = "tauri")]
 fn dirs_data_dir_fallback() -> std::path::PathBuf {
     dirs::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("com.weavine.desktop")
+        .join(android_data_dir_name())
 }
 
 #[cfg(feature = "tauri")]
