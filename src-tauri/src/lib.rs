@@ -86,7 +86,11 @@ pub fn run() {
         .map(|p| p.to_path_buf())
         .unwrap_or_else(dirs_data_dir_fallback);
     boot_log::init(&initial_data_dir);
-    boot_log::log("Tauri run() invoked");
+    boot_log::log(&format!(
+        "Tauri run() invoked (db_path={}, data_dir={})",
+        db::get_db_path().display(),
+        initial_data_dir.display()
+    ));
 
     let database = match Database::new() {
         Ok(db) => {
@@ -201,16 +205,29 @@ pub fn run() {
             // Tauri 2 stores those files in Android's AssetManager, not on the
             // filesystem, so extract them to the app data dir once at startup —
             // `voice_local::model_dir()` / `model_status()` then see a real path.
+            //
+            // The 228 MB model extraction blocks on JNI reads + filesystem
+            // writes — running it on Tauri's setup thread causes ANRs and
+            // memory-pressure OOM kills on low-RAM devices (observed on
+            // v1.0.25). Move it to spawn_blocking so the webview can show
+            // while extraction runs in the background.
             #[cfg(feature = "voice-local")]
             {
-                match android_assets::extract_sense_voice_to_data_dir() {
-                    Ok(()) => eprintln!("[weavine] sense-voice model extracted to data dir"),
-                    Err(e) => {
-                        let msg = format!("sense-voice model extraction failed: {e}");
-                        eprintln!("[weavine] {msg}");
-                        STARTUP_ERROR.set(msg).ok();
+                tauri::async_runtime::spawn_blocking(|| {
+                    boot_log::log("Starting sense-voice model extraction in background");
+                    match android_assets::extract_sense_voice_to_data_dir() {
+                        Ok(()) => {
+                            boot_log::log("sense-voice model extracted to data dir");
+                            eprintln!("[weavine] sense-voice model extracted to data dir");
+                        }
+                        Err(e) => {
+                            let msg = format!("sense-voice model extraction failed: {e}");
+                            boot_log::log(&msg);
+                            eprintln!("[weavine] {msg}");
+                            STARTUP_ERROR.set(msg).ok();
+                        }
                     }
-                }
+                });
             }
             install_id::spawn_first_launch_ping(app.handle().clone());
             #[cfg(desktop)]

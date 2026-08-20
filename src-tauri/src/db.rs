@@ -38,10 +38,14 @@ impl Database {
 pub(crate) fn get_db_path() -> PathBuf {
     #[cfg(target_os = "android")]
     {
-        let path = std::env::var("HOME")
-            .ok()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/data/user/0"))
+        // Hardcode `/data/user/0/<app_id>/files` rather than `$HOME/<app_id>/files`.
+        // Tauri 2's `app_local_data_dir()` resolves to exactly this path on
+        // Android (see `install_id::data_dir`'s fallback arm), and `$HOME`
+        // is unreliable across Android API levels — on some devices it points
+        // to the read-only root `/`, which makes `Connection::open` fail with
+        // EACCES, the database fall back to in-memory, the seed user never
+        // get created, and the JS home page loop on "正在加载用户…".
+        let path = PathBuf::from("/data/user/0")
             .join(crate::android_data_dir_name())
             .join("files")
             .join("dev.db");
