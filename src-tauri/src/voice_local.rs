@@ -3,10 +3,11 @@
 //! Used by `recognize_voice_local` instead of `recognize_voice` so that
 //! voice input on Android never hits the cloud, which would otherwise pile
 //! up server-side and 504 under load. The Whisper tiny multilingual model
-//! (~75 MB extracted) supports Chinese and English out of the box and is
-//! downloaded on first voice use (see
-//! `commands::voice_local::download_voice_model`) and cached in the app's
-//! data dir.
+//! (~75 MB extracted) supports Chinese and English out of the box. On the
+//! local-flavor APK it ships pre-bundled under `assets/whisper-tiny/` (see
+//! `tauri.local.conf.json::bundle.resources`); on a hypothetical stripped
+//! build the code falls back to downloading the tar.bz2 from k2-fsa's
+//! GitHub release (see `commands::voice_local::download_voice_model`).
 //!
 //! The entire module is gated on the `voice-local` Cargo feature so the
 //! cloud-flavor Android APK can be built without pulling in sherpa-onnx
@@ -15,7 +16,7 @@
 
 #![cfg(feature = "voice-local")]
 
-use std::path::{PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use crate::install_id;
@@ -33,7 +34,30 @@ pub const TOKENS_FILE: &str = "tiny-tokens.txt";
 /// (source archives, READMEs, sample audio) is skipped on extract.
 pub const REQUIRED_FILES: &[&str] = &[ENCODER_FILE, DECODER_FILE, TOKENS_FILE];
 
+/// Populated by `lib.rs` setup() with the path of the bundled model dir
+/// (`app.path().resource_dir().join("whisper-tiny")`) when the local-flavor
+/// APK ships with the model pre-installed. When this is set AND contains
+/// all three required files, `model_dir()` returns it directly and the
+/// runtime never hits `download_voice_model`. On a build without bundled
+/// resources the lock stays empty and the historical download path runs.
+static BUNDLED_MODEL_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_bundled_model_dir(path: PathBuf) {
+    let _ = BUNDLED_MODEL_DIR.set(path);
+}
+
+fn has_all_model_files(dir: &Path) -> bool {
+    dir.join(ENCODER_FILE).is_file()
+        && dir.join(DECODER_FILE).is_file()
+        && dir.join(TOKENS_FILE).is_file()
+}
+
 pub fn model_dir() -> PathBuf {
+    if let Some(bundled) = BUNDLED_MODEL_DIR.get() {
+        if has_all_model_files(bundled) {
+            return bundled.clone();
+        }
+    }
     install_id::data_dir().join(MODEL_DIR_NAME)
 }
 
@@ -113,8 +137,6 @@ pub fn transcribe(_samples: &[f32]) -> Result<(String, String), String> {
 
 #[cfg(target_os = "android")]
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineWhisperModelConfig};
-#[cfg(target_os = "android")]
-use std::path::Path;
 
 /// Process-wide singleton recognizer. Loading the Whisper tiny models
 /// (encoder + decoder) takes a couple of seconds on a mid-range Android

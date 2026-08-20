@@ -194,6 +194,22 @@ pub fn run() {
             if let Ok(app_data_dir) = app.path().app_data_dir() {
                 install_id::set_app_data_dir(app_data_dir);
             }
+            // Local-flavor APK ships the Whisper-tiny model pre-bundled under
+            // `assets/whisper-tiny/` (see tauri.local.conf.json::bundle.resources).
+            // Point voice_local at the bundled dir so `model_dir()` / `model_status()`
+            // skip the ~100 MB GitHub download entirely.
+            #[cfg(feature = "voice-local")]
+            {
+                if let Ok(resource_dir) = app.path().resource_dir() {
+                    let bundled = resource_dir.join("whisper-tiny");
+                    if bundled.join(voice_local::ENCODER_FILE).is_file()
+                        && bundled.join(voice_local::DECODER_FILE).is_file()
+                        && bundled.join(voice_local::TOKENS_FILE).is_file()
+                    {
+                        voice_local::set_bundled_model_dir(bundled);
+                    }
+                }
+            }
             install_id::spawn_first_launch_ping(app.handle().clone());
             #[cfg(desktop)]
             {
