@@ -370,14 +370,32 @@ jobs:
       # Model archive is ~228 MB — too big for git, and the developer's
       # network is often unreliable. Fetch + extract here so the Android
       # build step has the files ready for Tauri's resource bundler.
+      #
+      # GitHub direct is tried first; on failure (network: China, GitHub
+      # throttling, 403) gh-proxy.com is used. gh-proxy is a public
+      # proxy that does not modify file contents and is whitelisted by
+      # the team's prior tooling.
       - name: Download SenseVoice model (local flavor)
         if: matrix.flavor == 'local'
+        env:
+          SV_URL: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
+          SV_PROXY: "https://gh-proxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
         run: |
           set -euo pipefail
           mkdir -p src-tauri/resources/sense-voice
-          curl -fSL --retry 5 --retry-delay 5 --connect-timeout 30 \
-            -o /tmp/sv.tar.bz2 \
-            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
+          fetch() {
+            local url="$1"; local label="$2"
+            echo "::group::fetching SenseVoice via $label"
+            curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
+              --connect-timeout 30 --max-time 600 \
+              -o /tmp/sv.tar.bz2 \
+              "$url"
+            echo "::endgroup::"
+          }
+          if ! fetch "$SV_URL" "github.com direct"; then
+            echo "Direct GitHub download failed, falling back to gh-proxy.com"
+            fetch "$SV_PROXY" "gh-proxy.com"
+          fi
           tar -xjf /tmp/sv.tar.bz2 -C /tmp/
           mv /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx \
              src-tauri/resources/sense-voice/model.int8.onnx
@@ -386,6 +404,48 @@ jobs:
           rm -rf /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 /tmp/sv.tar.bz2
           echo "=== SenseVoice files staged ==="
           ls -la src-tauri/resources/sense-voice/
+
+      # Diagnostic dump captured BEFORE the build so a failure on the next
+      # step can be diagnosed from the uploaded artifact without needing
+      # to re-run the workflow with --verbose. Includes:
+      #  - NDK + JDK toolchain versions actually resolved
+      #  - aarch64-linux-android-clang presence (the link error of "Android
+      #    NDK invalid" comes from this not existing)
+      #  - sherpa-onnx-sys prebuilt archive state (the Android archive
+      #    path only appears here after first build attempt)
+      #  - Cargo target/aarch64-linux-android fingerprint
+      - name: Pre-build Android diagnostic dump
+        if: matrix.flavor == 'local'
+        run: |
+          echo "=== toolchain versions ==="
+          rustc --version
+          cargo --version
+          java -version 2>&1 || true
+          echo "=== ANDROID_HOME / ANDROID_SDK_ROOT ==="
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-<unset>}"
+          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-<unset>}"
+          echo "NDK_HOME=${NDK_HOME:-<unset>}"
+          echo "=== NDK toolchains ==="
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          ls -1 "$SDK/ndk/" 2>/dev/null || echo "(no ndk dir)"
+          echo "=== aarch64-linux-android-clang present? ==="
+          if [ -n "${ANDROID_NDK_HOME:-}" ]; then
+            ls -1 "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/" 2>/dev/null | grep -E "^aarch64-linux-android.*clang" | head -3 || echo "(none)"
+          else
+            echo "(ANDROID_NDK_HOME unset — Tauri CLI will resolve)"
+          fi
+          echo "=== sherpa-onnx-prebuilt state ==="
+          ls -la target/sherpa-onnx-prebuilt/ 2>/dev/null || echo "(no prebuilt dir yet)"
+          echo "=== SenseVoice resources staged ==="
+          ls -la src-tauri/resources/sense-voice/ 2>/dev/null || echo "(missing)"
+          echo "=== Cargo Android target installed? ==="
+          rustup target list --installed 2>/dev/null | grep android || echo "(no android targets installed)"
+          echo "=== Workspace fingerprint ==="
+          cat src-tauri/Cargo.toml | grep -E "sherpa-onnx|voice-local|voice-cloud" | head -10
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
 
       - name: Build Tauri Android APK (arm64-v8a only, ${{ matrix.flavor }} flavor)
         id: build
@@ -406,6 +466,7 @@ jobs:
           set -o pipefail
           if [ "${{ matrix.flavor }}" = "local" ]; then
             cargo tauri android build \
+              --verbose \
               --apk --split-per-abi --target aarch64 \
               --features voice-local \
               --config src-tauri/tauri.local.conf.json 2>&1 \
@@ -420,6 +481,8 @@ jobs:
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
+          RUST_BACKTRACE: '1'
+          CARGO_TERM_VERBOSE: 'true'
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'
@@ -427,6 +490,22 @@ jobs:
         with:
           name: tauri-android-build-log
           path: tauri-android-build.log
+
+      # Capture pre-build diagnostic + target/sherpa-onnx-prebuilt on
+      # failure. CI #164 failed at step 17 with no on-repo way to see
+      # the actual error (logs require GitHub auth, agent pollers
+      # 0-seconded). This artifact is the only signal we have without
+      # auth or a re-run.
+      - name: Upload Android pre-build diagnostic on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-prebuild-diagnostic
+          path: |
+            tauri-android-build.log
+            target/sherpa-onnx-prebuilt/
+            src-tauri/resources/sense-voice/
+          if-no-files-found: ignore
 
       - name: Stage Android APK
         if: always() && steps.build.outcome == 'success'
