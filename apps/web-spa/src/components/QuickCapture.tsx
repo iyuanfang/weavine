@@ -21,18 +21,19 @@ const KIND_ICON: Record<QuickKind, string> = {
   interaction: '💬',
 };
 
-function formatDue(due: string | null): string {
-  if (!due) return '未指定';
-  const d = new Date(due);
-  if (Number.isNaN(d.getTime())) return due;
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (sameDay) return `今天 ${hm}`;
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+function isoToLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function localInputToIso(local: string): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 function PreviewRow({ label, value }: { label: string; value: string }) {
@@ -67,21 +68,93 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [contactNames, setContactNames] = useState<string[]>([]);
+  const [contactList, setContactList] = useState<Array<{ id: string; nickname: string; name?: string | null }>>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [editedDue, setEditedDue] = useState<string | null>(null);
+  const [editedContactId, setEditedContactId] = useState<string | null>(null);
+  const [editedContactLabel, setEditedContactLabel] = useState<string>('');
   const [listening, setListening] = useState(false);
   const [selectedKind, setSelectedKind] = useState<QuickKind | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
   const handleRef = useRef<VoiceRecordingHandle<Blob | string> | null>(null);
+  // When we sync the textarea to reflect a user-picked contact, the parse
+  // effect below will fire on the new text. This flag tells that effect
+  // to keep the user's `editedContactId` instead of overwriting it from
+  // the parse result.
+  const isInternalTextUpdateRef = useRef(false);
 
   useEffect(() => {
     if (!userId) return;
     adapter.contacts
       .list({ user_id: userId })
-      .then((data: { items: Array<{ nickname: string; name?: string | null }> }) => {
+      .then((data: { items: Array<{ id: string; nickname: string; name?: string | null }> }) => {
+        setContactList(data.items);
         setContactNames(data.items.flatMap((c) => [c.nickname, ...(c.name ? [c.name] : [])]));
       })
       .catch(() => {});
   }, [adapter, userId]);
+
+  const resolveContactLabel = (id: string | null): string => {
+    if (!id) return '';
+    const c = contactList.find((x) => x.id === id);
+    if (!c) return '';
+    return c.name && c.name !== c.nickname ? `${c.nickname}（${c.name}）` : c.nickname;
+  };
+
+  // Single entry point for all contact-selection UI (dropdown option, clear
+  // ✕, "(不指定)", search-field match). When the new contact differs from
+  // the current one, substitute the old contact's display names in the
+  // textarea so the two stay in sync. Length-sorted to avoid replacing a
+  // shorter alias when a longer one is also present (e.g. "张三" vs
+  // "张三丰" — we want the longer match to win first).
+  const pickContact = (newId: string | null) => {
+    const oldId = editedContactId;
+    if (newId === oldId) {
+      setEditedContactLabel(resolveContactLabel(newId));
+      return;
+    }
+    const oldContact = contactList.find((c) => c.id === oldId);
+    const newLabel = resolveContactLabel(newId);
+    setEditedContactId(newId);
+    setEditedContactLabel(newLabel);
+
+    if (oldContact && newLabel) {
+      const oldNames = [oldContact.nickname, ...(oldContact.name ? [oldContact.name] : [])]
+        .filter((n): n is string => Boolean(n))
+        .sort((a, b) => b.length - a.length);
+      let next = text;
+      for (const name of oldNames) {
+        if (name && next.includes(name)) {
+          next = next.replace(name, newLabel);
+          break;
+        }
+      }
+      if (next !== text) {
+        isInternalTextUpdateRef.current = true;
+        setText(next);
+      }
+    }
+  };
+
+  const filteredContacts = useMemo(() => {
+    const q = contactSearch.trim().toLowerCase();
+    if (!q) return contactList.slice(0, 5);
+    const scored = contactList
+      .map((c) => {
+        const nick = c.nickname.toLowerCase();
+        const name = (c.name ?? '').toLowerCase();
+        let score = 0;
+        if (nick.startsWith(q)) score = 3;
+        else if (name.startsWith(q)) score = 2;
+        else if (nick.includes(q)) score = 1;
+        else if (name.includes(q)) score = 1;
+        return { c, score };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score);
+    return scored.slice(0, 5).map((x) => x.c);
+  }, [contactList, contactSearch]);
 
   useEffect(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -100,11 +173,26 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
         .then((p) => {
           setParsed(p);
           setSelectedKind(p.kind);
+          setEditedDue(p.due);
+          if (isInternalTextUpdateRef.current) {
+            // We synced the textarea to reflect the contact the user just
+            // picked — the parser ran on the new text and would normally
+            // overwrite `editedContactId`. Preserve the user's choice
+            // (and its resolved label), and clear the flag.
+            isInternalTextUpdateRef.current = false;
+            setEditedContactLabel(resolveContactLabel(editedContactId));
+          } else {
+            setEditedContactId(p.contact_id);
+            setEditedContactLabel(resolveContactLabel(p.contact_id));
+          }
+          setContactSearch('');
           setError(null);
         })
         .catch((e: unknown) => {
           setParsed(null);
           setSelectedKind(null);
+          // Don't clobber the flag on error — the next successful parse
+          // triggered by a real keystroke will reset it.
           setError(e instanceof Error ? e.message : String(e));
         });
     }, 250);
@@ -180,14 +268,16 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       const summary = p.summary || trimmed;
       const now = new Date().toISOString();
       const effectiveKind: QuickKind = selectedKind ?? p.kind;
+      const effectiveDue = editedDue ?? p.due;
+      const effectiveContactId = editedContactId ?? p.contact_id;
       switch (effectiveKind) {
         case 'event':
           await adapter.events.create({
             user_id: userId,
             title: summary,
             type: '其他',
-            start_at: p.due ?? now,
-            contact_id: p.contact_id,
+            start_at: effectiveDue ?? now,
+            contact_id: effectiveContactId,
           });
           queryClient.invalidateQueries({ queryKey: ['events', userId] });
           break;
@@ -195,8 +285,8 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           await adapter.actions.create({
             user_id: userId,
             title: summary,
-            due_at: p.due,
-            contact_id: p.contact_id,
+            due_at: effectiveDue,
+            contact_id: effectiveContactId,
           });
           queryClient.invalidateQueries({ queryKey: ['actions', userId] });
           break;
@@ -204,8 +294,8 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           await adapter.interactions.create({
             user_id: userId,
             summary,
-            occurred_at: p.due ?? now,
-            contact_id: p.contact_id,
+            occurred_at: effectiveDue ?? now,
+            contact_id: effectiveContactId,
           });
           queryClient.invalidateQueries({ queryKey: ['interactions', userId] });
           break;
@@ -261,12 +351,182 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
             置信度 {(parsed.confidence * 100).toFixed(0)}%
           </span>
         </div>
-        <PreviewRow label="时间" value={formatDue(parsed.due)} />
-        <PreviewRow label="对象" value={parsed.contact_id ? '已匹配联系人' : '未指定'} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+          <span
+            style={{
+              flexShrink: 0,
+              width: 44,
+              color: 'var(--muted)',
+              fontSize: 'var(--text-sm)',
+            }}
+          >
+            时间
+          </span>
+          <input
+            type="datetime-local"
+            aria-label="时间"
+            value={isoToLocalInput(editedDue)}
+            onChange={(e) => setEditedDue(localInputToIso(e.target.value))}
+            style={{
+              flex: 1,
+              fontSize: 'var(--text-base)',
+              padding: '4px 8px',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              background: 'var(--surface, #fff)',
+              color: 'var(--fg, #111)',
+            }}
+          />
+          {editedDue && (
+            <button
+              type="button"
+              onClick={() => setEditedDue(null)}
+              aria-label="清除时间"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                fontSize: 'var(--text-sm)',
+                padding: 4,
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+          <span
+            style={{
+              flexShrink: 0,
+              width: 44,
+              color: 'var(--muted)',
+              fontSize: 'var(--text-sm)',
+            }}
+          >
+            对象
+          </span>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <input
+              type="text"
+              aria-label="对象"
+              placeholder="搜索或选择联系人…"
+              value={contactSearch || editedContactLabel}
+              onChange={(e) => {
+                const v = e.target.value;
+                setContactSearch(v);
+                const match = contactList.find(
+                  (c) => c.nickname === v || (c.name ?? '') === v,
+                );
+                if (match) {
+                  pickContact(match.id);
+                  setContactSearch('');
+                } else {
+                  setEditedContactId(null);
+                  setEditedContactLabel(v);
+                }
+              }}
+              onFocus={() => setContactSearch('')}
+              style={{
+                width: '100%',
+                fontSize: 'var(--text-base)',
+                padding: '4px 8px',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                background: 'var(--surface, #fff)',
+                color: 'var(--fg, #111)',
+              }}
+            />
+            {contactSearch && filteredContacts.length > 0 && (
+              <div
+                role="listbox"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 2px)',
+                  left: 0,
+                  right: 0,
+                  zIndex: 10,
+                  maxHeight: 200,
+                  overflowY: 'auto',
+                  background: 'var(--surface, #fff)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                }}
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={editedContactId === null}
+                  onClick={() => {
+                    pickContact(null);
+                    setContactSearch('');
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '8px 10px',
+                    border: 'none',
+                    background: editedContactId === null ? 'var(--accent-soft, #ecfdf5)' : 'transparent',
+                    cursor: 'pointer',
+                    fontSize: 'var(--text-sm)',
+                    color: 'var(--muted)',
+                  }}
+                >
+                  （不指定）
+                </button>
+                {filteredContacts.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="option"
+                    aria-selected={editedContactId === c.id}
+                    onClick={() => {
+                      pickContact(c.id);
+                      setContactSearch('');
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 10px',
+                      border: 'none',
+                      background: editedContactId === c.id ? 'var(--accent-soft, #ecfdf5)' : 'transparent',
+                      cursor: 'pointer',
+                      fontSize: 'var(--text-sm)',
+                    }}
+                  >
+                    {resolveContactLabel(c.id)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {editedContactId && (
+            <button
+              type="button"
+              onClick={() => {
+                pickContact(null);
+              }}
+              aria-label="清除对象"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                fontSize: 'var(--text-sm)',
+                padding: 4,
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
         <PreviewRow label="摘要" value={parsed.summary} />
       </div>
     );
-  }, [parsed, selectedKind]);
+  }, [parsed, selectedKind, editedDue, editedContactId, editedContactLabel, contactSearch, contactList, filteredContacts]);
 
   return createPortal(
     <div

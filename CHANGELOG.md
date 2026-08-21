@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **忘记密码 / 重置密码（云账户）** — `POST /api/auth/forgot-password` 与 `POST /api/auth/reset-password` 端点 + Web SPA `/forgot-password` 与 `/reset-password` 页面 + 登录页底部"忘记密码？"链接。Token 64 字符随机 base62、哈希入库、60 分钟过期、一次性使用；成功重置后撤销该用户所有 refresh token 强制所有设备重新登录。邮箱发送走新增 `server/src/email/` 模块（默认 `LogEmailSender` 把链接打到 stderr；可选 `smtp` feature + `SMTP_URL` / `SMTP_FROM` 启用 `lettre` 经 SMTP 投递）。`forgot-password` 始终返回 `200 {ok:true}`（未知邮箱也如此）并加 80–250 ms 抖动防止计时探测；带 5/小时/IP 20/小时 的内存限速（`server/src/rate_limit.rs`）。迁移 `server/migrations/20260821000001_password_reset.sql`。前端 `apps/web-spa/src/lib/auth/storage.ts` 新增 `requestPasswordReset` / `performPasswordReset`。
 
+- **快速记录：联系人切换自动改写文本（方案 A）** — `QuickCapture` 选中/搜索/清除联系人时，根据当前 textarea 中已有的联系人姓名自动替换为新联系人。例如 "明天下午3点和张三开会" + 把联系人切到"李四" → 文本变 "明天下午3点和李四开会"。用 `useRef` 标记内部更新防止 text→parse→contact 的循环。旧名字按字符串长度倒序匹配，避免 "张三" vs "张三丰" 的子串误伤。
+
 ### Technical
 
 - 新增模块：`server/src/email/mod.rs`（`EmailSender` trait + `LogEmailSender` + `SmtpEmailSender`）+ `server/src/rate_limit.rs`（`RateLimiter` 用 `dashmap` + `VecDeque` 做滑动窗口）
