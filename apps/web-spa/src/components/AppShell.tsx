@@ -5,6 +5,7 @@ import { isTauri } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
 import { clearSession } from '../lib/auth/storage';
 import { useQuickCapture } from '../App';
+import { BottomNav } from './BottomNav';
 
 const navItems = [
   { to: '/today', label: '今天', icon: '🎯', end: true },
@@ -182,6 +183,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
         {children}
       </main>
+
+      <BottomNav />
     </div>
   );
 }
