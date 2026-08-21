@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { Avatar } from '../components/Avatar';
+import { HealthDot } from '../components/HealthDot';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
@@ -561,6 +562,10 @@ function ContactRow({
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <HealthDot
+              importance={c.importance}
+              lastInteractionIso={c.last_interaction_at}
+            />
             <span className="row-card__title">{displayName}</span>
             <ColdBadge
               lastInteractionIso={c.last_interaction_at}
