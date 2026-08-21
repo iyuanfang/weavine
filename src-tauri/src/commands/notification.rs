@@ -66,7 +66,13 @@ pub fn schedule_notification(app: AppHandle, args: ScheduleArgs) -> Result<(), S
         };
         for r in &due {
             let (title, body, _tag) = reminder_payload(r);
-            let _ = fire(&app_clone, &title, &body);
+            if let Err(e) = fire(&app_clone, &title, &body) {
+                eprintln!(
+                    "[notification] fire failed for reminder {}: {e} \
+                     (common on Android 13+ when POST_NOTIFICATIONS is not granted)",
+                    r.id
+                );
+            }
             let _ = app_clone.emit("weavine:reminder-fired", r);
         }
     });

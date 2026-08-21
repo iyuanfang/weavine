@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **快速记录：联系人切换自动改写文本（方案 A）** — `QuickCapture` 选中/搜索/清除联系人时，根据当前 textarea 中已有的联系人姓名自动替换为新联系人。例如 "明天下午3点和张三开会" + 把联系人切到"李四" → 文本变 "明天下午3点和李四开会"。用 `useRef` 标记内部更新防止 text→parse→contact 的循环。旧名字按字符串长度倒序匹配，避免 "张三" vs "张三丰" 的子串误伤。
 
+### Fixed
+
+- **Android 13+ 提醒不会弹系统通知** — CI manifest 补丁补上 `POST_NOTIFICATIONS`（之前只 patch 音频/相机）；Rust 端 `commands/notification.rs` 把静默的 `let _ = fire(...)` 改为打印 warning（带 reminder id + 提示 "common on Android 13+ when POST_NOTIFICATIONS is not granted"），permission 被拒至少能在日志里看见；`useReminderPoller` 在 Tauri 分支启动时立刻 `requestPermission()`，让 Android 13+ 在首启就弹系统权限框而不是等用户设第一个日程才悄悄失败。Windows 无副作用（tauri-plugin-notification 在 Win 上是 no-op）。
+
 ### Technical
 
 - 新增模块：`server/src/email/mod.rs`（`EmailSender` trait + `LogEmailSender` + `SmtpEmailSender`）+ `server/src/rate_limit.rs`（`RateLimiter` 用 `dashmap` + `VecDeque` 做滑动窗口）

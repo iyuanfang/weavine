@@ -307,9 +307,13 @@ jobs:
         # permission dialog. Without this, voice capture fails immediately with
         # NotAllowedError and there is no recovery path inside the app.
         # MODIFY_AUDIO_SETTINGS + CAMERA accompany it for full mic/camera capture.
+        # POST_NOTIFICATIONS is required on Android 13+ (API 33) for the
+        # Rust-side reminder scheduler (commands/notification.rs) to display
+        # system toast notifications. Without it, notification.show() is
+        # silently rejected by NotificationManager.
         run: |
           MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
-          for PERM in RECORD_AUDIO MODIFY_AUDIO_SETTINGS CAMERA; do
+          for PERM in RECORD_AUDIO MODIFY_AUDIO_SETTINGS CAMERA POST_NOTIFICATIONS; do
             if grep -q "android.permission.$PERM" "$MANIFEST"; then
               echo "$PERM already present, skipping"
             else

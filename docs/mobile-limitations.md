@@ -22,7 +22,7 @@ This document honestly describes the limitations, trade-offs, and known issues o
 | iOS build | ❌ Untested | Requires macOS + Apple Developer account |
 | Touch/gesture UX | ⚠️ Not optimized | UI assumes mouse/keyboard; tap targets may be too small |
 | Offline mode | ✅ Works | Rust + rusqlite is inherently local-first |
-| Push notifications | ❌ Not implemented | Requires platform-specific plugins |
+| Push notifications | ✅ Windows + Android (13+ via POST_NOTIFICATIONS) | iOS still needs APNs entitlement work |
 | Camera/photo picker | ❌ Not implemented | Would need Tauri plugin or native integration |
 
 ---

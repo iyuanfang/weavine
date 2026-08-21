@@ -42,6 +42,17 @@ export function useReminderPoller() {
       let unlisten: (() => void) | null = null;
       let cancelled = false;
       (async () => {
+        // Eagerly request the OS notification permission so Android 13+ shows
+        // the system prompt on first launch instead of silently rejecting
+        // reminders (the Rust scheduler only fails fast, no retry). On
+        // Windows this is a no-op; on Android the Tauri plugin surfaces the
+        // runtime permission dialog via NotificationExt::request_permission.
+        try {
+          await adapter.notifications.requestPermission();
+        } catch (e) {
+          console.warn("reminder poller: notification permission request failed", e);
+        }
+        if (cancelled) return;
         try {
           const { listen } = await import("@tauri-apps/api/event");
           if (cancelled) return;
