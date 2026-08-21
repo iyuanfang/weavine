@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
+import type { VoiceRecordingHandle } from '../lib/voice';
 
 interface Props {
   onOpen: (initialText: string) => void;
@@ -17,8 +18,15 @@ async function ensureModelAndRecognize(blob: Blob): Promise<string> {
 export function QuickFab({ onOpen }: Props) {
   const [listening, setListening] = useState(false);
   const [busy, setBusy] = useState(false);
+  const handleRef = useRef<VoiceRecordingHandle<Blob | string> | null>(null);
 
   const handleTap = () => {
+    // Second tap while listening: stop the in-flight recorder early.
+    if (handleRef.current) {
+      handleRef.current.stop();
+      handleRef.current = null;
+      return;
+    }
     setBusy(true);
     if (isAndroidTauri()) {
       if (!beginVoice()) {
@@ -28,12 +36,14 @@ export function QuickFab({ onOpen }: Props) {
       setListening(true);
       // Two APK flavors: `voice-local` runs sherpa-onnx on-device;
       // `voice-cloud` POSTs to /api/voice/recognize on the server.
+      const handle = recordAudio();
+      handleRef.current = handle as VoiceRecordingHandle<Blob | string>;
       const onAndroid = voiceMode() === 'local'
-        ? recordAudio().then(async (blob) => {
+        ? handle.promise.then(async (blob) => {
             if (blob.size === 0) throw new Error('录音为空，请重试');
             return ensureModelAndRecognize(blob);
           })
-        : recordAudio().then(async (blob) => {
+        : handle.promise.then(async (blob) => {
             if (blob.size === 0) throw new Error('录音为空，请重试');
             return recognizeCloud(blob);
           });
@@ -47,6 +57,7 @@ export function QuickFab({ onOpen }: Props) {
           onOpen(msg);
         })
         .finally(() => {
+          handleRef.current = null;
           setListening(false);
           setBusy(false);
           endVoice();
@@ -59,7 +70,9 @@ export function QuickFab({ onOpen }: Props) {
       return;
     }
     setListening(true);
-    recognizeSpeech()
+    const handle = recognizeSpeech();
+    handleRef.current = handle;
+    handle.promise
       .then((transcript) => {
         onOpen(transcript);
       })
@@ -67,6 +80,7 @@ export function QuickFab({ onOpen }: Props) {
         onOpen('');
       })
       .finally(() => {
+        handleRef.current = null;
         setListening(false);
         setBusy(false);
       });

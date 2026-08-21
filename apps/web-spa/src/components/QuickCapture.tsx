@@ -6,6 +6,7 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
 import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
+import type { VoiceRecordingHandle } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
 const KIND_LABEL: Record<QuickKind, string> = {
@@ -70,6 +71,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [selectedKind, setSelectedKind] = useState<QuickKind | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
+  const handleRef = useRef<VoiceRecordingHandle<Blob | string> | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -112,6 +114,14 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   }, [text, contactNames, userId]);
 
   const handleVoice = () => {
+    // Second tap while listening: stop the in-flight recorder early
+    // (Android's MediaRecorder padding 13s of silence is the main reason
+    // this affordance exists; Web Speech API on Windows auto-ends already).
+    if (handleRef.current) {
+      handleRef.current.stop();
+      handleRef.current = null;
+      return;
+    }
     if (!beginVoice()) return;
     setListening(true);
     const done = (transcript: string) => {
@@ -122,6 +132,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       setError(e instanceof Error ? e.message : String(e));
     };
     const release = () => {
+      handleRef.current = null;
       setListening(false);
       endVoice();
     };
@@ -129,8 +140,10 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       // Two APK flavors: `voice-local` uses sherpa-onnx on-device;
       // `voice-cloud` POSTs to /api/voice/recognize. Both share the same
       // recording pipeline; only the recognizer call differs.
+      const handle = recordAudio();
+      handleRef.current = handle as VoiceRecordingHandle<Blob | string>;
       if (voiceMode() === 'local') {
-        recordAudio()
+        handle.promise
           .then(async (blob) => {
             const status = await checkVoiceModel();
             if (!status.ready) {
@@ -139,14 +152,10 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
             return recognizeLocal(blob);
           })
           .then(done)
-          .catch((e: unknown) => {
-            fail(e);
-          })
-          .finally(() => {
-            release();
-          });
+          .catch(fail)
+          .finally(release);
       } else {
-        recordAudio()
+        handle.promise
           .then(async (blob) => recognizeCloud(blob))
           .then(done)
           .catch(fail)
@@ -154,10 +163,9 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       }
       return;
     }
-    recognizeSpeech()
-      .then(done)
-      .catch(fail)
-      .finally(release);
+    const handle = recognizeSpeech();
+    handleRef.current = handle;
+    handle.promise.then(done).catch(fail).finally(release);
   };
 
   const submit = async () => {
@@ -341,24 +349,25 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
             <button
               type="button"
               onClick={handleVoice}
-              disabled={listening}
-              aria-label={listening ? '正在聆听' : '语音输入'}
-              title="语音输入"
+              aria-label={listening ? '正在聆听（点此停止）' : '语音输入'}
+              title={listening ? '点此停止录音' : '语音输入'}
               style={{
                 position: 'absolute',
                 right: 8,
                 bottom: 8,
                 border: 'none',
-                background: 'var(--accent-soft, rgba(139,92,246,0.08))',
-                cursor: listening ? 'default' : 'pointer',
+                background: listening
+                  ? 'var(--danger-soft, rgba(220,38,38,0.10))'
+                  : 'var(--accent-soft, rgba(139,92,246,0.08))',
+                cursor: 'pointer',
                 fontSize: 28,
                 lineHeight: 1,
                 padding: 10,
                 borderRadius: 12,
-                opacity: listening ? 0.6 : 1,
+                opacity: 1,
               }}
             >
-              {listening ? '🎙️' : '🎤'}
+              {listening ? '🛑' : '🎤'}
             </button>
           )}
         </div>

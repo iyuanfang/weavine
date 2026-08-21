@@ -14,6 +14,7 @@ interface SpeechRecognitionLike {
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
   start(): void;
+  stop(): void;
 }
 
 interface SpeechRecognitionEventLike {
@@ -82,16 +83,19 @@ export function speechRecognitionAvailable(): boolean {
   return recognitionCtor() !== null;
 }
 
-export function recognizeSpeech(lang = 'zh-CN'): Promise<string> {
+export function recognizeSpeech(lang = 'zh-CN'): VoiceRecordingHandle<string> {
   const Ctor = recognitionCtor();
   if (!Ctor) {
-    return Promise.reject(new Error('当前环境不支持语音识别'));
+    return {
+      promise: Promise.reject(new Error('当前环境不支持语音识别')),
+      stop: () => {},
+    };
   }
   const rec = new Ctor();
   rec.lang = lang;
   rec.interimResults = false;
   rec.maxAlternatives = 1;
-  return new Promise<string>((resolve, reject) => {
+  const promise = new Promise<string>((resolve, reject) => {
     let settled = false;
     rec.onresult = (event) => {
       if (settled) return;
@@ -114,6 +118,7 @@ export function recognizeSpeech(lang = 'zh-CN'): Promise<string> {
     };
     rec.start();
   });
+  return { promise, stop: () => { try { rec.stop(); } catch { /* not started */ } } };
 }
 
 // ── Cloud STT (Tauri → weavine-server whisper) ─────────────────
@@ -140,8 +145,22 @@ function pickRecorderMime(): string | null {
   return null;
 }
 
-export function recordAudio(maxMs = 15000): Promise<Blob> {
-  return new Promise((resolve, reject) => {
+/**
+ * Handle for an in-flight voice recording. The promise resolves when the
+ * recorder stops (VAD-silence, maxMs cutoff, or explicit `.stop()`). Tap
+ * the mic button once to start, again to stop early — same on Android
+ * (MediaRecorder + VAD) and Windows/macOS/Web (Web Speech API).
+ */
+export interface VoiceRecordingHandle<T> {
+  promise: Promise<T>;
+  stop(): void;
+}
+
+export function recordAudio(maxMs = 15000): VoiceRecordingHandle<Blob> {
+  // Populated by the inner closure once the recorder exists. Safe to call
+  // before the recorder is ready — it's a no-op until then.
+  let manualStop: () => void = () => {};
+  const promise = new Promise<Blob>((resolve, reject) => {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       reject(new Error('当前环境不支持录音'));
       return;
@@ -192,7 +211,7 @@ recorder.onstop = () => {
         const silenceFramesNeeded = 36;  // 36 × ~16 ms ≈ 600 ms of silence
         let silenceFrames = 0;
         let stopped = false;
-        const maybeStop = (reason: 'silence' | 'max') => {
+        const maybeStop = (reason: 'silence' | 'max' | 'manual') => {
           if (stopped) return;
           stopped = true;
           if (recorder.state !== 'inactive') {
@@ -200,6 +219,7 @@ recorder.onstop = () => {
           }
           console.debug(`[voice] recorder stopped (${reason})`);
         };
+        manualStop = () => maybeStop('manual');
         // Delay start so the audio pipeline warms up without dropping samples.
         window.setTimeout(() => {
           try {
@@ -259,6 +279,7 @@ recorder.onstop = () => {
         reject(new Error(`无法访问麦克风（${name || 'unknown'}）：${msg || '未知错误'}`));
       });
   });
+  return { promise, stop: () => manualStop() };
 }
 
 export async function recognizeCloud(audioBlob: Blob): Promise<string> {
