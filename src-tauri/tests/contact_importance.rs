@@ -157,6 +157,7 @@ fn business_create_contact_default_importance_is_low() {
         notes: None,
         importance: None,
         tag_ids: None,
+        keep_in_touch_cadence_days: None,
     };
 
     let created = weavine_lib::business::contact::create(&conn, &input).expect("create");

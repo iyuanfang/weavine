@@ -21,18 +21,21 @@ const KIND_LABELS: Record<string, string> = {
   action_overdue: '过期待办',
   event_upcoming: '近期日程',
   contact_reminder: '互动提醒',
+  keep_in_touch: '保持联系',
 };
 
 const KIND_ICONS: Record<string, string> = {
   action_overdue: '⚠️',
   event_upcoming: '📅',
   contact_reminder: '👤',
+  keep_in_touch: '🔁',
 };
 
 const KIND_DOT: Record<string, string> = {
   action_overdue: '#ef4444',
   event_upcoming: '#3b82f6',
   contact_reminder: '#10b981',
+  keep_in_touch: '#8b5cf6',
 };
 
 const KIND_FILTERS: { value: string; label: string }[] = [
@@ -40,6 +43,7 @@ const KIND_FILTERS: { value: string; label: string }[] = [
   { value: 'action_overdue', label: '过期待办' },
   { value: 'event_upcoming', label: '近期日程' },
   { value: 'contact_reminder', label: '互动提醒' },
+  { value: 'keep_in_touch', label: '保持联系' },
 ];
 
 export function Reminders() {

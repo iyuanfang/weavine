@@ -68,6 +68,7 @@ fn contact_crud_roundtrip() {
             notes: None,
             importance: Some("important".to_string()),
             tag_ids: None,
+            keep_in_touch_cadence_days: None,
         },
     )
     .expect("create");
@@ -92,6 +93,7 @@ fn contact_crud_roundtrip() {
             notes: None,
             importance: None,
             tag_ids: None,
+            keep_in_touch_cadence_days: None,
         },
     )
     .expect("update");

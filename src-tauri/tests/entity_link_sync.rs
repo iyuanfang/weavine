@@ -31,13 +31,14 @@ fn seed_user_contact_event(conn: &Connection) {
 #[test]
 fn push_columns_registered_for_entity_link() {
     let cols = translate::push_columns("entity_link");
-    assert_eq!(cols.len(), 9);
+    assert_eq!(cols.len(), 10);
     assert!(cols.contains(&"id"));
     assert!(cols.contains(&"user_id"));
     assert!(cols.contains(&"from_type"));
     assert!(cols.contains(&"to_id"));
     assert!(cols.contains(&"relation_type"));
     assert!(cols.contains(&"role"));
+    assert!(cols.contains(&"label"));
     assert!(cols.contains(&"created_at"));
 }
 
