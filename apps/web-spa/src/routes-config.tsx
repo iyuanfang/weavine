@@ -35,7 +35,6 @@ import { SearchPage } from './routes/Search';
 import { SettingsPage } from './routes/Settings';
 import { ApiKeysPage } from './routes/ApiKeys';
 import ArchivePage from './routes/Archive';
-import { MoreMenu } from './routes/MoreMenu';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -59,7 +58,6 @@ export interface AppRoute {
 export const routes: AppRoute[] = [
   { path: '/login', Component: LoginPage, label: 'Login', bare: true },
   { path: '/today', Component: TodayPage, label: 'Today' },
-  { path: '/more', Component: MoreMenu, label: 'More' },
 
   // Placeholder entries below — replaced as Phase 4 lands.
   // Each migration subagent removes its placeholder and

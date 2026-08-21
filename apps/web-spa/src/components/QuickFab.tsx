@@ -95,7 +95,7 @@ export function QuickFab({ onOpen }: Props) {
 style={{
         position: 'fixed',
         right: 20,
-        bottom: 72,
+        bottom: 'calc(var(--bottom-nav-height, 56px) + env(safe-area-inset-bottom, 0px) + 36px)',
         zIndex: 99990,
         width: 44,
         height: 44,
