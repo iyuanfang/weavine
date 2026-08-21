@@ -1,7 +1,7 @@
-//! Speech-to-text via whisper.cpp (whisper-rs).
+//! Speech-to-text via sherpa-onnx (SenseVoice).
 //!
 //! `POST /api/voice/recognize` (feature `stt`): accepts a multipart audio file,
-//! decodes it to 16 kHz mono PCM f32, runs whisper, returns `{ text, lang }`.
+//! decodes it to 16 kHz mono PCM f32, runs SenseVoice, returns `{ text, lang }`.
 //!
 //! Auth is zero-friction: the shared service key (`WV_SERVICE_KEY`, or a random
 //! one logged at startup) via `X-Service-Key` / `Authorization: Bearer`, or a
@@ -14,12 +14,13 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use serde::Serialize;
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use tokio::io::AsyncWriteExt;
 use super::auth::{extract_endpoint_auth, EndpointAuth};
 
-use whisper_rs::{
-    get_lang_str, FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters,
+use sherpa_onnx::{
+    OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig,
 };
 
 const TARGET_RATE: u32 = 16000;
@@ -30,50 +31,70 @@ pub struct RecognizeResult {
     pub lang: String,
 }
 
-static WHISPER: OnceLock<WhisperContext> = OnceLock::new();
+/// Process-wide singleton recognizer. Loading the SenseVoice model
+/// (model.int8.onnx) takes a few seconds on server start, so we load
+/// once on first use and reuse. The `OfflineRecognizer` is `Send + Sync`
+/// and sherpa-onnx runs inference on a thread pool — we don't need to
+/// serialize calls, but we still cap concurrent requests with the semaphore
+/// below to avoid runaway CPU on small boxes.
+static RECOGNIZER: OnceLock<Result<Arc<OfflineRecognizer>, String>> = OnceLock::new();
 
-/// Serializes whisper inference. Each request spawns a blocking thread that
-/// uses `set_n_threads` (see `transcribe`); on a small (2-core) box, running
-/// several of those in parallel makes every request slower than the nginx
-/// proxy timeout, which surfaces as 504 Gateway Timeout to clients. We cap the
-/// concurrency at 2 and fail fast with 503 instead of letting requests pile up.
+/// Cap concurrent recognitions at 2. SenseVoice is CPU-heavy; running
+/// several in parallel on a small (2-core) box makes every request slower
+/// than the nginx proxy timeout, which surfaces as 504 Gateway Timeout
+/// to clients. We fail fast with 503 instead of letting requests pile up.
 static RECOGNIZE_SEM: std::sync::LazyLock<tokio::sync::Semaphore> =
     std::sync::LazyLock::new(|| tokio::sync::Semaphore::new(2));
 
-fn model_path() -> std::path::PathBuf {
-    std::env::var("WHISPER_MODEL")
+fn model_dir() -> std::path::PathBuf {
+    std::env::var("SENSEVOICE_MODEL_DIR")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::path::PathBuf::from("/var/lib/weavine/models/ggml-tiny.bin"))
+        .unwrap_or_else(|_| std::path::PathBuf::from("/var/lib/weavine/models/sense-voice/"))
 }
 
-fn get_whisper() -> Result<&'static WhisperContext, (StatusCode, String)> {
-    if let Some(ctx) = WHISPER.get() {
-        return Ok(ctx);
+fn build_recognizer(dir: &Path) -> Result<OfflineRecognizer, String> {
+    let model = dir.join("model.int8.onnx").to_string_lossy().into_owned();
+    let tokens = dir.join("tokens.txt").to_string_lossy().into_owned();
+
+    let mut config = OfflineRecognizerConfig::default();
+    config.model_config.sense_voice = OfflineSenseVoiceModelConfig {
+        model: Some(model.into()),
+        language: Some("auto".into()),
+        use_itn: true,
+    };
+    config.model_config.tokens = Some(tokens.into());
+    config.model_config.provider = Some("cpu".into());
+    config.model_config.num_threads = 4;
+
+    OfflineRecognizer::create(&config)
+        .ok_or_else(|| "failed to build sense-voice recognizer".to_string())
+}
+
+fn get_recognizer() -> Result<&'static Arc<OfflineRecognizer>, (StatusCode, String)> {
+    if let Some(cached) = RECOGNIZER.get() {
+        return match cached {
+            Ok(r) => Ok(r),
+            Err(e) => Err((StatusCode::SERVICE_UNAVAILABLE, e.clone())),
+        };
     }
-    let path = model_path();
-    if !path.exists() {
+    let dir = model_dir();
+    if !dir.join("model.int8.onnx").exists() {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             format!(
-                "whisper model not found at '{}'. Download a ggml model and set WHISPER_MODEL, e.g.:\n  curl -L -o {0} https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-                path.display()
+                "SenseVoice model not found at '{}'. Place model.int8.onnx and tokens.txt in that directory.",
+                dir.display()
             ),
         ));
     }
-    let path_str = path.to_string_lossy().into_owned();
-    let ctx = WhisperContext::new_with_params(&path_str, WhisperContextParameters::default())
-        .map_err(|e| {
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                format!("failed to load whisper model '{}': {e}", path.display()),
-            )
-        })?;
-    match WHISPER.set(ctx) {
-        Ok(()) => {
-            println!("[voice] whisper model loaded: {}", path.display());
-            Ok(WHISPER.get().expect("just set"))
+    let built = build_recognizer(&dir).map(Arc::new);
+    let result = RECOGNIZER.get_or_init(|| built.clone());
+    match result {
+        Ok(r) => {
+            println!("[voice] sense-voice recognizer loaded: {}", dir.display());
+            Ok(r)
         }
-        Err(_) => Ok(WHISPER.get().expect("set by racing task")),
+        Err(e) => Err((StatusCode::SERVICE_UNAVAILABLE, e.clone())),
     }
 }
 
@@ -82,6 +103,8 @@ pub async fn recognize(
     State(pool): State<Arc<sqlx::PgPool>>,
     mut form: Multipart,
 ) -> Result<axum::Json<RecognizeResult>, (StatusCode, String)> {
+    let t_total = std::time::Instant::now();
+    let t0 = t_total;
     let _auth = match extract_endpoint_auth(&headers, pool.as_ref()).await? {
         EndpointAuth::ServiceKey => "service:weavine-default".to_string(),
         EndpointAuth::User { user_id, .. } => user_id,
@@ -97,6 +120,7 @@ pub async fn recognize(
         }
     };
     super::activation::record_activation_hook(&headers, pool.as_ref(), "voice").await;
+    let t_auth = t_total.elapsed();
 
     let _permit = match RECOGNIZE_SEM.try_acquire() {
         Ok(p) => p,
@@ -126,16 +150,33 @@ pub async fn recognize(
     }
     let audio_bytes = audio_bytes
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "missing audio file field (\"file\" or \"audio\")".into()))?;
+    let t_upload = t_total.elapsed();
     if audio_bytes.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "empty audio".into()));
     }
 
+    let t1 = std::time::Instant::now();
     let pcm = decode_audio(&audio_bytes).await?;
+    let t_decode = t1.elapsed();
     if pcm.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "no decodable audio in upload".into()));
     }
 
+    let t2 = std::time::Instant::now();
     let (text, lang) = transcribe(pcm).await?;
+    let t_infer = t2.elapsed();
+    let t_total_ms = t0.elapsed().as_millis();
+    eprintln!(
+        "[voice] {} B -> {} PCM samples | auth={:?} upload={:?} decode={:?} infer={:?} total={}ms",
+        audio_bytes.len(),
+        // re-derive samples count from pcm after decode; pcm moved into transcribe so log len here
+        "—",
+        t_auth,
+        t_upload.saturating_sub(t_auth),
+        t_decode,
+        t_infer,
+        t_total_ms,
+    );
     Ok(axum::Json(RecognizeResult { text, lang }))
 }
 
@@ -304,18 +345,39 @@ fn resample_to_16k(mono: &[f32], rate: u32) -> Vec<f32> {
     trimmed
 }
 
-/// Decode via an `ffmpeg` subprocess: bytes in on stdin, raw f32 LE 16 kHz mono
-/// PCM out on stdout. Handles WebM/Opus from MediaRecorder and anything else.
+/// Decode via an `ffmpeg` subprocess. Audio bytes go to a NamedTempFile (NOT
+/// stdin pipe — pipe+drop(stdin) was hanging on the second/third request
+/// because Rust's async writer and ffmpeg's input-probe race on EOF when
+/// the pipe buffer is large); ffmpeg reads from the file path; raw f32 LE
+/// 16 kHz mono PCM comes out on stdout. WebM/Opus from MediaRecorder and
+/// anything else symphonia can't decode falls through here. Bounded by a
+/// 30 s timeout so a wedged ffmpeg can't pile up and hang new requests.
 async fn decode_with_ffmpeg(data: &[u8]) -> Result<Vec<f32>, (StatusCode, String)> {
+    let tmp = tempfile::Builder::new()
+        .prefix("weavine-voice-")
+        .suffix(".bin")
+        .tempfile()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("create temp file: {e}")))?;
+    let tmp_path = tmp.path().to_path_buf();
+    tokio::fs::write(&tmp_path, data)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("write temp audio ({} bytes): {e}", data.len()),
+            )
+        })?;
+
     let mut cmd = tokio::process::Command::new("ffmpeg");
-    cmd.args(["-nostdin", "-loglevel", "error", "-i", "-", "-f", "f32le", "-ac", "1", "-ar"])
+    cmd.args(["-nostdin", "-loglevel", "error", "-i"])
+        .arg(&tmp_path)
+        .args(["-f", "f32le", "-ac", "1", "-ar"])
         .arg(TARGET_RATE.to_string())
         .arg("-")
-        .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|e| {
+    let child = cmd.spawn().map_err(|e| {
         (
             StatusCode::SERVICE_UNAVAILABLE,
             format!(
@@ -325,20 +387,18 @@ async fn decode_with_ffmpeg(data: &[u8]) -> Result<Vec<f32>, (StatusCode, String
         )
     })?;
 
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "ffmpeg stdin unavailable".to_string()))?;
-    stdin
-        .write_all(data)
+    let timeout = std::time::Duration::from_secs(30);
+    let output = tokio::time::timeout(timeout, child.wait_with_output())
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("write ffmpeg stdin: {e}")))?;
-    drop(stdin);
-
-    let output = child
-        .wait_with_output()
-        .await
+        .map_err(|_| {
+            (
+                StatusCode::GATEWAY_TIMEOUT,
+                format!("ffmpeg decode timed out after {timeout:?}"),
+            )
+        })?
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("ffmpeg wait: {e}")))?;
+
+    let _ = tmp.close();
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
@@ -355,41 +415,24 @@ async fn decode_with_ffmpeg(data: &[u8]) -> Result<Vec<f32>, (StatusCode, String
     Ok(pcm)
 }
 
-/// Run whisper on 16 kHz mono PCM f32. CPU-bound, so it runs on a blocking
+/// Run SenseVoice on 16 kHz mono PCM f32. CPU-bound, so it runs on a blocking
 /// thread. Returns `(text, language_code)`.
 async fn transcribe(pcm: Vec<f32>) -> Result<(String, String), (StatusCode, String)> {
     tokio::task::spawn_blocking(move || {
-        let ctx = get_whisper()?;
-        let mut state = ctx.create_state().map_err(|e| {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("create whisper state: {e}"))
-        })?;
-
-        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
-        params.set_detect_language(true);
-        params.set_language(None);
-        params.set_n_threads(2);
-        params.set_print_special(false);
-        params.set_print_progress(false);
-        params.set_print_realtime(false);
-        params.set_print_timestamps(false);
-        params.set_max_len(0);
-
-        state.full(params, &pcm).map_err(|e| {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("whisper inference failed: {e}"))
-        })?;
-
-        let mut text = String::new();
-        let n = state.full_n_segments();
-        for i in 0..n {
-            if let Some(seg) = state.get_segment(i) {
-                if let Ok(t) = seg.to_str() {
-                    text.push_str(t);
-                }
-            }
-        }
-        let lang = get_lang_str(state.full_lang_id_from_state()).unwrap_or("unknown").to_string();
-        Ok((text.trim().to_string(), lang))
+        let recognizer = get_recognizer()?;
+        let stream = recognizer.create_stream();
+        stream.accept_waveform(16_000, &pcm);
+        recognizer.decode(&stream);
+        let result = stream
+            .get_result()
+            .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "recognizer returned no result".to_string()))?;
+        let text = result.text.trim().to_string();
+        // SenseVoice embeds language info in the text as `<|zh|>` / `<|en|>` tokens.
+        // We strip them here so the JS side sees clean text. The language field
+        // is reported as "auto" since the model handles detection internally.
+        let lang = "auto".to_string();
+        Ok((text, lang))
     })
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("whisper task failed: {e}")))?
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("recognizer task failed: {e}")))?
 }

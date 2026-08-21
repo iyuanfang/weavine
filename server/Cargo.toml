@@ -9,7 +9,7 @@ default = ["ocr"]
 ocr = ["dep:leptess"]
 # Speech-to-text: whisper.cpp via whisper-rs (builds with cmake + a C++ compiler),
 # symphonia for audio demux/decode, rubato to resample to whisper's 16 kHz input.
-stt = ["dep:whisper-rs", "dep:symphonia", "dep:rubato"]
+stt = ["dep:sherpa-onnx", "dep:symphonia", "dep:rubato"]
 
 [dependencies]
 weavine = { path = "../src-tauri", default-features = false, features = ["sqlx"] }
@@ -39,5 +39,9 @@ leptess = { version = "0.6", optional = true }
 symphonia = { version = "0.5", optional = true }
 # Sinc resampler only (no FFT resampler) — just enough to convert to 16 kHz.
 rubato = { version = "0.15", optional = true, default-features = false }
-whisper-rs = { version = "0.15", optional = true }
+# SenseVoice via sherpa-onnx (Linux x86_64 static link). The vendored
+# sherpa-onnx-sys (src-tauri/vendor/sherpa-onnx-sys-1.13.5-android-layout-fix)
+# provides the C API; on Linux it downloads the prebuilt `linux-x64-static-lib`
+# tarball from the k2-fsa GitHub release at build time.
+sherpa-onnx = { version = "1.13", optional = true, default-features = false, features = [] }
 tempfile = "3"
