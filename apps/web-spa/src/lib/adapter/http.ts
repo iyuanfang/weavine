@@ -79,6 +79,24 @@ function authHeaders(): Record<string, string> {
 
 // ── Fetch helper ───────────────────────────────────────
 
+// Routes that don't require a session. Listed here (not in
+// routes-config) because the 401-redirect gate fires from
+// globally-mounted hooks (e.g. useReminderPoller → useLocalUser)
+// that hit /api/auth/me before any route renders. Without this
+// list, the very first probe bounces the visitor away from
+// /forgot-password and /reset-password.
+const PUBLIC_PATHNAMES: readonly string[] = [
+  '/login',
+  '/forgot-password',
+  '/reset-password',
+];
+
+function isPublicPathname(p: string): boolean {
+  return PUBLIC_PATHNAMES.some(
+    (root) => p === root || p.startsWith(root + '/'),
+  );
+}
+
 function buildUrl(baseUrl: string, path: string, method: string): string {
   const url = baseUrl.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
   if (method === 'GET' || method === 'HEAD') {
@@ -105,14 +123,20 @@ async function request<R>(
 
   const resp = await fetch(url, opts);
 
-  if (!resp.ok) {
-    if (resp.status === 401 && typeof window !== 'undefined') {
-      clearSession();
-      if (!window.location.pathname.startsWith('/login')) {
-        const next = encodeURIComponent(window.location.pathname + window.location.search);
-        window.location.assign(`/login?next=${next}`);
+    if (!resp.ok) {
+      if (resp.status === 401 && typeof window !== 'undefined') {
+        clearSession();
+        // Only force-redirect when the user is on a route that
+        // actually requires a session. Public auth-bootstrap
+        // routes (/forgot-password, /reset-password) MUST stay
+        // visible even when the visitor is anonymous — otherwise
+        // the very first /api/auth/me probe on those pages
+        // bounces them straight back to /login.
+        if (!isPublicPathname(window.location.pathname)) {
+          const next = encodeURIComponent(window.location.pathname + window.location.search);
+          window.location.assign(`/login?next=${next}`);
+        }
       }
-    }
     let msg: string;
     try {
       msg = await resp.text();

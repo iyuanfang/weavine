@@ -1,8 +1,10 @@
-const CACHE = 'weavine-v4';
+const CACHE = 'weavine-v7';
 
 const PRECACHE_URLS = [
   '/',
   '/login',
+  '/forgot-password',
+  '/reset-password',
   '/today',
   '/contacts',
   '/calendar',
@@ -57,6 +59,27 @@ self.addEventListener('fetch', (event) => {
   if (!url.protocol.startsWith('http')) return;
 
   if (isApiRequest(url)) {
+    return;
+  }
+
+  // Network-first for SPA navigations so a route added in a new release
+  // is picked up immediately; fall back to cache when offline.
+  const isDocument = event.request.mode === 'navigate' ||
+    (event.request.headers.get('accept') || '').includes('text/html');
+  if (isDocument) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+          return res;
+        })
+        .catch(() =>
+          caches.match(event.request).then(
+            (cached) => cached || caches.match('/'),
+          ),
+        ),
+    );
     return;
   }
 

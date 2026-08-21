@@ -172,3 +172,36 @@ export async function logout(baseUrl: string): Promise<void> {
   }
   clearSession();
 }
+
+export async function requestPasswordReset(
+  email: string,
+  baseUrl: string,
+): Promise<void> {
+  const resp = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    if (resp.status === 429) throw new Error('尝试过于频繁，请稍后再试');
+    throw new Error(text || `请求失败: HTTP ${resp.status}`);
+  }
+}
+
+export async function performPasswordReset(
+  token: string,
+  newPassword: string,
+  baseUrl: string,
+): Promise<void> {
+  const resp = await fetch(`${baseUrl}/api/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    if (resp.status === 400) throw new Error(text || '重置链接无效或已过期');
+    throw new Error(text || `重置失败: HTTP ${resp.status}`);
+  }
+}

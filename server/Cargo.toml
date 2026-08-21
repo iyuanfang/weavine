@@ -10,6 +10,8 @@ ocr = ["dep:leptess"]
 # Speech-to-text: whisper.cpp via whisper-rs (builds with cmake + a C++ compiler),
 # symphonia for audio demux/decode, rubato to resample to whisper's 16 kHz input.
 stt = ["dep:sherpa-onnx", "dep:symphonia", "dep:rubato"]
+# SMTP transport for password-reset (and future transactional) emails.
+smtp = ["dep:lettre"]
 
 [dependencies]
 weavine = { path = "../src-tauri", default-features = false, features = ["sqlx"] }
@@ -45,3 +47,6 @@ rubato = { version = "0.15", optional = true, default-features = false }
 # tarball from the k2-fsa GitHub release at build time.
 sherpa-onnx = { version = "1.13", optional = true, default-features = false, features = [] }
 tempfile = "3"
+dashmap = "6"
+thiserror = "1"
+lettre = { version = "0.11", optional = true, default-features = false, features = ["smtp-transport", "tokio1-rustls", "rustls", "ring", "webpki-roots", "builder"] }

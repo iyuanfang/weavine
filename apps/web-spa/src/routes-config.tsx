@@ -9,6 +9,8 @@ import type { RouteObject } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { RequireAuth } from './lib/auth/RequireAuth';
 import { LoginPage } from './routes/Login';
+import { ForgotPasswordPage } from './routes/ForgotPassword';
+import { ResetPasswordPage } from './routes/ResetPassword';
 import { TodayPage } from './routes/Today';
 import { ContactsList } from './routes/ContactsList';
 import { ContactNew } from './routes/ContactNew';
@@ -57,6 +59,8 @@ export interface AppRoute {
  */
 export const routes: AppRoute[] = [
   { path: '/login', Component: LoginPage, label: 'Login', bare: true },
+  { path: '/forgot-password', Component: ForgotPasswordPage, label: 'ForgotPassword', bare: true },
+  { path: '/reset-password', Component: ResetPasswordPage, label: 'ResetPassword', bare: true },
   { path: '/today', Component: TodayPage, label: 'Today' },
 
   // Placeholder entries below — replaced as Phase 4 lands.
@@ -96,7 +100,7 @@ export const routes: AppRoute[] = [
  * on Tauri).
  */
 export function buildRouterObjects(): RouteObject[] {
-  return routes.map(({ path, Component, bare }) => ({
+  const out = routes.map(({ path, Component, bare }) => ({
     path,
     element: bare ? (
       <Component />
@@ -108,4 +112,5 @@ export function buildRouterObjects(): RouteObject[] {
       </RequireAuth>
     ),
   }));
+  return out;
 }

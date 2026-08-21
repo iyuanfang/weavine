@@ -5,6 +5,19 @@ All notable changes to Weavine PRM are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **忘记密码 / 重置密码（云账户）** — `POST /api/auth/forgot-password` 与 `POST /api/auth/reset-password` 端点 + Web SPA `/forgot-password` 与 `/reset-password` 页面 + 登录页底部"忘记密码？"链接。Token 64 字符随机 base62、哈希入库、60 分钟过期、一次性使用；成功重置后撤销该用户所有 refresh token 强制所有设备重新登录。邮箱发送走新增 `server/src/email/` 模块（默认 `LogEmailSender` 把链接打到 stderr；可选 `smtp` feature + `SMTP_URL` / `SMTP_FROM` 启用 `lettre` 经 SMTP 投递）。`forgot-password` 始终返回 `200 {ok:true}`（未知邮箱也如此）并加 80–250 ms 抖动防止计时探测；带 5/小时/IP 20/小时 的内存限速（`server/src/rate_limit.rs`）。迁移 `server/migrations/20260821000001_password_reset.sql`。前端 `apps/web-spa/src/lib/auth/storage.ts` 新增 `requestPasswordReset` / `performPasswordReset`。
+
+### Technical
+
+- 新增模块：`server/src/email/mod.rs`（`EmailSender` trait + `LogEmailSender` + `SmtpEmailSender`）+ `server/src/rate_limit.rs`（`RateLimiter` 用 `dashmap` + `VecDeque` 做滑动窗口）
+- 新增依赖：`dashmap 6`、`thiserror 1`、`lettre 0.11`（`smtp` feature gated）
+- `axum::serve` 改用 `into_make_service_with_connect_info::<SocketAddr>()` 让 `forgot-password` 能读客户端 IP
+- 14 个新增单元测试（rate limiter 三种场景、token 格式、IP 提取优先级、email sender happy path）
+
 ## [1.0.20] - 2026-08-18
 
 ### Fixed

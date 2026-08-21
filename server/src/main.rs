@@ -19,7 +19,9 @@ mod api_key_crypto;
 mod auth_keys;
 mod business;
 mod cadence_server;
+mod email;
 mod handlers;
+mod rate_limit;
 mod reminder_dispatcher;
 
 const CHANGE_LOG_TTL_DAYS: i64 = 90;
@@ -65,6 +67,10 @@ async fn main() {
         .expect("JWT_KEYS already initialized");
     // Shared service key for the zero-friction OCR/STT endpoints (WV_SERVICE_KEY).
     handlers::auth::init_service_key();
+    // Email sender (defaults to log; SMTP if `smtp` feature + env vars set).
+    email::init_sender();
+    // In-process rate limiter for password-reset endpoints.
+    handlers::auth::init_password_reset_rate_limiter();
 
     let api = Router::new()
         .route("/api/health", get(|| async { "OK" }))
@@ -74,6 +80,8 @@ async fn main() {
         .route("/api/auth/refresh", post(handlers::auth::refresh))
         .route("/api/auth/logout", post(handlers::auth::logout))
         .route("/api/auth/me", get(handlers::auth::me))
+        .route("/api/auth/forgot-password", post(handlers::auth::forgot_password))
+        .route("/api/auth/reset-password", post(handlers::auth::reset_password))
         // Activation tracking (anonymous, no auth required)
         .route("/api/activation/ping", post(handlers::activation::ping))
         // Diagnostic
@@ -170,7 +178,9 @@ async fn main() {
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     println!("weavine-server listening on http://{addr}");
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
+        .await
+        .unwrap();
 }
 
 fn spawn_change_log_pruner(pool: Arc<PgPool>) {

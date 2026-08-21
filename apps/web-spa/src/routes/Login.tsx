@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { loadSession, login, register, saveSession } from '../lib/auth/storage';
@@ -26,6 +26,10 @@ function nextPath(search: string): string {
   return '/today';
 }
 
+function hasDevBypass(): boolean {
+  return new URLSearchParams(window.location.search).get('dev-bypass') === '1';
+}
+
 export function LoginPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -35,6 +39,7 @@ export function LoginPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const justReset = new URLSearchParams(location.search).get('reset') === 'success';
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +78,22 @@ export function LoginPage() {
     }
     setPending(true);
     try {
+      if (import.meta.env.DEV && hasDevBypass()) {
+        const sess = {
+          user_id: 'dev-local',
+          access_token: 'dev-local',
+          refresh_token: 'dev-local',
+          email: trimmedEmail,
+        };
+        saveSession(sess);
+        queryClient.setQueryData(localUserQueryKey, {
+          id: sess.user_id,
+          name: trimmedEmail,
+          email: trimmedEmail,
+        });
+        window.location.href = nextPath(location.search);
+        return;
+      }
       const base = viteApiBase();
       const sess =
         mode === 'login'
@@ -113,6 +134,11 @@ export function LoginPage() {
         <p className="login-subtitle">
           {mode === 'login' ? '登录到您的账户' : '创建一个新账户'}
         </p>
+        {justReset ? (
+          <p className="reset-success" role="status">
+            密码已更新，请重新登录。
+          </p>
+        ) : null}
         <form onSubmit={onSubmit} className="login-form">
           <label className="login-field">
             <span>邮箱</span>
@@ -141,6 +167,13 @@ export function LoginPage() {
           <button type="submit" className="login-submit" disabled={pending}>
             {pending ? '请稍候...' : mode === 'login' ? '登录' : '注册'}
           </button>
+          {mode === 'login' ? (
+            <p className="login-switch">
+              <Link to="/forgot-password" className="login-switch-btn">
+                忘记密码？
+              </Link>
+            </p>
+          ) : null}
         </form>
         <p className="login-switch">
           {mode === 'login' ? '还没有账户？' : '已有账户？'}

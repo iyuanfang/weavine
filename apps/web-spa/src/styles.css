@@ -1638,6 +1638,18 @@ textarea.input-base {
   cursor: not-allowed;
 }
 
+.reset-success {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  text-align: center;
+  line-height: 1.5;
+}
+
 /* ── Reminder toast (bottom-right stack) ─────────────── */
 
 .reminder-toast-container {

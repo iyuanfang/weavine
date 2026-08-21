@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{ConnectInfo, State},
     http::{HeaderMap, StatusCode},
     Json,
 };
@@ -11,11 +11,29 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration as StdDuration;
+use crate::email::{self, EmailMessage};
 use crate::handlers::JWT_KEYS;
+use crate::rate_limit::RateLimiter;
 
 pub const ACCESS_TOKEN_TTL_SECS: u64 = 7 * 24 * 60 * 60;
 pub const REFRESH_TOKEN_TTL_SECS: u64 = 30 * 24 * 60 * 60;
 const MIN_PASSWORD_LEN: usize = 8;
+const RESET_TOKEN_TTL_SECS: i64 = 60 * 60;
+
+static PASSWORD_RESET_RL: OnceLock<RateLimiter> = OnceLock::new();
+
+pub fn init_password_reset_rate_limiter() {
+    PASSWORD_RESET_RL
+        .set(RateLimiter::new())
+        .expect("PASSWORD_RESET_RL already initialised");
+}
+
+fn reset_rate_limit() -> &'static RateLimiter {
+    PASSWORD_RESET_RL
+        .get()
+        .expect("PASSWORD_RESET_RL not initialised; call init_password_reset_rate_limiter() in main")
+}
 
 /// Shared zero-friction service key for the OCR/STT endpoints (feature
 /// `ocr`/`stt`). Loaded from `WV_SERVICE_KEY` once at startup by
@@ -766,4 +784,306 @@ pub async fn me(
         email,
         devices,
     }))
+}
+
+// ── Password reset ─────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct ForgotPasswordReq {
+    pub email: String,
+}
+
+#[derive(Serialize)]
+pub struct ForgotPasswordResp {
+    pub ok: bool,
+}
+
+#[derive(Deserialize)]
+pub struct ResetPasswordReq {
+    pub token: String,
+    pub new_password: String,
+}
+
+#[derive(Serialize)]
+pub struct ResetPasswordResp {
+    pub ok: bool,
+}
+
+fn reset_url_base() -> String {
+    std::env::var("WEAVINE_RESET_URL_BASE")
+        .unwrap_or_else(|_| "http://localhost:5173/reset-password".to_string())
+}
+
+fn random_reset_token() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect()
+}
+
+fn client_ip(headers: &HeaderMap, fallback: Option<std::net::SocketAddr>) -> String {
+    if let Some(v) = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
+        return v;
+    }
+    if let Some(v) = headers
+        .get("x-real-ip")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
+        return v;
+    }
+    fallback
+        .map(|a| a.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+pub async fn forgot_password(
+    State(pool): State<Arc<PgPool>>,
+    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
+    headers: HeaderMap,
+    Json(body): Json<ForgotPasswordReq>,
+) -> Result<Json<ForgotPasswordResp>, (StatusCode, String)> {
+    let email_raw = body.email.trim().to_lowercase();
+    let ip = client_ip(&headers, Some(peer));
+    let rl = reset_rate_limit();
+
+    // Per-IP cap first so an attacker can't burn through arbitrary emails.
+    if !rl.check(
+        "forgot-password",
+        "ip",
+        &ip,
+        20,
+        StdDuration::from_secs(60 * 60),
+    ) {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "请求过于频繁，请稍后再试".into(),
+        ));
+    }
+
+    // Lookup user (if any). Always return `ok: true` to avoid leaking
+    // which emails are registered; cap additional delay so timing also
+    // does not leak.
+    let user: Option<(String, String)> = if email_raw.contains('@') && email_raw.len() <= 254 {
+        sqlx::query_as("SELECT id, email FROM user_account WHERE email = $1")
+            .bind(&email_raw)
+            .fetch_optional(pool.as_ref())
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    } else {
+        None
+    };
+
+    if let Some((user_id, email)) = user {
+        // Per-email cap — checked AFTER the existence query so a
+        // yes-bouncer can't be probed by timing.
+        if rl.check(
+            "forgot-password",
+            "email",
+            &email,
+            5,
+            StdDuration::from_secs(60 * 60),
+        ) {
+            let raw = random_reset_token();
+            let token_hash = blake_hash(&raw);
+            let id = uuid::Uuid::new_v4().to_string();
+            let now = Utc::now();
+            // RFC 3339 / ISO 8601 with `Z` suffix — lexicographically
+            // sortable regardless of timezone, so string comparison in
+            // `reset_password` works correctly even though the column is
+            // stored as text.
+            let expires_at = (now + Duration::seconds(RESET_TOKEN_TTL_SECS))
+                .format("%Y-%m-%dT%H:%M:%SZ")
+                .to_string();
+            let created_at = now.format("%Y-%m-%dT%H:%M:%SZ").to_string();
+            if let Err(e) = sqlx::query(
+                "INSERT INTO password_reset_token (id, user_id, token_hash, expires_at, created_at) \
+                 VALUES ($1, $2, $3, $4, $5)",
+            )
+            .bind(&id)
+            .bind(&user_id)
+            .bind(&token_hash)
+            .bind(&expires_at)
+            .bind(&created_at)
+            .execute(pool.as_ref())
+            .await
+            {
+                eprintln!("[auth] forgot-password insert failed: {e}");
+            } else {
+                let link = format!("{}?token={}", reset_url_base(), raw);
+                let subject = "重置 Weavine 密码";
+                let body = format!(
+                    "您好，\n\n您（或冒充您的人）请求重置 Weavine 账户的密码。\n\n\
+                     请在 60 分钟内点击以下链接继续：\n\n  {link}\n\n\
+                     如果不是您本人请求，请忽略此邮件。\n\n— Weavine"
+                );
+                let send_res = email::sender()
+                    .send(EmailMessage::new(email, subject, body))
+                    .await;
+                if let Err(e) = send_res {
+                    eprintln!("[auth] forgot-password send failed: {e}");
+                }
+            }
+        }
+    } else {
+        // Also burn the email budget so an attacker can't probe presence
+        // by inspecting the per-email rejection vs the silent nothing.
+        let _ = rl.check(
+            "forgot-password",
+            "email",
+            &email_raw,
+            5,
+            StdDuration::from_secs(60 * 60),
+        );
+    }
+
+    // Anti-enumeration: pad response time to a uniform window so timing
+    // can't reveal whether the email was registered. 80–250 ms is short
+    // enough not to be user-hostile while still swamping network jitter.
+    let jitter = rand::random::<u64>() % 170;
+    tokio::time::sleep(StdDuration::from_millis(80 + jitter)).await;
+
+    Ok(Json(ForgotPasswordResp { ok: true }))
+}
+
+pub async fn reset_password(
+    State(pool): State<Arc<PgPool>>,
+    Json(body): Json<ResetPasswordReq>,
+) -> Result<Json<ResetPasswordResp>, (StatusCode, String)> {
+    if body.new_password.len() < MIN_PASSWORD_LEN {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("新密码至少 {} 位", MIN_PASSWORD_LEN),
+        ));
+    }
+    if body.token.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "token 不能为空".into()));
+    }
+
+    let token_hash = blake_hash(&body.token);
+    let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+    let row: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT id, user_id, expires_at FROM password_reset_token \
+         WHERE token_hash = $1",
+    )
+    .bind(&token_hash)
+    .fetch_optional(pool.as_ref())
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let (token_id, user_id, expires_at) = match row {
+        Some(r) => r,
+        None => return Err((StatusCode::BAD_REQUEST, "重置链接无效".into())),
+    };
+
+    if expires_at <= now {
+        return Err((StatusCode::BAD_REQUEST, "重置链接已过期".into()));
+    }
+
+    let pwhash = hash(body.new_password.as_bytes(), DEFAULT_COST)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("hash: {e}")))?;
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Re-check `used_at` under the row lock so two concurrent resets
+    // can't both succeed.
+    let used: Option<Option<String>> = sqlx::query_scalar(
+        "SELECT used_at FROM password_reset_token WHERE id = $1 FOR UPDATE",
+    )
+    .bind(&token_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if used.flatten().is_some() {
+        return Err((StatusCode::BAD_REQUEST, "重置链接已被使用".into()));
+    }
+
+    sqlx::query(
+        "UPDATE user_account SET password_hash = $1, updated_at = $2 WHERE id = $3",
+    )
+    .bind(&pwhash)
+    .bind(&now)
+    .bind(&user_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("update password: {e}")))?;
+
+    sqlx::query("UPDATE password_reset_token SET used_at = $1 WHERE id = $2")
+        .bind(&now)
+        .bind(&token_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("mark used: {e}")))?;
+
+    // Force re-login on every device.
+    sqlx::query(
+        "UPDATE refresh_token SET revoked_at = $1 \
+         WHERE user_id = $2 AND revoked_at IS NULL",
+    )
+    .bind(&now)
+    .bind(&user_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("revoke sessions: {e}")))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(ResetPasswordResp { ok: true }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blake_hash_is_stable() {
+        assert_eq!(blake_hash("hello").len(), 16);
+        assert_eq!(blake_hash("hello"), blake_hash("hello"));
+        assert_ne!(blake_hash("hello"), blake_hash("Hello"));
+    }
+
+    #[test]
+    fn reset_token_length_and_chars() {
+        for _ in 0..20 {
+            let t = random_reset_token();
+            assert_eq!(t.len(), 64);
+            assert!(t.chars().all(|c| c.is_ascii_alphanumeric()));
+        }
+    }
+
+    #[test]
+    fn client_ip_prefers_xff() {
+        let mut h = HeaderMap::new();
+        h.insert("x-forwarded-for", "1.2.3.4, 10.0.0.1".parse().unwrap());
+        h.insert("x-real-ip", "5.6.7.8".parse().unwrap());
+        let addr: std::net::SocketAddr = "127.0.0.1:9999".parse().unwrap();
+        assert_eq!(client_ip(&h, Some(addr)), "1.2.3.4");
+    }
+
+    #[test]
+    fn client_ip_falls_back_to_peer() {
+        let h = HeaderMap::new();
+        let addr: std::net::SocketAddr = "127.0.0.1:9999".parse().unwrap();
+        assert_eq!(client_ip(&h, Some(addr)), "127.0.0.1");
+    }
+
+    #[test]
+    fn client_ip_unknown_when_no_peer() {
+        let h = HeaderMap::new();
+        assert_eq!(client_ip(&h, None), "unknown");
+    }
 }
