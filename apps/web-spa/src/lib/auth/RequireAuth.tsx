@@ -10,12 +10,22 @@ interface Props {
   children: React.ReactNode;
 }
 
+const devBypass = (() => {
+  if (typeof window === 'undefined') return false;
+  if (!((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV)) return false;
+  return new URLSearchParams(window.location.search).get('dev-bypass') === '1';
+})();
+
 /**
  * Web-mode auth gate. Wraps any route that needs a logged-in user.
  *
  * Desktop: pass-through (single-user model, no login required).
  * Web: require a JWT in localStorage. Verify it with `/api/auth/me`; on 401
  * or absent token, redirect to `/login?next=<encoded current path>`.
+ *
+ * Local dev-only escape hatch: visit any URL with `?dev-bypass=1` to skip
+ * the JWT check. Only active when `import.meta.env.DEV` is true (vite dev
+ * server). Stripped from production builds automatically.
  */
 export function RequireAuth({ children }: Props) {
   const location = useLocation();
@@ -28,7 +38,7 @@ export function RequireAuth({ children }: Props) {
   useEffect(() => {
     let cancelled = false;
 
-    if (isTauri) {
+    if (isTauri || devBypass) {
       if (!cancelled) setState({ kind: 'pass' });
       return () => {
         cancelled = true;
