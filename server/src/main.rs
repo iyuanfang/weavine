@@ -18,9 +18,9 @@ use tower_http::{
 mod api_key_crypto;
 mod auth_keys;
 mod business;
-mod cadence_server;
 mod email;
 mod handlers;
+mod keep_in_touch_server;
 mod rate_limit;
 mod reminder_dispatcher;
 
@@ -58,7 +58,7 @@ async fn main() {
     let storage: Arc<dyn Storage> = Arc::new(LocalFsStorage::new(storage_root));
 
     spawn_change_log_pruner(pool.clone());
-    cadence_server::spawn_cadence_scheduler(pool.clone());
+    keep_in_touch_server::spawn_keep_in_touch_scheduler(pool.clone());
     reminder_dispatcher::spawn_reminder_dispatcher(pool.clone());
 
     // Initialize JWT keys from PEM files (RS256)

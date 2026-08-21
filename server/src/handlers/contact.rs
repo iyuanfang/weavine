@@ -104,7 +104,7 @@ pub async fn get(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut contact: Contact = sqlx::query_as(
         "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
-         notes, importance, last_interaction_at, \
+         notes, importance, last_interaction_at, keep_in_touch_cadence_days, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact WHERE id = $1 AND user_id = $2",
     )
@@ -236,6 +236,16 @@ pub async fn update(
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx)); binds.push(Bind::Text(v)); idx += 1;
         }
+    }
+    if let Some(v) = body.get("keep_in_touch_cadence_days") {
+        // 0 / negative = clear the override (NULL). Positive = set cadence.
+        let n = v.as_i64().unwrap_or(0);
+        sets.push(format!(
+            "keep_in_touch_cadence_days = CASE WHEN ${} > 0 THEN ${}::BIGINT ELSE NULL END",
+            idx, idx
+        ));
+        binds.push(Bind::I32(n as i32));
+        idx += 1;
     }
     sets.push(format!("updated_at = ${}", idx)); binds.push(Bind::Text(&now)); idx += 1;
 
