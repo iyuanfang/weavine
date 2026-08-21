@@ -341,6 +341,9 @@ pub struct CreateContactInput {
     pub notes: Option<String>,
     pub importance: Option<String>,
     pub tag_ids: Option<Vec<String>>,
+    /// Optional override for the keep-in-touch cadence (days). `None` or `0`
+    /// falls back to the importance-derived default (high=30, medium=90, low=180).
+    pub keep_in_touch_cadence_days: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -358,6 +361,10 @@ pub struct UpdateContactInput {
     pub notes: Option<String>,
     pub importance: Option<String>,
     pub tag_ids: Option<Vec<String>>,
+    /// Sentiment is "set to this value": `None` = leave unchanged,
+    /// `Some(0)` = clear the override (use importance default), `Some(n>0)` =
+    /// set the cadence override to `n` days.
+    pub keep_in_touch_cadence_days: Option<i64>,
 }
 
 // ──────────────────────────────────────────────

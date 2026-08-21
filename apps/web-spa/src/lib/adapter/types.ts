@@ -49,6 +49,7 @@ export interface Contact {
   notes: string | null;
   importance: string;
   last_interaction_at: string | null;
+  keep_in_touch_cadence_days: number | null;
   created_at: string;
   updated_at: string;
   tags: Tag[];
@@ -249,6 +250,8 @@ export interface CreateContactInput {
   notes?: string | null;
   importance?: string | null;
   tag_ids?: string[] | null;
+  /** 0 / undefined = use importance-derived default (high=30, medium=90, low=180). */
+  keep_in_touch_cadence_days?: number | null;
 }
 
 export interface CreateProjectInput {
@@ -285,6 +288,8 @@ export interface UpdateContactInput {
   notes?: string | null;
   importance?: string | null;
   tag_ids?: string[] | null;
+  /** Sentiment: 0 / undefined = clear override (back to importance default); positive = set cadence override (days). */
+  keep_in_touch_cadence_days?: number | null;
 }
 
 export interface CreateEventInput {

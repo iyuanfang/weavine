@@ -188,10 +188,12 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
         "INSERT INTO Contact \
          (id, user_id, nickname, name, company, title, address, \
           email, phone, wechat, notes, importance, \
+          keep_in_touch_cadence_days, \
           last_interaction_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
                  ?8, ?9, ?10, ?11, ?12, \
-                 ?13, ?14, ?15)",
+                 ?13, \
+                 ?14, ?15, ?16)",
         rusqlite::params![
             &id,
             &input.user_id,
@@ -205,6 +207,8 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
             &input.wechat,
             &input.notes,
             &importance,
+            // Treat 0 as "no override" — the importance default will apply.
+            input.keep_in_touch_cadence_days.filter(|d| *d > 0),
             None::<String>,
             &now,
             &now,
@@ -289,6 +293,14 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
         params.push(Box::new(imp.clone()));
         param_idx += 1;
     }
+    if let Some(cadence) = input.keep_in_touch_cadence_days {
+        set_clauses.push(format!("keep_in_touch_cadence_days = ?{}", param_idx));
+        // 0 / negative = clear the override (use importance default).
+        let bound: Box<dyn rusqlite::types::ToSql> =
+            if cadence > 0 { Box::new(cadence) } else { Box::new(None::<i64>) };
+        params.push(bound);
+        param_idx += 1;
+    }
 
     // Always bump updated_at
     set_clauses.push(format!("updated_at = ?{}", param_idx));
@@ -323,6 +335,12 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
                 rusqlite::params![&user_id, &input.id, tag_id],
             )?;
         }
+    }
+
+    // Refresh keep-in-touch reminder: importance or cadence override may have
+    // changed, so the existing row's trigger_at is no longer accurate.
+    if let Err(e) = crate::business::keep_in_touch::schedule_for_contact(conn, &input.id) {
+        eprintln!("[contact::update] keep_in_touch reschedule failed: {e}");
     }
 
     let contact = conn.query_row(
@@ -590,5 +608,110 @@ mod tests {
         let (items, total) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(total, 1);
+    }
+
+    #[test]
+    fn update_keep_in_touch_cadence_reschedules_reminder() {
+        let conn = setup_db();
+        let old_ts = (chrono::Utc::now() - chrono::Duration::days(100))
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
+        insert_contact(&conn, "c1", "Acme", Some(&old_ts), "2026-01-01", "2026-01-01");
+
+        let initial: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Reminder WHERE contact_id='c1' AND kind='keep_in_touch'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(initial, 0, "fresh DB has no kit reminder yet");
+
+        update(
+            &conn,
+            &UpdateContactInput {
+                id: "c1".to_string(),
+                nickname: None,
+                name: None,
+                company: None,
+                title: None,
+                address: None,
+                email: None,
+                phone: None,
+                wechat: None,
+                notes: None,
+                importance: None,
+                tag_ids: None,
+                keep_in_touch_cadence_days: Some(7),
+            },
+        )
+        .unwrap();
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM Reminder WHERE contact_id='c1' AND kind='keep_in_touch'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "update must trigger reschedule");
+    }
+
+    #[test]
+    fn update_clearing_cadence_resets_to_default() {
+        let conn = setup_db();
+        let old_ts = (chrono::Utc::now() - chrono::Duration::days(100))
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
+        insert_contact(&conn, "c1", "Acme", Some(&old_ts), "2026-01-01", "2026-01-01");
+
+        update(
+            &conn,
+            &UpdateContactInput {
+                id: "c1".to_string(),
+                nickname: None,
+                name: None,
+                company: None,
+                title: None,
+                address: None,
+                email: None,
+                phone: None,
+                wechat: None,
+                notes: None,
+                importance: None,
+                tag_ids: None,
+                keep_in_touch_cadence_days: Some(7),
+            },
+        )
+        .unwrap();
+
+        update(
+            &conn,
+            &UpdateContactInput {
+                id: "c1".to_string(),
+                nickname: None,
+                name: None,
+                company: None,
+                title: None,
+                address: None,
+                email: None,
+                phone: None,
+                wechat: None,
+                notes: None,
+                importance: None,
+                tag_ids: None,
+                keep_in_touch_cadence_days: Some(0),
+            },
+        )
+        .unwrap();
+
+        let stored: Option<i64> = conn
+            .query_row(
+                "SELECT keep_in_touch_cadence_days FROM Contact WHERE id='c1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(stored.is_none(), "Some(0) must clear the override to NULL");
     }
 }

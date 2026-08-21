@@ -103,6 +103,16 @@ pub fn schedule_for_contact_tx(
     Ok(())
 }
 
+/// Convenience wrapper for callers that don't already hold a transaction
+/// (e.g. `contact::update` after the row is updated). Opens its own tx and
+/// delegates to `schedule_for_contact_tx`.
+pub fn schedule_for_contact(conn: &Connection, contact_id: &str) -> rusqlite::Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    schedule_for_contact_tx(&tx, contact_id)?;
+    tx.commit()?;
+    Ok(())
+}
+
 /// Re-schedule for every contact that has a `last_interaction_at`. Used at
 /// app startup so the table reflects any external edits to `Contact`.
 pub fn schedule_all(conn: &Connection) -> rusqlite::Result<usize> {

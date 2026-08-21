@@ -8,6 +8,7 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { tagColor } from '../lib/tagColor';
+import { daysUntilCold } from '../lib/keepInTouch';
 import {
   IMPORTANCE_DOT,
   IMPORTANCE_LABEL,
@@ -20,6 +21,41 @@ import type {
   ContactSortBy,
   UpdateContactInput,
 } from '../lib/adapter/types';
+
+function ColdBadge({
+  lastInteractionIso,
+  importance,
+  overrideDays,
+}: {
+  lastInteractionIso: string | null | undefined;
+  importance: string;
+  overrideDays: number | null | undefined;
+}) {
+  const remaining = daysUntilCold(lastInteractionIso, importance, overrideDays);
+  if (remaining === null) return null;
+  if (remaining > 0) return null;
+  const overdueDays = Math.abs(remaining);
+  const text = overdueDays === 0 ? '今天该联系' : overdueDays < 30 ? `${overdueDays} 天未联系` : `${Math.round(overdueDays / 30)} 个月未联系`;
+  return (
+    <span
+      title={`已超过保持联系周期（默认每 ${
+        importance === 'high' ? 30 : importance === 'medium' ? 90 : 180
+      } 天）`}
+      data-testid="cold-badge"
+      style={{
+        fontSize: 'var(--text-xs)',
+        background: '#fef2f2',
+        color: '#b91c1c',
+        border: '1px solid #fecaca',
+        borderRadius: 999,
+        padding: '2px 8px',
+        flexShrink: 0,
+      }}
+    >
+      ❄️ {text}
+    </span>
+  );
+}
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -526,6 +562,11 @@ function ContactRow({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span className="row-card__title">{displayName}</span>
+            <ColdBadge
+              lastInteractionIso={c.last_interaction_at}
+              importance={c.importance}
+              overrideDays={c.keep_in_touch_cadence_days}
+            />
             {c.name && c.name !== c.nickname && (
               <span className="row-card__meta">{c.name}</span>
             )}

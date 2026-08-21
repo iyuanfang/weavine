@@ -7,6 +7,7 @@ import { useUserId } from '../lib/auth';
 import { Avatar } from '../components/Avatar';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { AvatarViewModal } from '../components/AvatarViewModal';
+import { CadencePicker } from '../components/CadencePicker';
 import { CardImageViewModal } from '../components/CardImageViewModal';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
@@ -119,6 +120,17 @@ export function ContactDetail() {
     mutationFn: (contactId: string) => adapter.contacts.delete(contactId),
     onSuccess: () => {
       navigate(fromParam || '/contacts');
+    },
+  });
+
+  const cadenceMutation = useMutation({
+    mutationFn: (overrideDays: number | null) =>
+      adapter.contacts.update({
+        id,
+        keep_in_touch_cadence_days: overrideDays && overrideDays > 0 ? overrideDays : 0,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contact', id] });
     },
   });
 
@@ -347,6 +359,28 @@ export function ContactDetail() {
           </div>
         </section>
       )}
+
+      <section className="section">
+        <h2 className="section__title">保持联系</h2>
+        <div className="card" style={{ marginTop: 10, padding: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <CadencePicker
+            importance={contact.importance || 'low'}
+            value={contact.keep_in_touch_cadence_days ?? null}
+            onChange={(next) => cadenceMutation.mutate(next)}
+          />
+          {cadenceMutation.isPending && (
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>保存中…</span>
+          )}
+          {cadenceMutation.isError && (
+            <span role="alert" style={{ color: '#dc2626', fontSize: 'var(--text-sm)' }}>
+              保存失败
+            </span>
+          )}
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            调整后系统会按这个周期提醒你再次联系
+          </span>
+        </div>
+      </section>
 
       {cardImages.length > 0 && (
         <section className="section">
