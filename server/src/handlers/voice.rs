@@ -64,7 +64,10 @@ fn build_recognizer(dir: &Path) -> Result<OfflineRecognizer, String> {
     };
     config.model_config.tokens = Some(tokens.into());
     config.model_config.provider = Some("cpu".into());
-    config.model_config.num_threads = 4;
+    // Box has 2 CPUs; the sense-voice decoder is mostly sequential and
+    // intra-op parallelism past num_cpus hurts more than helps. Pin to 1
+    // so onnxruntime doesn't oversubscribe and fight the cron jobs.
+    config.model_config.num_threads = 1;
 
     OfflineRecognizer::create(&config)
         .ok_or_else(|| "failed to build sense-voice recognizer".to_string())
