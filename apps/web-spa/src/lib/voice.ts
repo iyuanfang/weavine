@@ -167,13 +167,38 @@ export function recordAudio(maxMs = 15000): Promise<Blob> {
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) chunks.push(e.data);
         };
-        recorder.onstop = () => {
+recorder.onstop = () => {
           stream.getTracks().forEach((t) => t.stop());
+          if (audioCtx) { void audioCtx.close(); }
+          if (rafId !== 0) { cancelAnimationFrame(rafId); }
           resolve(new Blob(chunks, { type: mime ?? 'audio/webm' }));
         };
         recorder.onerror = () => {
           stream.getTracks().forEach((t) => t.stop());
+          if (audioCtx) { void audioCtx.close(); }
+          if (rafId !== 0) { cancelAnimationFrame(rafId); }
           reject(new Error('录音失败'));
+        };
+        // VAD: tap into the same MediaStream with an AnalyserNode and stop
+        // the recorder once we've seen `silenceMs` of consecutive frames
+        // whose RMS is below `silenceRms`. Without this, MediaRecorder just
+        // runs until maxMs and pads ~13 s of silence after a 1-2 s utterance
+        // — which made SenseVoice infer scale super-linearly with audio
+        // length and pushed end-to-end latency to 5-7 s.
+        let audioCtx: AudioContext | null = null;
+        let analyser: AnalyserNode | null = null;
+        let rafId = 0;
+        const silenceRms = 0.012;        // ~ -38 dBFS; tuned for quiet rooms
+        const silenceFramesNeeded = 36;  // 36 × ~16 ms ≈ 600 ms of silence
+        let silenceFrames = 0;
+        let stopped = false;
+        const maybeStop = (reason: 'silence' | 'max') => {
+          if (stopped) return;
+          stopped = true;
+          if (recorder.state !== 'inactive') {
+            try { recorder.stop(); } catch { /* already stopping */ }
+          }
+          console.debug(`[voice] recorder stopped (${reason})`);
         };
         // Delay start so the audio pipeline warms up without dropping samples.
         window.setTimeout(() => {
@@ -181,12 +206,44 @@ export function recordAudio(maxMs = 15000): Promise<Blob> {
             recorder.start();
           } catch (e) {
             stream.getTracks().forEach((t) => t.stop());
-            reject(new Error(`录音启动失败：${e instanceof Error ? e.message : String(e)}`));
+            reject(new Error(`录音启动失败：${e instanceof Error ? e.message : String(e)}）`));
+            return;
+          }
+          try {
+            const Ctor: typeof AudioContext | undefined =
+              (window.AudioContext ??
+                (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+            if (Ctor) {
+              audioCtx = new Ctor();
+              const src = audioCtx.createMediaStreamSource(stream);
+              analyser = audioCtx.createAnalyser();
+              analyser.fftSize = 1024;
+              src.connect(analyser);
+              const buf = new Uint8Array(analyser.fftSize);
+              const tick = () => {
+                if (!analyser || stopped) return;
+                analyser.getByteTimeDomainData(buf);
+                let sumSq = 0;
+                for (let i = 0; i < buf.length; i++) {
+                  const v = (buf[i] - 128) / 128;
+                  sumSq += v * v;
+                }
+                const rms = Math.sqrt(sumSq / buf.length);
+                if (rms < silenceRms) {
+                  silenceFrames += 1;
+                  if (silenceFrames >= silenceFramesNeeded) maybeStop('silence');
+                } else {
+                  silenceFrames = 0;
+                }
+                rafId = requestAnimationFrame(tick);
+              };
+              rafId = requestAnimationFrame(tick);
+            }
+          } catch (e) {
+            console.warn('[voice] VAD unavailable, falling back to maxMs', e);
           }
         }, 200);
-        window.setTimeout(() => {
-          if (recorder.state !== 'inactive') recorder.stop();
-        }, maxMs);
+        window.setTimeout(() => maybeStop('max'), maxMs);
       })
       .catch((e: unknown) => {
         const name = (e as { name?: string } | null)?.name ?? '';
