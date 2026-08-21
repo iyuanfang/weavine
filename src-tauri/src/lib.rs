@@ -1,6 +1,5 @@
 pub mod boot_log;
 pub mod business;
-pub mod cadence;
 
 #[cfg(feature = "tauri")]
 pub mod commands;
