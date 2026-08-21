@@ -223,15 +223,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Two flavors ship from the same source tree:
-        #   cloud — small APK (~25 MB), no sherpa-onnx deps; Android voice
-        #           POSTs to the server's /api/voice/recognize. Default.
-        #   local — large APK (~250 MB), sherpa-onnx + SenseVoice int8 model
-        #           bundled as an Android asset (extracted to the app data
-        #           dir at first launch via android_assets.rs); voice runs
-        #           entirely on-device. There is no download fallback — the
-        #           model ships with the APK.
-        flavor: [cloud, local]
+        # Cloud-only as of 2026-08-21: user count is small and the local
+        # APK (~250 MB with sherpa-onnx + SenseVoice bundled) eats CI
+        # minutes / upload bandwidth for very few installs. The local
+        # flavor is preserved in the source tree + Cargo features so it
+        # can be re-enabled by switching the matrix back to [cloud, local].
+        flavor: [cloud]
     runs-on: ubuntu-latest
 
     steps:
