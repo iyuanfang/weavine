@@ -247,6 +247,24 @@ pub fn run() {
             let handle = app.handle().clone();
             let db = handle.state::<crate::db::Database>();
             commands::notification::startup_catch_up(&handle, db.inner());
+            {
+                let conn = match db.inner().conn.lock() {
+                    Ok(g) => g,
+                    Err(e) => {
+                        eprintln!("[startup] keep_in_touch: db lock poisoned: {e}");
+                        return Ok(());
+                    }
+                };
+                match business::keep_in_touch::schedule_all(&conn) {
+                    Ok(n) if n > 0 => {
+                        eprintln!("[startup] keep_in_touch: re-scheduled {n} reminders");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("[startup] keep_in_touch::schedule_all failed: {e}");
+                    }
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

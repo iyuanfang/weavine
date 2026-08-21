@@ -65,6 +65,7 @@ pub async fn list(
             notes: r.notes,
             importance: r.importance,
             last_interaction_at: r.last_interaction_at,
+            keep_in_touch_cadence_days: None,
             created_at: r.created_at,
             updated_at: r.updated_at,
             avatar_storage_key: None,

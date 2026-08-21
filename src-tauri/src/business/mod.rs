@@ -1,6 +1,7 @@
 pub mod action;
 pub mod archive_sweep;
 pub mod cadence_local;
+pub mod keep_in_touch;
 pub mod contact;
 pub mod diagnostic;
 pub mod event;

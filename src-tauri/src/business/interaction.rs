@@ -111,6 +111,13 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
                 contact_id
             );
         }
+        // Re-schedule the keep-in-touch reminder in the same transaction
+        // so the new trigger_at reflects the bumped last_interaction_at.
+        if let Err(e) = crate::business::keep_in_touch::schedule_for_contact_tx(&tx, contact_id) {
+            eprintln!(
+                "[interaction::create] keep_in_touch re-schedule for {contact_id} failed: {e}"
+            );
+        }
     }
 
     let interaction = tx.query_row(

@@ -40,6 +40,7 @@ pub struct Contact {
     pub notes: Option<String>,
     pub importance: String,
     pub last_interaction_at: Option<String>,
+    pub keep_in_touch_cadence_days: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
     #[cfg_attr(feature = "sqlx", sqlx(skip))]

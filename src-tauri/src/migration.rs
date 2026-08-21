@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS "Contact" (
     "notes" TEXT,
     "importance" TEXT NOT NULL DEFAULT 'low' CHECK("importance" IN ('low', 'medium', 'high')),
 "last_interaction_at" DATETIME,
+    "keep_in_touch_cadence_days" INTEGER,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL
 );
@@ -139,7 +140,7 @@ CREATE TABLE IF NOT EXISTS "Reminder" (
     "contact_id" TEXT REFERENCES "Contact"("id") ON DELETE CASCADE,
     "event_id" TEXT REFERENCES "Event"("id") ON DELETE CASCADE,
     "trigger_at" DATETIME NOT NULL,
-    "kind" TEXT NOT NULL DEFAULT 'time' CHECK("kind" IN ('time', 'cadence')),
+    "kind" TEXT NOT NULL DEFAULT 'time' CHECK("kind" IN ('time', 'cadence', 'keep_in_touch')),
     "dispatched" INTEGER NOT NULL DEFAULT 0,
     "dismissed" INTEGER NOT NULL DEFAULT 0,
     "invitation_token" TEXT,
@@ -405,7 +406,14 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         ("Media", "height", "INTEGER"),
         ("Media", "alt_text", "TEXT"),
     ];
-    for (table, col, decl) in avatar_mirror_cols.iter().chain(media_storage_cols.iter()) {
+    let kit_cols = [
+        ("Contact", "keep_in_touch_cadence_days", "INTEGER"),
+    ];
+    for (table, col, decl) in avatar_mirror_cols
+        .iter()
+        .chain(media_storage_cols.iter())
+        .chain(kit_cols.iter())
+    {
         let present: i64 = conn.query_row(
             "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
             rusqlite::params![table, col],
@@ -717,6 +725,7 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "importance" TEXT NOT NULL DEFAULT 'normal',
             "reminder_enabled" INTEGER NOT NULL DEFAULT 1,
             "reminder_interval_days" INTEGER, "last_interaction_at" DATETIME,
+            "keep_in_touch_cadence_days" INTEGER,
             "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" DATETIME NOT NULL
         );"#,
@@ -821,7 +830,7 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "contact_id" TEXT REFERENCES "Contact"("id") ON DELETE CASCADE,
             "event_id" TEXT REFERENCES "Event"("id") ON DELETE CASCADE,
             "trigger_at" DATETIME NOT NULL,
-            "kind" TEXT NOT NULL DEFAULT 'time',
+            "kind" TEXT NOT NULL DEFAULT 'time' CHECK("kind" IN ('time', 'cadence', 'keep_in_touch')),
             "dispatched" INTEGER NOT NULL DEFAULT 0,
             "dismissed" INTEGER NOT NULL DEFAULT 0,
             "invitation_token" TEXT,
