@@ -44,7 +44,7 @@ static RECOGNIZER: OnceLock<Result<Arc<OfflineRecognizer>, String>> = OnceLock::
 /// than the nginx proxy timeout, which surfaces as 504 Gateway Timeout
 /// to clients. We fail fast with 503 instead of letting requests pile up.
 static RECOGNIZE_SEM: std::sync::LazyLock<tokio::sync::Semaphore> =
-    std::sync::LazyLock::new(|| tokio::sync::Semaphore::new(2));
+    std::sync::LazyLock::new(|| tokio::sync::Semaphore::new(1));
 
 fn model_dir() -> std::path::PathBuf {
     std::env::var("SENSEVOICE_MODEL_DIR")
