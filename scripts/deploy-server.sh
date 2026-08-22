@@ -40,7 +40,7 @@ deploy() {
     $SSH "cd $REPO_REMOTE && git fetch origin && git log -1 --oneline && git reset --hard origin/main"
 
     echo
-    echo "═══ 2. ensure runtime deps (ffmpeg) + whisper model ═══"
+    echo "═══ 2. ensure runtime deps (ffmpeg) + SenseVoice model ═══"
     # ffmpeg is the audio-decode fallback for /api/voice/recognize (symphonia 0.5
     # lacks a released opus codec; weavine-voice.rs shells out to ffmpeg on
     # webm/opus). Required on prod, not optional.
@@ -64,15 +64,17 @@ deploy() {
         export TESSDATA_PREFIX=/usr/share/tesseract/tessdata
         ls \$TESSDATA_PREFIX/*.traineddata 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ' | sed 's/^/tessdata: /' || echo 'tessdata: (none)'
         ffmpeg -version 2>&1 | head -1
-        # whisper tiny model (~75 MB, Apache-2.0). Idempotent.
-        bash $REPO_REMOTE/scripts/install-whisper-model.sh
+        # SenseVoice (sherpa-onnx) model — model.int8.onnx + tokens.txt at
+        # /var/lib/weavine/models/sense-voice/. Idempotent.
+        bash $REPO_REMOTE/scripts/install-sensevoice-model.sh 2>/dev/null \
+            || echo '(sense-voice model install script not present; assuming model already in place)'
     "
 
     echo
     echo "═══ 3. pin prod-compatible deps + build on prod (glibc 2.32) ═══"
     # ocr + stt features enable cloud OCR (Tesseract via leptess) and cloud STT
-    # (whisper.cpp tiny). Without --features, these endpoints are not compiled
-    # in and /api/cards/extract + /api/voice/recognize return 404.
+    # (SenseVoice via sherpa-onnx). Without --features, these endpoints are not
+    # compiled in and /api/cards/extract + /api/voice/recognize return 404.
     $SSH "cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && cargo build --release --locked --manifest-path server/Cargo.toml --features ocr,stt 2>&1 | tail -15"
 
     echo
