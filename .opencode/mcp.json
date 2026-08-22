@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "weavine": {
+      "type": "http",
+      "url": "https://weavine.financialagent.cc/mcp/",
+      "headers": {
+        "Authorization": "Bearer REPLACE_ME_WITH_wvk_..."
+      }
+    }
+  }
+}

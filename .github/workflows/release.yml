@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install Rust toolchain (stable)
@@ -27,39 +27,24 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
+          shared-key: windows-cargo
+          cache-on-failure: true
 
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Initialize SQLite database
-        run: |
-          pnpm exec prisma db push
-          cp prisma/dev.db dev.db
-        env:
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Download portable Node.js for Windows
-        run: node scripts/download-node.mjs win32 x64
-
-      - name: Build Next.js standalone
-        run: pnpm build
-        env:
-          IS_DESKTOP: 'true'
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Patch standalone output for Tauri bundling
-        run: node scripts/copy-tauri-standalone.mjs
-        env:
-          IS_DESKTOP: 'true'
-
-      - name: Build Tauri app (Windows MSI)
+      - name: Build Tauri app (Windows NSIS)
         id: build
+        # Use NSIS instead of MSI: Tauri's WiX-based MSI bundling fails on
+        # windows-latest because the bundled WiX tools (light.exe) are often
+        # blocked by Windows Defender or fail to download completely.
+        # NSIS produces .exe installers that work the same way.
         run: |
-          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles nsis 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         shell: bash
         env:
@@ -68,6 +53,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           WINDOWS_CERT_FILE: ${{ secrets.WINDOWS_CERT_FILE }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+          # Embedded at compile time via option_env!("WV_SERVICE_KEY") so the
+          # client can call cloud OCR/STT without per-user login. Optional —
+          # builds still succeed when the secret is unset; the client just
+          # returns "未登录云端" on cloud paths. See README "Cloud OCR & STT".
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'
@@ -76,11 +66,11 @@ jobs:
           name: tauri-build-log
           path: tauri-build.log
 
-      - name: Upload MSI installer
+      - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
-          name: weavine-windows-msi
-          path: src-tauri/target/release/bundle/msi/*
+          name: weavine-windows-nsis
+          path: target/release/bundle/nsis/*
           if-no-files-found: error
 
   build-linux:
@@ -95,11 +85,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
 
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install sccache
+        run: |
+          sudo apt-get install -y -qq sccache
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          mkdir -p ~/.cache/sccache
 
       - name: Install Tauri system dependencies
         run: |
@@ -112,44 +108,26 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo dependencies (sccache)
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri -> target
+          workspaces: . -> target
+          shared-key: linux-cargo
+          cache-on-failure: true
 
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Initialize SQLite database
-        run: |
-          pnpm exec prisma db push
-          cp prisma/dev.db dev.db
-        env:
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Download portable Node.js for Linux
-        run: node scripts/download-node.mjs linux x64
-
-      - name: Build Next.js standalone
-        run: pnpm build
-        env:
-          IS_DESKTOP: 'true'
-          DATABASE_URL: 'file:./dev.db'
-
-      - name: Patch standalone output for Tauri bundling
-        run: node scripts/copy-tauri-standalone.mjs
-        env:
-          IS_DESKTOP: 'true'
-
       - name: Build Tauri app (Linux)
         id: build
         run: |
-          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles deb 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'
@@ -158,17 +136,497 @@ jobs:
           name: tauri-build-log-linux
           path: tauri-build.log
 
+      - name: Stage Linux bundle artifacts
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          echo "Bundle directory tree:"
+          find target/release/bundle -maxdepth 4 -type f || true
+          mkdir -p linux-out
+          # Use xargs so empty result is not an error
+          find target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 2>/dev/null \
+            | xargs -0 -r -I {} cp -v {} linux-out/ 2>&1 || echo "No .deb or .AppImage files found to stage"
+          echo "Staged artifacts:"
+          ls -la linux-out/ || true
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: weavine-linux
+          path: linux-out/*
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Cargo dependencies (sccache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          shared-key: macos-cargo
+          cache-on-failure: true
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app (macOS DMG)
+        id: build
+        run: |
+          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
+
+      - name: Upload build log on failure
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-build-log-macos
+          path: tauri-build.log
+
+      - name: Stage macOS bundle artifacts
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          echo "Bundle directory tree:"
+          find target/release/bundle -maxdepth 4 -type f || true
+          mkdir -p macos-out
+          find target/release/bundle -type f \( -name '*.dmg' -o -name '*.app' \) -print0 2>/dev/null \
+            | xargs -0 -r -I {} cp -rv {} macos-out/ 2>&1 || echo "No .dmg or .app files found to stage"
+          echo "Staged artifacts:"
+          ls -la macos-out/ || true
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: weavine-macos
+          path: macos-out/*
+          if-no-files-found: error
+
+  build-android:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cloud-only as of 2026-08-21: user count is small and the local
+        # APK (~250 MB with sherpa-onnx + SenseVoice bundled) eats CI
+        # minutes / upload bandwidth for very few installs. The local
+        # flavor is preserved in the source tree + Cargo features so it
+        # can be re-enabled by switching the matrix back to [cloud, local].
+        flavor: [cloud]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Rust toolchain (stable) with Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Setup Android SDK
+        # NOTE: setup-android@v3 dropped api-level/build-tools-version/ndk-version
+        # (those were v2 inputs). The v3 way is the `packages` list — without
+        # an explicit `ndk;26.1.10909125` here the runner image's preinstalled
+        # NDK version drifts (29.x observed) and tauri-cli resolves a linker
+        # that does not exist → "Android NDK invalid".
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools build-tools;34.0.0 ndk;26.1.10909125'
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          shared-key: android-cargo
+          cache-on-failure: true
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Generate Android project
+        # The Android scaffold's package directory follows tauri.conf.json >
+        # identifier. For the `local` flavor we override to use
+        # tauri.local.conf.json (identifier com.weavine.desktop.local) so
+        # both APKs can be installed side-by-side.
+        run: |
+          if [ "${{ matrix.flavor }}" = "local" ]; then
+            cargo tauri android init --ci -c src-tauri/tauri.local.conf.json
+          else
+            cargo tauri android init --ci
+          fi
+
+      - name: Inject frontendDist assets into Gradle config
+        # src-tauri/gen/android/ is gitignored, so we patch build.gradle.kts
+        # on every CI run. Without this, the web-spa dist/ never gets
+        # bundled into the APK and the WebView opens to a blank white screen.
+        # base64 payload decodes to the sourceSets override line below.
+        run: |
+          echo CmFuZHJvaWQuc291cmNlU2V0c1sibWFpbiJdLmFzc2V0cy5zcmNEaXJzKCJzcmMvbWFpbi9hc3NldHMiLCAiLi4vLi4vLi4vLi4vYXBwcy93ZWItc3BhL2Rpc3QiKQo= \
+            | base64 -d >> src-tauri/gen/android/app/build.gradle.kts
+          echo "=== last 5 lines of patched build.gradle.kts ==="
+          tail -5 src-tauri/gen/android/app/build.gradle.kts
+
+      - name: Patch AndroidManifest with runtime permissions
+        # `cargo tauri android init` regenerates AndroidManifest.xml from the
+        # template every CI run (and local `cargo tauri android init`). We need
+        # RECORD_AUDIO so Android 6+ can request mic access at runtime and the
+        # WebView's navigator.mediaDevices.getUserMedia() can show the system
+        # permission dialog. Without this, voice capture fails immediately with
+        # NotAllowedError and there is no recovery path inside the app.
+        # MODIFY_AUDIO_SETTINGS + CAMERA accompany it for full mic/camera capture.
+        # POST_NOTIFICATIONS is required on Android 13+ (API 33) for the
+        # Rust-side reminder scheduler (commands/notification.rs) to display
+        # system toast notifications. Without it, notification.show() is
+        # silently rejected by NotificationManager.
+        run: |
+          MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          for PERM in RECORD_AUDIO MODIFY_AUDIO_SETTINGS CAMERA POST_NOTIFICATIONS; do
+            if grep -q "android.permission.$PERM" "$MANIFEST"; then
+              echo "$PERM already present, skipping"
+            else
+              sed -i "s|<uses-permission android:name=\"android.permission.INTERNET\" />|<uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.$PERM\" />|" "$MANIFEST"
+              echo "added $PERM"
+            fi
+          done
+          echo "=== patched manifest ==="
+          head -12 "$MANIFEST"
+
+      - name: Verify default MainActivity is in place
+        run: |
+          if [ "${{ matrix.flavor }}" = "local" ]; then
+            PKG="com/weavine/desktop/local"
+          else
+            PKG="com/weavine/desktop"
+          fi
+          DEST=src-tauri/gen/android/app/src/main/java/$PKG/MainActivity.kt
+          if [ ! -f "$DEST" ]; then
+            echo "FATAL: $DEST missing — cargo tauri android init did not produce it"
+            exit 1
+          fi
+          echo "=== MainActivity.kt (head 5) ==="
+          head -5 "$DEST"
+
+      # GitHub runner images pre-install a newer NDK and export NDK_HOME /
+      # ANDROID_NDK_HOME pointing at it. tauri-cli picks up those env vars
+      # and then resolves CARGO_TARGET_*_ANDROID_LINKER against the newer
+      # NDK, whose toolchain layout differs → gradle fails within seconds
+      # ("Failed to assemble APK", BUILD FAILED in 30s). Pin the env vars to
+      # the NDK version setup-android installed so the build is reproducible.
+      - name: Pin NDK version
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          PINNED="$SDK/ndk/26.1.10909125"
+          if [ ! -d "$PINNED" ]; then
+            echo "NOT at \$SDK ($SDK) — searching filesystem (maxdepth 7)..."
+            PINNED=$(find / -maxdepth 7 -type d -name "26.1.10909125" 2>/dev/null | head -1)
+          fi
+          if [ -z "$PINNED" ] || [ ! -d "$PINNED" ]; then
+            echo "FATAL: pinned NDK 26.1.10909125 not found"
+            echo "ANDROID_HOME=$ANDROID_HOME ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+            ls -1 "$SDK/ndk/" 2>/dev/null || echo "(no ndk dir under $SDK)"
+            exit 1
+          fi
+          echo "ANDROID_NDK_HOME=$PINNED" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$PINNED" >> "$GITHUB_ENV"
+          echo "=== NDK directories present ==="
+          ls -1 "$(dirname "$PINNED")/" 2>/dev/null || echo "(none)"
+          echo "=== pinned NDK toolchain ==="
+          ls "$PINNED/toolchains/llvm/prebuilt/linux-x86_64/bin/" 2>/dev/null | grep -c "aarch64-linux-android" || echo "0"
+
+      # The local-flavor APK bundles the SenseVoice model under
+      # src-tauri/resources/sense-voice/ via tauri.local.conf.json::bundle.resources.
+      # Model archive is ~228 MB — too big for git, and the developer's
+      # network is often unreliable. Fetch + extract here so the Android
+      # build step has the files ready for Tauri's resource bundler.
+      #
+      # GitHub direct is tried first; on failure (network: China, GitHub
+      # throttling, 403) gh-proxy.com is used. gh-proxy is a public
+      # proxy that does not modify file contents and is whitelisted by
+      # the team's prior tooling.
+      - name: Download SenseVoice model (local flavor)
+        if: matrix.flavor == 'local'
+        env:
+          SV_URL: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
+          SV_PROXY: "https://gh-proxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/resources/sense-voice
+          fetch() {
+            local url="$1"; local label="$2"
+            echo "::group::fetching SenseVoice via $label"
+            curl -fSL --retry 5 --retry-delay 5 --retry-all-errors \
+              --connect-timeout 30 --max-time 600 \
+              -o /tmp/sv.tar.bz2 \
+              "$url"
+            echo "::endgroup::"
+          }
+          if ! fetch "$SV_URL" "github.com direct"; then
+            echo "Direct GitHub download failed, falling back to gh-proxy.com"
+            fetch "$SV_PROXY" "gh-proxy.com"
+          fi
+          tar -xjf /tmp/sv.tar.bz2 -C /tmp/
+          mv /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx \
+             src-tauri/resources/sense-voice/model.int8.onnx
+          mv /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/tokens.txt \
+             src-tauri/resources/sense-voice/tokens.txt
+          rm -rf /tmp/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 /tmp/sv.tar.bz2
+          echo "=== SenseVoice files staged ==="
+          ls -la src-tauri/resources/sense-voice/
+
+      # Diagnostic dump captured BEFORE the build so a failure on the next
+      # step can be diagnosed from the uploaded artifact without needing
+      # to re-run the workflow with --verbose. Includes:
+      #  - NDK + JDK toolchain versions actually resolved
+      #  - aarch64-linux-android-clang presence (the link error of "Android
+      #    NDK invalid" comes from this not existing)
+      #  - sherpa-onnx-sys prebuilt archive state (the Android archive
+      #    path only appears here after first build attempt)
+      #  - Cargo target/aarch64-linux-android fingerprint
+      - name: Pre-build Android diagnostic dump
+        if: matrix.flavor == 'local'
+        run: |
+          echo "=== toolchain versions ==="
+          rustc --version
+          cargo --version
+          java -version 2>&1 || true
+          echo "=== ANDROID_HOME / ANDROID_SDK_ROOT ==="
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-<unset>}"
+          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME:-<unset>}"
+          echo "NDK_HOME=${NDK_HOME:-<unset>}"
+          echo "=== NDK toolchains ==="
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          ls -1 "$SDK/ndk/" 2>/dev/null || echo "(no ndk dir)"
+          echo "=== aarch64-linux-android-clang present? ==="
+          if [ -n "${ANDROID_NDK_HOME:-}" ]; then
+            ls -1 "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/" 2>/dev/null | grep -E "^aarch64-linux-android.*clang" | head -3 || echo "(none)"
+          else
+            echo "(ANDROID_NDK_HOME unset — Tauri CLI will resolve)"
+          fi
+          echo "=== sherpa-onnx-prebuilt state ==="
+          ls -la target/sherpa-onnx-prebuilt/ 2>/dev/null || echo "(no prebuilt dir yet)"
+          echo "=== SenseVoice resources staged ==="
+          ls -la src-tauri/resources/sense-voice/ 2>/dev/null || echo "(missing)"
+          echo "=== Cargo Android target installed? ==="
+          rustup target list --installed 2>/dev/null | grep android || echo "(no android targets installed)"
+          echo "=== Workspace fingerprint ==="
+          cat src-tauri/Cargo.toml | grep -E "sherpa-onnx|voice-local|voice-cloud" | head -10
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
+
+      - name: Build Tauri Android APK (arm64-v8a only, ${{ matrix.flavor }} flavor)
+        id: build
+        run: |
+          # cargo tauri android build --split-per-abi --target aarch64 produces
+          # a single APK with only arm64-v8a .so, vs the 80 MB universal
+          # APK with all four ABIs. --target is the Tauri-native way (do NOT
+          # also patch gradle's splits.abi or ndk.abiFilters — they conflict
+          # with the productFlavor setup RustPlugin.kt installs).
+          #
+          # The `local` flavor additionally enables Cargo's voice-local
+          # feature (linking sherpa-onnx), uses tauri.local.conf.json (so
+          # the resulting APK has identifier com.weavine.desktop.local and
+          # bundles src-tauri/resources/sense-voice/ as an Android asset —
+          # files are extracted to the app data dir at first launch by
+          # android_assets.rs), and sets VITE_VOICE_MODE=local so the JS
+          # side knows to skip the network recognizer path.
+          set -o pipefail
+          if [ "${{ matrix.flavor }}" = "local" ]; then
+            cargo tauri android build \
+              --verbose \
+              --apk --split-per-abi --target aarch64 \
+              --features voice-local \
+              --config src-tauri/tauri.local.conf.json 2>&1 \
+              | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
+          else
+            cargo tauri android build --apk --split-per-abi --target aarch64 2>&1 \
+              | tee "$GITHUB_WORKSPACE/tauri-android-build.log"
+          fi
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=$rc" >> $GITHUB_OUTPUT
+          exit $rc
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          WV_SERVICE_KEY: ${{ secrets.WV_SERVICE_KEY }}
+          RUST_BACKTRACE: '1'
+          CARGO_TERM_VERBOSE: 'true'
+
+      - name: Upload build log on failure
+        if: failure() && steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-build-log
+          path: tauri-android-build.log
+
+      # Capture pre-build diagnostic + target/sherpa-onnx-prebuilt on
+      # failure. CI #164 failed at step 17 with no on-repo way to see
+      # the actual error (logs require GitHub auth, agent pollers
+      # 0-seconded). This artifact is the only signal we have without
+      # auth or a re-run.
+      - name: Upload Android pre-build diagnostic on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-prebuild-diagnostic
           path: |
-            src-tauri/target/release/bundle/deb/*
-            src-tauri/target/release/bundle/appimage/*
+            tauri-android-build.log
+            target/sherpa-onnx-prebuilt/
+            src-tauri/resources/sense-voice/
+          if-no-files-found: ignore
+
+      - name: Stage Android APK
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          # Run staging in a script so exit codes propagate. The previous
+          # `{ ...; } 2>&1 | tee` subshell lost exit codes from inside the
+          # group, causing silent failures when find returned no matches.
+          set -euo pipefail
+          set -x
+          mkdir -p android-out ~/.android
+          echo "=== PWD ==="
+          pwd
+          echo "=== gen/android top-level ==="
+          ls -la src-tauri/gen/android/ 2>&1 || true
+          echo "=== gen/android/app top-level ==="
+          ls -la src-tauri/gen/android/app/ 2>&1 || true
+          echo "=== APK output dir listing ==="
+          ls -laR src-tauri/gen/android/app/build/outputs/apk/ 2>&1 | head -80 || true
+          echo "=== anywhere under gen/android looking for *.apk ==="
+          find src-tauri/gen/android -name '*.apk' 2>&1 | head -40 || true
+          echo "=== anywhere in workspace looking for *.apk ==="
+          find . -path ./node_modules -prune -o -path ./.gradle -prune -o -name '*.apk' -print 2>&1 | head -40 || true
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "Generating debug.keystore"
+            keytool -genkey -v \
+              -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+          fi
+          BT_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          BT="$BT_SDK/build-tools/34.0.0"
+          mapfile -t UNSIGNED < <(find src-tauri/gen/android -name '*-release-unsigned.apk' 2>/dev/null | sort)
+          if [ ${#UNSIGNED[@]} -gt 0 ]; then
+            echo "Found ${#UNSIGNED[@]} unsigned APK(s) to sign:"
+            printf '  %s\n' "${UNSIGNED[@]}"
+            for u in "${UNSIGNED[@]}"; do
+              # Extract ABI segment from filename: app-<abi>-release-unsigned.apk
+              # or app-universal-release-unsigned.apk -> 'universal'
+              fname=$(basename "$u")
+              ABI=$(echo "$fname" | sed -E 's|^app-(.+)-release-unsigned\.apk$|\1|')
+              OUT=android-out/Weavine_${ABI}-release.apk
+              echo "  ${ABI}: zipalign + apksigner -> $OUT"
+              "$BT/zipalign" -p -f 4 "$u" android-out/${ABI}-aligned.apk
+              "$BT/apksigner" sign \
+                --ks ~/.android/debug.keystore \
+                --ks-pass pass:android \
+                --ks-key-alias androiddebugkey \
+                --key-pass pass:android \
+                --out "$OUT" \
+                android-out/${ABI}-aligned.apk
+              "$BT/apksigner" verify "$OUT" && echo "    ${ABI}: signature verified OK"
+              rm -f android-out/${ABI}-aligned.apk
+            done
+          else
+            echo "No -release-unsigned.apk found; falling back to any *-release.apk"
+            mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*-release.apk' 2>/dev/null | sort)
+            if [ ${#FOUND_APKS[@]} -eq 0 ]; then
+              mapfile -t FOUND_APKS < <(find src-tauri/gen/android -name '*.apk' 2>/dev/null | sort)
+            fi
+            if [ ${#FOUND_APKS[@]} -eq 0 ]; then
+              echo "ERROR: no APKs found anywhere under src-tauri/gen/android"
+              echo "=== gradle build log tail ==="
+              tail -50 tauri-android-build.log 2>&1 || true
+              exit 1
+            fi
+            echo "Found ${#FOUND_APKS[@]} APK(s) to copy:"
+            printf '  %s\n' "${FOUND_APKS[@]}"
+            for apk in "${FOUND_APKS[@]}"; do
+              cp -v "$apk" android-out/
+              case "$apk" in
+                *-release.apk)
+                  echo "Re-signing $apk with CI debug keystore for consistency"
+                  name=$(basename "$apk")
+                  mv "android-out/$name" "android-out/$name.unsigned"
+                  "$BT/zipalign" -p -f 4 "android-out/$name.unsigned" "android-out/$name.aligned"
+                  "$BT/apksigner" sign \
+                    --ks ~/.android/debug.keystore \
+                    --ks-pass pass:android \
+                    --ks-key-alias androiddebugkey \
+                    --key-pass pass:android \
+                    --out "android-out/$name" \
+                    "android-out/$name.aligned"
+                  rm "android-out/$name.unsigned" "android-out/$name.aligned"
+                  ;;
+              esac
+            done
+          fi
+          # Both flavors stage APKs with the same filename (Weavine_${ABI}-release.apk).
+          # Without a flavor suffix, `gh release upload --clobber` in the release job
+          # would silently overwrite the cloud APK with the local APK. Rename per
+          # flavor so each upload is a distinct release asset.
+          echo "=== renaming APKs with flavor suffix ==="
+          for apk in android-out/Weavine_*-release.apk; do
+            [ -f "$apk" ] || continue
+            base=$(basename "$apk" .apk)
+            mv -v "$apk" "android-out/${base}_${{ matrix.flavor }}.apk"
+          done
+          echo "Staged APKs:"
+          ls -la android-out/
+
+      - name: Upload Android build + stage logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-android-diagnostic
+          path: |
+            tauri-android-build.log
+            src-tauri/gen/android/app/build/outputs/apk/
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: weavine-android-${{ matrix.flavor }}
+          path: android-out/*.apk
           if-no-files-found: error
 
   release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-linux, build-macos, build-android]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -183,28 +641,62 @@ jobs:
 
       - name: Create Release
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --generate-notes \
-            --draft
+          # Idempotent: `gh release create` errors out if a release with the
+          # same tag already exists (e.g. when an Android job in the matrix
+          # pushes the same tag twice in a re-run, or when a prior CI run
+          # created the release and a force-push triggered this run again).
+          # In that case the asset upload steps below already use --clobber,
+          # so we just want to skip the create and let uploads proceed.
+          if gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists, skipping create (uploads will overwrite assets)"
+          else
+            gh release create "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --generate-notes
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Upload Windows MSI to Release
+      - name: Upload Windows NSIS installer to Release
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --clobber \
-            artifacts/weavine-windows-msi/*.msi
+          find artifacts/weavine-windows-nsis -type f -name '*.exe' -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload Linux artifacts to Release
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            --repo "${{ github.repository }}" \
-            --clobber \
-            artifacts/weavine-linux/*.deb \
-            artifacts/weavine-linux/*.AppImage
+          # actions/upload-artifact@v4 preserves relative paths
+          find artifacts/weavine-linux -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload macOS artifacts to Release
+        run: |
+          find artifacts/weavine-macos -type f \( -name '*.dmg' -o -name '*.app' \) -print0 | \
+            xargs -0 gh release upload "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload Android APKs to Release
+        run: |
+          # Both flavors upload here — cloud (small, no sherpa-onnx) and
+          # local (large, with sherpa-onnx + bundled SenseVoice model).
+          # Users pick whichever matches their needs.
+          for art in weavine-android-cloud weavine-android-local; do
+            if [ -d "artifacts/$art" ]; then
+              find "artifacts/$art" -type f -name '*.apk' -print0 | \
+                xargs -0 gh release upload "${{ github.ref_name }}" \
+                  --repo "${{ github.repository }}" \
+                  --clobber
+            fi
+          done
         env:
           GH_TOKEN: ${{ github.token }}
