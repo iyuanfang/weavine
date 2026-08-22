@@ -47,26 +47,20 @@ export interface NextReminder {
  * Days until the next reminder fires for this contact.
  * `null` means no cadence is configured (low importance without override,
  * or unknown importance).
- *
- * If there is no `last_interaction_at` yet, returns `null` — the contact
- * has no reminder to count down to.
  */
 export function nextReminderIn(
-  lastInteractionIso: string | null | undefined,
+  lastInteractionIso: string,
   importance: string,
   overrideDays: number | null | undefined,
   now: Date = new Date(),
 ): NextReminder {
   const cadence = effectiveCadenceDays(importance, overrideDays);
-  if (cadence === null) return { days: null, hasCadence: false, hasInteraction: false };
-  if (!lastInteractionIso) {
-    return { days: null, hasCadence: true, hasInteraction: false };
+  if (cadence === null) return { days: null, hasCadence: false, hasInteraction: true };
+  const anchor = new Date(lastInteractionIso);
+  if (isNaN(anchor.getTime())) {
+    return { days: null, hasCadence: true, hasInteraction: true };
   }
-  const last = new Date(lastInteractionIso);
-  if (isNaN(last.getTime())) {
-    return { days: null, hasCadence: true, hasInteraction: false };
-  }
-  const dueMs = last.getTime() + cadence * 86_400_000;
+  const dueMs = anchor.getTime() + cadence * 86_400_000;
   const days = Math.floor((dueMs - now.getTime()) / 86_400_000);
   return { days, hasCadence: true, hasInteraction: true };
 }

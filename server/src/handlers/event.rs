@@ -799,7 +799,7 @@ mod tests {
             .await
             .unwrap();
 
-        sqlx::query("INSERT INTO contact (id, user_id, nickname, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+        sqlx::query("INSERT INTO contact (id, user_id, nickname, last_interaction_at, created_at, updated_at) VALUES ($1,$2,$3,$4,$4,$5)")
             .bind(&contact_id)
             .bind(&user_id)
             .bind("Test Contact")
@@ -871,7 +871,7 @@ mod tests {
             .await
             .unwrap();
 
-        sqlx::query("INSERT INTO contact (id, user_id, nickname, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+        sqlx::query("INSERT INTO contact (id, user_id, nickname, last_interaction_at, created_at, updated_at) VALUES ($1,$2,$3,$4,$4,$5)")
             .bind(&contact_id)
             .bind(&user_id)
             .bind("Test Contact")
@@ -951,7 +951,7 @@ mod tests {
             .await
             .unwrap();
 
-        sqlx::query("INSERT INTO contact (id, user_id, nickname, created_at, updated_at) VALUES ($1,$2,$3,$4,$5)")
+        sqlx::query("INSERT INTO contact (id, user_id, nickname, last_interaction_at, created_at, updated_at) VALUES ($1,$2,$3,$4,$4,$5)")
             .bind(&contact_id)
             .bind(&user_id)
             .bind("Test Contact")

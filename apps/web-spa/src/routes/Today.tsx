@@ -322,9 +322,7 @@ export function TodayPage() {
                 <span style={{ flex: 1 }}>
                   <div className="digest-row__title">{c.nickname}</div>
                   <div className="digest-row__meta">
-                    {c.last_interaction_at
-                      ? `上次 ${daysSinceLabel(c.last_interaction_at)}`
-                      : '尚未互动'}
+                    上次 {daysSinceLabel(c.last_interaction_at)}
                   </div>
                 </span>
                 <ReminderCountdown

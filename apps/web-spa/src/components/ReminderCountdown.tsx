@@ -15,7 +15,7 @@ export function ReminderCountdown({
   overrideDays,
   size = 'sm',
 }: {
-  lastInteractionIso: string | null | undefined;
+  lastInteractionIso: string;
   importance: string;
   overrideDays: number | null | undefined;
   size?: 'sm' | 'md';

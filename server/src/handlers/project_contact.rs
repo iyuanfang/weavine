@@ -23,7 +23,7 @@ struct ContactWithRole {
     wechat: Option<String>,
     notes: Option<String>,
     importance: String,
-    last_interaction_at: Option<String>,
+    last_interaction_at: String,
     created_at: String,
     updated_at: String,
     role: Option<String>,

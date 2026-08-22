@@ -48,7 +48,7 @@ export interface Contact {
   wechat: string | null;
   notes: string | null;
   importance: string;
-  last_interaction_at: string | null;
+  last_interaction_at: string;
   keep_in_touch_cadence_days: number | null;
   created_at: string;
   updated_at: string;

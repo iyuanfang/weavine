@@ -32,16 +32,25 @@ fn cadence_days(importance: &str, override_days: Option<i64>) -> Option<i64> {
     }
 }
 
-const TICK_INTERVAL_SECS: u64 = 3600;
-const INITIAL_DELAY_SECS: u64 = 30;
+const DAY_SECS: u64 = 86_400;
+
+/// Returns the number of seconds from `now` until the next local-midnight.
+fn seconds_until_local_midnight(now: chrono::DateTime<chrono::Local>) -> u64 {
+    let next_midnight = now.date_naive().succ_opt().unwrap().and_hms_opt(0, 0, 0).unwrap();
+    let next_midnight = next_midnight.and_local_timezone(chrono::Local).unwrap();
+    (next_midnight - now).num_seconds().max(0) as u64
+}
 
 pub fn spawn_keep_in_touch_scheduler(pool: Arc<PgPool>) {
     tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(INITIAL_DELAY_SECS)).await;
-        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(TICK_INTERVAL_SECS));
-        ticker.tick().await;
+        let mut initial_delay = seconds_until_local_midnight(chrono::Local::now());
+        eprintln!(
+            "[keep-in-touch] first tick in {}s (next local midnight)",
+            initial_delay
+        );
         loop {
-            ticker.tick().await;
+            tokio::time::sleep(std::time::Duration::from_secs(initial_delay)).await;
+            initial_delay = DAY_SECS;
             match tick_keep_in_touch(Utc::now(), &pool).await {
                 Ok(n) if n > 0 => {
                     eprintln!("[keep-in-touch] rescheduled {n} reminders");
@@ -59,7 +68,7 @@ async fn tick_keep_in_touch(
 ) -> Result<usize, sqlx::Error> {
     let rows: Vec<(String, String, Option<String>, Option<i64>)> = sqlx::query_as(
         "SELECT id, importance, last_interaction_at, keep_in_touch_cadence_days \
-         FROM contact WHERE last_interaction_at IS NOT NULL",
+         FROM contact",
     )
     .fetch_all(pool)
     .await?;

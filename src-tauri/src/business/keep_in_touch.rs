@@ -57,7 +57,7 @@ pub fn schedule_for_contact_tx(
     tx: &Transaction<'_>,
     contact_id: &str,
 ) -> rusqlite::Result<()> {
-    let row: Option<(String, Option<String>, Option<i64>)> = tx
+    let row: Option<(String, String, Option<i64>)> = tx
         .query_row(
             "SELECT importance, last_interaction_at, keep_in_touch_cadence_days \
              FROM Contact WHERE id = ?1",
@@ -66,7 +66,7 @@ pub fn schedule_for_contact_tx(
         )
         .ok();
 
-    let Some((importance, Some(last_interaction), override_days)) = row else {
+    let Some((importance, last_interaction, override_days)) = row else {
         tx.execute(
             "DELETE FROM Reminder WHERE contact_id = ?1 AND kind = 'keep_in_touch'",
             rusqlite::params![contact_id],
@@ -126,7 +126,7 @@ pub fn schedule_for_contact(conn: &Connection, contact_id: &str) -> rusqlite::Re
 /// app startup so the table reflects any external edits to `Contact`.
 pub fn schedule_all(conn: &Connection) -> rusqlite::Result<usize> {
     let ids: Vec<String> = {
-        let mut stmt = conn.prepare("SELECT id FROM Contact WHERE last_interaction_at IS NOT NULL")?;
+        let mut stmt = conn.prepare("SELECT id FROM Contact")?;
         let mapped = stmt.query_map([], |r| r.get::<_, String>(0))?;
         mapped.filter_map(|r| r.ok()).collect()
     };
@@ -160,11 +160,12 @@ mod tests {
         cadence_override: Option<i64>,
     ) {
         let now = "2026-08-21T10:00:00.000Z";
+        let last = last_iso.unwrap_or(now);
         conn.execute(
             "INSERT INTO Contact (id, user_id, nickname, importance, last_interaction_at, \
              keep_in_touch_cadence_days, created_at, updated_at) \
              VALUES (?1, 'local-default', ?1, ?2, ?3, ?4, ?5, ?5)",
-            rusqlite::params![id, importance, last_iso, cadence_override, now],
+            rusqlite::params![id, importance, last, cadence_override, now],
         )
         .unwrap();
     }
@@ -277,6 +278,10 @@ mod tests {
 
     #[test]
     fn contact_without_last_interaction_gets_no_reminder() {
+        // Every contact now has last_interaction_at stamped at creation
+        // time. So this case is unreachable in production; the test is
+        // retained as a placeholder to remind future readers the invariant
+        // is enforced at INSERT time.
         let conn = setup();
         insert_contact(&conn, "c1", "high", None, None);
 
@@ -291,23 +296,24 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 0);
+        // c1 has last_interaction_at (coerced to created_at) and high
+        // importance → reminder should fire.
+        assert_eq!(count, 1);
     }
 
     #[test]
     fn schedule_all_processes_every_contact() {
         let conn = setup();
+        // c1: high + recent interaction → INSERT
+        // c2: low + no override → DELETE-only (low = no-reminder rule)
+        // c3: high + recent interaction → INSERT
         insert_contact(&conn, "c1", "high", Some("2026-08-01T00:00:00.000Z"), None);
         insert_contact(&conn, "c2", "low", Some("2026-08-01T00:00:00.000Z"), None);
-        insert_contact(&conn, "c3", "high", None, None); // no last_interaction
+        insert_contact(&conn, "c3", "high", Some("2026-08-01T00:00:00.000Z"), None);
 
         let n = schedule_all(&conn).unwrap();
-        // schedule_all counts loop iterations, not INSERTs. c3 is filtered
-        // by SQL (no last_interaction). c1 + c2 are iterated.
-        assert_eq!(n, 2);
+        assert_eq!(n, 3, "all three contacts iterated");
 
-        // But only c1 yields an actual reminder — c2 is low+no override
-        // (DELETE-only path), c3 was filtered out before the loop.
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM Reminder WHERE kind = 'keep_in_touch'",
@@ -315,6 +321,6 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1, "only c1 (high+last_interaction) yields a reminder");
+        assert_eq!(count, 2, "c1 + c3 yield reminders, c2 is DELETE-only");
     }
 }

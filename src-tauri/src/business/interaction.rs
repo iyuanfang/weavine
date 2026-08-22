@@ -210,9 +210,10 @@ mod tests {
     }
 
     fn insert_test_contact(conn: &Connection, id: &str, nickname: &str) {
+        let now = "2026-01-01T00:00:00.000Z";
         conn.execute(
-            "INSERT INTO Contact (id, user_id, nickname, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
-            rusqlite::params![id, "local-default", nickname, "2026-01-01T00:00:00.000Z"],
+            "INSERT INTO Contact (id, user_id, nickname, last_interaction_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            rusqlite::params![id, "local-default", nickname, now, now],
         )
         .unwrap();
     }
@@ -263,14 +264,17 @@ mod tests {
         let interaction = create(&conn, &input).unwrap();
         assert!(interaction.contact_nickname.is_none());
 
-        let bumped: Option<String> = conn
+        let bumped: String = conn
             .query_row(
                 "SELECT last_interaction_at FROM Contact WHERE id = ?1",
                 rusqlite::params!["c1"],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(bumped, None);
+        // Without a contact_id, the interaction doesn't change
+        // last_interaction_at — the contact keeps its existing value
+        // (here, the value it was stamped with at insert time).
+        assert_eq!(bumped, "2026-01-01T00:00:00.000Z");
     }
 
     #[test]

@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS "Contact" (
     "wechat" TEXT,
     "notes" TEXT,
     "importance" TEXT NOT NULL DEFAULT 'low' CHECK("importance" IN ('low', 'medium', 'high')),
-"last_interaction_at" DATETIME,
+"last_interaction_at" DATETIME NOT NULL,
     "keep_in_touch_cadence_days" INTEGER,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL
@@ -427,6 +427,18 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         }
     }
 
+    // Backfill any NULL last_interaction_at with created_at so the
+    // (logical) NOT NULL invariant holds. SQLite can't ALTER COLUMN ...
+    // SET NOT NULL, so this stays an application-level invariant for old
+    // DBs — fresh DBs get the constraint from SCHEMA_SQL above. The
+    // contact::create path also sets last_interaction_at = created_at on
+    // insert so no future NULL rows appear.
+    conn.execute(
+        "UPDATE Contact SET last_interaction_at = COALESCE(created_at, CURRENT_TIMESTAMP) \
+         WHERE last_interaction_at IS NULL",
+        [],
+    )?;
+
     let stale_indexes: &[(&str, &str)] = &[
         ("Action_user_id_project_id_idx", "Action"),
         ("Event_user_id_project_id_idx", "Event"),
@@ -724,7 +736,7 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "city" TEXT, "email" TEXT, "phone" TEXT, "wechat" TEXT, "notes" TEXT,
             "importance" TEXT NOT NULL DEFAULT 'normal',
             "reminder_enabled" INTEGER NOT NULL DEFAULT 1,
-            "reminder_interval_days" INTEGER, "last_interaction_at" DATETIME,
+            "reminder_interval_days" INTEGER, "last_interaction_at" DATETIME NOT NULL,
             "keep_in_touch_cadence_days" INTEGER,
             "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             "updated_at" DATETIME NOT NULL
@@ -1074,8 +1086,8 @@ mod tests {
 
         // Insert a contact referencing that user
         conn.execute(
-            "INSERT INTO Contact (id, user_id, nickname, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)",
-            rusqlite::params!["contact-1", "test-user", "Test", "2025-01-01T00:00:00.000Z"],
+            "INSERT INTO Contact (id, user_id, nickname, last_interaction_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            rusqlite::params!["contact-1", "test-user", "Test", "2025-01-01T00:00:00.000Z", "2025-01-01T00:00:00.000Z"],
         )
         .unwrap();
 

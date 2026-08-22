@@ -48,8 +48,8 @@ mod tests {
 
     fn seed_contact(conn: &Connection, id: &str, nickname: &str) {
         conn.execute(
-            "INSERT INTO Contact (id, user_id, nickname, name, importance, created_at, updated_at) \
-             VALUES (?1, 'local-default', ?2, ?2, 'low', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+            "INSERT INTO Contact (id, user_id, nickname, name, importance, last_interaction_at, created_at, updated_at) \
+             VALUES (?1, 'local-default', ?2, ?2, 'low', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
             rusqlite::params![id, nickname],
         )
         .unwrap();

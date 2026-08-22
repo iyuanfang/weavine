@@ -209,7 +209,9 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
             &importance,
             // Treat 0 as "no override" — the importance default will apply.
             input.keep_in_touch_cadence_days.filter(|d| *d > 0),
-            None::<String>,
+            // New contacts start the keep-in-touch timer immediately at
+            // creation time so they don't stay at "no data".
+            &now,
             &now,
             &now,
         ],
@@ -387,6 +389,7 @@ mod tests {
         created_at: &str,
         updated_at: &str,
     ) {
+        let last = last_interaction_at.unwrap_or(created_at);
         conn.execute(
             "INSERT INTO Contact (id, user_id, nickname, name, importance, last_interaction_at, created_at, updated_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -396,7 +399,7 @@ mod tests {
                 nickname,
                 nickname,
                 "low",
-                last_interaction_at,
+                last,
                 created_at,
                 updated_at,
             ],

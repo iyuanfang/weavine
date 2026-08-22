@@ -15,7 +15,7 @@ fn contact(id: &str, name: &str) -> Contact {
         wechat: None,
         notes: None,
         importance: "low".into(),
-        last_interaction_at: None,
+        last_interaction_at: "2026-01-01T00:00:00Z".into(),
         keep_in_touch_cadence_days: None,
         created_at: "2026-01-01T00:00:00Z".into(),
         updated_at: "2026-01-01T00:00:00Z".into(),

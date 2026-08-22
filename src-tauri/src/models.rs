@@ -39,7 +39,7 @@ pub struct Contact {
     pub wechat: Option<String>,
     pub notes: Option<String>,
     pub importance: String,
-    pub last_interaction_at: Option<String>,
+    pub last_interaction_at: String,
     pub keep_in_touch_cadence_days: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
