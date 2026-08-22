@@ -75,10 +75,10 @@ deploy() {
     # ocr + stt features enable cloud OCR (Tesseract via leptess) and cloud STT
     # (SenseVoice via sherpa-onnx). Without --features, these endpoints are not
     # compiled in and /api/cards/extract + /api/voice/recognize return 404.
-    # -C link-arg=-static-libstdc++ links libstdc++.a statically so the
-    # prebuilt sherpa-onnx static libs (built with newer gcc) don't need
-    # std::__throw_bad_array_new_length() from the system libstdc++.so.6.
-    $SSH "cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && RUSTFLAGS='-C link-arg=-static-libstdc++' cargo build --release --locked --manifest-path server/Cargo.toml --features ocr,stt 2>&1 | tail -15"
+    # Build under gcc-toolset-13 (GCC 13.3.1) so its newer libstdc++ is used
+    # when statically linking sherpa-onnx's prebuilt static libs (built with
+    # newer GCC that emits std::__throw_bad_array_new_length etc).
+    $SSH "source /opt/rh/gcc-toolset-13/enable && cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && RUSTFLAGS='-C link-arg=-static-libstdc++' cargo build --release --locked --manifest-path server/Cargo.toml --features ocr,stt 2>&1 | tail -15"
 
     echo
     echo "═══ 5. backup current + install ═══"
