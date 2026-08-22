@@ -33,7 +33,8 @@ function formatTime(d: Date): string {
   });
 }
 
-function daysSinceLabel(iso: string): string {
+function daysSinceLabel(iso: string | null | undefined): string {
+  if (!iso) return '从未';
   const ms = Date.now() - new Date(iso).getTime();
   const days = Math.max(0, Math.floor(ms / 86_400_000));
   if (days === 0) return '今天';
