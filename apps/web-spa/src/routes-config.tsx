@@ -29,7 +29,6 @@ import { ActionsList } from './routes/ActionsList';
 import { ActionNew } from './routes/ActionNew';
 import { ActionEdit } from './routes/ActionEdit';
 import { ActionDetail } from './routes/ActionDetail';
-import { Reminders } from './routes/Reminders';
 import { Tags } from './routes/Tags';
 import { TagDetail } from './routes/TagDetail';
 import { InteractionDetail } from './routes/InteractionDetail';
@@ -84,7 +83,6 @@ export const routes: AppRoute[] = [
   { path: '/projects/:id', Component: ProjectDetail, label: 'ProjectDetail' },
   { path: '/projects/:id/edit', Component: ProjectEdit, label: 'ProjectEdit' },
   { path: '/interactions/:id', Component: InteractionDetail, label: 'InteractionDetail' },
-  { path: '/reminders', Component: Reminders, label: 'Reminders' },
   { path: '/tags', Component: Tags, label: 'Tags' },
   { path: '/tags/:tagId', Component: TagDetail, label: 'TagDetail' },
   { path: '/search', Component: SearchPage, label: 'Search' },

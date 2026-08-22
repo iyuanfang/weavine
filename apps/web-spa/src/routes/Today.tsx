@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 
 import { ContactBadge } from '../components/ContactBadge';
 import { ProjectBadge } from '../components/ProjectBadge';
+import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { nextReminderIn } from '../lib/keepInTouch';
 import type { Action, Event, Interaction, UpdateActionInput } from '../lib/adapter/types';
 
 // Window helpers — local time, no UTC confusion.
@@ -28,6 +30,15 @@ function formatTime(d: Date): string {
     minute: '2-digit',
     hour12: false,
   });
+}
+
+function daysSinceLabel(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const days = Math.max(0, Math.floor(ms / 86_400_000));
+  if (days === 0) return '今天';
+  if (days === 1) return '昨天';
+  if (days < 30) return `${days} 天前`;
+  return `${Math.round(days / 30)} 个月前`;
 }
 
 function formatDate(d: Date): string {
@@ -95,6 +106,17 @@ export function TodayPage() {
     enabled: Boolean(userId),
   });
 
+  const contactsQuery = useQuery({
+    queryKey: ['contacts', userId, 'for-suggestions'],
+    queryFn: () =>
+      adapter.contacts.list({
+        user_id: userId!,
+        sort_by: 'last_interaction_at',
+        limit: 200,
+      }),
+    enabled: Boolean(userId),
+  });
+
   const toggleDoneMutation = useMutation({
     mutationFn: (input: { id: string; status: 'done' | 'open' }) =>
       adapter.actions.update({
@@ -113,10 +135,14 @@ export function TodayPage() {
   if (
     actionsQuery.isError ||
     eventsQuery.isError ||
-    interactionsQuery.isError
+    interactionsQuery.isError ||
+    contactsQuery.isError
   ) {
     const err =
-      actionsQuery.error ?? eventsQuery.error ?? interactionsQuery.error;
+      actionsQuery.error ??
+      eventsQuery.error ??
+      interactionsQuery.error ??
+      contactsQuery.error;
     return (
       <div className="today-page">
         <div className="error">加载失败: {String(err)}</div>
@@ -166,6 +192,15 @@ export function TodayPage() {
     (p) => !p.completed_at,
   );
   const activeProjectCount = activeProjects.length;
+
+  // Contacts to reach out to: already overdue (any amount) or due within 7 days,
+  // sorted by most overdue first. Top 5.
+  const suggestedContacts = (contactsQuery.data?.items ?? [])
+    .map((c) => ({ c, r: nextReminderIn(c.last_interaction_at, c.importance, c.keep_in_touch_cadence_days, now) }))
+    .filter(({ r }) => r.hasCadence && r.days !== null && r.days <= 7)
+    .sort((a, b) => (a.r.days ?? 0) - (b.r.days ?? 0))
+    .slice(0, 5)
+    .map(({ c, r }) => ({ c, days: r.days! }));
 
   return (
     <div className="page">
@@ -268,6 +303,41 @@ export function TodayPage() {
           </div>
         </Link>
       </div>
+
+      <section className="section">
+        <SectionHeader title="📞 建议联系" viewAllHref="/contacts" />
+        {contactsQuery.isLoading ? (
+          <div className="loading">加载中</div>
+        ) : suggestedContacts.length === 0 ? (
+          <div className="empty-state">近期没人该联系，享受吧 ☕</div>
+        ) : (
+          <div className="card" style={{ padding: 0 }}>
+            {suggestedContacts.map(({ c }) => (
+              <Link
+                key={c.id}
+                to={`/contacts/${c.id}?from=/today`}
+                className="digest-row"
+              >
+                <span style={{ fontSize: 'var(--text-lg)' }}>📞</span>
+                <span style={{ flex: 1 }}>
+                  <div className="digest-row__title">{c.nickname}</div>
+                  <div className="digest-row__meta">
+                    {c.last_interaction_at
+                      ? `上次 ${daysSinceLabel(c.last_interaction_at)}`
+                      : '尚未互动'}
+                  </div>
+                </span>
+                <ReminderCountdown
+                  importance={c.importance}
+                  lastInteractionIso={c.last_interaction_at}
+                  overrideDays={c.keep_in_touch_cadence_days}
+                />
+                <span className="text-muted">→</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="section">
         <SectionHeader title="🎯 今日要做" viewAllHref="/actions" />
