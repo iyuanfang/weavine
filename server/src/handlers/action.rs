@@ -125,6 +125,17 @@ pub async fn update(
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let now = super::now_str();
 
+    let prev: Option<(Option<String>, String)> = sqlx::query_as(
+        "SELECT contact_id, status FROM action WHERE id = $1 AND user_id = $2",
+    )
+    .bind(&id).bind(&auth)
+    .fetch_optional(&*pool).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (prev_contact_id, prev_status) = match prev {
+        Some(r) => r,
+        None => return Err((StatusCode::NOT_FOUND, "行动不存在".to_string())),
+    };
+
     let mut tx = pool
         .begin()
         .await
@@ -170,6 +181,27 @@ pub async fn update(
     }
     q = q.bind(&id).bind(&auth);
     q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let new_status = body.get("status").and_then(|v| v.as_str()).unwrap_or(&prev_status);
+    let new_contact_id = body.get("contact_id").and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or(prev_contact_id.clone());
+    if new_status == "done" {
+        if let Some(ref contact_id) = new_contact_id {
+            let iid = uuid::Uuid::new_v4().to_string();
+            let title: String = body.get("title").and_then(|v| v.as_str())
+                .unwrap_or("").to_string();
+            let summary = if title.is_empty() { "完成了待办".to_string() } else { format!("完成了「{}」", title) };
+            sqlx::query(
+                "INSERT INTO interaction (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
+                 VALUES ($1,$2,$3,$4,NULL,$5,NULL,$6,'todo',$4,$5)",
+            )
+            .bind(&iid).bind(&auth).bind(contact_id)
+            .bind(&id).bind(&now).bind(&summary)
+            .execute(&mut *tx).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+    }
 
     tx.commit()
         .await

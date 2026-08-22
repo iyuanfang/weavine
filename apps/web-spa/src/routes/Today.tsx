@@ -306,40 +306,7 @@ export function TodayPage() {
       </div>
 
       <section className="section">
-        <SectionHeader title="📞 建议联系" viewAllHref="/contacts" />
-        {contactsQuery.isLoading ? (
-          <div className="loading">加载中</div>
-        ) : suggestedContacts.length === 0 ? (
-          <div className="empty-state">近期没人该联系，享受吧 ☕</div>
-        ) : (
-          <div className="card" style={{ padding: 0 }}>
-            {suggestedContacts.map(({ c }) => (
-              <Link
-                key={c.id}
-                to={`/contacts/${c.id}?from=/today`}
-                className="digest-row"
-              >
-                <span style={{ fontSize: 'var(--text-lg)' }}>📞</span>
-                <span style={{ flex: 1 }}>
-                  <div className="digest-row__title">{c.nickname}</div>
-                  <div className="digest-row__meta">
-                    上次 {daysSinceLabel(c.last_interaction_at)}
-                  </div>
-                </span>
-                <ReminderCountdown
-                  importance={c.importance}
-                  lastInteractionIso={c.last_interaction_at}
-                  overrideDays={c.keep_in_touch_cadence_days}
-                />
-                <span className="text-muted">→</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="section">
-        <SectionHeader title="🎯 今日要做" viewAllHref="/actions" />
+        <SectionHeader title="🎯 今日待办" viewAllHref="/actions" />
         {isLoading ? (
           <Skeleton />
         ) : todayDoActions.length > 0 ? (
@@ -373,6 +340,39 @@ export function TodayPage() {
           <div className="empty-state">
             <h3 className="empty-state__title">最近没有日程</h3>
             <p className="empty-state__hint">去日程页加一个吧</p>
+          </div>
+        )}
+      </section>
+
+      <section className="section">
+        <SectionHeader title="📞 建议联系" viewAllHref="/contacts" />
+        {contactsQuery.isLoading ? (
+          <div className="loading">加载中</div>
+        ) : suggestedContacts.length === 0 ? (
+          <div className="empty-state">近期没人该联系，享受吧 ☕</div>
+        ) : (
+          <div className="card" style={{ padding: 0 }}>
+            {suggestedContacts.map(({ c }) => (
+              <Link
+                key={c.id}
+                to={`/contacts/${c.id}?from=/today`}
+                className="digest-row"
+              >
+                <span style={{ fontSize: 'var(--text-lg)' }}>📞</span>
+                <span style={{ flex: 1 }}>
+                  <div className="digest-row__title">{c.nickname}</div>
+                  <div className="digest-row__meta">
+                    上次 {daysSinceLabel(c.last_interaction_at)}
+                  </div>
+                </span>
+                <ReminderCountdown
+                  importance={c.importance}
+                  lastInteractionIso={c.last_interaction_at}
+                  overrideDays={c.keep_in_touch_cadence_days}
+                />
+                <span className="text-muted">→</span>
+              </Link>
+            ))}
           </div>
         )}
       </section>

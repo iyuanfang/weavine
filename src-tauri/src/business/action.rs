@@ -130,6 +130,18 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
+    let prev: Option<(Option<String>, String, String)> = conn
+        .query_row(
+            "SELECT contact_id, status, user_id FROM Action WHERE id = ?1",
+            rusqlite::params![&input.id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+    let (prev_contact_id, prev_status, action_user_id) = match prev {
+        Some(r) => r,
+        None => return Err(rusqlite::Error::QueryReturnedNoRows),
+    };
+
     let mut sql = String::from("UPDATE Action SET ");
     let mut set_clauses: Vec<String> = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -187,7 +199,7 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
     }
 
     set_clauses.push(format!("updated_at = ?{}", param_idx));
-    params.push(Box::new(now));
+    params.push(Box::new(now.clone()));
     param_idx += 1;
 
     sql.push_str(&set_clauses.join(", "));
@@ -198,6 +210,35 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|b| b.as_ref()).collect();
         conn.execute(&sql, params_refs.as_slice())?;
+    }
+
+    let new_status = input.status.as_deref().unwrap_or(&prev_status);
+    let new_contact_id = input.contact_id.as_deref()
+        .map(|s| s.to_string())
+        .or(prev_contact_id.clone());
+    if new_status == "done" {
+        if let Some(ref contact_id) = new_contact_id {
+            let iid = Uuid::new_v4().to_string();
+            let title_text = input.title.as_deref().unwrap_or("");
+            let summary = if title_text.is_empty() {
+                "完成了待办".to_string()
+            } else {
+                format!("完成了「{}」", title_text)
+            };
+            conn.execute(
+                "INSERT INTO Interaction \
+                 (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
+                 VALUES (?1, ?2, ?3, ?4, NULL, ?5, NULL, ?6, 'todo', ?4, ?5)",
+                rusqlite::params![
+                    &iid,
+                    &action_user_id,
+                    contact_id,
+                    &input.id,
+                    &now,
+                    &summary,
+                ],
+            )?;
+        }
     }
 
     conn.query_row(
