@@ -134,6 +134,7 @@ export function SearchPage() {
                   month: 'numeric',
                   day: 'numeric',
                 }),
+                tag: i.source === 'event' ? '📅 来自日程' : i.source === 'todo' ? '✅ 来自待办' : undefined,
               }))}
             />
           )}
@@ -205,7 +206,7 @@ function SearchSection({
 }: {
   title: string;
   viewAllHref: string;
-  items: { key: string; href: string; title: string; meta: string; isArchived?: boolean }[];
+  items: { key: string; href: string; title: string; meta: string; isArchived?: boolean; tag?: string }[];
 }) {
   return (
     <section className="section" style={{ marginBottom: 0 }}>
@@ -229,6 +230,11 @@ function SearchSection({
               {item.isArchived && <span aria-hidden style={{ marginRight: 6 }}>📦</span>}
               {item.title}
             </span>
+            {item.tag && (
+              <span className="badge badge--muted" style={{ fontSize: 'var(--text-xs)', flexShrink: 0 }}>
+                {item.tag}
+              </span>
+            )}
             {item.meta && <span className="row-card__meta">{item.meta}</span>}
           </Link>
         ))}

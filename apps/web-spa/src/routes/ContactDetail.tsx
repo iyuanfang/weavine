@@ -9,6 +9,7 @@ import { AvatarCropModal } from '../components/AvatarCropModal';
 import { AvatarViewModal } from '../components/AvatarViewModal';
 import { CadencePicker } from '../components/CadencePicker';
 import { ReminderCountdown } from '../components/ReminderCountdown';
+import { InteractionSourceTag } from '../components/InteractionSourceTag';
 import { CardImageViewModal } from '../components/CardImageViewModal';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
@@ -536,6 +537,7 @@ export function ContactDetail() {
                   })}
                 </span>
                 <span className="row-card__title">{i.summary}</span>
+                <InteractionSourceTag source={i.source} />
                 {i.channel && <span className="badge badge--muted">{i.channel}</span>}
               </div>
             ))}

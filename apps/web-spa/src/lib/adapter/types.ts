@@ -126,6 +126,9 @@ export interface Interaction {
   occurred_at: string;
   channel: string | null;
   summary: string;
+  /** 'manual' | 'event' | 'todo' — distinguishes auto-logged rows. */
+  source?: string;
+  source_ref?: string | null;
   created_at: string;
   /** LEFT JOIN Contact — only set when contact_id is not null */
   contact_nickname?: string | null;

@@ -58,6 +58,11 @@ pub fn spawn_keep_in_touch_scheduler(pool: Arc<PgPool>) {
                 Ok(_) => {}
                 Err(e) => eprintln!("[keep-in-touch] tick error: {e}"),
             }
+            match super::auto_log_server::tick_auto_log(&pool).await {
+                Ok(n) if n > 0 => eprintln!("[auto-log] wrote {n} interactions"),
+                Ok(_) => {}
+                Err(e) => eprintln!("[auto-log] tick error: {e}"),
+            }
         }
     });
 }

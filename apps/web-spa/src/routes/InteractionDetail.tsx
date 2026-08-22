@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { InteractionSourceTag } from '../components/InteractionSourceTag';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 
@@ -121,6 +122,15 @@ export function InteractionDetail() {
           <h2 className="section__title">渠道</h2>
           <div className="card" style={{ marginTop: 10, padding: 16 }}>
             <span className="badge badge--accent">{interaction.channel}</span>
+          </div>
+        </section>
+      )}
+
+      {interaction.source && interaction.source !== 'manual' && (
+        <section className="section">
+          <h2 className="section__title">来源</h2>
+          <div className="card" style={{ marginTop: 10, padding: 16 }}>
+            <InteractionSourceTag source={interaction.source} />
           </div>
         </section>
       )}

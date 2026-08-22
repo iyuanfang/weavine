@@ -17,6 +17,7 @@ use tower_http::{
 
 mod api_key_crypto;
 mod auth_keys;
+mod auto_log_server;
 mod business;
 mod email;
 mod handlers;

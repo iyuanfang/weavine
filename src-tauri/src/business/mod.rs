@@ -1,5 +1,6 @@
 pub mod action;
 pub mod archive_sweep;
+pub mod auto_log;
 pub mod keep_in_touch;
 pub mod contact;
 pub mod diagnostic;

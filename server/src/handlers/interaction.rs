@@ -10,7 +10,7 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Interaction;
 
-const INTERACTION_SELECT: &str = "SELECT i.id, i.user_id, i.contact_id, i.action_id, i.event_id, i.occurred_at, i.channel, i.summary, i.created_at, \
+const INTERACTION_SELECT: &str = "SELECT i.id, i.user_id, i.contact_id, i.action_id, i.event_id, i.occurred_at, i.channel, i.summary, i.source, i.source_ref, i.created_at, \
      c.nickname AS contact_nickname \
      FROM interaction i \
      LEFT JOIN contact c ON c.id = i.contact_id AND c.user_id = i.user_id";
@@ -65,8 +65,8 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query(
-        "INSERT INTO interaction (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        "INSERT INTO interaction (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',NULL,$11)",
     )
     .bind(&id).bind(&auth)
     .bind(body.get("contact_id").and_then(|v| v.as_str()))

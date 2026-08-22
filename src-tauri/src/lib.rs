@@ -263,6 +263,15 @@ pub fn run() {
                         eprintln!("[startup] keep_in_touch::schedule_all failed: {e}");
                     }
                 }
+                match business::auto_log::run_with_default_window(&conn) {
+                    Ok(n) if n > 0 => {
+                        eprintln!("[startup] auto_log: wrote {n} interactions");
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("[startup] auto_log::run failed: {e}");
+                    }
+                }
             }
             Ok(())
         })

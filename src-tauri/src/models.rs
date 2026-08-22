@@ -97,9 +97,17 @@ pub struct Interaction {
     pub occurred_at: String,
     pub channel: Option<String>,
     pub summary: String,
+    #[serde(default = "default_interaction_source")]
+    pub source: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub source_ref: Option<String>,
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub contact_nickname: Option<String>,
+}
+
+fn default_interaction_source() -> String {
+    "manual".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -462,6 +470,26 @@ pub struct CreateInteractionInput {
     pub occurred_at: String,
     pub channel: Option<String>,
     pub summary: String,
+    #[serde(default = "default_interaction_source")]
+    pub source: String,
+    #[serde(default)]
+    pub source_ref: Option<String>,
+}
+
+impl Default for CreateInteractionInput {
+    fn default() -> Self {
+        Self {
+            user_id: String::new(),
+            contact_id: None,
+            action_id: None,
+            event_id: None,
+            occurred_at: String::new(),
+            channel: None,
+            summary: String::new(),
+            source: default_interaction_source(),
+            source_ref: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -474,6 +502,10 @@ pub struct UpdateInteractionInput {
     pub occurred_at: Option<String>,
     pub channel: Option<String>,
     pub summary: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub source_ref: Option<String>,
 }
 
 // ──────────────────────────────────────────────

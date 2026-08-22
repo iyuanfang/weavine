@@ -12,13 +12,15 @@ pub(crate) fn row_to_interaction(row: &rusqlite::Row) -> rusqlite::Result<Intera
         occurred_at: row.get(5)?,
         channel: row.get(6)?,
         summary: row.get(7)?,
-        created_at: row.get(8)?,
-        contact_nickname: row.get(9)?,
+        source: row.get(8)?,
+        source_ref: row.get(9)?,
+        created_at: row.get(10)?,
+        contact_nickname: row.get(11)?,
     })
 }
 
 const INTERACTION_COLS: &str =
-    "Interaction.id, Interaction.user_id, Interaction.contact_id, Interaction.action_id, Interaction.event_id, Interaction.occurred_at, Interaction.channel, Interaction.summary, Interaction.created_at, c.nickname AS contact_nickname";
+    "Interaction.id, Interaction.user_id, Interaction.contact_id, Interaction.action_id, Interaction.event_id, Interaction.occurred_at, Interaction.channel, Interaction.summary, Interaction.source, Interaction.source_ref, Interaction.created_at, c.nickname AS contact_nickname";
 
 const INTERACTION_JOIN: &str =
     " LEFT JOIN \"Contact\" c ON c.id = Interaction.contact_id AND c.user_id = Interaction.user_id";
@@ -82,8 +84,8 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
 
     tx.execute(
         "INSERT INTO Interaction \
-         (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+         (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'manual', NULL, ?9)",
         rusqlite::params![
             &id,
             &input.user_id,
@@ -231,6 +233,7 @@ mod tests {
             occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
             channel: Some("phone".to_string()),
             summary: "Test call".to_string(),
+            ..Default::default()
         };
 
         let interaction = create(&conn, &input).unwrap();
@@ -259,6 +262,7 @@ mod tests {
             occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
             channel: None,
             summary: "Standalone note".to_string(),
+            ..Default::default()
         };
 
         let interaction = create(&conn, &input).unwrap();
@@ -297,6 +301,7 @@ mod tests {
             occurred_at: "2026-06-15T10:30:00.000Z".to_string(),
             channel: None,
             summary: "Orphan interaction".to_string(),
+            ..Default::default()
         };
 
         let interaction = create(&conn, &input).unwrap();

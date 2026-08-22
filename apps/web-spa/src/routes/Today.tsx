@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { ContactBadge } from '../components/ContactBadge';
+import { InteractionSourceTag } from '../components/InteractionSourceTag';
 import { ProjectBadge } from '../components/ProjectBadge';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
@@ -590,6 +591,7 @@ function InteractionRow({ interaction }: { interaction: Interaction }) {
         {d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
       </span>
       <span className="row-card__title">{interaction.summary}</span>
+      <InteractionSourceTag source={interaction.source} />
       {interaction.contact_nickname && (
         <ContactBadge contact={interaction.contact_nickname} compact />
       )}

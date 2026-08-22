@@ -131,6 +131,8 @@ CREATE TABLE IF NOT EXISTS "Interaction" (
     "occurred_at" DATETIME NOT NULL,
     "channel" TEXT,
     "summary" TEXT NOT NULL,
+    "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','todo')),
+    "source_ref" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -638,6 +640,36 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    let interaction_source_present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Interaction') WHERE name='source'",
+        [],
+        |r| r.get(0),
+    )?;
+    if interaction_source_present == 0 {
+        conn.execute(
+            "ALTER TABLE \"Interaction\" ADD COLUMN \"source\" TEXT NOT NULL DEFAULT 'manual'",
+            [],
+        )?;
+    }
+    let interaction_source_ref_present: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Interaction') WHERE name='source_ref'",
+        [],
+        |r| r.get(0),
+    )?;
+    if interaction_source_ref_present == 0 {
+        conn.execute(
+            "ALTER TABLE \"Interaction\" ADD COLUMN \"source_ref\" TEXT",
+            [],
+        )?;
+    }
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_interaction_source_ref_contact
+            ON Interaction (source, source_ref, contact_id)
+         WHERE source IS NOT NULL
+           AND source_ref IS NOT NULL
+           AND contact_id IS NOT NULL",
+    )?;
+
     Ok(())
 }
 
@@ -827,11 +859,15 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "action_id" TEXT REFERENCES "Action"("id") ON DELETE SET NULL,
             "event_id" TEXT REFERENCES "Event"("id") ON DELETE SET NULL,
             "occurred_at" DATETIME NOT NULL, "channel" TEXT, "summary" TEXT NOT NULL,
+            "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','todo')),
+            "source_ref" TEXT,
             "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );"#,
         ["id"=>"id", "ownerId"=>"user_id", "contactId"=>"contact_id",
          "actionId"=>"action_id", "eventId"=>"event_id", "occurredAt"=>"occurred_at",
-         "channel"=>"channel", "summary"=>"summary", "createdAt"=>"created_at"]
+         "channel"=>"channel", "summary"=>"summary",
+         "source"=>"source", "sourceRef"=>"source_ref",
+         "createdAt"=>"created_at"]
     );
 
     // ── Reminder ──
