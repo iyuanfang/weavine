@@ -595,6 +595,34 @@ button:focus-visible {
   }
 }
 
+/* ── Digest row (建议联系) ──────────────────────────── */
+
+.digest-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--transition);
+}
+
+.digest-row:hover {
+  background: var(--bg-hover);
+}
+
+.digest-row__title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-normal);
+}
+
+.digest-row__meta {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 /* ── Inputs ─────────────────────────────────────────── */
 
 .input-base {
