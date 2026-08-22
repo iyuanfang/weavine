@@ -66,7 +66,7 @@ pub async fn create(
 
     sqlx::query(
         "INSERT INTO interaction (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',NULL,$11)",
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'manual',NULL,$9)",
     )
     .bind(&id).bind(&auth)
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
