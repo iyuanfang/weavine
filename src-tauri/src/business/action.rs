@@ -130,14 +130,14 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
-    let prev: Option<(Option<String>, String, String)> = conn
+    let prev: Option<(Option<String>, String, String, String)> = conn
         .query_row(
-            "SELECT contact_id, status, user_id FROM Action WHERE id = ?1",
+            "SELECT contact_id, status, user_id, title FROM Action WHERE id = ?1",
             rusqlite::params![&input.id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .ok();
-    let (prev_contact_id, prev_status, action_user_id) = match prev {
+    let (prev_contact_id, prev_status, action_user_id, prev_title) = match prev {
         Some(r) => r,
         None => return Err(rusqlite::Error::QueryReturnedNoRows),
     };
@@ -219,16 +219,11 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
     if new_status == "done" {
         if let Some(ref contact_id) = new_contact_id {
             let iid = Uuid::new_v4().to_string();
-            let title_text = input.title.as_deref().unwrap_or("");
-            let summary = if title_text.is_empty() {
-                "完成了待办".to_string()
-            } else {
-                format!("完成了「{}」", title_text)
-            };
+            let summary = input.title.clone().unwrap_or(prev_title);
             conn.execute(
                 "INSERT INTO Interaction \
                  (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
-                 VALUES (?1, ?2, ?3, ?4, NULL, ?5, NULL, ?6, 'todo', ?4, ?5)",
+                 VALUES (?1, ?2, ?3, ?4, NULL, ?5, NULL, ?6, 'action', ?4, ?5)",
                 rusqlite::params![
                     &iid,
                     &action_user_id,

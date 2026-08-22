@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS "Interaction" (
     "occurred_at" DATETIME NOT NULL,
     "channel" TEXT,
     "summary" TEXT NOT NULL,
-    "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','todo')),
+    "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','action')),
     "source_ref" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -859,7 +859,7 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
             "action_id" TEXT REFERENCES "Action"("id") ON DELETE SET NULL,
             "event_id" TEXT REFERENCES "Event"("id") ON DELETE SET NULL,
             "occurred_at" DATETIME NOT NULL, "channel" TEXT, "summary" TEXT NOT NULL,
-            "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','todo')),
+            "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','action')),
             "source_ref" TEXT,
             "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );"#,
