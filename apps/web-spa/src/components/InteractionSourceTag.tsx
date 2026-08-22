@@ -3,7 +3,7 @@ import type { Interaction } from '../lib/adapter/types';
 const LABELS: Record<NonNullable<Interaction['source']>, string> = {
   manual: '',
   event: '📅 来自日程',
-  todo: '✅ 来自待办',
+  action: '✅ 来自待办',
 };
 
 export function InteractionSourceTag({
