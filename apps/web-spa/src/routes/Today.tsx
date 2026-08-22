@@ -359,11 +359,11 @@ export function TodayPage() {
                 className="digest-row"
               >
                 <span style={{ fontSize: 'var(--text-lg)' }}>📞</span>
-                <span style={{ flex: 1 }}>
-                  <div className="digest-row__title">{c.nickname}</div>
-                  <div className="digest-row__meta">
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="digest-row__title">{c.nickname}</span>
+                  <span className="digest-row__meta" style={{ marginLeft: 8 }}>
                     上次 {daysSinceLabel(c.last_interaction_at)}
-                  </div>
+                  </span>
                 </span>
                 <ReminderCountdown
                   importance={c.importance}
