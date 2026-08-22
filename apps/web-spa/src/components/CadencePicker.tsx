@@ -21,7 +21,12 @@ export function CadencePicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const effective = effectiveCadenceDays(importance, value);
   const isOverridden = typeof value === 'number' && value > 0;
-  const label = isOverridden ? `自定义 · ${cadenceLabel(effective)}` : `默认 · ${cadenceLabel(effective)}`;
+  const label =
+    effective === null
+      ? '不提醒'
+      : isOverridden
+        ? `自定义 · ${cadenceLabel(effective)}`
+        : `默认 · ${cadenceLabel(effective)}`;
 
   const select = (next: number | null) => {
     onChange(next);
@@ -83,7 +88,12 @@ export function CadencePicker({
           className="picker-menu__item"
           data-testid="cadence-picker-default"
         >
-          <span style={{ flex: 1 }}>使用默认（{cadenceLabel(effectiveCadenceDays(importance, null))}）</span>
+          <span style={{ flex: 1 }}>
+            {(() => {
+              const d = effectiveCadenceDays(importance, null);
+              return d === null ? '不提醒' : `使用默认（${cadenceLabel(d)}）`;
+            })()}
+          </span>
           {!isOverridden && <span>✓</span>}
         </button>
       </Popover>

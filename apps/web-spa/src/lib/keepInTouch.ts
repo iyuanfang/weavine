@@ -1,19 +1,31 @@
-//! Keep-in-touch cadence logic shared by the picker UI and the list badge.
+//! Keep-in-touch cadence logic.
 //!
-//! Defaults mirror `src-tauri/src/business/keep_in_touch.rs::cadence_days`.
+//! Each contact has a `cadence_days` (days between expected touches):
+//!   - If the user set an override (`Contact.keep_in_touch_cadence_days`),
+//!     that wins.
+//!   - Otherwise it falls back to the importance-tier default:
+//!     high = 30d, medium = 90d, low = null (no reminder — opt out by default).
+//!
+//! When `last_interaction_at + cadence_days` arrives, an OS notification
+//! fires ("该联系了") and the contact is flagged as overdue everywhere it
+//! is shown.
 
-const DEFAULTS: Record<string, number> = {
+const DEFAULTS: Record<string, number | null> = {
   high: 30,
   medium: 90,
-  low: 180,
+  low: null,
 };
 
+/**
+ * Effective cadence in days. `null` means "no reminder" (low importance
+ * without an override, or unknown importance).
+ */
 export function effectiveCadenceDays(
   importance: string,
   overrideDays: number | null | undefined,
-): number {
+): number | null {
   if (typeof overrideDays === 'number' && overrideDays > 0) return overrideDays;
-  return DEFAULTS[importance] ?? 180;
+  return DEFAULTS[importance] ?? null;
 }
 
 export function cadenceLabel(days: number): string {
@@ -22,77 +34,39 @@ export function cadenceLabel(days: number): string {
   return `每 ${(days / 365).toFixed(1)} 年`;
 }
 
+export interface NextReminder {
+  /** Days until the next reminder fires. Negative = overdue by N days. */
+  days: number | null;
+  /** Whether the cadence is set (i.e. the contact has a reminder at all). */
+  hasCadence: boolean;
+  /** Whether last_interaction is recorded (only meaningful when hasCadence). */
+  hasInteraction: boolean;
+}
+
 /**
- * Returns how many days until this contact should be re-engaged. Negative
- * means the cadence is overdue (the user has gone cold). `null` when the
- * contact has never been interacted with.
+ * Days until the next reminder fires for this contact.
+ * `null` means no cadence is configured (low importance without override,
+ * or unknown importance).
+ *
+ * If there is no `last_interaction_at` yet, returns `null` — the contact
+ * has no reminder to count down to.
  */
-export function daysUntilCold(
+export function nextReminderIn(
   lastInteractionIso: string | null | undefined,
   importance: string,
   overrideDays: number | null | undefined,
   now: Date = new Date(),
-): number | null {
-  if (!lastInteractionIso) return null;
+): NextReminder {
+  const cadence = effectiveCadenceDays(importance, overrideDays);
+  if (cadence === null) return { days: null, hasCadence: false, hasInteraction: false };
+  if (!lastInteractionIso) {
+    return { days: null, hasCadence: true, hasInteraction: false };
+  }
   const last = new Date(lastInteractionIso);
-  if (isNaN(last.getTime())) return null;
-  const cadenceMs = effectiveCadenceDays(importance, overrideDays) * 86_400_000;
-  const due = last.getTime() + cadenceMs;
-  return Math.floor((due - now.getTime()) / 86_400_000);
-}
-
-/**
- * Exponential-decay relationship health score in [0, 1].
- *
- *   score = importance_weight × exp(-days / tier_halflife)
- *
- * - `importance_weight`: how much this relationship matters overall
- * - `tier_halflife`: days for the score to halve (high importance = fast decay)
- *
- * Returns `null` when there is no recorded interaction yet.
- */
-const IMPORTANCE_WEIGHT: Record<string, number> = {
-  high: 1.0,
-  medium: 0.85,
-  low: 0.7,
-};
-const TIER_HALFLIFE_DAYS: Record<string, number> = {
-  high: 15,
-  medium: 45,
-  low: 90,
-};
-
-export function healthScore(
-  importance: string,
-  lastInteractionIso: string | null | undefined,
-  now: Date = new Date(),
-): number | null {
-  if (!lastInteractionIso) return null;
-  const last = new Date(lastInteractionIso);
-  if (isNaN(last.getTime())) return null;
-  const weight = IMPORTANCE_WEIGHT[importance] ?? 0.7;
-  const halflife = TIER_HALFLIFE_DAYS[importance] ?? 90;
-  const days = Math.max(0, (now.getTime() - last.getTime()) / 86_400_000);
-  return weight * Math.exp(-days / halflife);
-}
-
-export type HealthBucket = 'fresh' | 'warm' | 'cool' | 'cold';
-
-export function healthBucket(score: number | null): HealthBucket {
-  if (score === null) return 'cool';
-  if (score >= 0.6) return 'fresh';
-  if (score >= 0.3) return 'warm';
-  if (score >= 0.1) return 'cool';
-  return 'cold';
-}
-
-const HEALTH_COLORS: Record<HealthBucket, string> = {
-  fresh: '#10b981',
-  warm: '#eab308',
-  cool: '#f97316',
-  cold: '#ef4444',
-};
-
-export function healthColor(bucket: HealthBucket): string {
-  return HEALTH_COLORS[bucket];
+  if (isNaN(last.getTime())) {
+    return { days: null, hasCadence: true, hasInteraction: false };
+  }
+  const dueMs = last.getTime() + cadence * 86_400_000;
+  const days = Math.floor((dueMs - now.getTime()) / 86_400_000);
+  return { days, hasCadence: true, hasInteraction: true };
 }

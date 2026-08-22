@@ -18,19 +18,22 @@
 
 use rusqlite::{Connection, Transaction};
 
-const DEFAULT_CADENCE: &[(&str, i64)] = &[("high", 30), ("medium", 90), ("low", 180)];
+// `None` = "no reminder" (low importance without override, or unknown
+// importance). The keep-in-touch system respects a user's "low" tag by
+// staying silent unless they explicitly opt in via the override.
+const DEFAULT_CADENCE: &[(&str, Option<i64>)] = &[("high", Some(30)), ("medium", Some(90)), ("low", None)];
 
 /// Returns the cadence in days for the given contact: explicit override if
-/// set, otherwise the default for the contact's `importance`.
-fn cadence_days(importance: &str, override_days: Option<i64>) -> i64 {
+/// set, otherwise the default for the contact's `importance`. `None` means
+/// the contact has no reminder at all (low importance without an override).
+fn cadence_days(importance: &str, override_days: Option<i64>) -> Option<i64> {
     if let Some(d) = override_days.filter(|d| *d > 0) {
-        return d;
+        return Some(d);
     }
     DEFAULT_CADENCE
         .iter()
         .find(|(k, _)| *k == importance)
-        .map(|(_, d)| *d)
-        .unwrap_or(180)
+        .and_then(|(_, d)| *d)
 }
 
 fn trigger_iso(last_interaction: &str, days: i64) -> Result<String, rusqlite::Error> {
@@ -71,7 +74,13 @@ pub fn schedule_for_contact_tx(
         return Ok(());
     };
 
-    let days = cadence_days(&importance, override_days);
+    let Some(days) = cadence_days(&importance, override_days) else {
+        tx.execute(
+            "DELETE FROM Reminder WHERE contact_id = ?1 AND kind = 'keep_in_touch'",
+            rusqlite::params![contact_id],
+        )?;
+        return Ok(());
+    };
     let trigger_at = match trigger_iso(&last_interaction, days) {
         Ok(t) => t,
         Err(_) => return Ok(()),
@@ -162,22 +171,28 @@ mod tests {
 
     #[test]
     fn default_cadence_uses_importance() {
-        assert_eq!(cadence_days("high", None), 30);
-        assert_eq!(cadence_days("medium", None), 90);
-        assert_eq!(cadence_days("low", None), 180);
-        assert_eq!(cadence_days("garbage", None), 180);
+        assert_eq!(cadence_days("high", None), Some(30));
+        assert_eq!(cadence_days("medium", None), Some(90));
+        assert_eq!(cadence_days("low", None), None);
+        assert_eq!(cadence_days("garbage", None), None);
     }
 
     #[test]
     fn override_beats_importance_default() {
-        assert_eq!(cadence_days("high", Some(7)), 7);
-        assert_eq!(cadence_days("medium", Some(60)), 60);
+        assert_eq!(cadence_days("high", Some(7)), Some(7));
+        assert_eq!(cadence_days("medium", Some(60)), Some(60));
     }
 
     #[test]
     fn zero_or_negative_override_falls_back_to_default() {
-        assert_eq!(cadence_days("high", Some(0)), 30);
-        assert_eq!(cadence_days("high", Some(-1)), 30);
+        assert_eq!(cadence_days("high", Some(0)), Some(30));
+        assert_eq!(cadence_days("high", Some(-1)), Some(30));
+    }
+
+    #[test]
+    fn low_with_explicit_override_keeps_reminder() {
+        // User can opt a low-importance contact back in.
+        assert_eq!(cadence_days("low", Some(60)), Some(60));
     }
 
     #[test]
@@ -287,8 +302,12 @@ mod tests {
         insert_contact(&conn, "c3", "high", None, None); // no last_interaction
 
         let n = schedule_all(&conn).unwrap();
+        // schedule_all counts loop iterations, not INSERTs. c3 is filtered
+        // by SQL (no last_interaction). c1 + c2 are iterated.
         assert_eq!(n, 2);
 
+        // But only c1 yields an actual reminder — c2 is low+no override
+        // (DELETE-only path), c3 was filtered out before the loop.
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM Reminder WHERE kind = 'keep_in_touch'",
@@ -296,6 +315,6 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 2, "c3 (no last_interaction) is skipped");
+        assert_eq!(count, 1, "only c1 (high+last_interaction) yields a reminder");
     }
 }

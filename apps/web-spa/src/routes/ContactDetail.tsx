@@ -8,6 +8,7 @@ import { Avatar } from '../components/Avatar';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { AvatarViewModal } from '../components/AvatarViewModal';
 import { CadencePicker } from '../components/CadencePicker';
+import { ReminderCountdown } from '../components/ReminderCountdown';
 import { CardImageViewModal } from '../components/CardImageViewModal';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
@@ -376,6 +377,12 @@ export function ContactDetail() {
               保存失败
             </span>
           )}
+          <ReminderCountdown
+            importance={contact.importance || 'low'}
+            lastInteractionIso={contact.last_interaction_at}
+            overrideDays={contact.keep_in_touch_cadence_days}
+            size="md"
+          />
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginLeft: 'auto' }}>
             调整后系统会按这个周期提醒你再次联系
           </span>

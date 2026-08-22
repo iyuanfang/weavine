@@ -20,15 +20,15 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
 
-fn cadence_days(importance: &str, override_days: Option<i64>) -> i64 {
+fn cadence_days(importance: &str, override_days: Option<i64>) -> Option<i64> {
     if let Some(d) = override_days.filter(|d| *d > 0) {
-        return d;
+        return Some(d);
     }
     match importance {
-        "high" => 30,
-        "medium" => 90,
-        "low" => 180,
-        _ => 180,
+        "high" => Some(30),
+        "medium" => Some(90),
+        "low" => None,
+        _ => None,
     }
 }
 
@@ -71,8 +71,20 @@ async fn tick_keep_in_touch(
             Ok(d) => d.with_timezone(&Utc),
             Err(_) => continue,
         };
-        let days = cadence_days(&importance, override_days);
-        let trigger_at = (last + Duration::days(days)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let Some(days) = cadence_days(&importance, override_days) else {
+        // No cadence (low importance without override, or unknown
+        // importance). Make sure any stale reminder is gone.
+        sqlx::query(
+            "DELETE FROM reminder \
+             WHERE contact_id = $1 AND kind = 'keep_in_touch' \
+               AND dispatched = false AND dismissed = false",
+        )
+        .bind(&contact_id)
+        .execute(pool)
+        .await?;
+        continue;
+    };
+    let trigger_at = (last + Duration::days(days)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
         let mut tx = pool.begin().await?;
 
@@ -114,21 +126,26 @@ mod tests {
 
     #[test]
     fn cadence_default_falls_back_to_importance() {
-        assert_eq!(cadence_days("high", None), 30);
-        assert_eq!(cadence_days("medium", None), 90);
-        assert_eq!(cadence_days("low", None), 180);
-        assert_eq!(cadence_days("garbage", None), 180);
+        assert_eq!(cadence_days("high", None), Some(30));
+        assert_eq!(cadence_days("medium", None), Some(90));
+        assert_eq!(cadence_days("low", None), None);
+        assert_eq!(cadence_days("garbage", None), None);
     }
 
     #[test]
     fn cadence_override_beats_importance() {
-        assert_eq!(cadence_days("high", Some(7)), 7);
-        assert_eq!(cadence_days("medium", Some(60)), 60);
+        assert_eq!(cadence_days("high", Some(7)), Some(7));
+        assert_eq!(cadence_days("medium", Some(60)), Some(60));
     }
 
     #[test]
     fn zero_or_negative_override_falls_back() {
-        assert_eq!(cadence_days("high", Some(0)), 30);
-        assert_eq!(cadence_days("high", Some(-5)), 30);
+        assert_eq!(cadence_days("high", Some(0)), Some(30));
+        assert_eq!(cadence_days("high", Some(-5)), Some(30));
+    }
+
+    #[test]
+    fn low_can_opt_back_in_with_override() {
+        assert_eq!(cadence_days("low", Some(60)), Some(60));
     }
 }
