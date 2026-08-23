@@ -356,6 +356,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
                   id: c.id,
                   label: nick || name || '?',
                   sublabel,
+                  searchText: [nick, name].filter(Boolean).join(' '),
                 };
               })}
               placeholder="搜索或选择联系人…"

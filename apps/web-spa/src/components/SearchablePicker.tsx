@@ -5,6 +5,14 @@ export interface PickerOption {
   id: string;
   label: string;
   sublabel?: string | null;
+  /**
+   * Extra haystack to match against the search query, beyond
+   * `label` and `sublabel`. Use for fields the picker shouldn't
+   * display but the user still expects to find by typing
+   * (e.g. a contact's English `name` when `nickname` is shown
+   * as the primary label).
+   */
+  searchText?: string | null;
 }
 
 interface Props {
@@ -44,11 +52,16 @@ export function SearchablePicker({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter(
-      (o) =>
-        o.label.toLowerCase().includes(q) ||
-        (o.sublabel ?? '').toLowerCase().includes(q),
-    );
+    return options.filter((o) => {
+      const haystack = [
+        o.label,
+        o.sublabel ?? '',
+        o.searchText ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
   }, [options, query]);
 
   // Cap visible rows so the dropdown stays usable with hundreds of contacts

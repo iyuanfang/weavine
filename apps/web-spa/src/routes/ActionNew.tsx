@@ -230,6 +230,9 @@ export function ActionNew() {
                       id: c.id,
                       label: c.nickname ?? c.name ?? '?',
                       sublabel: c.company ?? c.title ?? null,
+                      searchText: [c.nickname, c.name, c.company, c.title]
+                        .filter(Boolean)
+                        .join(' '),
                     }))}
                     placeholder="搜索联系人…"
                     emptyText="没有匹配的联系人"

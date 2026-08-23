@@ -44,7 +44,8 @@ export function ContactMultiPicker({ selectedIds, onChange }: Props) {
         (c) =>
           (c.nickname ?? '').toLowerCase().includes(trimmed) ||
           (c.name ?? '').toLowerCase().includes(trimmed) ||
-          (c.company ?? '').toLowerCase().includes(trimmed),
+          (c.company ?? '').toLowerCase().includes(trimmed) ||
+          (c.title ?? '').toLowerCase().includes(trimmed),
       )
       .slice(0, 50);
   }, [allContacts, selectedSet, trimmed]);
