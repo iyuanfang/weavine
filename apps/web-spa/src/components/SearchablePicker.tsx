@@ -15,6 +15,7 @@ interface Props {
   emptyText?: string;
   disabled?: boolean;
   emptyState?: React.ReactNode;
+  footer?: React.ReactNode;
 }
 
 export function SearchablePicker({
@@ -25,6 +26,7 @@ export function SearchablePicker({
   emptyText = '没有匹配的项',
   disabled,
   emptyState,
+  footer,
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -48,6 +50,17 @@ export function SearchablePicker({
         (o.sublabel ?? '').toLowerCase().includes(q),
     );
   }, [options, query]);
+
+  // Cap visible rows so the dropdown stays usable with hundreds of contacts
+  // (project picker can grow to a few thousand). Footer stays pinned below
+  // the scrollable list so users can still click "新建联系人" without
+  // scrolling past every match.
+  const VISIBLE_ROW_CAP = 50;
+  const visible = useMemo(
+    () => filtered.slice(0, VISIBLE_ROW_CAP),
+    [filtered],
+  );
+  const overflow = filtered.length - visible.length;
 
   useEffect(() => {
     if (!open) return;
@@ -123,64 +136,96 @@ export function SearchablePicker({
           left: pos.left,
           width: pos.width,
           zIndex: 99999,
-          maxHeight: 280,
-          overflowY: 'auto',
           background: 'var(--surface, #fff)',
           border: '1px solid var(--border)',
           borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: 320,
         }}
       >
-        {filtered.length === 0 ? (
+        <div
+          style={{
+            overflowY: 'auto',
+            maxHeight: footer ? 240 : 280,
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div
+              style={{
+                padding: '14px 12px',
+                color: 'var(--muted)',
+                fontSize: 'var(--text-base)',
+                textAlign: 'center',
+              }}
+            >
+              {options.length === 0 && emptyState ? emptyState : emptyText}
+            </div>
+          ) : (
+            visible.map((opt, idx) => {
+              const isSel = opt.id === value;
+              const isHi = idx === highlight;
+              return (
+                <div
+                  key={opt.id}
+                  onMouseEnter={() => setHighlight(idx)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    commit(opt.id);
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    background: isHi ? 'var(--accent-soft, #eff6ff)' : 'transparent',
+                    borderLeft: isSel
+                      ? '3px solid var(--accent)'
+                      : '3px solid transparent',
+                    fontSize: 'var(--text-base)',
+                  }}
+                >
+                  <div style={{ fontWeight: isSel ? 600 : 400 }}>
+                    {opt.label}
+                  </div>
+                  {opt.sublabel && (
+                    <div
+                      style={{
+                        fontSize: 'var(--text-sm)',
+                        color: 'var(--muted)',
+                        marginTop: 2,
+                      }}
+                    >
+                      {opt.sublabel}
+                    </div>
+                    )}
+                </div>
+              );
+            })
+          )}
+          {overflow > 0 && (
+            <div
+              style={{
+                padding: '8px 12px',
+                fontSize: 'var(--text-sm)',
+                color: 'var(--muted)',
+                textAlign: 'center',
+              }}
+            >
+              还有 {overflow} 条匹配，输入关键词以缩小范围
+            </div>
+          )}
+        </div>
+        {footer && (
           <div
             style={{
-              padding: '14px 12px',
-              color: 'var(--muted)',
-              fontSize: 'var(--text-base)',
-              textAlign: 'center',
+              borderTop: '1px solid var(--border)',
+              paddingTop: 8,
+              flexShrink: 0,
+              background: 'var(--surface, #fff)',
             }}
           >
-            {options.length === 0 && emptyState ? emptyState : emptyText}
+            {footer}
           </div>
-        ) : (
-          filtered.map((opt, idx) => {
-            const isSel = opt.id === value;
-            const isHi = idx === highlight;
-            return (
-              <div
-                key={opt.id}
-                onMouseEnter={() => setHighlight(idx)}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  commit(opt.id);
-                }}
-                style={{
-                  padding: '8px 12px',
-                  cursor: 'pointer',
-                  background: isHi ? 'var(--accent-soft, #eff6ff)' : 'transparent',
-                  borderLeft: isSel
-                    ? '3px solid var(--accent)'
-                    : '3px solid transparent',
-                  fontSize: 'var(--text-base)',
-                }}
-              >
-                <div style={{ fontWeight: isSel ? 600 : 400 }}>
-                  {opt.label}
-                </div>
-                {opt.sublabel && (
-                  <div
-                    style={{
-                      fontSize: 'var(--text-sm)',
-                      color: 'var(--muted)',
-                      marginTop: 2,
-                    }}
-                  >
-                    {opt.sublabel}
-                  </div>
-                  )}
-              </div>
-            );
-          })
         )}
       </div>
     ) : null;
