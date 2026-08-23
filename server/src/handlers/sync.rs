@@ -455,9 +455,11 @@ pub async fn pull(
 }
 
 pub async fn prune_change_log(pool: &PgPool, ttl_days: i64) -> Result<u64, sqlx::Error> {
+    // `make_interval` only takes `integer`, but sqlx binds `i64` → bigint, so we
+    // cast explicitly. PG 16 has no overload for bigint days.
     let result = sqlx::query(
         "DELETE FROM sync_change_log \
-         WHERE changed_at < to_char(NOW() AT TIME ZONE 'UTC' - make_interval(days => $1), 'YYYY-MM-DD HH24:MI:SS')"
+         WHERE changed_at < to_char(NOW() AT TIME ZONE 'UTC' - make_interval(days => $1::int), 'YYYY-MM-DD HH24:MI:SS')"
     )
     .bind(ttl_days)
     .execute(pool)

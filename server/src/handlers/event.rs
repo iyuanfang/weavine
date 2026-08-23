@@ -13,7 +13,7 @@ use weavine_lib::models::Event;
 /// Compute the RFC3339 trigger time for an event reminder:
 /// `trigger_at = start_at - lead_minutes`. Accepts RFC3339 (clients)
 /// or legacy space-separated `%Y-%m-%d %H:%M:%S` input.
-fn compute_trigger_at(start_at: &str, lead_minutes: i32) -> Option<String> {
+fn compute_trigger_at(start_at: &str, lead_minutes: i64) -> Option<String> {
     if lead_minutes <= 0 {
         return None;
     }
@@ -39,8 +39,8 @@ async fn upsert_event_reminder(
     event_id: &str,
     contact_id: Option<&str>,
     start_at: &str,
-    lead_minutes: i32,
-    old_lead_minutes: Option<i32>,
+    lead_minutes: i64,
+    old_lead_minutes: Option<i64>,
 ) -> Result<(), sqlx::Error> {
     if lead_minutes <= 0 {
         if let Some(old) = old_lead_minutes.filter(|&l| l > 0) {
@@ -229,7 +229,7 @@ pub async fn create(
     .bind(body.get("notes").and_then(|v| v.as_str()))
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
     .bind(body.get("project_id").and_then(|v| v.as_str()))
-    .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()).map(|n| n as i32))
+    .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()))
     .bind(&now)
     .bind(&now)
     .execute(&mut *tx)
@@ -271,7 +271,7 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
-    let lead = body.get("reminder_lead_minutes").and_then(|v| v.as_i64()).map(|n| n as i32);
+    let lead = body.get("reminder_lead_minutes").and_then(|v| v.as_i64());
     if let Some(lead) = lead.filter(|&l| l > 0) {
         let start_at = body.get("start_at").and_then(|v| v.as_str()).unwrap_or(&now);
         let contact_id = if participant_ids.is_empty() {
@@ -342,8 +342,12 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let old: Option<(Option<i32>, String)> = sqlx::query_as(
-        "SELECT reminder_lead_minutes, start_at FROM event WHERE id = $1 AND user_id = $2",
+    let old: Option<(Option<i64>, String)> = sqlx::query_as(
+        // Cast reminder_lead_minutes to BIGINT so sqlx can decode it into
+        // Option<i64>. The Rust Event struct uses i64 (matching EVENT_SELECT's
+        // cast at the top of this file) but the underlying column is INT4.
+        "SELECT reminder_lead_minutes::BIGINT AS reminder_lead_minutes, start_at \
+         FROM event WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)
     .bind(&auth)
@@ -354,7 +358,7 @@ pub async fn update(
 
     enum Bind<'a> {
         Text(&'a str),
-        I32(i32),
+        I64(i64),
     }
 
     let mut sets = Vec::new();
@@ -369,7 +373,7 @@ pub async fn update(
     }
     if let Some(v) = body.get("reminder_lead_minutes").and_then(|v| v.as_i64()) {
         sets.push(format!("reminder_lead_minutes = ${}", idx));
-        binds.push(Bind::I32(v as i32));
+        binds.push(Bind::I64(v));
         idx += 1;
     }
     if let Some(v) = body.get("archived_at").and_then(|v| v.as_str()) {
@@ -388,7 +392,7 @@ pub async fn update(
     for b in &binds {
         q = match b {
             Bind::Text(s) => q.bind(*s),
-            Bind::I32(n) => q.bind(*n),
+            Bind::I64(n) => q.bind(*n),
         };
     }
     q = q.bind(&id).bind(&auth);
@@ -436,7 +440,7 @@ pub async fn update(
 
     let body_lead = body.get("reminder_lead_minutes");
     let lead_present = body_lead.is_some();
-    let new_lead: Option<i32> = body_lead.and_then(|v| v.as_i64()).map(|n| n as i32);
+    let new_lead: Option<i64> = body_lead.and_then(|v| v.as_i64());
     let new_start_at: Option<&str> = body.get("start_at").and_then(|v| v.as_str());
     let lead_changed = lead_present && new_lead != old_lead;
     let start_changed = new_start_at.is_some() && new_start_at != Some(old_start_at.as_str());
@@ -817,7 +821,7 @@ mod tests {
         .bind(&user_id)
         .bind("Test Event")
         .bind("2026-08-15T10:00:00+00:00")
-        .bind(15i32)
+        .bind(15i64)
         .bind(&now)
         .bind(&now)
         .execute(&pool)
@@ -889,7 +893,7 @@ mod tests {
         .bind(&user_id)
         .bind("Test Event")
         .bind("2026-08-15T10:00:00+00:00")
-        .bind(15i32)
+        .bind(15i64)
         .bind(&now)
         .bind(&now)
         .execute(&pool)
@@ -969,7 +973,7 @@ mod tests {
         .bind(&user_id)
         .bind("Test Event")
         .bind("2026-08-15T10:00:00+00:00")
-        .bind(15i32)
+        .bind(15i64)
         .bind(&now)
         .bind(&now)
         .execute(&pool)
