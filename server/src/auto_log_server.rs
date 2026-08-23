@@ -80,7 +80,12 @@ async fn write_interactions_for_event(
             "INSERT INTO interaction \
                 (id, user_id, contact_id, event_id, occurred_at, summary, source, source_ref, created_at) \
              VALUES ($1, $2, $3, $4, $5, $6, 'event', $4, $7) \
-             ON CONFLICT DO NOTHING",
+             ON CONFLICT (source, source_ref, contact_id)
+                WHERE source IS NOT NULL
+                  AND source_ref IS NOT NULL
+                  AND contact_id IS NOT NULL
+                  AND deleted_at IS NULL
+                DO NOTHING",
         )
         .bind(&id)
         .bind(&ev.user_id)

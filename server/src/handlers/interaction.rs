@@ -149,8 +149,6 @@ pub async fn update(
             params.push(v.to_string()); idx += 1;
         }
     }
-    sets.push(format!("created_at = ${}", idx));
-    params.push(now); idx += 1;
     let sql = format!("UPDATE interaction SET {} WHERE id = ${} AND user_id = ${}", sets.join(", "), idx, idx + 1);
     let mut q = sqlx::query(&sql);
     for p in &params { q = q.bind(p); }
