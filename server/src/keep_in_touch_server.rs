@@ -71,9 +71,15 @@ async fn tick_keep_in_touch(
     now: DateTime<Utc>,
     pool: &PgPool,
 ) -> Result<usize, sqlx::Error> {
+    // Skip soft-deleted contacts — without the WHERE clause they leak into
+    // the scan and the INSERT SELECT below would re-create reminders for
+    // rows that the caller already deleted.
+    // Index (user_id, last_interaction_at) WHERE deleted_at IS NULL makes
+    // this scan sequential at PG planner's discretion but bounded by user
+    // count, not table size, in practice.
     let rows: Vec<(String, String, Option<String>, Option<i64>)> = sqlx::query_as(
         "SELECT id, importance, last_interaction_at, keep_in_touch_cadence_days \
-         FROM contact",
+         FROM contact WHERE deleted_at IS NULL",
     )
     .fetch_all(pool)
     .await?;
