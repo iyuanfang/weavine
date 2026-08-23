@@ -1,13 +1,16 @@
 use axum::{
     body::Bytes,
-    extract::{multipart::Multipart, State},
+    extract::{multipart::Multipart, ConnectInfo, State},
     http::{HeaderMap, StatusCode},
 };
 use leptess::LepTess;
 use serde::Serialize;
 use std::sync::Arc;
 
-use super::auth::{extract_endpoint_auth, EndpointAuth};
+use super::auth::{
+    client_ip, extract_endpoint_auth, ocr_voice_rate_limit, EndpointAuth,
+    OCR_VOICE_RL_LIMIT, OCR_VOICE_RL_WINDOW,
+};
 
 fn tessdata_path() -> Option<std::path::PathBuf> {
     if let Ok(p) = std::env::var("TESSDATA_PREFIX") {
@@ -201,9 +204,26 @@ fn extract_fields(lines: &[OcrLine]) -> OcrFields {
 
 pub async fn extract_card(
     headers: HeaderMap,
+    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
     State(pool): State<Arc<sqlx::PgPool>>,
     mut form: Multipart,
 ) -> Result<axum::Json<OcrResult>, (StatusCode, String)> {
+    // Per-IP per-minute rate limit (v1.2.0 S2). Applied BEFORE auth so
+    // an anonymous abuser can't burn CPU by spamming the endpoint.
+    let ip = client_ip(&headers, Some(peer));
+    if !ocr_voice_rate_limit().check(
+        "ocr",
+        "ip",
+        &ip,
+        OCR_VOICE_RL_LIMIT,
+        OCR_VOICE_RL_WINDOW,
+    ) {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "OCR 请求过于频繁，请稍后再试".into(),
+        ));
+    }
+
     let _auth = match extract_endpoint_auth(&headers, pool.as_ref()).await? {
         EndpointAuth::ServiceKey => "service:weavine-default".to_string(),
         EndpointAuth::User { user_id, .. } => user_id,

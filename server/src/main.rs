@@ -72,6 +72,7 @@ async fn main() {
     email::init_sender();
     // In-process rate limiter for password-reset endpoints.
     handlers::auth::init_password_reset_rate_limiter();
+    handlers::auth::init_ocr_voice_rate_limiter();
 
     let api = Router::new()
         .route("/api/health", get(|| async { "OK" }))

@@ -10,14 +10,17 @@
 
 use axum::{
     body::Bytes,
-    extract::{multipart::Multipart, State},
+    extract::{multipart::Multipart, ConnectInfo, State},
     http::{HeaderMap, StatusCode},
 };
 use serde::Serialize;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use tokio::io::AsyncWriteExt;
-use super::auth::{extract_endpoint_auth, EndpointAuth};
+use super::auth::{
+    client_ip, extract_endpoint_auth, ocr_voice_rate_limit, EndpointAuth,
+    OCR_VOICE_RL_LIMIT, OCR_VOICE_RL_WINDOW,
+};
 
 use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OfflineSenseVoiceModelConfig,
@@ -103,11 +106,30 @@ fn get_recognizer() -> Result<&'static Arc<OfflineRecognizer>, (StatusCode, Stri
 
 pub async fn recognize(
     headers: HeaderMap,
+    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
     State(pool): State<Arc<sqlx::PgPool>>,
     mut form: Multipart,
 ) -> Result<axum::Json<RecognizeResult>, (StatusCode, String)> {
     let t_total = std::time::Instant::now();
     let t0 = t_total;
+
+    // Per-IP per-minute rate limit (v1.2.0 S2). Applied BEFORE auth + before
+    // RECOGNIZE_SEM so an anonymous flood doesn't even contend for the CPU
+    // semaphore slot.
+    let ip = client_ip(&headers, Some(peer));
+    if !ocr_voice_rate_limit().check(
+        "voice",
+        "ip",
+        &ip,
+        OCR_VOICE_RL_LIMIT,
+        OCR_VOICE_RL_WINDOW,
+    ) {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "语音识别请求过于频繁，请稍后再试".into(),
+        ));
+    }
+
     let _auth = match extract_endpoint_auth(&headers, pool.as_ref()).await? {
         EndpointAuth::ServiceKey => "service:weavine-default".to_string(),
         EndpointAuth::User { user_id, .. } => user_id,

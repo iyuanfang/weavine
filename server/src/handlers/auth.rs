@@ -35,6 +35,31 @@ fn reset_rate_limit() -> &'static RateLimiter {
         .expect("PASSWORD_RESET_RL not initialised; call init_password_reset_rate_limiter() in main")
 }
 
+/// Rate limiter for the cloud OCR / voice endpoints (v1.2.0 S2). Keys by
+/// `(route, ip)` so a single client can't flood the server with hundreds
+/// of OCR/STT calls per minute. Per-user caps live in install_activation
+/// (`daily_ocr_count`, `daily_voice_count`); this is the per-minute layer
+/// that protects CPU + memory before the daily quota is hit.
+static OCR_VOICE_RL: OnceLock<RateLimiter> = OnceLock::new();
+
+pub fn init_ocr_voice_rate_limiter() {
+    OCR_VOICE_RL
+        .set(RateLimiter::new())
+        .expect("OCR_VOICE_RL already initialised");
+}
+
+pub fn ocr_voice_rate_limit() -> &'static RateLimiter {
+    OCR_VOICE_RL
+        .get()
+        .expect("OCR_VOICE_RL not initialised; call init_ocr_voice_rate_limiter() in main")
+}
+
+/// 30 requests/minute/IP. Generous enough for a real user uploading 10+
+/// cards in a session, tight enough that an anonymous abuser hits 429 in
+/// seconds. Daily quota on install_activation catches sustained abuse.
+pub const OCR_VOICE_RL_LIMIT: usize = 30;
+pub const OCR_VOICE_RL_WINDOW: StdDuration = StdDuration::from_secs(60);
+
 /// Shared zero-friction service key for the OCR/STT endpoints (feature
 /// `ocr`/`stt`). Loaded from `WV_SERVICE_KEY` once at startup by
 /// `init_service_key`; if unset, a random key is generated and logged.
@@ -822,7 +847,7 @@ fn random_reset_token() -> String {
         .collect()
 }
 
-fn client_ip(headers: &HeaderMap, fallback: Option<std::net::SocketAddr>) -> String {
+pub(crate) fn client_ip(headers: &HeaderMap, fallback: Option<std::net::SocketAddr>) -> String {
     if let Some(v) = headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
