@@ -169,7 +169,7 @@ install_activation(
   first_seen_at, last_seen_at TEXT,       -- rfc3339 timestamps
   app_version         TEXT,                -- version at first launch
   os, platform        TEXT,                -- 'darwin' | 'linux' | 'windows' | 'android' | 'web'
-  last_ip_hash        TEXT,                -- SHA-256(JWT_SECRET || ip), never raw
+  last_ip_hash        TEXT,                -- SHA-256(WEAVINE_JWT_SECRET || ip), never raw
   call_count          BIGINT,              -- increments on every OCR / voice / ping
   last_event          TEXT,                -- 'launch' | 'ocr' | 'voice'
   device_key          TEXT UNIQUE,         -- 32-char hex, minted on first ping
@@ -204,7 +204,7 @@ UPDATE install_activation SET revoked_at = now() WHERE device_key = '...';
 
 ### Privacy
 
-**The server only stores the SHA-256 hash of the client IP, salted with `JWT_SECRET`.** Raw IPs are never persisted. The `install_id` is a per-install UUID minted by the client itself — it is not derived from any hardware fingerprint, machine ID, browser fingerprint, or other device-specific signal. Wiping the app data dir (or `localStorage`) produces a fresh `install_id` on next launch, which defaults to "new install" semantics.
+**The server only stores the SHA-256 hash of the client IP, salted with `WEAVINE_JWT_SECRET`.** Raw IPs are never persisted. The `install_id` is a per-install UUID minted by the client itself — it is not derived from any hardware fingerprint, machine ID, browser fingerprint, or other device-specific signal. Wiping the app data dir (or `localStorage`) produces a fresh `install_id` on next launch, which defaults to "new install" semantics.
 
 The `device_key` is similarly a 122-bit random UUID; losing it just means the client can no longer make anonymous cloud calls until the next `POST /api/activation/ping` re-mints one (the server returns the same key on subsequent pings as long as `install_id` matches).
 
@@ -230,7 +230,7 @@ First launch creates `weavine.db` in the platform data dir and applies all migra
 ```bash
 # One-time: create .env from .env.example
 cp .env.example .env
-$EDITOR .env             # set DATABASE_URL, JWT_SECRET, etc.
+$EDITOR .env             # set DATABASE_URL, WEAVINE_JWT_SECRET, etc.
 
 # Migrate + run
 psql "$DATABASE_URL" -f server/migrations/20260704000001_initial_schema.sql
@@ -345,7 +345,7 @@ cargo run --example smoke --manifest-path src-tauri/Cargo.toml
   - macOS: `~/Library/Application Support/com.weavine.desktop/weavine.db`
   - Linux: `~/.local/share/com.weavine.desktop/weavine.db`
 - **Local HTTP port** for the in-app Tauri webview bridge: default `3299` (overridable in `src-tauri/tauri.conf.json`).
-- **Sync server**: copy `.env.example` to `.env`, set `DATABASE_URL`, `JWT_SECRET`, `BIND_ADDR`.
+- **Sync server**: copy `.env.example` to `.env`, set `DATABASE_URL`, `WEAVINE_JWT_SECRET`, `BIND_ADDR`.
 
 ## Roadmap
 

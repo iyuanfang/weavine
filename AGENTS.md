@@ -28,7 +28,7 @@ Schema after full migration:
 Anonymous installs (Tauri / Web SPA, never logged in) register themselves with `weavine-server` so usage stats cover the full funnel, not just paying users.
 
 **Schema** (migration `20260814000001_install_activation.sql` then `20260820000001_device_key.sql`):
-- `install_activation` — one row per install. Columns: `install_id` (PK), `first_seen_at`, `last_seen_at`, `app_version`, `os`, `platform` (`desktop|android|web`), `last_ip_hash` (SHA-256 with `JWT_SECRET`), `call_count`, `last_event`, `device_key` (UNIQUE partial idx where not null), `plan`, `daily_ocr_count`, `daily_voice_count`, `daily_reset_at`, `revoked_at`.
+- `install_activation` — one row per install. Columns: `install_id` (PK), `first_seen_at`, `last_seen_at`, `app_version`, `os`, `platform` (`desktop|android|web`), `last_ip_hash` (SHA-256 with `WEAVINE_JWT_SECRET`), `call_count`, `last_event`, `device_key` (UNIQUE partial idx where not null), `plan`, `daily_ocr_count`, `daily_voice_count`, `daily_reset_at`, `revoked_at`.
 - The same `install_id` becomes `devices.id` after `register()` / `login()`, so `JOIN install_activation ON install_id = devices.id` reveals multi-device users. Older clients (no `device.install_id`) get a fresh UUID v4.
 
 **Server endpoints**:
@@ -58,7 +58,7 @@ X-App-Version:    <weavine version>
 ```
 
 **Privacy guarantees** (README "Activation tracking" section):
-- Raw IP is never persisted — only `SHA-256(JWT_SECRET || ip)`.
+- Raw IP is never persisted — only `SHA-256(WEAVINE_JWT_SECRET || ip)`.
 - `install_id` is client-minted UUID v4 — no fingerprint / no machine-id / no browser fingerprint.
 - Only destination is the server URL the user has configured.
 - Disabling: delete `<data_dir>/install_id` + `<data_dir>/device_key`, or clear `localStorage[weavine:install_id|weavine:device_key]`. Next launch = new install row.

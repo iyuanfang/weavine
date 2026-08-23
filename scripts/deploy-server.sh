@@ -77,8 +77,30 @@ deploy() {
     # compiled in and /api/cards/extract + /api/voice/recognize return 404.
     # Build under gcc-toolset-13 (GCC 13.3.1) so its newer libstdc++ is used
     # when statically linking sherpa-onnx's prebuilt static libs (built with
-    # newer GCC that emits std::__throw_bad_array_new_length etc).
+    # newer GCC that emits std::__throw_bad_array_length etc).
     $SSH "source /opt/rh/gcc-toolset-13/enable && cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && RUSTFLAGS='-C link-arg=-static-libstdc++' cargo build --release --locked --manifest-path server/Cargo.toml --features ocr,stt 2>&1 | tail -15"
+
+    echo
+    echo "═══ 4. ensure WEAVINE_JWT_SECRET is in systemd unit (idempotent) ═══"
+    # Required since activation.rs ip_hash_for() fail-closed. If the systemd
+    # unit doesn't carry this env var, the server refuses to start. We persist
+    # a generated value into the unit file the first time we see it's missing
+    # so the value stays stable across rebuilds and won't churn the IP hashes
+    # of existing installs.
+    $SSH "
+        set -e
+        UNIT=/etc/systemd/system/$SERVICE_NAME.service
+        if grep -q '^Environment=WEAVINE_JWT_SECRET=' \"\$UNIT\" 2>/dev/null; then
+            echo '  (already set — skipping)'
+        else
+            SECRET=\$(openssl rand -hex 32)
+            # Insert after the last Environment= line so the block stays grouped.
+            LAST_ENV_LINE=\$(grep -n '^Environment=' \"\$UNIT\" | tail -1 | cut -d: -f1)
+            sed -i \"\${LAST_ENV_LINE}a Environment=WEAVINE_JWT_SECRET=\$SECRET\" \"\$UNIT\"
+            systemctl daemon-reload
+            echo \"  (added Environment=WEAVINE_JWT_SECRET=<random-64hex> to \$UNIT)\"
+        fi
+    "
 
     echo
     echo "═══ 5. backup current + install ═══"
