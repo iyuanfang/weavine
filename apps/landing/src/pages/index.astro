@@ -1,7 +1,7 @@
 ---
 import '../styles/global.css';
 
-const release = 'v1.1.0';
+const release = 'v1.1.2';
 const repo = 'iyuanfang/weavine';
 const releaseUrl = `https://github.com/${repo}/releases/tag/${release}`;
 
@@ -15,57 +15,49 @@ const platforms = [
 
 const features = [
   {
-    icon: '🔒',
-    title: '本地优先',
-    body: '数据存放在你自己的设备上。默认离线可用，隐私和性能都是第一公民。',
+    icon: '⚡',
+    title: '快速记录',
+    body: '一句话、一张名片、一段语音——想到就记。Ctrl+K 随时唤起，3 秒完成一条记录。',
+  },
+  {
+    icon: '🧠',
+    title: '智能关系管理',
+    body: '不只是通讯录。自动关联联系人、项目、待办和日程，帮你理清每个人背后的故事。',
+  },
+  {
+    icon: '🎙️',
+    title: '语音 & OCR',
+    body: '对着手机说一句话，自动识别为文字并归档。扫描名片，秒级录入联系人信息。',
+  },
+  {
+    icon: '📅',
+    title: '日程与提醒',
+    body: '会议、待办、重要日期，永远不会忘。跨设备同步提醒，手机桌面都能收到。',
   },
   {
     icon: '🔄',
     title: '多端同步',
-    body: '桌面、手机、网页，编辑后即时同步。自建服务或官方云，二选一。',
+    body: '桌面、手机、网页，编辑即时同步。自建服务或官方云，你自己选。',
   },
   {
-    icon: '💚',
-    title: '永久开源',
-    body: 'AGPL-3.0 许可。代码可读、协议开放，不会有一天突然停服、收费、改协议。',
+    icon: '🔒',
+    title: '数据在你手里',
+    body: '默认本地存储，离线可用。你的联系人、对话、日程，不会存在别人的服务器上。',
   },
 ];
 
+const screenshots = [
+  { src: '/screenshot-contacts.png', alt: '联系人管理' },
+  { src: '/screenshot-quick-capture.png', alt: '快速记录' },
+  { src: '/screenshot-calendar.png', alt: '日程管理' },
+];
+
 const downloads = [
-  {
-    id: 'download-macos',
-    name: 'macOS',
-    desc: 'Universal · 适用于 Apple Silicon 和 Intel',
-    href: releaseUrl,
-    file: '.dmg',
-  },
-  {
-    id: 'download-windows',
-    name: 'Windows',
-    desc: 'Windows 10 / 11 · 64-bit',
-    href: releaseUrl,
-    file: '.msi',
-  },
-  {
-    id: 'download-linux',
-    name: 'Linux',
-    desc: 'Debian / Ubuntu · 其他发行版可选 .AppImage',
-    href: releaseUrl,
-    file: '.deb',
-  },
-  {
-    id: 'download-android',
-    name: 'Android',
-    desc: 'Android 8+ · 通用 APK，启用"未知来源"安装',
-    href: releaseUrl,
-    file: '.apk',
-  },
-  {
-    name: '网页版',
-    desc: '无需安装，浏览器即开即用',
-    href: '/login',
-    file: '→',
-  },
+  { id: 'download-macos', name: 'macOS', desc: 'Universal · Apple Silicon + Intel', href: releaseUrl, file: '.dmg' },
+  { id: 'download-windows', name: 'Windows', desc: 'Windows 10 / 11 · 64-bit', href: releaseUrl, file: '.msi' },
+  { id: 'download-linux', name: 'Linux', desc: 'Debian / Ubuntu · .AppImage', href: releaseUrl, file: '.deb' },
+  { id: 'download-android', name: 'Android', desc: 'Android 8+ · 通用 APK', href: releaseUrl, file: '.apk' },
+  { name: '网页版', desc: '无需安装，浏览器即开即用', href: '/login', file: '→' },
 ];
 ---
 
@@ -74,9 +66,9 @@ const downloads = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Weavine — 本地优先的个人关系管理工具。数据存放在你自己的设备上，多端同步，永久开源。" />
+    <meta name="description" content="Weavine — 记住每一个重要的人。语音记录、名片扫描、智能关联，帮你管好人和事。" />
     <meta name="theme-color" content="#7c3aed" />
-    <title>Weavine · 本地优先的个人关系管理</title>
+    <title>Weavine · 记住每一个重要的人</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body class="font-sans">
@@ -84,20 +76,18 @@ const downloads = [
       <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
         <a href="/" class="font-semibold text-lg tracking-tight">Weavine</a>
         <nav class="flex gap-6 text-sm text-gray-600">
-          <a href="#features" class="hover:text-gray-900 transition">特性</a>
+          <a href="#features" class="hover:text-gray-900 transition">功能</a>
+          <a href="#screenshots" class="hover:text-gray-900 transition">截图</a>
           <a href="#download" class="hover:text-gray-900 transition">下载</a>
-          <a href={`https://github.com/${repo}`} class="hover:text-gray-900 transition" rel="noopener">GitHub</a>
         </nav>
       </div>
     </header>
 
     <main>
-      <!-- Hero -->
       <section class="max-w-5xl mx-auto px-6 py-20 sm:py-28 text-center">
-        <h1 class="text-4xl sm:text-6xl font-bold tracking-tight">本地优先的个人关系管理</h1>
+        <h1 class="text-4xl sm:text-6xl font-bold tracking-tight">记住每一个重要的人</h1>
         <p class="mt-6 text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-          Weavine 帮你记住每一个重要的人、每一件待办的事。
-          数据存放在你自己的设备上，多端加密同步，永久开源。
+          语音、文字、名片——想到就记。自动关联联系人、项目和日程，帮你管好人和事。
         </p>
         <div class="mt-10 flex flex-wrap gap-3 justify-center">
           {platforms.map((p) => (
@@ -116,16 +106,15 @@ const downloads = [
           ))}
         </div>
         <p class="mt-6 text-sm text-gray-500">
-          最新版本 <a href={`https://github.com/${repo}/releases/tag/${release}`} class="underline hover:text-gray-700" rel="noopener">{release}</a>
-          · AGPL-3.0
+          最新版本 <a href={releaseUrl} class="underline hover:text-gray-700" rel="noopener">{release}</a>
         </p>
       </section>
 
-      <!-- Features -->
       <section id="features" class="bg-gray-50 py-20">
         <div class="max-w-5xl mx-auto px-6">
-          <h2 class="text-3xl font-bold text-center">为什么用 Weavine</h2>
-          <div class="mt-12 grid sm:grid-cols-3 gap-8">
+          <h2 class="text-3xl font-bold text-center">核心功能</h2>
+          <p class="mt-3 text-center text-gray-500 text-sm">不只是记事本，是你的关系管理引擎</p>
+          <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((f) => (
               <div>
                 <div class="w-10 h-10 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center text-xl">{f.icon}</div>
@@ -137,24 +126,23 @@ const downloads = [
         </div>
       </section>
 
-      <!-- Screenshots -->
-      <section class="py-20">
+      <section id="screenshots" class="py-20">
         <div class="max-w-5xl mx-auto px-6">
           <h2 class="text-3xl font-bold text-center">看看实际效果</h2>
-          <p class="mt-4 text-center text-gray-500 text-sm">截图待补 · 跑起来后加 3 张</p>
           <div class="mt-12 grid sm:grid-cols-3 gap-6">
-            <div class="aspect-[4/3] bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">主页</div>
-            <div class="aspect-[4/3] bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">联系人详情</div>
-            <div class="aspect-[4/3] bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-sm">Android</div>
+            {screenshots.map((s) => (
+              <div class="rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <img src={s.src} alt={s.alt} class="w-full h-auto" loading="lazy" />
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <!-- Download -->
       <section id="download" class="bg-gray-50 py-20">
         <div class="max-w-5xl mx-auto px-6">
           <h2 class="text-3xl font-bold text-center">下载</h2>
-          <p class="mt-4 text-center text-gray-600 text-sm">所有版本发布在 GitHub Releases，永久保留</p>
+          <p class="mt-4 text-center text-gray-600 text-sm">全平台覆盖，数据跨设备同步</p>
           <div class="mt-12 max-w-2xl mx-auto divide-y divide-gray-200 bg-white rounded-lg border border-gray-200">
             {downloads.map((d) => (
               <a
@@ -171,41 +159,16 @@ const downloads = [
               </a>
             ))}
           </div>
-          <p class="mt-6 text-center text-sm text-gray-500">
-            找不到适合你系统的版本？去
-            <a href={`https://github.com/${repo}/releases`} class="underline hover:text-gray-700" rel="noopener">Releases 页面</a>
-            查看全部历史版本。
-          </p>
-        </div>
-      </section>
-
-      <!-- Open source -->
-      <section class="py-20">
-        <div class="max-w-3xl mx-auto px-6 text-center">
-          <h2 class="text-3xl font-bold">永远开源</h2>
-          <p class="mt-4 text-gray-600 leading-relaxed">
-            Weavine 以 AGPL-3.0 协议开源。
-            任何人都可以查看、修改、部署自己的副本。
-            不会有一天突然收费、停服、改协议。
-          </p>
-          <a
-            href={`https://github.com/${repo}`}
-            class="mt-8 inline-flex items-center px-5 py-2.5 rounded-lg font-medium bg-gray-900 text-white hover:bg-gray-800 transition"
-            rel="noopener"
-          >
-            查看 GitHub 仓库 →
-          </a>
         </div>
       </section>
     </main>
 
     <footer class="border-t border-gray-100 py-8">
       <div class="max-w-5xl mx-auto px-6 text-sm text-gray-500 flex flex-col sm:flex-row gap-2 justify-between">
-        <div>© 2026 Weavine · AGPL-3.0</div>
+        <div>© 2026 Weavine</div>
         <div class="flex gap-4">
           <a href={`https://github.com/${repo}`} class="hover:text-gray-900" rel="noopener">GitHub</a>
           <a href={`https://github.com/${repo}/releases`} class="hover:text-gray-900" rel="noopener">Releases</a>
-          <a href={`https://github.com/${repo}/blob/main/LICENSE`} class="hover:text-gray-900" rel="noopener">License</a>
         </div>
       </div>
     </footer>
