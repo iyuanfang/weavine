@@ -1,6 +1,6 @@
 # Weavine 产品蓝图（Product Blueprint / Spec）
 
-> 版本：**v1.2（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-17 — v1.0.9 P0 修复 sweep**：(1) **P0-a 同步游标饿死** —— `commands/media.rs` `updated_at` 空格格式 `%Y-%m-%d %H:%M:%S` 与全栈 Z 格式 `%Y-%m-%dT%H:%M:%S%.3fZ` 混用 → 全局游标 `KEY_LAST_PUSHED_AT` 一旦推到 Z 行,后续空格格式 media 行 string-cmp 永远 `<` 游标,media 永不重推。已统一为 Z 格式。(2) **P0-b 桌面 avatar write-back** —— `upload_avatar`/`delete_avatar` 不更新 `Contact.avatar_storage_key`(服务端有 trigger 镜像,桌面无),已加手动写回镜像 `Contact` 行 + 修复 `get_avatar` 路径 user_id 双 join bug。(3) **桌面头像/名片图渲染** —— `register_uri_scheme_protocol("files")` 接管 `files://localhost/files/{key}` 请求,从 `data_dir()` 服务;`TauriAdapter.baseUrl='files://localhost'` 让所有 `avatarUrlFor`/`cardImageUrl` 命中协议。(4) **server `now_str()` Z 统一** —— `handlers/mod.rs:32` 改为 Z 格式,server↔client LWW 比较一致;`archive_sweep`/`archive`/`cadence_server`/`activation` 的 `DateTime::parse_from_rfc3339` 不再因 server 写空格失败。(5) **QuickCapture 静默失败** —— `submit()` `if (!userId) return;` 改为显式 `setError('本地用户尚未就绪')`,E2E quick-capture ×3 全绿。(6) **ContactDetail avatar 错误透出** —— `err instanceof Error ? err.message : String(err)`,Tauri v2 invoke 拒绝时返 raw Rust string 不再吞成通用文案。(7) **Re-OCR 入口从 ContactDetail 移到 ContactEdit** —— 扫描结果填入表单由用户确认(§7 Q9 拍板 2026-08-17)。**§11.5.6 Q4 部分启用**:FREE quota 20→100/天,TRIAL 50,PRO 不限,仅匿名 device_key 路径生效。**状态:v1.0.9 已发布(tag v1.0.9,commit e38762f,2026-08-17,Phase 2.7 bugfix sweep 全部落地);P2/P3 与 #16–#20 待排期**
+> 版本：**v1.2（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-17 — v1.0.9 P0 修复 sweep**：(1) **P0-a 同步游标饿死** —— `commands/media.rs` `updated_at` 空格格式 `%Y-%m-%d %H:%M:%S` 与全栈 Z 格式 `%Y-%m-%dT%H:%M:%S%.3fZ` 混用 → 全局游标 `KEY_LAST_PUSHED_AT` 一旦推到 Z 行,后续空格格式 media 行 string-cmp 永远 `<` 游标,media 永不重推。已统一为 Z 格式。(2) **P0-b 桌面 avatar write-back** —— `upload_avatar`/`delete_avatar` 不更新 `Contact.avatar_storage_key`(服务端有 trigger 镜像,桌面无),已加手动写回镜像 `Contact` 行 + 修复 `get_avatar` 路径 user_id 双 join bug。(3) **桌面头像/名片图渲染** —— `register_uri_scheme_protocol("files")` 接管 `files://localhost/files/{key}` 请求,从 `data_dir()` 服务;`TauriAdapter.baseUrl='files://localhost'` 让所有 `avatarUrlFor`/`cardImageUrl` 命中协议。(4) **server `now_str()` Z 统一** —— `handlers/mod.rs:32` 改为 Z 格式,server↔client LWW 比较一致;`archive_sweep`/`archive`/`cadence_server`/`activation` 的 `DateTime::parse_from_rfc3339` 不再因 server 写空格失败。(5) **QuickCapture 静默失败** —— `submit()` `if (!userId) return;` 改为显式 `setError('本地用户尚未就绪')`,E2E quick-capture ×3 全绿。(6) **ContactDetail avatar 错误透出** —— `err instanceof Error ? err.message : String(err)`,Tauri v2 invoke 拒绝时返 raw Rust string 不再吞成通用文案。(7) **Re-OCR 入口从 ContactDetail 移到 ContactEdit** —— 扫描结果填入表单由用户确认(§7 Q9 拍板 2026-08-17)。**§11.5.6 Q4 部分启用**:FREE quota 20→100/天,TRIAL 50,PRO 不限,仅匿名 device_key 路径生效。**状态:v1.0.9 已发布(tag v1.0.9,commit e38762f,2026-08-17,Phase 2.7 bugfix sweep 全部落地);P2/P3 与 #16–#20 待排期** **2026-08-18 增补 (8)(9)**:(8) **Windows/Android 头像不显示(裁剪正常但最终不换)** —— Tauri v2 自定义协议跨平台映射不同:macOS/Linux=`files://localhost/<path>`,Windows(WebView2)/Android(WebView)=`http://files.localhost/<path>`;v1.0.9 的 `TauriAdapter.baseUrl='files://localhost'` 仅在 macOS/Linux 生效,Windows/Android 上 `<img>` 加载失败回退首字母。已改 `filesBaseUrl()` 按 UA 区分。(9) **Android 麦克风授权后仍报无权限** —— `AndroidManifest.xml` 只声明 INTERNET,`RustWebChromeClient.onPermissionRequest` 的 RECORD_AUDIO 运行时请求被系统自动拒绝(部分 OEM 仍弹窗但回调 denied);已在 manifest 补 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`/`CAMERA`。**注意:`src-tauri/gen/` 在 .gitignore 中,manifest 修改不入 git,重克隆后需 `tauri android init` 重新补权限(建议把权限清单记入部署文档)** **2026-08-18 增补 (10) Android 录音"说话没反应"**:`voice.ts` `recordAudio` 的"warm-up"实现把 `stream.getTracks().forEach(t => t.stop())` 立即关掉了所有音频轨道,返回的是**已停止的 stream** → `MediaRecorder` 拿到死流 → `ondataavailable` 不出数据 → onstop 产出空 blob → 服务端 400 "empty audio"(被 `.catch(fail)` 吞成 setError,用户感知为"没反应")。已改为**延迟 200ms 再 `recorder.start()`**(正确 warm-up,不动 track),并对 `new MediaRecorder` 包 try/catch 让"NotSupported"等错误透出而非被通用文案吞掉。**残留风险**:Android System WebView 的 MediaRecorder 对纯音频流支持有限,若修复后仍产空 blob/NotSupportedError,则需按 §3.5/§7 拍板改用 Android 原生 SpeechRecognizer 插件(当前代码违背该拍板,走的是 MediaRecorder+云端 whisper)。
 > **产品蓝图（唯一权威）**：本文档是 Weavine 的**唯一产品蓝图**。所有需求设计、状态调整、平台策略、中国特性、技术债均回写此处，不再创建独立 spec 文件。文档结构一旦建立保持稳定，后续只追加章节、不重排结构。
 > **维护约定（living spec）**：本文档为活文档。每次需求变动须回写本节并更新上方「最近更新」日期；对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下，与 spec 编号（#1–#20）一一对应，便于持续跟踪。
 > **拍板溯源**：§3.5 子系统设计的所有关键决策（解析引擎选型、节奏模型、范围、Android 验证方式）来源于 2026-08-09 brainstorming 会话，详见各小节顶部加粗的「拍板结论」标注。
@@ -175,7 +175,7 @@ relation_type × role 枚举:
 
 - 联系人与用户均可设头像；列表/详情/图谱节点均展示。
 - 支持上传 + 首字母/色块兜底；移动端可调用相机。
-  **依赖**：无（#4 强烈建议先有）。**验收**：可上传/更换头像；在列表与图谱节点正确显示。（已实现：Media 表 + `/api/media` 上传 + 裁剪 modal + server 持久化 + 图谱节点头像 + 首字母兜底；跨端同步已闭环 §5.7；**v1.0.9 补齐桌面渲染**：`upload_avatar`/`delete_avatar` 显式回写 `Contact.avatar_storage_key`/`avatar_mime`(桌面无 DB trigger,手动镜像)；`get_avatar` 路径修 user_id 双 join bug；Tauri 注册 `files://` 自定义协议 + `TauriAdapter.baseUrl='files://localhost'` 解决桌面 WebView `/files/{key}` 404 问题）
+  **依赖**：无（#4 强烈建议先有）。**验收**：可上传/更换头像；在列表与图谱节点正确显示。（已实现：Media 表 + `/api/media` 上传 + 裁剪 modal + server 持久化 + 图谱节点头像 + 首字母兜底；跨端同步已闭环 §5.7；**v1.0.9 补齐桌面渲染**：`upload_avatar`/`delete_avatar` 显式回写 `Contact.avatar_storage_key`/`avatar_mime`(桌面无 DB trigger,手动镜像)；`get_avatar` 路径修 user_id 双 join bug；Tauri 注册 `files://` 自定义协议 + `TauriAdapter.baseUrl='files://localhost'` 解决桌面 WebView `/files/{key}` 404 问题——**该写法仅对 macOS/Linux 生效；2026-08-18 修正：WebView2/Android WebView 下自定义协议映射为 `http://files.localhost/<path>`，`tauri.ts` 已改 `filesBaseUrl()` 按 UA 区分（Windows/Android→`http://files.localhost`，mac/Linux→`files://localhost`）**）
 
 #### ○ #13 手机端语音快速捕获（🟢 已实施，详见 §3.5）
 
@@ -225,7 +225,7 @@ relation_type × role 枚举:
 
 - ✅ Web（5181）+ Desktop（Tauri macOS/Windows/Linux）+ Android（Tauri APK，模拟器验证）
 - ✅ Ctrl+K 全局面板（Web/Desktop），Android 用浮动 FAB
-- ✅ **语音输入**：Desktop（macOS/Windows）+ Web 走 Web Speech API；**Android 走 Tauri 原生 plugin**（`tauri-plugin-android-speechrecognition`，D3 拍板）
+- ✅ **语音输入**：Web 走 Web Speech API（国内实测可用：Safari/Chrome 直连）+ 服务端 whisper REST `/voice` 兜底；**Desktop（macOS/Windows/Linux）与 Android 走 sherpa-onnx 端上 ASR**（Rust 核心共享，详见 §11.6 语音识别架构定稿）
 - ✅ 一句话创建：**日程 / 待办 / 互动**（三件事）
 - ✅ 本地确定性解析（规则 + chrono + 联系人模糊匹配）
 - ✅ #14 节奏提醒：**亲密 14 天 / 重要 45 天，普通不提醒**；**owner = 端上 first-party + Server**(为 Web) + invitation token 去重(B2 拍板)
@@ -237,7 +237,7 @@ relation_type × role 枚举:
 │  UI 层                                              │
 │  Web:   <QuickCapture/>  React + 全局快捷键 hook    │
 │  Desk:  同上, Tauri globalShortcut (系统级 Ctrl+K)   │
-│  Andr:  浮动 FAB + Web Speech API                   │
+│  Andr:  浮动 FAB + sherpa-onnx 端上 ASR            │
 └─────────────────────────────────────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────────────┐
@@ -355,7 +355,7 @@ fn classify_kind(s: &str) -> (Kind, f32) {
 **Android**（浮动 FAB）：
 
 - 全屏面板（同上），底部多一个麦克风按钮
-- **长按麦克风** → 录音 → 转文字（**Tauri 原生 plugin**：`tauri-plugin-android-speechrecognition` + `android.permission.RECORD_AUDIO` + `SpeechRecognizer.createSpeechRecognizer`；非 Web Speech API，因 Android WebView 不支持）→ 自动填入输入框
+- **长按麦克风** → 录音 → 转文字（**sherpa-onnx 端上 ASR**，Rust command `recognize_voice_local`；非 Web Speech API，因 Android WebView 国内连不上 Google，详见 §11.6）→ 自动填入输入框
 
 > **v1.0.9 UX 变更**：名片扫描 / 重新拍名片入口从 `ContactDetail`（只读查看页）移到 `ContactEdit`（编辑页）。理由：扫描结果是草稿，须用户确认入库（详见 §7 Q9 拍板）。`ContactDetail` 顶部 `📷 重新拍名片` 按钮 v1.0.9 移除。QuickCapture 提交逻辑 v1.0.9 修复：`submit()` 在 `userId` 尚未加载时由静默 return 改为显式错误 `setError('本地用户尚未就绪')`。
 
@@ -801,7 +801,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | --- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ---- |
 | **B** | **节奏提醒「重复弹」** — 单一 owner 设计                                                  | **B2:端上 first-party**：桌面/Android 各自 SQLite 算(为本地)、Server 算(为 Web)。reminder 通过 invitation token 跨端去重(§3.5.6)。代价:多套实现 + 协调协议,实施量约 B1 的 2-3 倍,换取 offline-first + 数据所有权。 | ✅ 已实施（Task 6+10） |
 | **C** | **桌面端 cadence 代码错用 PG `Pool`** — 双栈分界未明示                                       | **跟随 B2**:cadence 计算需两套实现 —— server 走 sqlx::PgPool,桌面/Android 走 rusqlite::Connection。同一 Rust trait 抽象,内部各自执行。                                  | ✅ 已实施（Task 4-6） |
-| **D** | **语音输入押宝 Web Speech API 不成立** — Android WebView 不支持 SpeechRecognition | **D3:按端能力选最稳** —— Desktop macOS/Windows + Web 走 Web Speech API(成熟零成本);Android 走 Tauri 原生 plugin(`tauri-plugin-android-speechrecognition` + `android.permission.RECORD_AUDIO` + `SpeechRecognizer.createSpeechRecognizer`)。whisper.cpp 留作 #10 远期选项。 | ✅ 已实施（Task 9，实际改为 Web Speech API + 降级） |
+| **D** | **语音输入押宝 Web Speech API 不成立** — Android WebView 不支持 SpeechRecognition | **D3:按端能力选最稳** —— Desktop macOS/Windows + Web 走 Web Speech API(成熟零成本);Android 走 Tauri 原生 plugin(`tauri-plugin-android-speechrecognition` + `android.permission.RECORD_AUDIO` + `SpeechRecognizer.createSpeechRecognizer`)。whisper.cpp 留作 #10 远期选项。**（Android 方案于 v1.0.19 起演进为 sherpa-onnx 端上 ASR，弃用原生 SpeechRecognizer plugin，详见 §11.6）** | ✅ 已实施；2026-08-20 演进为端上 sherpa-onnx（见 §11.6） |
 
 > **实施前置**:以上 3 项已拍板。下一步:writing-plans 阶段把 §3.5.5/§3.5.6/§3.5.4 落地为具体模块路径与接口签名(invitation token 协议、cadence trait 抽象、speech plugin 集成)。
 
@@ -834,7 +834,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | #8  | 提醒声音            | P3  | ✅ 已实现（Settings + poller + WebAudio）                          |
 | #10 | 移动端小模型 MCP      | P3  | ⬜                                                            |
 | #2  | 合影取头像           | P3  | ⬜                                                            |
-| #13 | 手机端语音快速捕获       | P1  | 🟢 已实施（Web Speech API + QuickFab，详见 §3.5）；Android 降级为手动输入；**v1.0.9 修复 QuickCapture `submit()` `userId` 未就绪时静默 return → 显式 `setError('本地用户尚未就绪')`**（e2e quick-capture ×3 全绿） |
+| #13 | 手机端语音快速捕获       | P1  | 🟢 已实施（Web 走 Web Speech API + QuickFab，Android 走 sherpa-onnx 端上 ASR，详见 §3.5/§11.6）；**v1.0.9 修复 QuickCapture `submit()` `userId` 未就绪时静默 return → 显式 `setError('本地用户尚未就绪')`**（e2e quick-capture ×3 全绿） |
 
 **中国特性新增需求（2026-08-09，详见 §11；每日摘要已排除）：**
 
@@ -1108,3 +1108,386 @@ extract_endpoint_auth() -> EndpointAuth
 *本文档（工作区维护版）与项目根目录 `Weavine-产品需求Spec.md` 已合并统一（2026-08-09）：以本文档为真相源，吸收项目根目录版「✅ 全部落地」的代码复查结论（git HEAD `4b701e4`，含 §5.7 同步白名单修复），并保留本文档独有的中国市场原则（§11）、#13–#20、排除每日摘要、§10 平台策略，以及 §5.7 同步白名单断链（P0）记录（已于 2026-08-09 修复）。对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下。*
 
 *2026-08-09 追加：本文档升格为 **产品蓝图**（v1.1），锁定为唯一权威需求来源；§3.5「快速捕获与节奏中枢」子系统设计（合并 #13 / #14 / #15，跨端 Ctrl+K + Android 语音 + 节奏提醒，亲密 14 / 重要 45）已批准，进入 Phase 2.5 实施。所有后续需求、状态调整、平台策略、中国特性、技术债均回写本文档，不再创建独立 spec 文件。拍板溯源详见 §7.1。*
+
+---
+
+## 11.6 语音识别架构定稿（2026-08-20 拍板，国内为主市场）
+
+> 演进溯源：D3（2026-08-09）原定 Android 走 `tauri-plugin-android-speechrecognition` 原生 plugin；v1.0.19 起实施演进为 **sherpa-onnx 端上 ASR**（国行无 GMS、原生 SpeechRecognizer 不可用），本节约为当前权威结论。
+
+### 11.6.1 分层架构（按端能力选最稳）
+
+| 端 | 主路径 | 兜底 | 理由 |
+| --- | --- | --- | --- |
+| **Web** | Web Speech API（国内实测可用：Safari 走 Apple 后端 / Chrome 代理直连 Google） | 服务端 whisper REST `/voice` | 零成本、准；墙内/不支持浏览器回退服务端（修 #46） |
+| **Desktop（Win/Mac/Linux）** | sherpa-onnx 端上（Rust command，离线、零服务端成本、无 Google 依赖） | 服务端 whisper | Tauri 原生壳能跑端上；比 Web Speech 更贴 offline-first |
+| **Android** | 同一套 Rust 核心（编译 android target）端上 sherpa-onnx | 服务端 whisper | 国行无 GMS 无法用 Web Speech / 原生 SpeechRecognizer |
+| **统一** | — | 服务端 whisper 始终保留 | 长录音/噪声/低端机/模型未下载时降级 |
+
+> **明确不采用**：原生 `SpeechRecognizer`（国行 GMS 不可用）、纯 Web Speech 作全端主路径（国内墙 + 非离线 + Google 隐私依赖）。
+
+### 11.6.2 ASR 模型拍板：SenseVoice int8 主档 + whisper tiny 兜底
+
+- **主档模型**：`sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17`（阿里达摩院，非自回归 CTC，中英日韩粤自动检测）。
+  - 中文准确率、标点、ITN 数字归一化（"一百二"→"120"）显著优于 Whisper tiny；推理更快；附赠情感/音频事件标签。
+  - 启用 `use_itn=true` 提升落库文本质量。
+- **低端机兜底**：≤3GB RAM 设备跑 239MB 模型有压力 → 保留 whisper tiny（75MB）作低档 fallback。
+- **体积/内存代价**：SenseVoice int8 ~239MB、运行内存 ~400MB；首次使用**按需下载**，不打进 APK。
+- **许可证**：FunASR Model License v1.1（免费可用，商用需保留署名/声明）。
+
+### 11.6.3 模型下载源（国内）
+
+- **国内源 = 魔搭社区 ModelScope（modelscope.cn）**，避免 GitHub releases 被墙。
+- 推荐仓库（sherpa-onnx 转换版，weavine 用此）：`Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17`（含 `model.int8.onnx` 239MB + `tokens.txt`）。
+- 下载方式（任选）：
+  - 单文件直链：`https://modelscope.cn/models/Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/master/model.int8.onnx` + 同目录 `tokens.txt`
+  - `git clone https://www.modelscope.cn/Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.git`
+  - ModelScope SDK：`snapshot_download('Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17')`
+- **约束**：sherpa-onnx 要求 `model.int8.onnx` 与 `tokens.txt` **同目录**；下载逻辑写进 `voice_local.rs` 模型配置，落 App 私有目录。
+
+### 11.6.4 Android 启动闪退修复记（v1.0.x）
+
+- 现象：Android build 成功但打开即闪退。
+- 根因 1：`MainActivity.kt` 被误删（manifest 引用 `.MainActivity` 但源码缺失 → ClassNotFoundException）。已恢复空壳 `class MainActivity : TauriActivity()`。
+- 根因 2：sherpa 的 3 个 .so（`libsherpa-onnx-c-api.so` / `libonnxruntime.so` / `libc++_shared.so`）未打进 APK（build.rs 拷贝目录错位），`Rust.kt` 启动 `loadLibrary` 失败。已修拷贝逻辑。
+- **遗留**：`gen/` 在 gitignore → `MainActivity.kt` 等手写文件无版本保护，建议在仓库留副本 + 构建脚本拷贝（或 `git add -f`），避免再次误删复现。
+
+## 12. 产品调研与新功能提案（2026-08-17 独立撰写，待拍板）
+
+> **状态**：草稿，待用户回来 review 后进入 Phase 3 实施。**不发布新版。**
+
+### 12.1 调研背景
+
+- **当前实现面**（v1.0.11，git HEAD `877ade7`）：
+  - **27 routes**（`apps/web-spa/src/routes-config.tsx` 唯一真相源）：Login、Today、Contacts × 5、Calendar、Events × 3、Actions × 4、Projects × 4、InteractionDetail、Reminders、Tags × 2、Search、Settings × 2、Archive
+  - **23 components**：AppShell / Avatar / AvatarCropModal / AvatarViewModal / CardImageViewModal / CardScanner / CategoryPicker / ContactBadge / ContactMultiPicker / ImportancePicker / PageHeader / PickerEmptyState / Popover / PriorityPicker / ProjectBadge / QuickCapture / QuickFab / ReminderToast / RescanCardModal / SearchablePicker / StatusPicker / TagPicker / categoryPresets
+  - **22 server handlers**（`server/src/handlers/`）：action / activation / api_key / archive / auth / contact / diagnostic / event / graph / interaction / media / mod / ocr / project / project_contact / quick / reminder / search / setting / storage / sync / tag / voice
+- **已完成需求**：§8 显示 #3 / #12 P0；#4 / #5 / #11 / #1 / #13 / #14 / #15 P1；#8 P3。
+- **未实现需求**：§8 P2 #9 #6 + #16 #17 #18；P3 #10 #2 #19 #20。
+- **全盘回归**（2026-08-17）：`cargo test src-tauri --lib` 37/37、`cargo test server --bins` 11/11、`npx tsc --noEmit` clean、`npx playwright test` 12/12 全绿。
+
+### 12.2 现状评估（按 PRM 核心竞争力）
+
+| 维度 | 状态 | 评价 |
+| --- | --- | --- |
+| **关系捕获** | ✅ 双向已闭环（#3 关系模型 + 关系图谱 #4） | 核心壁垒已建 |
+| **快速记录** | ✅ QuickCapture 已落地（Ctrl+K + Android 语音 + 时间 tie-breaker v1.0.11） | 体验顺 |
+| **节奏提醒** | ✅ Cadence Hub + 原生通知（§3.6 + §3.5） | 留存主力 |
+| **多端同步** | ✅ sync v0.2.0b 已闭环（F1–F6） | 跨端无感 |
+| **本地导入** | ❌ 完全缺失（#16 未做） | 数据入口短板 |
+| **AI 教练 / 简报** | ❌ 完全缺失（#17 #18 #20 未做） | 高价值、未启程 |
+| **数据可视化** | 🟡 关系图谱有、机会看板 / 漏斗无（#19 未做） | 决策辅助空白 |
+| **协作 / 团队** | ❌ 明确不做（单租户个人 CRM 定位） | 不在路线 |
+
+### 12.3 调研方法
+
+调研覆盖三类来源：
+1. **代码现场**：routes/components/services/business 目录结构 + 已有 TODO/FIXME 注释 + 最近 30 天 commit message 中的用户反馈
+2. **spec 现有 backlog**：§3 P2/P3 编号 #6 #9 #10 #2 #16 #17 #18 #19 #20 重新评估依赖、价值、实现路径
+3. **同类产品参考**（PRM / 个人 CRM / 网络笔记）：
+   - **Monica CRM**（个人关系管理标杆）：日记流 / 提醒 / 礼物建议 / 关系类型标签
+   - **Clay**（关系网络图谱）：自动联系频率建议 / 关系健康度 / 上下文卡片
+   - **Notion / Roam Research**（双链笔记）：块引用、嵌入、tag、backlink
+   - **Day One / Journey**（日记）：每日回顾 + 时间轴 + 模板
+   - **HubSpot / Salesforce 个人版**（B2C CRM）：阶段、漏斗、活动日志
+   - **微信 / 飞书**（中国 IM 上下文）：朋友圈、聊天记录、通话记录、文件传输
+   - **Notion Calendar / Cron / Reclaim**（时间块）：自动时间块 + 节奏建议
+
+### 12.4 新功能提案（按 P0/P1/P2/P3 排序，需用户拍板）
+
+#### 🔴 优先级：数据入口（短期内必做，否则用户自己流失）
+
+##### 🆕 #21 通讯录 + 通话记录本地导入（Android）
+
+- **价值**：补"微信黑盒"数据缺口，是用户最强烈的导入诉求。
+- **核心 UX**：Android 设置 → 数据导入 → 授权 Contacts + CallLog → 后台增量同步到本地 Contact（按 phone last-4 fuzzy match 去重）。
+- **依赖**：Android `READ_CONTACTS` / `READ_CALL_LOG` 权限（已在 manifest？需查）。
+- **工作量**：~5 人/日（含权限流 + 去重 + UI + e2e）。
+- **风险**：Android 11+ Scoped Storage + Call Log 权限收紧，需降级方案（仅 Contacts）。
+- **关联**：合并现有 #16（提案相同，合二为一）。
+
+##### 🆕 #22 名片扫描 + 群发（卡片导入多联系人）
+
+- **价值**：会议上收到一堆名片，一次拍下来自动识别多个联系人的字段，减少重复录入。
+- **核心 UX**：拍摄含多张名片的图片 → server 端 multi-card OCR（切割 + 识别 + 字段合并）→ 弹出多联系人确认面板 → 批量创建。
+- **依赖**：Tesseract multi-region + 卡片检测算法（YOLO 或简单矩形检测）。
+- **工作量**：~8 人/日（模型训练 / 标注数据 / server 集成 / UI 流程）。
+- **风险**：OCR 精度依赖训练数据，先用规则矩形检测 + 手工分割兜底。
+- **关联**：扩展现有 #11 名片 OCR（已实现单张）。
+
+##### 🆕 #23 微信 / 飞书聊天记录导入（解析 SQLite）
+
+- **价值**：用户最大诉求：把历史聊天数据落入 CRM。
+- **核心 UX**：用户从手机导出聊天记录（微信 WeChat Backup / 飞书 export）→ 在桌面端解析 → 自动按 contact + 时间匹配到 Interaction。
+- **依赖**：微信 DB 解密（EnMicroMsg.db 密钥推导，需用户输入 IMEI 或 root），飞书导出 JSON。
+- **工作量**：~12 人/日（解密 + 解析 + 匹配 + UI），且有法律灰色地带。
+- **风险**⚠️：微信备份解密可能违反微信 ToS，且密钥推导依赖用户手机 IMEI（隐私敏感）。**建议暂不做，提供导出 .txt 的手动导入路径**（用户合规风险自负）。
+- **关联**：替代 #18（聊天洞察）的数据源。
+
+#### 🟠 优先级：智能化（产品差异化）
+
+##### 🆕 #24 关系健康度评分（每日计算 + 卡片展示）
+
+- **价值**：让用户"看见"哪些关系在降温，主动出击。
+- **核心 UX**：ContactDetail 顶部加一个 "健康度" 进度条 + 三色（绿/黄/红）+ Tooltip 解释因子（最近互动距今 / 频率 vs Cadence 目标 / 上次情绪 / 关系强度）。
+- **依赖**：本地计算，无 server 依赖。
+- **工作量**：~3 人/日（公式 + UI + e2e）。
+- **数据点**：`last_interaction_at` / `cadence_target_days` / `interaction_count_30d` / `emotional_sentiment_avg`（#25 之后才有）。
+- **关联**：与 Cadence Hub（§3.5.5）联动，节奏提醒的"为什么联系"原因。
+
+##### 🆕 #25 互动情绪分析（NLP 标签）
+
+- **价值**：在 Interaction 上自动打"积极 / 中性 / 消极"标签，长期看关系走向。
+- **核心 UX**：Interaction 创建后，server 跑轻量 sentiment 模型（中文用 snowNLP / 英文用 VADER）→ 返回 label + score → UI 显示小图标。
+- **依赖**：server 端集成 NLP 库，或客户端调用 ONNX 模型（桌面 / Android 可本地）。
+- **工作量**：~5 人/日（模型集成 + API + UI）。
+- **风险**：模型准确度（中文口语化 + emoji），前期可仅作辅助标签。
+- **关联**：#24 健康度评分的输入因子。
+
+##### 🆕 #26 AI 会议简报（与 #17 合并）
+
+- **价值**：开会前 30 分钟弹一条 "你与张三的 5 次互动 + 最近的 3 个话题 + 待跟进项"。
+- **核心 UX**：EventEdit / EventDetail 加 "生成简报" 按钮 → server 端 fetch 该 contact 的最近 N 个 Interaction + Action → LLM 总结（用本地 Ollama 或 server 端 GPT）→ 渲染到卡片。
+- **依赖**：本地 LLM（Ollama / llama.cpp）或 server 端 API key。
+- **工作量**：~6 人/日（LLM 集成 + prompt 设计 + 卡片 UI）。
+- **关联**：合并现有 #17。
+
+#### 🟡 优先级：生产力
+
+##### 🆕 #27 联系人导出（vCard / CSV）
+
+- **价值**：本地 CRM 用户最基础诉求：能导出来（迁移、备份、跨工具）。
+- **核心 UX**：设置 → 数据 → 导出全部联系人 → 下载 .vcf（vCard 3.0 / 4.0）或 .csv。
+- **依赖**：无。
+- **工作量**：~1 人/日（vCard 序列化 + 触发下载 + e2e）。
+- **风险**：无。
+
+##### 🆕 #28 联系人分组 / 列表（标签之上的更结构化分组）
+
+- **价值**：Tag 是 flat，Group 是 nested（"客户 > A 公司 > 张三"）。许多用户已有 mental model。
+- **核心 UX**：ContactNew / ContactEdit 加 "分组" Picker（树状），ContactList 加按分组筛选。
+- **依赖**：新建 `contact_group` 表 + 多对多关联表 `contact_group_member`。
+- **工作量**：~4 人/日（schema + UI + sync + e2e）。
+- **风险**：与 Tag 功能重叠，需拍板：Tag 是属性、Group 是容器（互斥？）还是共存。
+- **建议拍板问题**（§7 新增 Q）：Tag vs Group 边界。
+
+##### 🆕 #29 快速记录模板（场景化预填）
+
+- **价值**：销售 / 招聘 / 投资等场景有固定结构，预填字段减少认知负担。
+- **核心 UX**：QuickCapture 加 "模板" 按钮 → 选择模板（如"销售线索"= 联系人 + 公司 + 需求 + 预算 + 下一步）→ 预填 textarea → 用户编辑 → 提交。
+- **依赖**：新建 `quick_capture_template` 表。
+- **工作量**：~3 人/日（schema + UI + 模板插入 pipeline）。
+- **关联**：扩展 §3.5 QuickCapture 子系统。
+
+##### 🆕 #30 关系图谱增强（影响力 / 中心度）
+
+- **价值**：让用户看到"谁是网络核心节点"（帮用户识别关键人脉）。
+- **核心 UX**：ContactGraph 加开关："显示中心度" → 节点大小/颜色映射 degree / betweenness centrality。
+- **依赖**：本地算法（networkx 风格），无 server。
+- **工作量**：~3 人/日（算法 + UI + e2e）。
+- **关联**：扩展现有 #4 关系图谱。
+
+#### ⚪ 优先级：实验性 / 远期
+
+##### 🆕 #31 联系人头像自动生成（字母 / 渐变色）
+
+- **价值**：用户没传头像时，显示当前 initials 的灰色头像（当前是 fallback），改成品牌感的字母渐变头像。
+- **核心 UX**：Avatar 组件 fallback 渲染：从姓名首字母 → 根据 hash 选择 12 色之一 → 圆形 + 渐变背景。
+- **依赖**：纯前端 CSS gradient。
+- **工作量**：~0.5 人/日。
+- **风险**：无。
+
+##### 🆕 #32 微信小程序入口（只读视图）
+
+- **价值**：用户手机上快速查看某个联系人的信息卡片（不用打开桌面 App）。
+- **核心 UX**：开发微信小程序 → 微信扫码登录 → 拉取云端数据 → 只读视图。
+- **依赖**：server API + 小程序开发 + 微信开放平台认证。
+- **工作量**：~10 人/日（含审核）。
+- **风险**：需企业认证 + 域名备案 + 微信审核（中国合规）。
+- **关联**：与 #9 云服务器选型联动。
+
+##### 🆕 #33 数据可视化仪表盘（个人 CRM 主页）
+
+- **价值**：让用户登录后第一眼看到"我的关系网络健康度"：联系人总数 / 本周新增 / 逾期未联系 / 情绪分布。
+- **核心 UX**：默认路由改到 `/dashboard`（原 `/contacts`）→ 4 个 KPI 卡片 + 趋势图。
+- **依赖**：聚合查询 + 简单图表库。
+- **工作量**：~5 人/日。
+
+### 12.5 实施路径建议（待拍板）
+
+如果用户批准，建议的 Phase 3 推进顺序（按 ROI 排序）：
+
+| 阶段 | 内容 | 估时 | 价值 |
+| --- | --- | --- | --- |
+| **Phase 3.1** | #27 导出 + #31 字母头像 + #24 健康度评分 | ~5 人/日 | 快速胜利、提升日常使用 |
+| **Phase 3.2** | #21 通讯录导入 + #22 群名片扫描 | ~13 人/日 | 数据入口短板、补"微信黑盒" |
+| **Phase 3.3** | #25 情绪分析 + #26 AI 会议简报（LLM 集成） | ~11 人/日 | 智能化跃迁、产品差异化 |
+| **Phase 3.4** | #28 分组 + #29 模板 + #30 图谱增强 | ~10 人/日 | 生产力与可视化 |
+| **Phase 3.5** | #23 微信聊天导入（合规审查后）+ #33 仪表盘 | ~17 人/日 | 长期主线 |
+
+合计 ~56 人/日（按一人/日 8h 算）。建议至少 Phase 3.1 + 3.2 优先，对应用户最强烈的"补数据"诉求。
+
+### 12.6 现有 P2/P3 backlog 重新评估（与新提案的关系）
+
+| 编号 | 现有描述 | 处理 |
+| --- | --- | --- |
+| #6 Onboarding + 套餐 | P2 暂缓 | **保留**，但前置条件是云服务器 (#9) + LLM (#26)。Phase 3.3 后启动。 |
+| #9 云服务器选型 | P2 | **前置**（#26 #32 都依赖）。建议先用 prod 已有的 `weavine.financialagent.cc`，暂不切。 |
+| #10 移动端小模型 MCP | P3 | **合并**进 #25（NLP 模型本地推理）。 |
+| #2 合影取头像 | P3 | **保留**但推迟到 Phase 3.4 之后，依赖 #1 头像已成熟。 |
+| #16 通话/通讯录本地导入 | P2 | **合并**为 #21（提案升级：通讯录 + 通话记录一起做）。 |
+| #17 会议准备简报 | P2 | **合并**为 #26（AI 简报 + LLM 集成）。 |
+| #18 引荐洞察 | P2 | **保留**到 Phase 3.3 后做，依赖 #26 LLM 基础设施。 |
+| #19 机会看板 | P3 | **保留**，但挪到 Phase 3.5。 |
+| #20 AI 教练 + 消息起草 | P3 | **合并**进 #26（LLM 集成是同一个技术栈）。 |
+
+### 12.7 不在本调研内（明确）
+
+- ❌ **多用户协作 / 共享空间** —— 与"个人 CRM"定位冲突，§10 已明确不做。
+- ❌ **第三方数据接入（LinkedIn / 微博 / Twitter）** —— 中国合规 + 数据驻留问题，且数据来源不稳定。
+- ❌ **AI 自动联系（自动发邮件 / 自动发微信）** —— 越权 + 体验糟糕 + 反 spam 法律风险。
+- ❌ **语音 / 视频通话集成** —— 不在产品边界内，交给专业工具。
+
+### 12.8 拍板记录（本节增项）
+
+待用户回来 review 后填写：
+- **Q10 调研范围是否覆盖足够？** → 用户拍板
+- **Q11 优先推进 Phase 3 哪些？** → 用户拍板
+- **Q12 #23 微信聊天导入是否做？合规审查？** → 用户拍板
+- **Q13 #28 Tag vs Group 边界怎么定？** → 用户拍板
+- **Q14 Phase 3 总节奏（每周 / 每月 / 一次性）？** → 用户拍板
+
+---
+
+## 13. 代码现场发现的 quick wins / 缺口（2026-08-17 自动巡检）
+
+> **状态**：与 §12 并列的"小而急"清单。**不发布新版**。来源于 `explore` 代理对全仓 `TODO/FIXME/console.log/stub/已知 bug` 扫描 + 直读 routes-config / handler 列表 / 平台差异文档。
+
+### 13.1 P1 — 数据安全与可用性（必做）
+
+##### 🆕 #34 sync boolean 翻译 bug 修复
+
+- **背景**：`src-tauri/tests/cloud_sync.rs:9-12` 注释里标注："Known issue: the second `sync_once` push trips a translate bug (`invalid input syntax for type boolean: ""`) when re-pushing seed rows. See TODO in src-tauri/src/sync/translate.rs for the boolean fix."
+- **风险**：二次推送种子数据会触发 sync 翻译层 type cast 异常 → 数据写入失败 → 可能静默丢数据。
+- **范围**：S1 — 修复 `sync/translate.rs::boolean_columns()`，加回归测试覆盖二次推送。
+
+##### 🆕 #35 Web PWA 云端 sync 缺失
+
+- **背景**：`apps/web-spa/src/lib/adapter/http.ts:450-455` —— `cloud = { status/login/logout/syncNow: () => Promise.reject(new Error('cloud sync is desktop-only')) }`。
+- **影响**：PWA 用户完全无法 sync。登录后服务起落本地可写但跨端不通。
+- **范围**：S2 — 4 个 endpoint 走 REST 调用 `/api/auth/*` + `/api/sync/*`。
+
+##### 🆕 #36 weavine-mcp lib 补全
+
+- **背景**：`weavine-mcp/src/lib.rs:1` 1 行 stub：`// stub — real implementation comes in Task 4`。
+- **影响**：MCP 二进制可跑但 lib crate 不可被其他 crate 依赖。
+- **范围**：S1 — 重导出内部模块。
+
+### 13.2 P2 — 用户可见的 papercut（一周内可做）
+
+##### 🆕 #37 生产环境 console.log 清扫
+
+- **背景**：5 文件 15+ 处 `console.log/warn/error` 留在生产代码：
+  - `routes/ContactDetail.tsx:168-197` — 7 处 `[avatar-pick]` / `[avatar-upload]` 日志
+  - `lib/adapter/http.ts:495-508` — 4 处 `[avatar-upload]` 日志
+  - `routes/Settings.tsx:407` — `[cloud sync]` result
+  - `lib/use-reminder-poller.ts:54,83,97` — 3 处 `console.warn`
+  - `routes/ContactNew.tsx:53` — `console.error('save card image failed:', e)`
+- **范围**：S1 — 删除或用 `if (import.meta.env.DEV) console.log(...)` 包住。
+
+##### 🆕 #38 桌面 adapter api_keys + graph 接入
+
+- **背景**：`apps/web-spa/src/lib/adapter/tauri.ts:387-405` —— 桌面端 `apiKeys` 和 `graph` 调 `Promise.reject('cloud-only/desktop-only')`。
+- **影响**：桌面用户看不到 API 密钥管理 + 关系图谱（虽然 #4 已实现但走的是 web REST）。
+- **范围**：S2 — 加 Tauri command（server handlers 已存在 `api_key.rs` / `graph.rs`）。
+
+##### 🆕 #39 /stats 路由 + 仪表盘
+
+- **背景**：
+  - README 列出 "Stats — a small dashboard so you can see at a glance: who you haven't talked to in 60 days, how many new contacts this month, tag distribution"
+  - 但 routes-config 没有 `/stats`，handler 列表没有 `stats.rs`（仅在 worktree `feat-overview-page` 分支存在）
+- **影响**：README 在撒谎。这是 §12 #33 仪表盘的低成本先期版（聚合查询 + 简单列表即可）。
+- **范围**：S2 — 加 `StatsPage` 路由 + 4 个聚合查询 + 简单列表展示。
+
+##### 🆕 #40 README / 营销文案刷新
+
+- **背景**：当前 `README.md`：
+  - "Latest release: v0.2.23" — 实际已 v1.0.11
+  - 平台尺寸：macOS DMG 6.9 MB / Windows MSI 7.9 MB / Linux DEB 6.9 MB / Android APK **64.6 MB** —— 实际 v1.0.8 MSI 6.89 MB / DMG 7.67 MB / DEB 8.91 MB / Android APK 24.19 MB（per-ABI split）
+  - "iOS — Tauri 2 has experimental iOS support; aiming for v0.3" — iOS 不在路线
+  - Roadmap 中 "Relationship graph — visual graph view" — 已落地（#4）
+  - "Stats — a small dashboard" — 未落地（见 #39）
+  - "Health score" — 列入长线 Roadmap，未落地（§12 #24）
+- **影响**：对外文档与实际产品不一致 → 用户期望偏差。
+- **范围**：S1 — 删除过时条款（iOS / Stats / Health score 移到 long-term），更新版本号 + 尺寸 + 平台列表。
+
+##### 🆕 #41 `api_key_crypto.rs:38` `panic!` 改 Result
+
+- **背景**：`panic!("WEAVINE_MASTER_KEY must decode to exactly 32 bytes")` —— 服务启动路径 panic。
+- **影响**：环境变量配错时整个进程崩，而不是优雅退出并打印错误。
+- **范围**：S1 — 返回 `Result`，main.rs 处理。
+
+##### 🆕 #42 静态 export 动态路由失败
+
+- **背景**：`/interactions/:id`、`/contacts/:id`、`/events/:id` 等动态路由在静态构建（web PWA）时会失败。
+- **影响**：影响 SEO / 离线 PWA 可访问性。
+- **范围**：S1 — 加 `generateStaticParams()` 或 fallback SPA shell。
+
+### 13.3 P3 — 移动端体验打磨（Phase 4 可挑）
+
+##### 🆕 #43 触屏目标尺寸审查（≥48dp）
+
+- **背景**：UI 假设鼠标点击，部分 tap target 可能 < 48dp。
+- **范围**：S2 — CSS 审查 + `@media (hover: none)` fallback。
+
+##### 🆕 #44 Android 推送通知
+
+- **背景**：移动端 reminder 当前只走 `tauri-plugin-notification`（Android 13+ 需 `POST_NOTIFICATIONS`）。
+- **影响**：用户可能关闭 in-app reminder 时错过提醒。
+- **范围**：S2 — 验证 manifest 权限 + Android 13+ 通知 channel 创建。
+
+##### 🆕 #45 iOS scaffold
+
+- **背景**：`docs/mobile-limitations.md` 标注 iOS 项目脚手架未建（需 macOS build host）。
+- **范围**：S3 — 需要 macOS + Tauri 2 iOS support。
+
+##### 🆕 #46 voice.ts:140 错误抛出 → Web 回退服务端 `/voice` REST（2026-08-20 修订）
+
+- **背景**：`lib/voice.ts:140` —— `throw new Error('云端语音识别仅在 Tauri 客户端可用')`。
+- **影响**：Web 用户若代码走到云端分支会抛 JS 异常；且 Web 当前缺失对 Web Speech 不可用的优雅降级。
+- **范围**：S1 — 不再弹"请用桌面端"，改为 **Web 走不通 Web Speech 时回退到服务端 whisper REST `/voice`**（服务端 endpoint 已存在，见 §13.4 `ocr/voice` 行）；纯 Web 用户也能在国内墙内环境用语音。音频过服务端属隐私取舍，已接受。
+
+### 13.4 跨栈一致性补全（与 §13.2 P2 重叠，已并列）
+
+| 项 | Desktop | Server | Web | 缺什么 |
+| --- | --- | --- | --- | --- |
+| `cloud.sync*` | ✅ Tauri invoke | ✅ endpoint | ❌ reject | **#35** Web PWA |
+| `api_keys.*` | ❌ reject | ✅ endpoint | ✅ REST | **#38** Desktop |
+| `graph.*` | ❌ reject | ✅ endpoint | ✅ REST | **#38** Desktop |
+| `ocr/voice` | ✅ invoke | ✅ endpoint | ✅ REST | OK |
+| `quick.parse` | ✅ local | ✅ endpoint | ✅ REST | OK |
+
+### 13.5 实施优先级（推荐 Sprint）
+
+| 优先级 | 项 | 估时 | 风险 |
+| --- | --- | --- | --- |
+| 🔴 本周 | #34 sync boolean bug 修 | 0.5d | 数据安全 |
+| 🔴 本周 | #40 README 刷新 | 0.25d | 营销一致性 |
+| 🟠 下周 | #37 console.log 清扫 | 0.25d | 噪音清理 |
+| 🟠 下周 | #41 panic → Result | 0.1d | 服务稳定 |
+| 🟠 下周 | #36 weavine-mcp lib | 0.5d | 工具链 |
+| 🟡 Phase 3 起步 | #35 Web PWA sync | 2d | 路线补齐 |
+| 🟡 Phase 3 起步 | #39 /stats 仪表盘 | 2d | README 兑现 |
+| 🟡 Phase 3 起步 | #38 Desktop adapter 接通 | 1d | 桌面体验 |
+| ⚪ 移动打磨 | #42 #43 #44 #46 | 各 0.5d | 移动体验 |
+| ⚪ 远期 | #45 iOS | 10d | 平台扩展 |
+
+合计 P1+P2 ≈ **6.5 人/日**，可在一周内全部清掉，作为 Phase 3 的"健康基础"。
+
+### 13.6 拍板记录（本节增项）
+
+待用户回来 review 后填写：
+- **Q15 #34 sync boolean bug 是否本周修？** → 用户拍板
+- **Q16 #39 仪表盘是否单独做，还是合并到 §12 #33 Phase 3.5？** → 用户拍板
+- **Q17 #40 README 刷新是否一起做？** → 用户拍板
+- **Q18 iOS 路线是否继续（#45）？** → 用户拍板

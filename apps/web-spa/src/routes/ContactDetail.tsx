@@ -494,13 +494,18 @@ export function ContactDetail() {
 
         <form onSubmit={handleCreateInteraction} className="card" style={{ marginBottom: 12 }}>
           <div style={{ display: 'grid', gap: 10 }}>
-            <input
-              type="text"
+            <select
               className="input-sm"
-              placeholder="互动渠道（可选，如：微信、邮件）"
               value={interactionChannel}
               onChange={(e) => setInteractionChannel(e.target.value)}
-            />
+              data-testid="interaction-channel"
+            >
+              <option value="">渠道（可选）</option>
+              <option value="微信">微信</option>
+              <option value="电话">电话</option>
+              <option value="邮件">邮件</option>
+              <option value="见面">见面</option>
+            </select>
             <textarea
               className="input-base"
               placeholder="+ 记一笔这次互动…"
@@ -528,18 +533,26 @@ export function ContactDetail() {
         ) : (
           <div style={{ display: 'grid', gap: 6 }}>
             {interactions.map((i) => (
-              <div key={i.id} className="row-card">
+              <Link
+                key={i.id}
+                to={`/interactions/${i.id}?from=/contacts/${id}`}
+                className="row-card"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
                 <span style={{ fontSize: 'var(--text-lg)' }}>💬</span>
                 <span className="row-card__meta">
-                  {new Date(i.occurred_at).toLocaleDateString('zh-CN', {
+                  {new Date(i.occurred_at).toLocaleString('zh-CN', {
                     month: 'numeric',
                     day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
                   })}
                 </span>
                 <span className="row-card__title">{i.summary}</span>
                 <InteractionSourceTag source={i.source} />
                 {i.channel && <span className="badge badge--muted">{i.channel}</span>}
-              </div>
+              </Link>
             ))}
           </div>
         )}
