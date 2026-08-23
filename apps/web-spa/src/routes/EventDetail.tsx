@@ -1,9 +1,10 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
+import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 
 function formatEventType(type: string | null | undefined): string {
@@ -15,7 +16,9 @@ function formatEventType(type: string | null | undefined): string {
 export function EventDetail() {
   const { id } = useParams() as { id: string };
   const adapter = useAdapter();
+  const userId = useUserId();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const fromParam = searchParams.get('from');
 
@@ -28,7 +31,13 @@ export function EventDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: (eventId: string) => adapter.events.delete(eventId),
-    onSuccess: () => navigate(fromParam || '/calendar'),
+    onSuccess: () => {
+      // Required: navigate() remounts Calendar but the cached
+      // ['events', userId] query is still fresh (staleTime: 30s), so the
+      // calendar would keep showing the deleted event until F5.
+      queryClient.invalidateQueries({ queryKey: ['events', userId] });
+      navigate(fromParam || '/calendar');
+    },
   });
 
   const handleDelete = () => {

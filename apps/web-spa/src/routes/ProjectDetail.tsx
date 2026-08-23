@@ -164,7 +164,13 @@ export function ProjectDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: () => adapter.projects.delete(id),
-    onSuccess: () => navigate(fromParam || '/projects'),
+    onSuccess: () => {
+      // Required: navigate() remounts ProjectsList but the cached
+      // ['projects', userId] query is still fresh (staleTime: 30s), so the
+      // list would keep showing the deleted row until F5.
+      queryClient.invalidateQueries({ queryKey: ['projects', userId] });
+      navigate(fromParam || '/projects');
+    },
   });
 
   const addContactMutation = useMutation({

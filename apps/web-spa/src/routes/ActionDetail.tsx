@@ -62,7 +62,13 @@ export function ActionDetail() {
 
   const deleteMutation = useMutation({
     mutationFn: (actionId: string) => adapter.actions.delete(actionId),
-    onSuccess: () => navigate(fromParam || '/actions'),
+    onSuccess: () => {
+      // Required: navigate() remounts ActionsList but the cached
+      // ['actions', userId] query is still fresh (staleTime: 30s), so the
+      // list would keep showing the deleted row until F5.
+      queryClient.invalidateQueries({ queryKey: ['actions', userId] });
+      navigate(fromParam || '/actions');
+    },
   });
 
   const handleDelete = () => {
