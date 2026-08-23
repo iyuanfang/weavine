@@ -24,17 +24,22 @@ pub async fn parse(
     State(pool): State<Arc<PgPool>>,
     Json(req): Json<ParseReq>,
 ) -> Result<Json<QuickItem>, (StatusCode, String)> {
-    let _auth = extract_auth(&headers, &pool).await?;
+    let auth = extract_auth(&headers, &pool).await?;
 
     let contacts: Vec<Contact> = if !req.contact_names.is_empty() {
+        // Scope contact lookup to the caller's user_id. Without this, any
+        // authenticated user could pass a nickname that exists on another
+        // account and have it resolved into a foreign contact_id in the
+        // parser response (cross-user nickname撞库).
         sqlx::query_as::<_, Contact>(
             "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
              notes, importance, last_interaction_at, keep_in_touch_cadence_days, \
              created_at, updated_at, \
              avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, \
              avatar_height::BIGINT AS avatar_height, avatar_alt_text \
-             FROM contact WHERE nickname = ANY($1)",
+             FROM contact WHERE user_id = $1 AND nickname = ANY($2)",
         )
+        .bind(&auth)
         .bind(&req.contact_names)
         .fetch_all(&*pool)
         .await

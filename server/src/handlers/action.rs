@@ -189,7 +189,15 @@ pub async fn update(
     if new_status == "done" {
         if let Some(ref contact_id) = new_contact_id {
             let iid = uuid::Uuid::new_v4().to_string();
-            let summary = body.get("title").and_then(|v| v.as_str()).unwrap_or(&prev_title).to_string();
+            // Guard against "" slipping past as_str().unwrap_or — an empty
+            // title from the body would otherwise become an empty interaction
+            // summary, silently destroying the auto-logged context.
+            let summary = body
+                .get("title")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(&prev_title)
+                .to_string();
             sqlx::query(
                 "INSERT INTO interaction (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
                  VALUES ($1,$2,$3,$4,NULL,$5,NULL,$6,'action',$4,$5)",
