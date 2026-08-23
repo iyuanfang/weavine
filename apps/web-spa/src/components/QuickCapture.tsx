@@ -5,6 +5,9 @@ import { createPortal } from 'react-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
+import { PickerEmptyState } from './PickerEmptyState';
+import { QuickCreateContact } from './QuickCreateContact';
+import { SearchablePicker } from './SearchablePicker';
 import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
 import type { VoiceRecordingHandle } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
@@ -69,20 +72,18 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [contactNames, setContactNames] = useState<string[]>([]);
   const [contactList, setContactList] = useState<Array<{ id: string; nickname: string; name?: string | null }>>([]);
-  const [contactSearch, setContactSearch] = useState('');
   const [editedDue, setEditedDue] = useState<string | null>(null);
-  const [editedContactId, setEditedContactId] = useState<string | null>(null);
-  const [editedContactLabel, setEditedContactLabel] = useState<string>('');
+  const [contactId, setContactId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [selectedKind, setSelectedKind] = useState<QuickKind | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
   const handleRef = useRef<VoiceRecordingHandle<Blob | string> | null>(null);
-  // When we sync the textarea to reflect a user-picked contact, the parse
-  // effect below will fire on the new text. This flag tells that effect
-  // to keep the user's `editedContactId` instead of overwriting it from
-  // the parse result.
-  const isInternalTextUpdateRef = useRef(false);
+  // Once the user manually picks a contact via the picker, the parser
+  // stops overwriting contactId on subsequent re-runs (which fire every
+  // 250ms while the user types in the textarea). Reset on textarea clear
+  // or on explicit picker clear via the ✕ button.
+  const userOverrideContactRef = useRef(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -94,67 +95,6 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       })
       .catch(() => {});
   }, [adapter, userId]);
-
-  const resolveContactLabel = (id: string | null): string => {
-    if (!id) return '';
-    const c = contactList.find((x) => x.id === id);
-    if (!c) return '';
-    return c.name && c.name !== c.nickname ? `${c.nickname}（${c.name}）` : c.nickname;
-  };
-
-  // Single entry point for all contact-selection UI (dropdown option, clear
-  // ✕, "(不指定)", search-field match). When the new contact differs from
-  // the current one, substitute the old contact's display names in the
-  // textarea so the two stay in sync. Length-sorted to avoid replacing a
-  // shorter alias when a longer one is also present (e.g. "张三" vs
-  // "张三丰" — we want the longer match to win first).
-  const pickContact = (newId: string | null) => {
-    const oldId = editedContactId;
-    if (newId === oldId) {
-      setEditedContactLabel(resolveContactLabel(newId));
-      return;
-    }
-    const oldContact = contactList.find((c) => c.id === oldId);
-    const newLabel = resolveContactLabel(newId);
-    setEditedContactId(newId);
-    setEditedContactLabel(newLabel);
-
-    if (oldContact && newLabel) {
-      const oldNames = [oldContact.nickname, ...(oldContact.name ? [oldContact.name] : [])]
-        .filter((n): n is string => Boolean(n))
-        .sort((a, b) => b.length - a.length);
-      let next = text;
-      for (const name of oldNames) {
-        if (name && next.includes(name)) {
-          next = next.replace(name, newLabel);
-          break;
-        }
-      }
-      if (next !== text) {
-        isInternalTextUpdateRef.current = true;
-        setText(next);
-      }
-    }
-  };
-
-  const filteredContacts = useMemo(() => {
-    const q = contactSearch.trim().toLowerCase();
-    if (!q) return contactList.slice(0, 5);
-    const scored = contactList
-      .map((c) => {
-        const nick = c.nickname.toLowerCase();
-        const name = (c.name ?? '').toLowerCase();
-        let score = 0;
-        if (nick.startsWith(q)) score = 3;
-        else if (name.startsWith(q)) score = 2;
-        else if (nick.includes(q)) score = 1;
-        else if (name.includes(q)) score = 1;
-        return { c, score };
-      })
-      .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score);
-    return scored.slice(0, 5).map((x) => x.c);
-  }, [contactList, contactSearch]);
 
   useEffect(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -174,25 +114,19 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           setParsed(p);
           setSelectedKind(p.kind);
           setEditedDue(p.due);
-          if (isInternalTextUpdateRef.current) {
-            // We synced the textarea to reflect the contact the user just
-            // picked — the parser ran on the new text and would normally
-            // overwrite `editedContactId`. Preserve the user's choice
-            // (and its resolved label), and clear the flag.
-            isInternalTextUpdateRef.current = false;
-            setEditedContactLabel(resolveContactLabel(editedContactId));
-          } else {
-            setEditedContactId(p.contact_id);
-            setEditedContactLabel(resolveContactLabel(p.contact_id));
+          // The parser can only set contactId if the user hasn't manually
+          // picked one since the last text-clear. Otherwise a user who
+          // selects a contact, then keeps typing in the textarea, would
+          // have their pick overwritten whenever the parser spots a
+          // contact name in the new text.
+          if (!userOverrideContactRef.current) {
+            setContactId(p.contact_id);
           }
-          setContactSearch('');
           setError(null);
         })
         .catch((e: unknown) => {
           setParsed(null);
           setSelectedKind(null);
-          // Don't clobber the flag on error — the next successful parse
-          // triggered by a real keystroke will reset it.
           setError(e instanceof Error ? e.message : String(e));
         });
     }, 250);
@@ -269,7 +203,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       const now = new Date().toISOString();
       const effectiveKind: QuickKind = selectedKind ?? p.kind;
       const effectiveDue = editedDue ?? p.due;
-      const effectiveContactId = editedContactId ?? p.contact_id;
+      const effectiveContactId = contactId ?? p.contact_id;
       switch (effectiveKind) {
         case 'event':
           await adapter.events.create({
@@ -407,126 +341,48 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           >
             对象
           </span>
-          <div style={{ flex: 1, position: 'relative' }}>
-            <input
-              type="text"
-              aria-label="对象"
+          <div style={{ flex: 1 }}>
+            <SearchablePicker
+              value={contactId ?? ''}
+              onChange={(v) => {
+                userOverrideContactRef.current = true;
+                setContactId(v || null);
+              }}
+              options={contactList.map((c) => {
+                const nick = c.nickname ?? '';
+                const name = c.name ?? '';
+                const sublabel = name && name !== nick ? name : null;
+                return {
+                  id: c.id,
+                  label: nick || name || '?',
+                  sublabel,
+                };
+              })}
               placeholder="搜索或选择联系人…"
-              value={contactSearch || editedContactLabel}
-              onChange={(e) => {
-                const v = e.target.value;
-                setContactSearch(v);
-                const match = contactList.find(
-                  (c) => c.nickname === v || (c.name ?? '') === v,
-                );
-                if (match) {
-                  pickContact(match.id);
-                  setContactSearch('');
-                } else {
-                  setEditedContactId(null);
-                  setEditedContactLabel(v);
-                }
-              }}
-              onFocus={() => setContactSearch('')}
-              style={{
-                width: '100%',
-                fontSize: 'var(--text-base)',
-                padding: '4px 8px',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                background: 'var(--surface, #fff)',
-                color: 'var(--fg, #111)',
-              }}
+              emptyText="没有匹配的联系人"
+              emptyState={<PickerEmptyState kind="contact" />}
+              footer={
+                <QuickCreateContact
+                  onCreated={(c) => {
+                    userOverrideContactRef.current = true;
+                    setContactList((prev) => [...prev, c]);
+                    setContactNames((prev) => [
+                      ...prev,
+                      c.nickname,
+                      ...(c.name ? [c.name] : []),
+                    ]);
+                    setContactId(c.id);
+                  }}
+                />
+              }
             />
-            {contactSearch && filteredContacts.length > 0 && (
-              <div
-                role="listbox"
-                style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 2px)',
-                  left: 0,
-                  right: 0,
-                  zIndex: 10,
-                  maxHeight: 200,
-                  overflowY: 'auto',
-                  background: 'var(--surface, #fff)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                }}
-              >
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={editedContactId === null}
-                  onClick={() => {
-                    pickContact(null);
-                    setContactSearch('');
-                  }}
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '8px 10px',
-                    border: 'none',
-                    background: editedContactId === null ? 'var(--accent-soft, #ecfdf5)' : 'transparent',
-                    cursor: 'pointer',
-                    fontSize: 'var(--text-sm)',
-                    color: 'var(--muted)',
-                  }}
-                >
-                  （不指定）
-                </button>
-                {filteredContacts.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    role="option"
-                    aria-selected={editedContactId === c.id}
-                    onClick={() => {
-                      pickContact(c.id);
-                      setContactSearch('');
-                    }}
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '8px 10px',
-                      border: 'none',
-                      background: editedContactId === c.id ? 'var(--accent-soft, #ecfdf5)' : 'transparent',
-                      cursor: 'pointer',
-                      fontSize: 'var(--text-sm)',
-                    }}
-                  >
-                    {resolveContactLabel(c.id)}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-          {editedContactId && (
-            <button
-              type="button"
-              onClick={() => {
-                pickContact(null);
-              }}
-              aria-label="清除对象"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                color: 'var(--muted)',
-                fontSize: 'var(--text-sm)',
-                padding: 4,
-              }}
-            >
-              ✕
-            </button>
-          )}
         </div>
 
         <PreviewRow label="摘要" value={parsed.summary} />
       </div>
     );
-  }, [parsed, selectedKind, editedDue, editedContactId, editedContactLabel, contactSearch, contactList, filteredContacts]);
+  }, [parsed, selectedKind, editedDue, contactId, contactList]);
 
   return createPortal(
     <div
