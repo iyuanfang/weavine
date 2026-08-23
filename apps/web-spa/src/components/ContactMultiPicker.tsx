@@ -4,6 +4,7 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { Popover } from './Popover';
 import { PickerEmptyState } from './PickerEmptyState';
+import { QuickCreateContact } from './QuickCreateContact';
 import type { Contact } from '../lib/adapter/types';
 
 interface Props {
@@ -158,6 +159,13 @@ export function ContactMultiPicker({ selectedIds, onChange }: Props) {
             ))}
           </ul>
         )}
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 8 }}>
+          <QuickCreateContact
+            onCreated={(c) => {
+              onChange(selectedIds.includes(c.id) ? selectedIds : [...selectedIds, c.id]);
+            }}
+          />
+        </div>
       </Popover>
     </div>
   );

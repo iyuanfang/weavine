@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { PickerEmptyState } from '../components/PickerEmptyState';
+import { QuickCreateContact } from '../components/QuickCreateContact';
 import { ACTION_PRESETS } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
@@ -258,6 +259,12 @@ export function ActionEdit() {
                     placeholder="搜索联系人…"
                     emptyText="没有匹配的联系人"
                     emptyState={<PickerEmptyState kind="contact" />}
+                    footer={
+                      <QuickCreateContact
+                        onCreated={(c) => setContactId(c.id)}
+                        initialNickname=""
+                      />
+                    }
                   />
                 </div>
               </div>

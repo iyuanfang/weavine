@@ -6,6 +6,7 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { stageColor } from '../lib/projectStageColor';
 import { backTarget } from '../lib/backNavigation';
+import { QuickCreateContact } from '../components/QuickCreateContact';
 
 const TEMPLATE_LABELS: Record<string, string> = {
   general: '通用项目',
@@ -631,6 +632,19 @@ export function ProjectDetail() {
                   })}
                 </div>
               )}
+              <div
+                style={{
+                  borderTop: '1px solid var(--border, #e5e7eb)',
+                  marginTop: 10,
+                  paddingTop: 10,
+                }}
+              >
+                <QuickCreateContact
+                  onCreated={(c) => {
+                    addContactMutation.mutate({ contact_id: c.id, role: null });
+                  }}
+                />
+              </div>
             </div>
           )}
 
