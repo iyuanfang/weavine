@@ -72,8 +72,12 @@ async fn write_interactions_for_event(
     let now = Utc::now();
     let now_str = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
+    // One transaction for all participants of this event. Previously this
+    // was one tx per participant, which meant a 50-person event opened and
+    // closed 50 PG transactions per tick. ON CONFLICT DO NOTHING is
+    // per-row, so a single duplicate does not poison the rest.
+    let mut tx = pool.begin().await?;
     for contact_id in participants {
-        let mut tx = pool.begin().await?;
         let id = format!("auto-{}", uuid::Uuid::new_v4());
 
         let inserted = sqlx::query(
@@ -97,7 +101,6 @@ async fn write_interactions_for_event(
         .execute(&mut *tx)
         .await?;
         if inserted.rows_affected() == 0 {
-            tx.rollback().await?;
             continue;
         }
         sqlx::query(
@@ -110,8 +113,8 @@ async fn write_interactions_for_event(
         .bind(&ev.user_id)
         .execute(&mut *tx)
         .await?;
-        tx.commit().await?;
         written += 1;
     }
+    tx.commit().await?;
     Ok(written)
 }
