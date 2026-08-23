@@ -416,7 +416,8 @@ export class HttpAdapter implements PRMAdapter {
         '/api/search' +
           qs({
             user_id,
-            query,
+            // WHY `q` not `query`: backend QueryParams expects `q`; sending `query=` → 422 (every search panel renders empty).
+            q: query,
             limit: limit ?? null,
             include_archived: options?.include_archived ?? true,
           }),
