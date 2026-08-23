@@ -88,7 +88,14 @@ fn validate_field(name: &str, value: &str, max: usize) -> Result<(), String> {
 }
 
 fn ip_hash_for(ip: &str) -> String {
-    let salt = env::var("JWT_SECRET").unwrap_or_else(|_| "weavine-default".to_string());
+    // Salt the IP hash with a per-deployment secret so the same IP produces
+    // different hashes across installs. Without this, an operator who forgets
+    // to set WEAVINE_JWT_SECRET would silently emit globally-stable hashes
+    // that any third party could rainbow-table to recover the source IPs.
+    // Also: do NOT fall back to a default — fail closed so the operator
+    // notices and sets the env var.
+    let salt = env::var("WEAVINE_JWT_SECRET")
+        .expect("WEAVINE_JWT_SECRET must be set (used as IP-hash salt; same var as JWT_SECRET for convenience)");
     let mut hasher = Sha256::new();
     hasher.update(salt.as_bytes());
     hasher.update(b"|");
