@@ -41,11 +41,21 @@ export function NotesList() {
   const userId = useUserId() ?? '';
   const navigate = useNavigate();
   const [notes, setNotes] = useState<Note[] | null>(null);
+  const [filter, setFilter] = useState('');
 
   useEffect(() => {
     if (!userId) return;
     adapter.notes.list(userId).then(setNotes).catch(() => setNotes([]));
   }, [adapter, userId]);
+
+  const filteredNotes = useMemo(() => {
+    if (!notes) return null;
+    const q = filter.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter(
+      (n) => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q),
+    );
+  }, [notes, filter]);
 
   return (
     <div className="page notes-list">
@@ -59,6 +69,23 @@ export function NotesList() {
           + 新建笔记
         </button>
       </header>
+
+      {notes && notes.length > 0 && (
+        <div className="notes-list__filter">
+          <input
+            type="search"
+            className="input-base"
+            placeholder="筛选笔记…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+          {filter && (
+            <span className="notes-list__filter-count">
+              {filteredNotes!.length} / {notes.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {notes === null && <p className="muted">加载中…</p>}
       {notes && notes.length === 0 && (
@@ -77,8 +104,11 @@ export function NotesList() {
           </button>
         </div>
       )}
-      {notes && notes.length > 0 && (
-        <NotesGroups notes={notes} />
+      {filteredNotes && filteredNotes.length === 0 && notes && notes.length > 0 && (
+        <p className="muted">没有匹配「{filter}」的笔记。</p>
+      )}
+      {filteredNotes && filteredNotes.length > 0 && (
+        <NotesGroups notes={filteredNotes} />
       )}
     </div>
   );

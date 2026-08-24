@@ -2172,6 +2172,22 @@ textarea.input-base {
   flex-direction: column;
   gap: 20px;
 }
+.notes-list__filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.notes-list__filter input {
+  flex: 1;
+  max-width: 360px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+.notes-list__filter-count {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+}
 .notes-list__group-title {
   font-size: var(--text-sm);
   font-weight: 600;
