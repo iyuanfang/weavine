@@ -59,9 +59,9 @@ export function BacklinksPanel({ entityType, entityId }: Props) {
         {visible.map((b) => (
           <li key={b.note_id} className="backlinks-panel__item">
             <Link to={`/notes/${b.note_id}`} className="backlinks-panel__link">
-              {b.note_title}
+              <span className="backlinks-panel__title-text">{b.note_title || '（无标题）'}</span>
+              <span className="backlinks-panel__snippet">{b.snippet}</span>
             </Link>
-            <p className="backlinks-panel__snippet">{b.snippet}</p>
           </li>
         ))}
       </ul>

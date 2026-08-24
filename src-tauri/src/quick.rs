@@ -12,6 +12,7 @@ pub enum Kind {
     Event,
     Action,
     Interaction,
+    Note,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -38,12 +39,17 @@ const KIND_KEYWORDS_INTERACTION: &[&str] = &[
     "吃饭", "通话", "打电话", "聊", "call", "dinner", "lunch", "chat",
     "coffee", "喝咖啡", "见面", "联系",
 ];
+const KIND_KEYWORDS_NOTE: &[&str] = &[
+    "记一下", "记一笔", "想法", "灵感", "备注", "备忘", "随手记",
+    "note", "thought", "idea", "memo", "remember",
+];
 
 fn classify_kind(s: &str, due: Option<DateTime<Utc>>, now: DateTime<Utc>) -> (Kind, f32) {
     let event_hits = KIND_KEYWORDS_EVENT.iter().filter(|k| s.contains(*k)).count();
     let action_hits = KIND_KEYWORDS_ACTION.iter().filter(|k| s.contains(*k)).count();
     let interaction_hits = KIND_KEYWORDS_INTERACTION.iter().filter(|k| s.contains(*k)).count();
-    let max = event_hits.max(action_hits).max(interaction_hits);
+    let note_hits = KIND_KEYWORDS_NOTE.iter().filter(|k| s.contains(*k)).count();
+    let max = event_hits.max(action_hits).max(interaction_hits).max(note_hits);
     if max == 0 {
         return (Kind::Action, 0.6);
     }
@@ -60,7 +66,9 @@ fn classify_kind(s: &str, due: Option<DateTime<Utc>>, now: DateTime<Utc>) -> (Ki
         }
     }
 
-    if event_hits == max {
+    if note_hits == max && note_hits > 0 {
+        (Kind::Note, 0.85)
+    } else if event_hits == max {
         (Kind::Event, 0.9)
     } else if action_hits == max {
         (Kind::Action, 0.9)
@@ -300,6 +308,7 @@ impl Kind {
             Self::Event => "event",
             Self::Action => "action",
             Self::Interaction => "interaction",
+            Self::Note => "note",
         }
     }
 }
@@ -348,5 +357,23 @@ mod tests {
     fn no_time_event_keyword_stays_event() {
         let item = parse("开会", &[], now());
         assert_eq!(item.kind, Kind::Event);
+    }
+
+    #[test]
+    fn note_keyword_chinese_routes_to_note() {
+        let item = parse("记一下今天在读的书", &[], now());
+        assert_eq!(item.kind, Kind::Note);
+    }
+
+    #[test]
+    fn note_keyword_english_routes_to_note() {
+        let item = parse("idea: support wikilinks in notes", &[], now());
+        assert_eq!(item.kind, Kind::Note);
+    }
+
+    #[test]
+    fn note_keyword_with_event_keyword_prefers_note() {
+        let item = parse("记一下明天的会议要点", &[], now());
+        assert_eq!(item.kind, Kind::Note);
     }
 }
