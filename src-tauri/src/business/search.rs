@@ -19,7 +19,7 @@ pub fn search(
 
     let contacts: Vec<Contact> = {
         let mut stmt = conn.prepare(
-            "SELECT id, user_id, nickname, name, company, title, city, email, phone, wechat, notes, importance, last_interaction_at, created_at, updated_at \
+            "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, notes, importance, last_interaction_at, created_at, updated_at \
              FROM Contact WHERE user_id = ?1 \
              AND (nickname LIKE ?2 OR name LIKE ?2 OR company LIKE ?2 OR notes LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2) \
              ORDER BY updated_at DESC LIMIT ?3",

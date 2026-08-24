@@ -95,7 +95,7 @@ pub fn list_contacts_for_project(
 ) -> rusqlite::Result<Vec<ProjectContactWithContact>> {
     use crate::business::contact::hydrate_tags;
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.city, \
+        "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.address, \
                 c.email, c.phone, c.wechat, c.notes, c.importance, \
                 c.last_interaction_at, c.created_at, c.updated_at, \
                 pc.role, pc.added_at \
