@@ -119,6 +119,12 @@ export function TodayPage() {
     enabled: Boolean(userId),
   });
 
+  const notesQuery = useQuery({
+    queryKey: ['notes', userId, 'recent-for-today'],
+    queryFn: () => adapter.notes.list(userId!, { archived: 'active' }).then((all) => all.slice(0, 5)),
+    enabled: Boolean(userId),
+  });
+
   const toggleDoneMutation = useMutation({
     mutationFn: (input: { id: string; status: 'done' | 'open' }) =>
       adapter.actions.update({
@@ -390,6 +396,37 @@ export function TodayPage() {
           <div className="empty-state">
             <h3 className="empty-state__title">最近 7 天没有互动</h3>
             <p className="empty-state__hint">找个人打个招呼，记录一条互动</p>
+          </div>
+        )}
+      </section>
+
+      <section className="section">
+        <SectionHeader title="🗒️ 最近笔记" viewAllHref="/notes" />
+        {notesQuery.isLoading ? (
+          <Skeleton />
+        ) : (notesQuery.data ?? []).length > 0 ? (
+          <div className="card" style={{ padding: 0 }}>
+            {(notesQuery.data ?? []).map((n) => (
+              <Link
+                key={n.id}
+                to={`/notes/${n.id}?from=/today`}
+                className="digest-row"
+              >
+                <span style={{ fontSize: 'var(--text-lg)' }}>🗒️</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="digest-row__title">{n.title || '（无标题）'}</span>
+                  <span className="digest-row__meta" style={{ marginLeft: 8 }}>
+                    {daysSinceLabel(n.updated_at)}
+                  </span>
+                </span>
+                <span className="text-muted">→</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <h3 className="empty-state__title">还没有笔记</h3>
+            <p className="empty-state__hint">在联系人/项目里点「+ 笔记」或 Cmd/Ctrl+K 快速记录</p>
           </div>
         )}
       </section>

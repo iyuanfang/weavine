@@ -515,6 +515,20 @@ export function NoteDetail() {
     if (updated) setNote(updated);
   };
 
+  const onCopyMarkdown = async () => {
+    if (!note) return;
+    const title = draftTitle.trim() || '（无标题）';
+    const md = `# ${title}\n\n${draftBody}`;
+    try {
+      await navigator.clipboard.writeText(md);
+      setSaveStatus('saved');
+      setLastSavedAt(Date.now());
+      window.setTimeout(() => setSaveStatus('idle'), 1500);
+    } catch {
+      window.prompt('复制失败，手动复制：', md);
+    }
+  };
+
   const saveLabel = (() => {
     if (saveStatus === 'saving') return '保存中…';
     if (saveStatus === 'error') return '保存失败';
@@ -553,9 +567,17 @@ export function NoteDetail() {
           <button
             type="button"
             className="btn"
+            onClick={onCopyMarkdown}
+            title="复制 Markdown 源码到剪贴板"
+          >
+            复制 MD
+          </button>
+          <button
+            type="button"
+            className="btn"
             onClick={() => navigate(`/notes/new?clone_from=${id}`)}
           >
-            复制
+            克隆
           </button>
           <button type="button" className="btn" onClick={onToggleArchive}>
             {note?.archived_at ? '取消归档' : '归档'}
