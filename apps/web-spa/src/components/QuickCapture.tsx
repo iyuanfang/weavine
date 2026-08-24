@@ -16,12 +16,14 @@ const KIND_LABEL: Record<QuickKind, string> = {
   event: '事件',
   action: '待办',
   interaction: '互动',
+  note: '笔记',
 };
 
 const KIND_ICON: Record<QuickKind, string> = {
   event: '📅',
   action: '✅',
   interaction: '💬',
+  note: '📝',
 };
 
 function isoToLocalInput(iso: string | null): string {
@@ -233,6 +235,14 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           });
           queryClient.invalidateQueries({ queryKey: ['interactions', userId] });
           break;
+        case 'note':
+          await adapter.notes.create({
+            user_id: userId,
+            title: summary.slice(0, 80),
+            body: text,
+          });
+          queryClient.invalidateQueries({ queryKey: ['notes', userId] });
+          break;
       }
       setSubmitted(true);
       window.setTimeout(onClose, 400);
@@ -275,6 +285,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
             <option value="event">{KIND_ICON.event} {KIND_LABEL.event}</option>
             <option value="interaction">{KIND_ICON.interaction} {KIND_LABEL.interaction}</option>
             <option value="action">{KIND_ICON.action} {KIND_LABEL.action}</option>
+            <option value="note">{KIND_ICON.note} {KIND_LABEL.note}</option>
           </select>
           <span
             style={{

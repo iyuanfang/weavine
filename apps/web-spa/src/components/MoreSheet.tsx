@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 const items = [
   { to: '/projects', label: '项目', icon: '📁' },
+  { to: '/notes', label: '笔记', icon: '📝' },
   { to: '/tags', label: '标签', icon: '🏷️' },
   { to: '/archive', label: '归档', icon: '📦' },
   { to: '/settings', label: '设置', icon: '⚙️' },

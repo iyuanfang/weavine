@@ -410,6 +410,34 @@ export interface UpdateTagInput {
   name?: string | null;
 }
 
+export interface Note {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateNoteInput {
+  user_id: string;
+  title: string;
+  body: string;
+}
+
+export interface UpdateNoteInput {
+  id: string;
+  title?: string | null;
+  body?: string | null;
+}
+
+export interface NoteBacklink {
+  note_id: string;
+  note_title: string;
+  snippet: string;
+}
+
 // ──────────────────────────────────────────────
 // Search
 // ──────────────────────────────────────────────
@@ -420,6 +448,7 @@ export interface SearchResults {
   events: Event[];
   actions: Action[];
   projects: Project[];
+  notes: Note[];
 }
 
 // ──────────────────────────────────────────────
@@ -555,6 +584,15 @@ export interface PRMAdapter {
     create(input: CreateTagInput): Promise<Tag>;
     update(input: UpdateTagInput): Promise<Tag>;
     delete(id: string): Promise<void>;
+  };
+
+  notes: {
+    list(user_id: string, opts?: { include_archived?: boolean | null }): Promise<Note[]>;
+    get(user_id: string, id: string): Promise<Note | null>;
+    create(input: CreateNoteInput): Promise<Note>;
+    update(user_id: string, id: string, input: UpdateNoteInput): Promise<Note | null>;
+    delete(user_id: string, id: string): Promise<boolean>;
+    listBacklinks(user_id: string, entity_type: string, entity_id: string): Promise<NoteBacklink[]>;
   };
 
   settings: {

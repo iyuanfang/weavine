@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
+import { BacklinksPanel } from '../components/BacklinksPanel';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 import type { UpdateActionInput } from '../lib/adapter/types';
@@ -304,6 +305,7 @@ export function ActionDetail() {
           </button>
         </div>
       )}
+      <BacklinksPanel entityType="action" entityId={id} />
     </div>
   );
 }

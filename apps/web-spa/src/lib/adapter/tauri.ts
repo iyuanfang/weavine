@@ -35,6 +35,7 @@ import type {
   CreateActionInput,
   CreateContactInput,
   CreateEventInput,
+  CreateNoteInput,
   CreateInteractionInput,
   CreateProjectInput,
   CreateReminderInput,
@@ -47,6 +48,8 @@ import type {
   ListMediaParams,
   LocalUser,
   MediaItem,
+  Note,
+  NoteBacklink,
   PRMAdapter,
   Project,
   ProjectContactWithContact,
@@ -59,6 +62,7 @@ import type {
   UpdateContactInput,
   UpdateEventInput,
   UpdateInteractionInput,
+  UpdateNoteInput,
   UpdateProjectInput,
   UpdateReminderInput,
   UpdateTagInput,
@@ -304,6 +308,35 @@ export class TauriAdapter implements PRMAdapter {
       invoke<Tag>('update_tag', { input }),
     delete: (id: string): Promise<void> =>
       invoke<void>('delete_tag', { id }),
+  };
+
+  notes = {
+    list: async (
+      user_id: string,
+      opts?: { include_archived?: boolean | null },
+    ): Promise<Note[]> =>
+      invoke<Note[]>('list_notes', {
+        user_id,
+        include_archived: opts?.include_archived ?? false,
+      }),
+    get: async (user_id: string, id: string): Promise<Note | null> =>
+      invoke<Note | null>('get_note', { user_id, id }),
+    create: (input: CreateNoteInput): Promise<Note> =>
+      invoke<Note>('create_note', { input }),
+    update: async (
+      user_id: string,
+      id: string,
+      input: UpdateNoteInput,
+    ): Promise<Note | null> =>
+      invoke<Note | null>('update_note', { user_id, id, input }),
+    delete: async (user_id: string, id: string): Promise<boolean> =>
+      invoke<boolean>('delete_note', { user_id, id }),
+    listBacklinks: async (
+      user_id: string,
+      entity_type: string,
+      entity_id: string,
+    ): Promise<NoteBacklink[]> =>
+      invoke<NoteBacklink[]>('list_note_backlinks', { user_id, entity_type, entity_id }),
   };
 
   settings = {

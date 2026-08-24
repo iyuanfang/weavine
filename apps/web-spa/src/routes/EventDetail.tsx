@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
+import { BacklinksPanel } from '../components/BacklinksPanel';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 
@@ -226,6 +227,7 @@ export function EventDetail() {
           )}
         </div>
       </section>
+      <BacklinksPanel entityType="event" entityId={id} />
     </div>
   );
 }

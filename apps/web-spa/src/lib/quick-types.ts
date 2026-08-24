@@ -1,4 +1,4 @@
-export type QuickKind = 'event' | 'action' | 'interaction';
+export type QuickKind = 'event' | 'action' | 'interaction' | 'note';
 
 export interface ParsedQuick {
   kind: QuickKind;

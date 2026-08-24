@@ -11,6 +11,15 @@
  *   Set to `http://localhost:3000` for dev if not using Vite proxy.
  */
 
+export class HttpError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = 'HttpError';
+  }
+}
+
 import type {
   Action,
   ApiKeyRevealed,
@@ -22,6 +31,7 @@ import type {
   CreateActionInput,
   CreateApiKeyInput,
   CreateContactInput,
+  CreateNoteInput,
   CreateEventInput,
   CreateInteractionInput,
   CreateProjectInput,
@@ -35,6 +45,8 @@ import type {
   ListMediaParams,
   LocalUser,
   MediaItem,
+  Note,
+  NoteBacklink,
   PRMAdapter,
   Project,
   ProjectContactWithContact,
@@ -46,6 +58,7 @@ import type {
   UpdateActionInput,
   UpdateContactInput,
   UpdateEventInput,
+  UpdateNoteInput,
   UpdateInteractionInput,
   UpdateProjectInput,
   UpdateReminderInput,
@@ -143,7 +156,8 @@ async function request<R>(
     } catch {
       msg = `HTTP ${resp.status} ${resp.statusText}`;
     }
-    throw new Error(`${method} ${path}: ${resp.status} ${resp.statusText} — ${msg}`);
+    const err = new HttpError(`${method} ${path}: ${resp.status} ${resp.statusText} — ${msg}`, resp.status);
+    throw err;
   }
 
   // Empty body (204 No Content, etc.)
@@ -390,6 +404,57 @@ export class HttpAdapter implements PRMAdapter {
 
     delete: (id: string): Promise<void> =>
       request<void>(this.baseUrl, 'DELETE', `/api/tags/${id}`),
+  };
+
+  notes = {
+    list: (_user_id: string, opts?: { include_archived?: boolean | null }): Promise<Note[]> =>
+      request<Note[]>(
+        this.baseUrl,
+        'GET',
+        '/api/notes' + qs({ archived: opts?.include_archived ? 'true' : null }),
+      ),
+
+    get: async (_user_id: string, id: string): Promise<Note | null> => {
+      try {
+        return await request<Note>(this.baseUrl, 'GET', `/api/notes/${id}`);
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
+    },
+
+    create: (input: CreateNoteInput): Promise<Note> =>
+      request<Note>(this.baseUrl, 'POST', '/api/notes', input),
+
+    update: async (_user_id: string, id: string, input: UpdateNoteInput): Promise<Note | null> => {
+      try {
+        return await request<Note>(this.baseUrl, 'PUT', `/api/notes/${id}`, input);
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return null;
+        throw e;
+      }
+    },
+
+    delete: async (_user_id: string, id: string): Promise<boolean> => {
+      try {
+        await request<void>(this.baseUrl, 'DELETE', `/api/notes/${id}`);
+        return true;
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 404) return false;
+        throw e;
+      }
+    },
+
+    listBacklinks: (
+      _user_id: string,
+      entity_type: string,
+      entity_id: string,
+    ): Promise<NoteBacklink[]> =>
+      request<NoteBacklink[]>(
+        this.baseUrl,
+        'GET',
+        '/api/notes/backlinks' + qs({ entity_type, entity_id }),
+      ),
   };
 
   settings = {

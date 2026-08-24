@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { Avatar } from '../components/Avatar';
+import { BacklinksPanel } from '../components/BacklinksPanel';
 import { AvatarCropModal } from '../components/AvatarCropModal';
 import { AvatarViewModal } from '../components/AvatarViewModal';
 import { CadencePicker } from '../components/CadencePicker';
@@ -303,6 +304,7 @@ export function ContactDetail() {
             </div>
           )}
         </div>
+        <BacklinksPanel entityType="contact" entityId={id} />
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}>
           <Link to={back.href} className="btn btn-ghost">
             {back.label}

@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { BacklinksPanel } from '../components/BacklinksPanel';
 import { stageColor } from '../lib/projectStageColor';
 import { backTarget } from '../lib/backNavigation';
 import { QuickCreateContact } from '../components/QuickCreateContact';
@@ -1042,6 +1043,7 @@ export function ProjectDetail() {
           )}
         </section>
       )}
+      <BacklinksPanel entityType="project" entityId={id} />
     </div>
   );
 }

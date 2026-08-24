@@ -36,6 +36,8 @@ import { SearchPage } from './routes/Search';
 import { SettingsPage } from './routes/Settings';
 import { ApiKeysPage } from './routes/ApiKeys';
 import ArchivePage from './routes/Archive';
+import { NotesList } from './routes/NotesList';
+import { NoteNew, NoteDetail } from './routes/NoteDetail';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -89,6 +91,9 @@ export const routes: AppRoute[] = [
   { path: '/settings', Component: SettingsPage, label: 'Settings' },
   { path: '/settings/api-keys', Component: ApiKeysPage, label: 'API 密钥' },
   { path: '/archive', Component: ArchivePage, label: 'Archive' },
+  { path: '/notes', Component: NotesList, label: 'Notes' },
+  { path: '/notes/new', Component: NoteNew, label: 'NoteNew' },
+  { path: '/notes/:id', Component: NoteDetail, label: 'NoteDetail' },
 ];
 
 /**
