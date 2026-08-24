@@ -2238,32 +2238,188 @@ textarea.input-base {
   gap: 8px;
 }
 
-/* MD editor split-pane: textarea on left, live preview on right */
-.note-edit__split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: stretch;
-  min-height: 320px;
-}
-@media (max-width: 720px) {
-  .note-edit__split {
-    grid-template-columns: 1fr;
-  }
-}
-.note-edit__preview {
+/* Note edit: CodeMirror 6 inline-preview editor */
+.note-edit__editor {
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 8px;
-  padding: 12px 14px;
+  background: var(--surface-1, #ffffff);
+  overflow: hidden;
+}
+.md-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
   background: var(--surface-2, #fafafa);
-  overflow: auto;
+}
+.md-editor-toolbar__btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--text-base, #1f2937);
+  cursor: pointer;
+  min-width: 28px;
+  text-align: center;
+  font-family: inherit;
+}
+.md-editor-toolbar__btn:hover {
+  background: var(--surface-3, #eef2ff);
+  border-color: var(--border, #e5e7eb);
+}
+.md-editor-toolbar__btn:active {
+  background: var(--surface-4, #dbeafe);
+}
+.md-editor-toolbar__sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border, #e5e7eb);
+  margin: 0 4px;
+}
+.md-editor-host {
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.md-editor-host .cm-editor {
+  height: 100%;
+}
+.md-editor-host .cm-scroller {
+  font-family: inherit;
+  padding: 12px 14px;
   min-height: 320px;
 }
-.note-edit__preview:empty::before,
-.note-edit__preview .markdown-view:empty::before {
-  content: '预览会显示在这里';
-  color: var(--muted);
+.md-editor-host .cm-content {
+  caret-color: var(--accent, #3b82f6);
+}
+.md-editor-host .cm-line {
+  padding: 0 4px;
+}
+
+.cm-md-faint {
+  opacity: 0.32;
+}
+.cm-md-bold {
+  font-weight: 600;
+}
+.cm-md-italic {
   font-style: italic;
+}
+.cm-md-code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  background: var(--surface-3, #f3f4f6);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #be185d;
+}
+.cm-md-link-text {
+  color: var(--accent, #2563eb);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cm-md-heading {
+  font-weight: 700;
+  color: var(--text-strong, #111827);
+}
+.cm-md-heading .tok-keyword {
+  font-weight: inherit;
+}
+.cm-md-quote {
+  font-style: italic;
+  color: var(--muted, #6b7280);
+  border-left: 3px solid var(--border, #e5e7eb);
+  padding-left: 8px;
+  margin-left: 4px;
+}
+.cm-md-list {
+  color: var(--text-base, #1f2937);
+}
+.cm-md-hr {
+  text-align: center;
+  color: var(--muted, #9ca3af);
+}
+.cm-md-fenced {
+  background: var(--surface-2, #f9fafb);
+  border-radius: 4px;
+}
+
+.md-bubble-toolbar {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  background: #1f2937;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 1000;
+  pointer-events: auto;
+}
+.md-bubble-toolbar .md-editor-toolbar__btn {
+  color: #f9fafb;
+  background: transparent;
+  padding: 3px 7px;
+  font-size: 13px;
+  min-width: 26px;
+}
+.md-bubble-toolbar .md-editor-toolbar__btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.md-slash-menu {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 1001;
+}
+.md-slash-menu__item {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-base, #1f2937);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: inherit;
+}
+.md-slash-menu__item.is-active,
+.md-slash-menu__item:hover {
+  background: var(--surface-3, #eef2ff);
+}
+.md-slash-menu__hint {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+@media (max-width: 720px) {
+  .md-editor-toolbar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .md-editor-toolbar__btn {
+    flex-shrink: 0;
+  }
 }
 .note-edit__section {
   display: flex;

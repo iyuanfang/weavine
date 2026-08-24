@@ -112,14 +112,11 @@ test.describe('Notes feature', () => {
 
     const mdBody =
       '# 标题\n\n这是一段正文，**加粗**、*斜体*、`代码`。\n\n- 列表项 1\n- 列表项 2\n\n```ts\nconst x = 1;\n```';
-    await page.locator('textarea.note-edit__body').fill(mdBody);
+    await page.locator('.note-edit__editor .cm-content').click();
+    await page.keyboard.type(mdBody);
 
-    // Live preview should render headings/lists/code
-    const preview = page.locator('.note-edit__preview');
-    await expect(preview.locator('h1', { hasText: '标题' })).toBeVisible();
-    await expect(preview.locator('strong', { hasText: '加粗' })).toBeVisible();
-    await expect(preview.locator('li', { hasText: '列表项 1' })).toBeVisible();
-    await expect(preview.locator('pre code')).toContainText('const x = 1');
+    await expect(page.locator('.note-edit__editor .cm-content').getByText('加粗', { exact: false })).toBeVisible();
+    await expect(page.locator('.note-edit__editor .cm-content').getByText('列表项 1', { exact: false })).toBeVisible();
 
     // ── Add linked entities: contact + project (default tab is 联系人)
     await expect(page.locator('.entity-picker')).toBeVisible();

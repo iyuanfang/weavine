@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { MarkdownView } from '../components/MarkdownView';
+import { MarkdownEditor } from '../components/MarkdownEditor';
 import { SearchablePicker } from '../components/SearchablePicker';
 import type {
   Action,
@@ -243,16 +244,8 @@ export function NoteNew() {
           onChange={(e) => setTitle(e.target.value)}
           autoFocus
         />
-        <div className="note-edit__split">
-          <textarea
-            className="input-base note-edit__body"
-            placeholder={'Markdown 正文，支持 # 标题、列表、加粗、代码等。右侧实时预览。'}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-          <div className="note-edit__preview">
-            <MarkdownView body={body} />
-          </div>
+        <div className="note-edit__editor">
+          <MarkdownEditor value={body} onChange={setBody} />
         </div>
         <div className="note-edit__section">
           <label className="note-edit__label">关联实体</label>
@@ -407,15 +400,8 @@ export function NoteDetail() {
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
           />
-          <div className="note-edit__split">
-            <textarea
-              className="input-base note-edit__body"
-              value={draftBody}
-              onChange={(e) => setDraftBody(e.target.value)}
-            />
-            <div className="note-edit__preview">
-              <MarkdownView body={draftBody} />
-            </div>
+          <div className="note-edit__editor">
+            <MarkdownEditor value={draftBody} onChange={setDraftBody} />
           </div>
           <div className="note-edit__section">
             <label className="note-edit__label">关联实体</label>
