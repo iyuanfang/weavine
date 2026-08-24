@@ -116,7 +116,7 @@ async fn upsert_event_reminder(
     Ok(())
 }
 
-const EVENT_SELECT: &str = "SELECT e.id, e.user_id, e.title, e.event_type, e.start_at, e.end_at, e.location, e.notes, \
+const EVENT_SELECT: &str = "SELECT e.id, e.user_id, e.title, e.event_type, e.start_at, e.end_at, e.location, \
      e.contact_id, e.project_id, e.reminder_lead_minutes::BIGINT AS reminder_lead_minutes, e.archived_at, e.created_at, e.updated_at, \
      c.nickname AS contact_nickname, p.title AS project_title \
      FROM event e \
@@ -215,9 +215,9 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query(
-        "INSERT INTO event (id, user_id, title, event_type, start_at, end_at, location, notes, \
+        "INSERT INTO event (id, user_id, title, event_type, start_at, end_at, location, \
          contact_id, project_id, reminder_lead_minutes, created_at, updated_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
     )
     .bind(&id)
     .bind(&auth)
@@ -226,7 +226,6 @@ pub async fn create(
     .bind(body.get("start_at").and_then(|v| v.as_str()).unwrap_or(&now))
     .bind(body.get("end_at").and_then(|v| v.as_str()))
     .bind(body.get("location").and_then(|v| v.as_str()))
-    .bind(body.get("notes").and_then(|v| v.as_str()))
     .bind(body.get("contact_id").and_then(|v| v.as_str()))
     .bind(body.get("project_id").and_then(|v| v.as_str()))
     .bind(body.get("reminder_lead_minutes").and_then(|v| v.as_i64()))

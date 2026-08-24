@@ -25,7 +25,7 @@ pub async fn list(
     Query(p): Query<ListParams>,
 ) -> Result<Json<Vec<Project>>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
-    let mut sql = "SELECT id, user_id, title, description, template, stage, \
+    let mut sql = "SELECT id, user_id, title, template, stage, \
                     start_at, due_at, completed_at, archived_at, created_at, updated_at \
                     FROM project WHERE user_id = $1".to_string();
     let mut idx = 2u32;
@@ -65,7 +65,7 @@ pub async fn get(
 ) -> Result<Json<Project>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let project: Project = sqlx::query_as(
-        "SELECT id, user_id, title, description, template, stage, \
+        "SELECT id, user_id, title, template, stage, \
          start_at, due_at, completed_at, archived_at, created_at, updated_at \
          FROM project WHERE id = $1 AND user_id = $2",
     )
@@ -107,14 +107,13 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query(
-        "INSERT INTO project (id, user_id, title, description, template, stage, \
+        "INSERT INTO project (id, user_id, title, template, stage, \
          start_at, due_at, created_at, updated_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
     )
     .bind(&id)
     .bind(&auth)
     .bind(body.get("title").and_then(|v| v.as_str()).unwrap_or(""))
-    .bind(body.get("description").and_then(|v| v.as_str()))
     .bind(template)
     .bind(stage)
     .bind(body.get("start_at").and_then(|v| v.as_str()))

@@ -59,7 +59,7 @@ pub async fn list(
 
     let query_sql = format!(
         "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
-         notes, importance, last_interaction_at, keep_in_touch_cadence_days, \
+         importance, last_interaction_at, keep_in_touch_cadence_days, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact \
          WHERE user_id = $1 \
@@ -104,7 +104,7 @@ pub async fn get(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut contact: Contact = sqlx::query_as(
         "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
-         notes, importance, last_interaction_at, keep_in_touch_cadence_days, \
+         importance, last_interaction_at, keep_in_touch_cadence_days, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact WHERE id = $1 AND user_id = $2",
     )
@@ -149,8 +149,8 @@ pub async fn create(
 
     sqlx::query(
         "INSERT INTO contact (id, user_id, nickname, name, company, title, address, email, phone, wechat, \
-         notes, importance, last_interaction_at, created_at, updated_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)",
+         importance, last_interaction_at, created_at, updated_at) \
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
     )
     .bind(&id)
     .bind(&auth)
@@ -162,7 +162,6 @@ pub async fn create(
     .bind(body.get("email").and_then(|v| v.as_str()))
     .bind(body.get("phone").and_then(|v| v.as_str()))
     .bind(body.get("wechat").and_then(|v| v.as_str()))
-    .bind(body.get("notes").and_then(|v| v.as_str()))
     .bind(body.get("importance").and_then(|v| v.as_str()).unwrap_or("low"))
     .bind(&now)
     .bind(&now)

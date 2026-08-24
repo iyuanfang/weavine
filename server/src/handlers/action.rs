@@ -10,7 +10,7 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Action;
 
-const ACTION_SELECT: &str = "SELECT a.id, a.user_id, a.title, a.description, a.status, a.priority::BIGINT AS priority, a.category, a.due_at, \
+const ACTION_SELECT: &str = "SELECT a.id, a.user_id, a.title, a.status, a.priority::BIGINT AS priority, a.category, a.due_at, \
      a.contact_id, a.project_id, a.completed_at, a.archived_at, a.created_at, a.updated_at, \
      c.nickname AS contact_nickname, p.title AS project_title \
      FROM action a \
@@ -70,13 +70,12 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     sqlx::query(
-        "INSERT INTO action (id, user_id, title, description, status, priority, category, due_at, \
+        "INSERT INTO action (id, user_id, title, status, priority, category, due_at, \
          contact_id, project_id, created_at, updated_at) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
     )
     .bind(&id).bind(&auth)
     .bind(body.get("title").and_then(|v| v.as_str()).unwrap_or(""))
-    .bind(body.get("description").and_then(|v| v.as_str()))
     .bind(body.get("status").and_then(|v| v.as_str()).unwrap_or("inbox"))
     .bind(body.get("priority").and_then(|v| v.as_i64()).map(|n| n as i32).unwrap_or(0i32))
     .bind(body.get("category").and_then(|v| v.as_str()))
