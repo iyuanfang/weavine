@@ -107,7 +107,8 @@ pub fn list_contacts_for_project(
     let rows: Vec<(Contact, Option<String>, String)> = stmt
         .query_map(params![project_id], |row| {
             let c = crate::business::contact::row_to_contact(row)?;
-            Ok((c, row.get(15)?, row.get(16)?))
+            // SELECT layout: idx 0-15 = Contact cols, 16 = pc.role, 17 = pc.added_at.
+            Ok((c, row.get(16)?, row.get(17)?))
         })?
         .filter_map(|r| r.ok())
         .collect();
