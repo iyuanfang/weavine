@@ -2245,6 +2245,43 @@ textarea.input-base {
   background: var(--surface-1, #ffffff);
   overflow: hidden;
 }
+.note-edit__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-2, #fafafa);
+}
+.note-edit__tab {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 4px 14px;
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: -1px;
+}
+.note-edit__tab.is-active {
+  background: var(--surface-1, #ffffff);
+  border-color: var(--border, #e5e7eb);
+  color: var(--text-base, #1f2937);
+  font-weight: 600;
+}
+.note-edit__tab:not(.is-active):hover {
+  color: var(--text-base, #1f2937);
+}
+.note-edit__preview {
+  border-top: 1px solid var(--border, #e5e7eb);
+  padding: 14px 18px;
+  min-height: 320px;
+  background: var(--surface-1, #ffffff);
+  max-height: 60vh;
+  overflow: auto;
+}
 .md-editor-toolbar {
   display: flex;
   flex-wrap: wrap;

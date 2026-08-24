@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
@@ -202,6 +202,7 @@ export function NoteNew() {
   const rosters = useEntityRosters();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [links, setLinks] = useState<NoteEntityLink[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,9 +245,35 @@ export function NoteNew() {
           onChange={(e) => setTitle(e.target.value)}
           autoFocus
         />
-        <div className="note-edit__editor">
-          <MarkdownEditor value={body} onChange={setBody} />
+        <div className="note-edit__tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'edit'}
+            className={`note-edit__tab ${mode === 'edit' ? 'is-active' : ''}`}
+            onClick={() => setMode('edit')}
+          >
+            编辑
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'preview'}
+            className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
+            onClick={() => setMode('preview')}
+          >
+            预览
+          </button>
         </div>
+        {mode === 'edit' ? (
+          <div className="note-edit__editor">
+            <MarkdownEditor value={body} onChange={setBody} />
+          </div>
+        ) : (
+          <div className="note-edit__preview">
+            <MarkdownView body={body} />
+          </div>
+        )}
         <div className="note-edit__section">
           <label className="note-edit__label">关联实体</label>
           <EntityPicker rosters={rosters} value={links} onChange={setLinks} />
@@ -272,8 +299,7 @@ export function NoteDetail() {
   const navigate = useNavigate();
   const rosters = useEntityRosters();
   const [note, setNote] = useState<Note | null | undefined>(undefined);
-  const [entityLinks, setEntityLinks] = useState<NoteEntityLink[]>([]);
-  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<'edit' | 'preview'>('preview');
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
   const [draftLinks, setDraftLinks] = useState<NoteEntityLink[]>([]);
@@ -298,7 +324,6 @@ export function NoteDetail() {
         entity_links: linksSnapshot,
       });
       setNote(updated);
-      setEntityLinks(linksSnapshot);
       setLastSavedAt(Date.now());
       setSaveStatus('saved');
     } catch (err) {
@@ -311,7 +336,7 @@ export function NoteDetail() {
   useEffect(() => {
     if (!userId || !id) return;
     let cancelled = false;
-    setEditing(false);
+    setMode('preview');
     dirtyRef.current = false;
     Promise.all([
       adapter.notes.get(userId, id),
@@ -319,7 +344,6 @@ export function NoteDetail() {
     ]).then(([n, ls]) => {
       if (cancelled) return;
       setNote(n);
-      setEntityLinks(ls);
       if (n) {
         setDraftTitle(n.title);
         setDraftBody(n.body);
@@ -332,24 +356,23 @@ export function NoteDetail() {
   }, [adapter, userId, id]);
 
   useEffect(() => {
-    if (!editing) return;
     dirtyRef.current = true;
     const handle = window.setTimeout(() => {
       void persist();
     }, 3000);
     return () => window.clearTimeout(handle);
-  }, [editing, draftTitle, draftBody, draftLinks]);
+  }, [draftTitle, draftBody, draftLinks]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        if (editing) void persist({ force: true });
+        void persist({ force: true });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editing, persist]);
+  }, [persist]);
 
   const onDelete = async () => {
     if (!userId || !id) return;
@@ -358,14 +381,6 @@ export function NoteDetail() {
     await adapter.notes.delete(userId, id);
     navigate('/notes');
   };
-
-  const viewableLinks = useMemo(
-    () =>
-      entityLinks.filter((l) =>
-        ['contact', 'project', 'event', 'action'].includes(l.entity_type),
-      ),
-    [entityLinks],
-  );
 
   const saveLabel = (() => {
     if (saveStatus === 'saving') return '保存中…';
@@ -396,69 +411,57 @@ export function NoteDetail() {
           ← 返回
         </button>
         <div className="note-detail__actions">
-          {editing && (
-            <span
-              className={`note-detail__save-status note-detail__save-status--${saveStatus}`}
-            >
-              {saveLabel}
-            </span>
-          )}
+          <span className={`note-detail__save-status note-detail__save-status--${saveStatus}`}>
+            {saveLabel}
+          </span>
           <button type="button" className="btn" onClick={onDelete}>
             删除
           </button>
-          {editing ? (
-            <button type="button" className="btn" onClick={() => setEditing(false)}>
-              完成
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setEditing(true)}
-            >
-              编辑
-            </button>
-          )}
         </div>
       </header>
 
-      {editing ? (
-        <div className="note-detail__edit">
-          <input
-            type="text"
-            className="input-base note-edit__title"
-            value={draftTitle}
-            onChange={(e) => setDraftTitle(e.target.value)}
-            placeholder="标题"
-          />
+      <div className="note-detail__edit">
+        <input
+          type="text"
+          className="input-base note-edit__title"
+          value={draftTitle}
+          onChange={(e) => setDraftTitle(e.target.value)}
+          placeholder="标题"
+        />
+        <div className="note-edit__tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'edit'}
+            className={`note-edit__tab ${mode === 'edit' ? 'is-active' : ''}`}
+            onClick={() => setMode('edit')}
+          >
+            编辑
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'preview'}
+            className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
+            onClick={() => setMode('preview')}
+          >
+            预览
+          </button>
+        </div>
+        {mode === 'edit' ? (
           <div className="note-edit__editor">
             <MarkdownEditor value={draftBody} onChange={setDraftBody} />
           </div>
-          <div className="note-edit__section">
-            <label className="note-edit__label">关联实体</label>
-            <EntityPicker rosters={rosters} value={draftLinks} onChange={setDraftLinks} />
+        ) : (
+          <div className="note-edit__preview">
+            <MarkdownView body={draftBody} />
           </div>
+        )}
+        <div className="note-edit__section">
+          <label className="note-edit__label">关联实体</label>
+          <EntityPicker rosters={rosters} value={draftLinks} onChange={setDraftLinks} />
         </div>
-      ) : (
-        <article className="note-detail__view">
-          <h1 className="note-detail__title">{note.title || '（无标题）'}</h1>
-          <p className="note-detail__meta">
-            更新于 {new Date(note.updated_at).toLocaleString('zh-CN')}
-          </p>
-          {viewableLinks.length > 0 && (
-            <div className="note-detail__chips">
-              {viewableLinks.map((l) => (
-                <EntityChip
-                  key={`${l.entity_type}:${l.entity_id}`}
-                  link={l}
-                  rosters={rosters}
-                />
-              ))}
-            </div>
-          )}
-          <MarkdownView body={note.body} />
-        </article>
-      )}
+      </div>
       {error && <p className="danger">{error}</p>}
     </div>
   );

@@ -140,12 +140,11 @@ test.describe('Notes feature', () => {
     await page.getByRole('button', { name: /^保存$/ }).click();
     await expect(page).toHaveURL(/\/notes\/[0-9a-f-]+$/);
 
-    // ── Detail view: title, MD rendered, 2 chips
-    await expect(page.getByRole('heading', { name: 'E2E 测试笔记' })).toBeVisible();
-    await expect(page.locator('.note-detail__view .markdown-view h1', { hasText: '标题' })).toBeVisible();
-    await expect(page.locator('.note-detail__chips .entity-chip')).toHaveCount(2);
-    await expect(page.locator('.note-detail__chips .entity-chip').nth(0)).toContainText('联系人');
-    await expect(page.locator('.note-detail__chips .entity-chip').nth(1)).toContainText('项目');
+    // ── Detail view: title input + preview tab (default) renders MD + 2 chips
+    await expect(page.locator('input.note-edit__title')).toHaveValue('E2E 测试笔记');
+    await expect(page.getByRole('tab', { name: '预览' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.note-edit__preview h1', { hasText: '标题' })).toBeVisible();
+    await expect(page.locator('.note-detail__edit .entity-picker__chips .entity-chip')).toHaveCount(2);
 
     const noteUrl = page.url();
     const noteId = noteUrl.split('/').pop()!;
@@ -171,14 +170,20 @@ test.describe('Notes feature', () => {
     await expect(backlinksPanel).toBeVisible({ timeout: 10000 });
     await expect(backlinksPanel.locator('.backlinks-panel__item')).toContainText('E2E 测试笔记');
 
-    // ── Edit: remove project link, auto-save, return to view
+    // ── Edit: switch to 编辑 tab, remove project link, auto-save, return via 返回
     await page.goto(noteUrl);
-    await page.getByRole('button', { name: /^编辑$/ }).click();
+    await page.getByRole('tab', { name: '编辑' }).click();
+    await expect(page.getByRole('tab', { name: '编辑' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.note-edit__editor .cm-content')).toBeVisible();
     await page.locator('.note-detail__edit .entity-chip__remove').nth(1).click();
-    await expect(page.locator('.note-detail__edit .entity-chip')).toHaveCount(1);
+    await expect(page.locator('.note-detail__edit .entity-picker__chips .entity-chip')).toHaveCount(1);
     await expect(page.locator('.note-detail__save-status--saved')).toBeVisible({ timeout: 8000 });
-    await page.getByRole('button', { name: /^完成$/ }).click();
-    await expect(page.locator('.note-detail__view .note-detail__chips .entity-chip')).toHaveCount(1);
+    await page.getByRole('button', { name: /^← 返回$/ }).click();
+    await expect(page).toHaveURL(/\/notes$/);
+
+    // ── Delete (open note again from list, then click 删除)
+    await page.goto(noteUrl);
+    await expect(page.locator('input.note-edit__title')).toBeVisible();
 
     // ── Delete
     page.once('dialog', (d) => d.accept());
