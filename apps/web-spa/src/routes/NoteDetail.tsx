@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
@@ -272,24 +272,54 @@ export function NoteDetail() {
   const navigate = useNavigate();
   const rosters = useEntityRosters();
   const [note, setNote] = useState<Note | null | undefined>(undefined);
+  const [entityLinks, setEntityLinks] = useState<NoteEntityLink[]>([]);
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
   const [draftLinks, setDraftLinks] = useState<NoteEntityLink[]>([]);
-  const [links, setLinks] = useState<NoteEntityLink[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const dirtyRef = useRef(false);
+
+  const persist = async (opts?: { force?: boolean }) => {
+    if (!userId || !id || !note) return;
+    if (!opts?.force && !dirtyRef.current) return;
+    const title = draftTitle.trim() || '（无标题）';
+    const linksSnapshot = draftLinks;
+    const bodySnapshot = draftBody;
+    dirtyRef.current = false;
+    setSaveStatus('saving');
+    try {
+      const updated = await adapter.notes.update(userId, id, {
+        id,
+        title,
+        body: bodySnapshot,
+        entity_links: linksSnapshot,
+      });
+      setNote(updated);
+      setEntityLinks(linksSnapshot);
+      setLastSavedAt(Date.now());
+      setSaveStatus('saved');
+    } catch (err) {
+      dirtyRef.current = true;
+      setSaveStatus('error');
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   useEffect(() => {
     if (!userId || !id) return;
     let cancelled = false;
+    setEditing(false);
+    dirtyRef.current = false;
     Promise.all([
       adapter.notes.get(userId, id),
       adapter.notes.listEntityLinks(userId, id),
     ]).then(([n, ls]) => {
       if (cancelled) return;
       setNote(n);
-      setLinks(ls);
+      setEntityLinks(ls);
       if (n) {
         setDraftTitle(n.title);
         setDraftBody(n.body);
@@ -301,41 +331,51 @@ export function NoteDetail() {
     };
   }, [adapter, userId, id]);
 
-  const onSave = async () => {
-    if (!userId || !id) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await adapter.notes.update(userId, id, {
-        id,
-        title: draftTitle.trim() || '（无标题）',
-        body: draftBody,
-        entity_links: draftLinks,
-      });
-      setNote(updated);
-      setLinks(draftLinks);
-      setEditing(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  };
+  useEffect(() => {
+    if (!editing) return;
+    dirtyRef.current = true;
+    const handle = window.setTimeout(() => {
+      void persist();
+    }, 3000);
+    return () => window.clearTimeout(handle);
+  }, [editing, draftTitle, draftBody, draftLinks]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (editing) void persist({ force: true });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, persist]);
 
   const onDelete = async () => {
     if (!userId || !id) return;
     if (!window.confirm('确定删除这条笔记？此操作不可恢复。')) return;
+    await persist({ force: true });
     await adapter.notes.delete(userId, id);
     navigate('/notes');
   };
 
   const viewableLinks = useMemo(
     () =>
-      links.filter((l) =>
+      entityLinks.filter((l) =>
         ['contact', 'project', 'event', 'action'].includes(l.entity_type),
       ),
-    [links],
+    [entityLinks],
   );
+
+  const saveLabel = (() => {
+    if (saveStatus === 'saving') return '保存中…';
+    if (saveStatus === 'error') return '保存失败';
+    if (!lastSavedAt) return '未修改';
+    const ago = Math.max(0, Math.round((Date.now() - lastSavedAt) / 1000));
+    if (ago < 5) return '已保存';
+    if (ago < 60) return `已保存 ${ago} 秒前`;
+    return `已保存 ${Math.round(ago / 60)} 分钟前`;
+  })();
 
   if (note === undefined) return <div className="page">加载中…</div>;
   if (note === null) {
@@ -356,38 +396,28 @@ export function NoteDetail() {
           ← 返回
         </button>
         <div className="note-detail__actions">
+          {editing && (
+            <span
+              className={`note-detail__save-status note-detail__save-status--${saveStatus}`}
+            >
+              {saveLabel}
+            </span>
+          )}
+          <button type="button" className="btn" onClick={onDelete}>
+            删除
+          </button>
           {editing ? (
-            <>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  setDraftTitle(note.title);
-                  setDraftBody(note.body);
-                  setDraftLinks(links);
-                  setEditing(false);
-                }}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={onSave}
-                disabled={saving}
-              >
-                {saving ? '保存中…' : '保存'}
-              </button>
-            </>
+            <button type="button" className="btn" onClick={() => setEditing(false)}>
+              完成
+            </button>
           ) : (
-            <>
-              <button type="button" className="btn" onClick={() => setEditing(true)}>
-                编辑
-              </button>
-              <button type="button" className="btn btn-danger" onClick={onDelete}>
-                删除
-              </button>
-            </>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setEditing(true)}
+            >
+              编辑
+            </button>
           )}
         </div>
       </header>
@@ -399,6 +429,7 @@ export function NoteDetail() {
             className="input-base note-edit__title"
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
+            placeholder="标题"
           />
           <div className="note-edit__editor">
             <MarkdownEditor value={draftBody} onChange={setDraftBody} />
