@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
@@ -22,6 +22,18 @@ function relTime(iso: string): string {
 function snippet(body: string, max = 140): string {
   const stripped = body.replace(/\[\[[^\]]+\]\]/g, '').replace(/\s+/g, ' ').trim();
   return stripped.length > max ? `${stripped.slice(0, max)}…` : stripped;
+}
+
+function dateBucket(iso: string): string {
+  const t = new Date(iso);
+  const now = new Date();
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.floor((startOf(now) - startOf(t)) / 86_400_000);
+  if (days <= 0) return '今天';
+  if (days === 1) return '昨天';
+  if (days < 7) return '本周';
+  if (days < 30) return '过去 30 天';
+  return '更早';
 }
 
 export function NotesList() {
@@ -66,18 +78,42 @@ export function NotesList() {
         </div>
       )}
       {notes && notes.length > 0 && (
-        <ul className="notes-list__items">
-          {notes.map((n) => (
-            <li key={n.id} className="notes-list__item">
-              <Link to={`/notes/${n.id}`} className="notes-list__link">
-                <div className="notes-list__title">{n.title || '（无标题）'}</div>
-                <div className="notes-list__snippet">{snippet(n.body) || '（空白）'}</div>
-                <div className="notes-list__meta">更新于 {relTime(n.updated_at)}</div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <NotesGroups notes={notes} />
       )}
+    </div>
+  );
+}
+
+const BUCKET_ORDER = ['今天', '昨天', '本周', '过去 30 天', '更早'];
+
+function NotesGroups({ notes }: { notes: Note[] }) {
+  const grouped = useMemo(() => {
+    const map = new Map<string, Note[]>();
+    for (const n of notes) {
+      const b = dateBucket(n.updated_at);
+      if (!map.has(b)) map.set(b, []);
+      map.get(b)!.push(n);
+    }
+    return BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ label: b, items: map.get(b)! }));
+  }, [notes]);
+  return (
+    <div className="notes-list__groups">
+      {grouped.map((g) => (
+        <section key={g.label} className="notes-list__group">
+          <h2 className="notes-list__group-title">{g.label}</h2>
+          <ul className="notes-list__items">
+            {g.items.map((n) => (
+              <li key={n.id} className="notes-list__item">
+                <Link to={`/notes/${n.id}`} className="notes-list__link">
+                  <div className="notes-list__title">{n.title || '（无标题）'}</div>
+                  <div className="notes-list__snippet">{snippet(n.body) || '（空白）'}</div>
+                  <div className="notes-list__meta">更新于 {relTime(n.updated_at)}</div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

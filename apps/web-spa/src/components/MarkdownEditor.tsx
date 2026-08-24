@@ -169,6 +169,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const hostRef = useRef<HTMLDivElement | null>(null);
     const viewRef = useRef<EditorView | null>(null);
     const readOnlyComp = useRef(new Compartment());
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
     const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
     const [slashMenu, setSlashMenu] = useState<{
       x: number;
@@ -185,7 +187,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       });
       viewRef.current = view;
 
-      const handler = (e: Event) => onChange((e as CustomEvent<string>).detail);
+      const handler = (e: Event) => onChangeRef.current((e as CustomEvent<string>).detail);
       view.dom.addEventListener('markdown-change', handler);
 
       const refresh = () => {

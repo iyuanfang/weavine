@@ -1,4 +1,61 @@
 import { useEffect, useRef, useState } from 'react';
+
+const NOTE_TEMPLATES: { id: string; icon: string; title: string; body: string }[] = [
+  {
+    id: 'meeting',
+    icon: '🤝',
+    title: '会议记录',
+    body: `# 会议主题
+
+**时间**：${new Date().toLocaleString('zh-CN')}
+**参与人**：
+
+## 议题
+- 
+
+## 决议
+- 
+
+## 待办
+- [ ] 
+
+`,
+  },
+  {
+    id: 'idea',
+    icon: '💡',
+    title: '想法',
+    body: `# 
+
+## 为什么想做
+- 
+
+## 怎么做
+- 
+
+## 风险
+- 
+
+`,
+  },
+  {
+    id: 'retro',
+    icon: '🔄',
+    title: '复盘',
+    body: `# 
+
+## 做得好的
+- 
+
+## 做得不好的
+- 
+
+## 下一步
+- 
+
+`,
+  },
+];
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
@@ -301,7 +358,34 @@ export function NoteNew() {
         </div>
         {mode === 'edit' ? (
           <div className="note-edit__editor">
-            <MarkdownEditor value={body} onChange={setBody} />
+            {body.trim() === '' && (
+              <div className="note-edit__templates">
+                <span className="note-edit__templates-label">快速开始：</span>
+                {NOTE_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="note-edit__template"
+                    onClick={() => {
+                      setBody(t.body);
+                      setTitle(t.title);
+                    }}
+                  >
+                    {t.icon} {t.title}
+                  </button>
+                ))}
+              </div>
+            )}
+            <MarkdownEditor
+              value={body}
+              onChange={(next) => {
+                if (!title.trim()) {
+                  const heading = next.match(/^\s*#\s+(.+?)\s*$/m);
+                  if (heading) setTitle(heading[1].slice(0, 120));
+                }
+                setBody(next);
+              }}
+            />
           </div>
         ) : (
           <div className="note-edit__preview">

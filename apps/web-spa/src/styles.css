@@ -2167,6 +2167,20 @@ textarea.input-base {
   flex-direction: column;
   gap: 8px;
 }
+.notes-list__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.notes-list__group-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+  padding: 0 2px;
+}
 .notes-list__item {
   background: var(--surface, #fff);
   border: 1px solid var(--border);
@@ -2251,6 +2265,37 @@ textarea.input-base {
   padding: 6px 8px 0;
   border-bottom: 1px solid var(--border, #e5e7eb);
   background: var(--surface-2, #fafafa);
+}
+.note-edit__templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface-2, #fafafa);
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  align-items: center;
+}
+.note-edit__templates-label {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+  margin-right: 4px;
+}
+.note-edit__template {
+  appearance: none;
+  background: var(--surface-1, #ffffff);
+  border: 1px dashed var(--border, #e5e7eb);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text, #111827);
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.note-edit__template:hover {
+  border-color: var(--accent, #8b5cf6);
+  border-style: solid;
+  color: var(--accent, #8b5cf6);
 }
 .note-edit__tab {
   appearance: none;
