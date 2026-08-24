@@ -386,6 +386,7 @@ pub struct SearchResults {
     pub events: Vec<Event>,
     pub actions: Vec<Action>,
     pub projects: Vec<Project>,
+    pub notes: Vec<Note>,
 }
 
 // ──────────────────────────────────────────────
@@ -574,4 +575,53 @@ pub struct UpdateTagInput {
     #[serde(default)]
     pub id: String,
     pub name: Option<String>,
+}
+
+// ──────────────────────────────────────────────
+// Notes
+// ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
+pub struct Note {
+    pub id: String,
+    pub user_id: String,
+    pub title: String,
+    pub body: String,
+    pub archived_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "sqlx", derive(sqlx::FromRow))]
+pub struct NoteEntity {
+    pub id: String,
+    pub note_id: String,
+    pub user_id: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateNoteInput {
+    pub user_id: String,
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateNoteInput {
+    #[serde(default)]
+    pub id: String,
+    pub title: Option<String>,
+    pub body: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteBacklink {
+    pub note_id: String,
+    pub note_title: String,
+    pub snippet: String,
 }

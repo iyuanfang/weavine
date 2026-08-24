@@ -216,6 +216,26 @@ CREATE TABLE IF NOT EXISTS "Media" (
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS "Note" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL DEFAULT '',
+    "archived_at" TEXT,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS "NoteEntity" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "note_id" TEXT NOT NULL REFERENCES "Note"("id") ON DELETE CASCADE,
+    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "entity_type" TEXT NOT NULL CHECK("entity_type" IN ('contact','project','action','event')),
+    "entity_id" TEXT NOT NULL,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE("note_id", "entity_type", "entity_id")
+);
 "#;
 
 const INDEX_SQL: &str = r#"
@@ -261,6 +281,9 @@ CREATE INDEX IF NOT EXISTS "ProjectContact_contact_id_idx" ON "ProjectContact"("
 CREATE INDEX IF NOT EXISTS "Contact_user_id_last_interaction_at_idx" ON "Contact"("user_id", "last_interaction_at DESC");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_created_at_idx" ON "Contact"("user_id", "created_at DESC");
 CREATE INDEX IF NOT EXISTS "Contact_user_id_nickname_idx" ON "Contact"("user_id", "nickname COLLATE NOCASE ASC");
+CREATE INDEX IF NOT EXISTS "ix_Note_user_updated" ON "Note"("user_id", "updated_at" DESC);
+CREATE INDEX IF NOT EXISTS "ix_NoteEntity_note" ON "NoteEntity"("note_id");
+CREATE INDEX IF NOT EXISTS "ix_NoteEntity_target" ON "NoteEntity"("entity_type", "entity_id");
 CREATE TABLE IF NOT EXISTS "UserAccount" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,

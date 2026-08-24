@@ -2,6 +2,7 @@ use crate::business::action::row_to_action;
 use crate::business::contact::row_to_contact;
 use crate::business::event::row_to_event;
 use crate::business::interaction::row_to_interaction;
+use crate::business::note::row_to_note;
 use crate::business::project::row_to_project;
 use crate::models::*;
 use rusqlite::Connection;
@@ -97,11 +98,28 @@ pub fn search(
         results
     };
 
+    let notes: Vec<Note> = {
+        let sql = format!(
+            "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
+             FROM Note WHERE user_id = ?1 \
+             AND (title LIKE ?2 OR body LIKE ?2){} \
+             ORDER BY updated_at DESC LIMIT ?3",
+            archive_clause
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let results = stmt
+            .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_note)?
+            .filter_map(|r| r.ok())
+            .collect::<Vec<Note>>();
+        results
+    };
+
     Ok(SearchResults {
         contacts,
         interactions,
         events,
         actions,
         projects,
+        notes,
     })
 }
