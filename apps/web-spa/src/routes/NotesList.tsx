@@ -36,17 +36,21 @@ function dateBucket(iso: string): string {
   return '更早';
 }
 
+type ArchiveFilter = 'active' | 'archived' | 'all';
+
 export function NotesList() {
   const adapter = useAdapter();
   const userId = useUserId() ?? '';
   const navigate = useNavigate();
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [filter, setFilter] = useState('');
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active');
 
   useEffect(() => {
     if (!userId) return;
-    adapter.notes.list(userId).then(setNotes).catch(() => setNotes([]));
-  }, [adapter, userId]);
+    setNotes(null);
+    adapter.notes.list(userId, { archived: archiveFilter }).then(setNotes).catch(() => setNotes([]));
+  }, [adapter, userId, archiveFilter]);
 
   const filteredNotes = useMemo(() => {
     if (!notes) return null;
@@ -70,45 +74,67 @@ export function NotesList() {
         </button>
       </header>
 
-      {notes && notes.length > 0 && (
-        <div className="notes-list__filter">
-          <input
-            type="search"
-            className="input-base"
-            placeholder="筛选笔记…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-          {filter && (
-            <span className="notes-list__filter-count">
-              {filteredNotes!.length} / {notes.length}
-            </span>
-          )}
+      <div className="notes-list__filter-row">
+        <div className="notes-list__tabs" role="tablist" aria-label="笔记状态">
+          {(['active', 'archived', 'all'] as ArchiveFilter[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={archiveFilter === k}
+              className={`notes-list__tab ${archiveFilter === k ? 'is-active' : ''}`}
+              onClick={() => setArchiveFilter(k)}
+            >
+              {k === 'active' ? '活跃' : k === 'archived' ? '已归档' : '全部'}
+            </button>
+          ))}
         </div>
-      )}
+        {notes && notes.length > 0 && (
+          <div className="notes-list__filter">
+            <input
+              type="search"
+              className="input-base"
+              placeholder="筛选笔记…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            {filter && (
+              <span className="notes-list__filter-count">
+                {filteredNotes!.length} / {notes.length}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       {notes === null && <p className="muted">加载中…</p>}
       {notes && notes.length === 0 && (
         <div className="empty-state">
-          <h3 className="empty-state__title">还没有笔记</h3>
+          <h3 className="empty-state__title">
+            {archiveFilter === 'archived' ? '没有已归档的笔记' : '还没有笔记'}
+          </h3>
           <p className="empty-state__hint">
-            点上面「+ 新建笔记」开始，或在联系人/项目里点「+ 笔记」直接关联。
+            {archiveFilter === 'archived'
+              ? '归档后的笔记会出现在这里。在笔记详情页点「归档」即可收纳。'
+              : '点上面「+ 新建笔记」开始，或在联系人/项目里点「+ 笔记」直接关联。'}
           </p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ marginTop: 12 }}
-            onClick={() => navigate('/notes/new')}
-          >
-            + 新建笔记
-          </button>
+          {archiveFilter !== 'archived' && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: 12 }}
+              onClick={() => navigate('/notes/new')}
+            >
+              + 新建笔记
+            </button>
+          )}
         </div>
       )}
       {filteredNotes && filteredNotes.length === 0 && notes && notes.length > 0 && (
         <p className="muted">没有匹配「{filter}」的笔记。</p>
       )}
       {filteredNotes && filteredNotes.length > 0 && (
-        <NotesGroups notes={filteredNotes} />
+        <NotesGroups notes={filteredNotes} archiveFilter={archiveFilter} />
       )}
     </div>
   );
@@ -116,7 +142,7 @@ export function NotesList() {
 
 const BUCKET_ORDER = ['今天', '昨天', '本周', '过去 30 天', '更早'];
 
-function NotesGroups({ notes }: { notes: Note[] }) {
+function NotesGroups({ notes, archiveFilter }: { notes: Note[]; archiveFilter: ArchiveFilter }) {
   const grouped = useMemo(() => {
     const map = new Map<string, Note[]>();
     for (const n of notes) {
@@ -133,11 +159,14 @@ function NotesGroups({ notes }: { notes: Note[] }) {
           <h2 className="notes-list__group-title">{g.label}</h2>
           <ul className="notes-list__items">
             {g.items.map((n) => (
-              <li key={n.id} className="notes-list__item">
+              <li key={n.id} className={`notes-list__item ${archiveFilter !== 'active' && n.archived_at ? 'is-archived' : ''}`}>
                 <Link to={`/notes/${n.id}`} className="notes-list__link">
                   <div className="notes-list__title">{n.title || '（无标题）'}</div>
                   <div className="notes-list__snippet">{snippet(n.body) || '（空白）'}</div>
-                  <div className="notes-list__meta">更新于 {relTime(n.updated_at)}</div>
+                  <div className="notes-list__meta">
+                    更新于 {relTime(n.updated_at)}
+                    {n.archived_at && <span className="notes-list__badge">已归档</span>}
+                  </div>
                 </Link>
               </li>
             ))}

@@ -143,7 +143,8 @@ pub async fn update(
         "UPDATE note SET \
             title      = COALESCE($3, title), \
             body       = COALESCE($4, body),  \
-            updated_at = $5 \
+            updated_at = $5, \
+            archived_at = CASE WHEN $6::bool THEN $5 ELSE NULL END \
          WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)
@@ -151,6 +152,7 @@ pub async fn update(
     .bind(&input.title)
     .bind(&input.body)
     .bind(&now_str)
+    .bind(input.archived.unwrap_or(false))
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("update: {e}")))?;

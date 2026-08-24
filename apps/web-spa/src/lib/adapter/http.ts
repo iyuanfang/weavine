@@ -408,12 +408,14 @@ export class HttpAdapter implements PRMAdapter {
   };
 
   notes = {
-    list: (_user_id: string, opts?: { include_archived?: boolean | null }): Promise<Note[]> =>
-      request<Note[]>(
+    list: (_user_id: string, opts?: { archived?: 'active' | 'archived' | 'all' }): Promise<Note[]> => {
+      const include = opts?.archived === 'archived' || opts?.archived === 'all';
+      return request<Note[]>(
         this.baseUrl,
         'GET',
-        '/api/notes' + qs({ archived: opts?.include_archived ? 'true' : null }),
-      ),
+        '/api/notes' + qs({ archived: include ? 'true' : null }),
+      );
+    },
 
     get: async (_user_id: string, id: string): Promise<Note | null> => {
       try {

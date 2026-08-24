@@ -85,9 +85,10 @@ pub fn update(conn: &Connection, user_id: &str, id: &str, input: &UpdateNoteInpu
         "UPDATE Note SET \
             title      = COALESCE(?3, title), \
             body       = COALESCE(?4, body),  \
-            updated_at = ?5 \
+            updated_at = ?5, \
+            archived_at = CASE WHEN ?6 THEN ?5 ELSE NULL END \
          WHERE id = ?1 AND user_id = ?2",
-        params![id, user_id, input.title, input.body, now],
+        params![id, user_id, input.title, input.body, now, input.archived.unwrap_or(false)],
     )?;
     if changed == 0 {
         return Ok(None);
