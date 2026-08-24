@@ -12,6 +12,7 @@ import {
 
 import { QuickCapture } from './components/QuickCapture';
 import { QuickFab } from './components/QuickFab';
+import { SearchPalette } from './components/SearchPalette';
 import { ReminderToastContainer, type ReminderToastItem } from './components/ReminderToast';
 import { useGlobalShortcut } from './hooks/useGlobalShortcut';
 import { RegisterSW } from './lib/register-sw';
@@ -34,6 +35,19 @@ const QuickCaptureContext = createContext<QuickCaptureApi | null>(null);
 export function useQuickCapture(): QuickCaptureApi {
   const ctx = useContext(QuickCaptureContext);
   if (!ctx) throw new Error('useQuickCapture must be used within AppInner');
+  return ctx;
+}
+
+interface GlobalSearchApi {
+  open: (initialQuery?: string) => void;
+  close: () => void;
+}
+
+const SearchContext = createContext<GlobalSearchApi | null>(null);
+
+export function useGlobalSearch(): GlobalSearchApi {
+  const ctx = useContext(SearchContext);
+  if (!ctx) throw new Error('useGlobalSearch must be used within AppInner');
   return ctx;
 }
 
@@ -64,6 +78,29 @@ export function AppInner({ children }: { children?: ReactNode }) {
   const [pendingReminders, setPendingReminders] = useState<ReminderToastItem[]>([]);
   const seenReminderIds = useRef<Set<string>>(new Set());
   useGlobalShortcut('k', () => setQuickOpen((o) => !o));
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchInitial, setSearchInitial] = useState('');
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      setSearchOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const openSearch = (initialQuery: string = '') => {
+    setSearchInitial(initialQuery);
+    setSearchOpen(true);
+  };
+  const closeSearch = () => setSearchOpen(false);
+  const searchApi = useMemo<GlobalSearchApi>(
+    () => ({ open: openSearch, close: closeSearch }),
+    [],
+  );
   const openQuick = (initialText: string = '') => {
     setQuickInitial(initialText);
     setQuickOpen(true);
@@ -102,15 +139,24 @@ export function AppInner({ children }: { children?: ReactNode }) {
 
   return (
     <QuickCaptureContext.Provider value={quickApi}>
-      {children}
-      <QuickFab onOpen={openQuick} />
-      <ReminderToastContainer reminders={pendingReminders} onDismiss={dismissReminder} />
-      {quickOpen && (
-        <QuickCapture
-          onClose={() => setQuickOpen(false)}
-          initialText={quickInitial}
-        />
-      )}
+      <SearchContext.Provider value={searchApi}>
+        {children}
+        <QuickFab onOpen={openQuick} />
+        <ReminderToastContainer reminders={pendingReminders} onDismiss={dismissReminder} />
+        {quickOpen && (
+          <QuickCapture
+            onClose={() => setQuickOpen(false)}
+            initialText={quickInitial}
+          />
+        )}
+        {searchOpen && (
+          <SearchPalette
+            open={searchOpen}
+            onClose={closeSearch}
+            initialQuery={searchInitial}
+          />
+        )}
+      </SearchContext.Provider>
     </QuickCaptureContext.Provider>
   );
 }

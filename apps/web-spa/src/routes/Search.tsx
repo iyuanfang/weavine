@@ -199,14 +199,16 @@ export function SearchPage() {
   );
 }
 
-function SearchSection({
+export function SearchSection({
   title,
   viewAllHref,
   items,
+  activeKey,
 }: {
   title: string;
   viewAllHref: string;
   items: { key: string; href: string; title: string; meta: string; isArchived?: boolean; tag?: string }[];
+  activeKey?: string;
 }) {
   return (
     <section className="section" style={{ marginBottom: 0 }}>
@@ -223,7 +225,7 @@ function SearchSection({
           <Link
             key={item.key}
             to={item.href}
-            className="row-card"
+            className={`row-card${item.key === activeKey ? ' row-card--active' : ''}`}
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
             <span className="row-card__title" style={{ opacity: item.isArchived ? 0.65 : 1 }}>

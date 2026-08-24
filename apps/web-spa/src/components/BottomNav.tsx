@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
+import { useGlobalSearch } from '../App';
 import { MoreSheet } from './MoreSheet';
 
 const primaryTabs = [
@@ -17,10 +18,19 @@ function isFullScreenRoute(pathname: string): boolean {
 
 export function BottomNav() {
   const { pathname } = useLocation();
+  const { open: openSearch } = useGlobalSearch();
   const [moreOpen, setMoreOpen] = useState(false);
   if (isFullScreenRoute(pathname)) return null;
   return (
     <>
+      <button
+        type="button"
+        className="search-fab"
+        onClick={() => openSearch()}
+        aria-label="搜索"
+      >
+        🔍
+      </button>
       <nav className="bottom-nav" aria-label="主导航">
         {primaryTabs.map((tab) => (
           <NavLink

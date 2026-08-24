@@ -4,7 +4,7 @@ import { NavLink } from 'react-router-dom';
 import { isTauri } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
 import { clearSession } from '../lib/auth/storage';
-import { useQuickCapture } from '../App';
+import { useQuickCapture, useGlobalSearch } from '../App';
 import { BottomNav } from './BottomNav';
 
 const navItems = [
@@ -27,6 +27,7 @@ function shortcutLabel(): string {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading: userLoading } = useLocalUser();
   const { open: openQuickCapture } = useQuickCapture();
+  const { open: openSearch } = useGlobalSearch();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showReleaseTip, setShowReleaseTip] = useState(() => {
     if (typeof localStorage === 'undefined') return false;
@@ -48,6 +49,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const nav = (
     <>
+      <button
+        type="button"
+        className="app-shell__search"
+        onClick={() => {
+          openSearch();
+          setDrawerOpen(false);
+        }}
+        aria-label="搜索"
+      >
+        <span className="app-shell__search-icon" aria-hidden="true">
+          🔍
+        </span>
+        <span className="app-shell__search-text">搜索…</span>
+        <kbd className="app-shell__search-kbd">/</kbd>
+      </button>
+
       <div className="app-shell__brand">
         <img src="/logo.svg" alt="Weavine" className="app-shell__brand-logo" />
         <span className="app-shell__brand-text">Weavine</span>
