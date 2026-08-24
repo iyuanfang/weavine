@@ -69,7 +69,7 @@ fn dirs_data_dir_fallback() -> std::path::PathBuf {
 #[cfg(feature = "tauri")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use commands::{action, contact, diagnostic, event, install_id as cmd_install_id, interaction, media, ocr, project, project_contact, quick, reminder, search, setting, tag, voice};
+    use commands::{action, contact, diagnostic, event, install_id as cmd_install_id, interaction, media, note, ocr, project, project_contact, quick, reminder, search, setting, tag, voice};
     use db::Database;
     use std::fs;
     use tauri::{Emitter, Manager};
@@ -334,6 +334,12 @@ pub fn run() {
             media::delete_media,
             ocr::extract_card,
         ocr::save_card_image,
+            note::list_notes,
+            note::get_note,
+            note::create_note,
+            note::update_note,
+            note::delete_note,
+            note::list_note_backlinks,
             voice::recognize_voice,
             #[cfg(feature = "voice-local")]
             commands::voice_local::check_voice_model,

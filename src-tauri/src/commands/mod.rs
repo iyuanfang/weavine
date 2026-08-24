@@ -6,6 +6,7 @@ pub mod event;
 pub mod interaction;
 pub mod install_id;
 pub mod notification;
+pub mod note;
 pub mod params;
 pub mod project;
 pub mod project_contact;
