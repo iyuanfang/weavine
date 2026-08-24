@@ -173,6 +173,8 @@ pub fn push_columns(kind: &str) -> &'static [&'static str] {
         "contact_tag" => &["user_id","contact_id","tag_id"],
         "project_contact" => &["user_id","project_id","contact_id","role","added_at"],
         "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","label","created_at"],
+        "note" => &["id","user_id","title","body","archived_at","created_at","updated_at"],
+        "note_entity" => &["id","note_id","user_id","entity_type","entity_id","created_at"],
         _ => &[],
     }
 }
