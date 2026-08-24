@@ -42,11 +42,17 @@ export function BacklinksPanel({ entityType, entityId }: Props) {
   }, [adapter, userId, entityType, entityId]);
 
   if (items === null) return null;
+  const newHref = `/notes/new?link_${entityType}=${encodeURIComponent(entityId)}`;
   if (items.length === 0) {
     return (
       <section className="backlinks-panel">
-        <h3 className="backlinks-panel__title">相关笔记</h3>
-        <p className="backlinks-panel__empty">暂无笔记引用</p>
+        <div className="backlinks-panel__header">
+          <h3 className="backlinks-panel__title">相关笔记</h3>
+          <Link to={newHref} className="backlinks-panel__cta">
+            + 新建笔记
+          </Link>
+        </div>
+        <p className="backlinks-panel__empty">暂无笔记引用 — 点击上方按钮快速创建一条</p>
       </section>
     );
   }
@@ -54,7 +60,12 @@ export function BacklinksPanel({ entityType, entityId }: Props) {
   const visible = expanded ? items : items.slice(0, COLLAPSED_LIMIT);
   return (
     <section className="backlinks-panel">
-      <h3 className="backlinks-panel__title">相关笔记（{items.length}）</h3>
+      <div className="backlinks-panel__header">
+        <h3 className="backlinks-panel__title">相关笔记（{items.length}）</h3>
+        <Link to={newHref} className="backlinks-panel__cta">
+          + 新建笔记
+        </Link>
+      </div>
       <ul className="backlinks-panel__list">
         {visible.map((b) => (
           <li key={b.note_id} className="backlinks-panel__item">

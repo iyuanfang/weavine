@@ -50,7 +50,20 @@ export function NotesList() {
 
       {notes === null && <p className="muted">加载中…</p>}
       {notes && notes.length === 0 && (
-        <p className="muted">还没有笔记。点击右上角新建一条，或在快速记录里选「笔记」。</p>
+        <div className="empty-state">
+          <h3 className="empty-state__title">还没有笔记</h3>
+          <p className="empty-state__hint">
+            点上面「+ 新建笔记」开始，或在联系人/项目里点「+ 笔记」直接关联。
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            onClick={() => navigate('/notes/new')}
+          >
+            + 新建笔记
+          </button>
+        </div>
       )}
       {notes && notes.length > 0 && (
         <ul className="notes-list__items">

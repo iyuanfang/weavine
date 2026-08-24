@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
@@ -200,12 +200,46 @@ export function NoteNew() {
   const adapter = useAdapter();
   const navigate = useNavigate();
   const rosters = useEntityRosters();
+  const userId = useUserId() ?? '';
+  const [searchParams] = useSearchParams();
+  const preContact = searchParams.get('link_contact');
+  const preProject = searchParams.get('link_project');
+  const preEvent = searchParams.get('link_event');
+  const preAction = searchParams.get('link_action');
+  const cloneFrom = searchParams.get('clone_from');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
-  const [links, setLinks] = useState<NoteEntityLink[]>([]);
+  const [links, setLinks] = useState<NoteEntityLink[]>(() => {
+    const init: NoteEntityLink[] = [];
+    if (preContact) init.push({ entity_type: 'contact', entity_id: preContact });
+    if (preProject) init.push({ entity_type: 'project', entity_id: preProject });
+    if (preEvent) init.push({ entity_type: 'event', entity_id: preEvent });
+    if (preAction) init.push({ entity_type: 'action', entity_id: preAction });
+    return init;
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Clone from an existing note — fetch its body + links (without the title prefix).
+  useEffect(() => {
+    if (!cloneFrom || !userId) return;
+    let cancelled = false;
+    Promise.all([
+      adapter.notes.get(userId, cloneFrom),
+      adapter.notes.listEntityLinks(userId, cloneFrom),
+    ])
+      .then(([n, ls]) => {
+        if (cancelled || !n) return;
+        setTitle('');
+        setBody(n.body);
+        setLinks(ls);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [cloneFrom, adapter, userId]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -419,6 +453,13 @@ export function NoteDetail() {
           <span className={`note-detail__save-status note-detail__save-status--${saveStatus}`}>
             {saveLabel}
           </span>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => navigate(`/notes/new?clone_from=${id}`)}
+          >
+            复制
+          </button>
           <button type="button" className="btn" onClick={onDelete}>
             删除
           </button>

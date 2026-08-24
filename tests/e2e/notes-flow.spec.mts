@@ -169,6 +169,15 @@ test.describe('Notes feature', () => {
     const backlinksPanel = page.locator('.backlinks-panel');
     await expect(backlinksPanel).toBeVisible({ timeout: 10000 });
     await expect(backlinksPanel.locator('.backlinks-panel__item')).toContainText('E2E 测试笔记');
+    await expect(backlinksPanel.locator('.backlinks-panel__cta')).toBeVisible();
+
+    // ── Quick-add: click the backlinks-panel CTA → /notes/new?link_contact=... with chip pre-set
+    const secondContactId = seed.contactId;
+    await backlinksPanel.locator('.backlinks-panel__cta').click();
+    await expect(page).toHaveURL(new RegExp(`/notes/new\\?link_contact=${secondContactId}`));
+    await expect(page.locator('.entity-picker__chips .entity-chip')).toHaveCount(1);
+    await expect(page.locator('.entity-picker__chips .entity-chip')).toContainText(seed.contactNickname);
+    await page.getByRole('button', { name: /^← 返回$/ }).click();
 
     // ── Edit: switch to 编辑 tab, remove project link, auto-save, return via 返回
     await page.goto(noteUrl);
