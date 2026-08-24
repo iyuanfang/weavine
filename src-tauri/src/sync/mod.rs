@@ -565,7 +565,7 @@ mod tests {
         let conn = open_minimal();
         let data = json!({
             "id": "p1", "user_id": "u1", "title": "Demo",
-            "description": "hello", "template": "general", "stage": "进行中",
+            "template": "general", "stage": "进行中",
             "start_at": "2026-08-01T00:00:00Z", "due_at": null, "completed_at": null,
             "archived_at": "2026-07-05T12:00:00Z",
             "created_at": "2026-07-05T00:00:00Z",
@@ -574,14 +574,14 @@ mod tests {
         apply_change(&conn, &change_row("project", "UPDATE", "p1", data), "local-default")
             .expect("apply");
 
-        let (desc, archived, due): (String, String, Option<String>) = conn
+        let (template, archived, due): (String, String, Option<String>) = conn
             .query_row(
-                "SELECT description, archived_at, due_at FROM Project WHERE id='p1'",
+                "SELECT template, archived_at, due_at FROM Project WHERE id='p1'",
                 [],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .expect("query");
-        assert_eq!(desc, "hello");
+        assert_eq!(template, "general");
         assert_eq!(archived, "2026-07-05T12:00:00Z");
         assert!(due.is_none());
     }

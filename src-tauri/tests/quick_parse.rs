@@ -13,7 +13,6 @@ fn contact(id: &str, name: &str) -> Contact {
         email: None,
         phone: None,
         wechat: None,
-        notes: None,
         importance: "low".into(),
         last_interaction_at: "2026-01-01T00:00:00Z".into(),
         keep_in_touch_cadence_days: None,

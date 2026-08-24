@@ -22,8 +22,8 @@ fn search_returns_contact_with_correct_importance_after_reminder_column_drop() {
     seed_user(&conn, "u1");
 
     conn.execute(
-        "INSERT INTO \"Contact\" (id, user_id, nickname, name, importance, notes, created_at, updated_at) \
-         VALUES ('c1', 'u1', 'Ali', 'Alice', 'high', 'needle-token', '2026-08-09', '2026-08-09')",
+        "INSERT INTO \"Contact\" (id, user_id, nickname, name, importance, created_at, updated_at) \
+         VALUES ('c1', 'u1', 'Ali', 'Alice', 'high', '2026-08-09', '2026-08-09')",
         [],
     )
     .unwrap();
@@ -37,7 +37,6 @@ fn search_returns_contact_with_correct_importance_after_reminder_column_drop() {
         c.importance, "high",
         "importance must survive the SELECT round-trip (would be corrupted if reminder columns were still in the SELECT list)"
     );
-    assert_eq!(c.notes.as_deref(), Some("needle-token"));
     assert!(
         !c.last_interaction_at.is_empty(),
         "last_interaction_at must be populated on a fresh contact (stamped to created_at)"
@@ -51,8 +50,8 @@ fn search_returns_multiple_contacts_with_distinct_importance_levels() {
 
     for (i, imp) in ["high", "low", "medium"].iter().enumerate() {
         conn.execute(
-            "INSERT INTO \"Contact\" (id, user_id, nickname, name, importance, notes, created_at, updated_at) \
-             VALUES (?1, 'u1', ?2, ?3, ?4, 'shared-token', '2026-08-09', '2026-08-09')",
+            "INSERT INTO \"Contact\" (id, user_id, nickname, name, importance, created_at, updated_at) \
+             VALUES (?1, 'u1', ?2, ?3, ?4, '2026-08-09', '2026-08-09')",
             rusqlite::params![format!("c{i}"), format!("p{i}"), format!("Person {i}"), imp],
         )
         .unwrap();
@@ -73,9 +72,6 @@ fn search_returns_multiple_contacts_with_distinct_importance_levels() {
             "importance {needed} must round-trip, got {importances:?}"
         );
     }
-    for c in &results.contacts {
-        assert_eq!(c.notes.as_deref(), Some("shared-token"));
-    }
 }
 
 #[test]
@@ -84,8 +80,8 @@ fn project_contact_list_returns_contact_with_correct_importance() {
     seed_user(&conn, "u1");
 
     conn.execute(
-        "INSERT INTO \"Contact\" (id, user_id, nickname, name, importance, notes, created_at, updated_at) \
-         VALUES ('c1', 'u1', 'B', 'Bob', 'medium', 'should round-trip', '2026-08-09', '2026-08-09')",
+        "INSERT INTO \"Contact\" (id, user_id, nickname, name, importance, created_at, updated_at) \
+         VALUES ('c1', 'u1', 'B', 'Bob', 'medium', '2026-08-09', '2026-08-09')",
         [],
     )
     .unwrap();
