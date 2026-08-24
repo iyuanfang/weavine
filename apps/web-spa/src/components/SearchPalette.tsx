@@ -108,6 +108,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
   const events = results?.events ?? [];
   const actions = results?.actions ?? [];
   const projects = results?.projects ?? [];
+  const notes = results?.notes ?? [];
 
   const sections = useMemo(
     () => [
@@ -175,8 +176,25 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
           isArchived: !!p.archived_at,
         })),
       },
+      {
+        title: '笔记',
+        viewAllHref: '/notes',
+        items: notes.map((n) => {
+          const firstLine = (n.body || '').split('\n').find((l) => l.trim().length > 0) ?? '';
+          const title = n.title || firstLine.replace(/^#+\s*/, '').slice(0, 40) || '（无标题）';
+          return {
+            key: n.id,
+            href: `/notes/${n.id}?from=/search`,
+            title,
+            meta: new Date(n.updated_at).toLocaleDateString('zh-CN', {
+              month: 'numeric',
+              day: 'numeric',
+            }),
+          };
+        }),
+      },
     ],
-    [contacts, interactions, events, actions, projects],
+    [contacts, interactions, events, actions, projects, notes],
   );
 
   const flatItems = useMemo(() => sections.flatMap((s) => s.items), [sections]);
@@ -230,7 +248,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
             ref={inputRef}
             type="text"
             className="search-palette__input"
-            placeholder="搜索联系人、互动、日程、待办、项目…"
+            placeholder="搜索联系人、互动、日程、待办、项目、笔记…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="搜索关键词"

@@ -33,7 +33,7 @@ pub async fn parse(
         // parser response (cross-user nickname撞库).
         sqlx::query_as::<_, Contact>(
             "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
-             notes, importance, last_interaction_at, keep_in_touch_cadence_days, \
+             importance, last_interaction_at, keep_in_touch_cadence_days, \
              created_at, updated_at, \
              avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, \
              avatar_height::BIGINT AS avatar_height, avatar_alt_text \

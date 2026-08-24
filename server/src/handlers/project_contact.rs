@@ -21,7 +21,6 @@ struct ContactWithRole {
     email: Option<String>,
     phone: Option<String>,
     wechat: Option<String>,
-    notes: Option<String>,
     importance: String,
     last_interaction_at: String,
     created_at: String,
@@ -38,7 +37,7 @@ pub async fn list(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, ContactWithRole>(
         "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.address, c.email, c.phone, c.wechat, \
-                c.notes, c.importance, c.last_interaction_at, \
+                c.importance, c.last_interaction_at, \
                 c.created_at, c.updated_at, pc.role, pc.added_at \
          FROM project_contact pc \
          JOIN contact c ON c.id = pc.contact_id \

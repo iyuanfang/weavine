@@ -96,7 +96,7 @@ pub fn list_contacts_for_project(
     use crate::business::contact::hydrate_tags;
     let mut stmt = conn.prepare(
         "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.address, \
-                c.email, c.phone, c.wechat, c.notes, c.importance, \
+                c.email, c.phone, c.wechat, c.importance, \
                 c.last_interaction_at, c.keep_in_touch_cadence_days, c.created_at, c.updated_at, \
                 pc.role, pc.added_at \
          FROM Contact c \

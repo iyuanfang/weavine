@@ -48,7 +48,7 @@ pub fn search(
 
     let events: Vec<Event> = {
         let sql = format!(
-            "SELECT Event.id, Event.user_id, Event.title, Event.event_type, Event.start_at, Event.end_at, Event.location, Event.notes, Event.contact_id, Event.project_id, Event.reminder_lead_minutes, Event.archived_at, Event.created_at, Event.updated_at, c.nickname AS contact_nickname, p.title AS project_title \
+            "SELECT Event.id, Event.user_id, Event.title, Event.event_type, Event.start_at, Event.end_at, Event.location, Event.contact_id, Event.project_id, Event.reminder_lead_minutes, Event.archived_at, Event.created_at, Event.updated_at, c.nickname AS contact_nickname, p.title AS project_title \
              FROM Event LEFT JOIN \"Contact\" c ON c.id = Event.contact_id AND c.user_id = Event.user_id \
              LEFT JOIN \"Project\" p ON p.id = Event.project_id AND p.user_id = Event.user_id \
              WHERE Event.user_id = ?1 \

@@ -21,6 +21,7 @@ const SECTION_ICONS: Record<string, string> = {
   日程: '📅',
   待办: '📌',
   项目: '🎯',
+  笔记: '📝',
 };
 
 export function SearchPage() {
@@ -56,8 +57,14 @@ export function SearchPage() {
   const events = results?.events ?? [];
   const actions = results?.actions ?? [];
   const projects = results?.projects ?? [];
+  const notes = results?.notes ?? [];
   const totalCount =
-    contacts.length + interactions.length + events.length + actions.length + projects.length;
+    contacts.length +
+    interactions.length +
+    events.length +
+    actions.length +
+    projects.length +
+    notes.length;
 
   return (
     <div className="page">
@@ -66,7 +73,7 @@ export function SearchPage() {
         subtitle={
           debouncedQuery && results
             ? `「${debouncedQuery}」共 ${totalCount} 条结果`
-            : '跨联系人、互动、日程、待办、项目'
+            : '跨联系人、互动、日程、待办、项目、笔记'
         }
       />
 
@@ -186,6 +193,25 @@ export function SearchPage() {
                 meta: p.stage,
                 isArchived: !!p.archived_at,
               }))}
+            />
+          )}
+          {notes.length > 0 && (
+            <SearchSection
+              title="笔记"
+              viewAllHref="/notes"
+              items={notes.map((n) => {
+                const firstLine = (n.body || '').split('\n').find((l) => l.trim().length > 0) ?? '';
+                const title = n.title || firstLine.replace(/^#+\s*/, '').slice(0, 40) || '（无标题）';
+                return {
+                  key: n.id,
+                  href: `/notes/${n.id}?from=/search`,
+                  title,
+                  meta: new Date(n.updated_at).toLocaleDateString('zh-CN', {
+                    month: 'numeric',
+                    day: 'numeric',
+                  }),
+                };
+              })}
             />
           )}
         </div>
