@@ -156,7 +156,7 @@ pub async fn update(
     let mut params: Vec<String> = Vec::new();
     let mut idx = 1u32;
 
-    for field in &["title", "description", "stage", "start_at", "due_at", "completed_at", "archived_at"] {
+    for field in &["title", "stage", "start_at", "due_at", "completed_at", "archived_at"] {
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx));
             params.push(v.to_string());

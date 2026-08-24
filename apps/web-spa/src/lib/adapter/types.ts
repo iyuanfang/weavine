@@ -46,7 +46,6 @@ export interface Contact {
   email: string | null;
   phone: string | null;
   wechat: string | null;
-  notes: string | null;
   importance: string;
   last_interaction_at: string;
   keep_in_touch_cadence_days: number | null;
@@ -69,7 +68,6 @@ export interface Event {
   start_at: string;
   end_at: string | null;
   location: string | null;
-  notes: string | null;
   contact_id: string | null;
   project_id: string | null;
   reminder_lead_minutes: number | null;
@@ -138,7 +136,6 @@ export interface Project {
   id: string;
   user_id: string;
   title: string;
-  description: string | null;
   template: string;
   stage: string;
   start_at: string | null;
@@ -153,7 +150,6 @@ export interface Action {
   id: string;
   user_id: string;
   title: string;
-  description: string | null;
   status: string;
   priority: number;
   category: string | null;
@@ -250,7 +246,6 @@ export interface CreateContactInput {
   email?: string | null;
   phone?: string | null;
   wechat?: string | null;
-  notes?: string | null;
   importance?: string | null;
   tag_ids?: string[] | null;
   /** 0 / undefined = use importance-derived default (high=30, medium=90, low=180). */
@@ -260,7 +255,6 @@ export interface CreateContactInput {
 export interface CreateProjectInput {
   user_id: string;
   title: string;
-  description?: string | null;
   template: string;
   stage?: string | null;
   start_at?: string | null;
@@ -270,7 +264,6 @@ export interface CreateProjectInput {
 export interface UpdateProjectInput {
   id: string;
   title?: string | null;
-  description?: string | null;
   stage?: string | null;
   start_at?: string | null;
   due_at?: string | null;
@@ -288,7 +281,6 @@ export interface UpdateContactInput {
   email?: string | null;
   phone?: string | null;
   wechat?: string | null;
-  notes?: string | null;
   importance?: string | null;
   tag_ids?: string[] | null;
   /** Sentiment: 0 / undefined = clear override (back to importance default); positive = set cadence override (days). */
@@ -302,7 +294,6 @@ export interface CreateEventInput {
   start_at: string;
   end_at?: string | null;
   location?: string | null;
-  notes?: string | null;
   contact_id?: string | null;
   project_id?: string | null;
   reminder_lead_minutes?: number | null;
@@ -316,7 +307,6 @@ export interface UpdateEventInput {
   start_at?: string | null;
   end_at?: string | null;
   location?: string | null;
-  notes?: string | null;
   contact_id?: string | null;
   project_id?: string | null;
   reminder_lead_minutes?: number | null;
@@ -327,7 +317,6 @@ export interface UpdateEventInput {
 export interface CreateActionInput {
   user_id: string;
   title: string;
-  description?: string | null;
   status?: string | null;
   priority?: number | null;
   category?: string | null;
@@ -339,7 +328,6 @@ export interface CreateActionInput {
 export interface UpdateActionInput {
   id: string;
   title?: string | null;
-  description?: string | null;
   status?: string | null;
   priority?: number | null;
   category?: string | null;
@@ -420,16 +408,22 @@ export interface Note {
   updated_at: string;
 }
 
+export interface NoteEntityLink {
+  entity_type: 'contact' | 'project' | 'action' | 'event';
+  entity_id: string;
+}
+
 export interface CreateNoteInput {
-  user_id: string;
   title: string;
   body: string;
+  entity_links?: NoteEntityLink[];
 }
 
 export interface UpdateNoteInput {
   id: string;
   title?: string | null;
   body?: string | null;
+  entity_links?: NoteEntityLink[] | null;
 }
 
 export interface NoteBacklink {
@@ -593,6 +587,7 @@ export interface PRMAdapter {
     update(user_id: string, id: string, input: UpdateNoteInput): Promise<Note | null>;
     delete(user_id: string, id: string): Promise<boolean>;
     listBacklinks(user_id: string, entity_type: string, entity_id: string): Promise<NoteBacklink[]>;
+    listEntityLinks(user_id: string, note_id: string): Promise<NoteEntityLink[]>;
   };
 
   settings: {

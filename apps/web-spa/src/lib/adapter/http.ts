@@ -47,6 +47,7 @@ import type {
   MediaItem,
   Note,
   NoteBacklink,
+  NoteEntityLink,
   PRMAdapter,
   Project,
   ProjectContactWithContact,
@@ -454,6 +455,12 @@ export class HttpAdapter implements PRMAdapter {
         this.baseUrl,
         'GET',
         '/api/notes/backlinks' + qs({ entity_type, entity_id }),
+      ),
+    listEntityLinks: (_user_id: string, note_id: string): Promise<NoteEntityLink[]> =>
+      request<NoteEntityLink[]>(
+        this.baseUrl,
+        'GET',
+        `/api/notes/${note_id}/entities`,
       ),
   };
 

@@ -233,7 +233,7 @@ pub async fn update(
     if let Some(v) = body.get("nickname").and_then(|v| v.as_str()) {
         sets.push(format!("nickname = ${}", idx)); binds.push(Bind::Text(v)); idx += 1;
     }
-    for field in &["name", "company", "title", "address", "email", "phone", "wechat", "notes", "importance"] {
+    for field in &["name", "company", "title", "address", "email", "phone", "wechat", "importance"] {
         if let Some(v) = body.get(field).and_then(|v| v.as_str()) {
             sets.push(format!("{} = ${}", field, idx)); binds.push(Bind::Text(v)); idx += 1;
         }

@@ -202,7 +202,6 @@ export function ActionsList() {
       if (!debouncedSearch) return true;
       const haystack = [
         a.title,
-        a.description ?? '',
         a.category ?? '',
         a.contact_nickname ?? '',
       ]

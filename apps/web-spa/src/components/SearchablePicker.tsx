@@ -182,6 +182,8 @@ export function SearchablePicker({
               return (
                 <div
                   key={opt.id}
+                  data-testid="searchable-picker-option"
+                  data-option-id={opt.id}
                   onMouseEnter={() => setHighlight(idx)}
                   onMouseDown={(e) => {
                     e.preventDefault();

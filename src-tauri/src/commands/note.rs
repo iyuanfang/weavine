@@ -27,10 +27,11 @@ pub fn get_note(
 #[tauri::command]
 pub fn create_note(
     db: State<Database>,
+    user_id: String,
     input: CreateNoteInput,
 ) -> Result<Note, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::create(&conn, &input).map_err(|e| e.to_string())
+    business::note::create(&conn, &user_id, &input).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -60,4 +61,14 @@ pub fn list_note_backlinks(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::note::list_backlinks(&conn, &user_id, &entity_type, &entity_id)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_note_entities(
+    db: State<Database>,
+    user_id: String,
+    note_id: String,
+) -> Result<Vec<NoteEntityLink>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    business::note::list_note_entities(&conn, &user_id, &note_id).map_err(|e| e.to_string())
 }

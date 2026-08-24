@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const ACTION_COLS: &str =
-    "Action.id, Action.user_id, Action.title, Action.description, Action.status, Action.priority, Action.category, Action.due_at, Action.contact_id, Action.project_id, Action.completed_at, Action.archived_at, Action.created_at, Action.updated_at";
+    "Action.id, Action.user_id, Action.title, Action.status, Action.priority, Action.category, Action.due_at, Action.contact_id, Action.project_id, Action.completed_at, Action.archived_at, Action.created_at, Action.updated_at";
 
 const ACTION_REL_COLS: &str = ", c.nickname AS contact_nickname, p.title AS project_title";
 
@@ -15,19 +15,18 @@ pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
         id: row.get(0)?,
         user_id: row.get(1)?,
         title: row.get(2)?,
-        description: row.get(3)?,
-        status: row.get(4)?,
-        priority: row.get(5)?,
-        category: row.get(6)?,
-        due_at: row.get(7)?,
-        contact_id: row.get(8)?,
-        project_id: row.get(9)?,
-        completed_at: row.get(10)?,
-        archived_at: row.get(11)?,
-        created_at: row.get(12)?,
-        updated_at: row.get(13)?,
-        contact_nickname: row.get(14)?,
-        project_title: row.get(15)?,
+        status: row.get(3)?,
+        priority: row.get(4)?,
+        category: row.get(5)?,
+        due_at: row.get(6)?,
+        contact_id: row.get(7)?,
+        project_id: row.get(8)?,
+        completed_at: row.get(9)?,
+        archived_at: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+        contact_nickname: row.get(13)?,
+        project_title: row.get(14)?,
     })
 }
 
@@ -98,13 +97,12 @@ pub fn create(conn: &Connection, input: &CreateActionInput) -> rusqlite::Result<
 
     conn.execute(
         "INSERT INTO Action \
-         (id, user_id, title, description, status, priority, category, due_at, contact_id, project_id, completed_at, archived_at, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+         (id, user_id, title, status, priority, category, due_at, contact_id, project_id, completed_at, archived_at, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             &id,
             &input.user_id,
             &input.title,
-            &input.description,
             &status,
             &priority,
             &input.category,
@@ -150,11 +148,6 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
     if let Some(ref t) = input.title {
         set_clauses.push(format!("title = ?{}", param_idx));
         params.push(Box::new(t.clone()));
-        param_idx += 1;
-    }
-    if let Some(ref d) = input.description {
-        set_clauses.push(format!("description = ?{}", param_idx));
-        params.push(Box::new(d.clone()));
         param_idx += 1;
     }
     if let Some(ref s) = input.status {

@@ -214,19 +214,6 @@ export function EventDetail() {
           </div>
         </div>
       </section>
-
-      <section className="section">
-        <h2 className="section__title">备注</h2>
-        <div className="card" style={{ marginTop: 10, padding: 16, minHeight: 60 }}>
-          {event.notes ? (
-            <p style={{ margin: 0, fontSize: 'var(--text-base)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-              {event.notes}
-            </p>
-          ) : (
-            <span className="text-sm text-muted">暂无备注</span>
-          )}
-        </div>
-      </section>
       <BacklinksPanel entityType="event" entityId={id} />
     </div>
   );

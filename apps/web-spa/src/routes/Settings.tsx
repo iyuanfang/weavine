@@ -798,7 +798,6 @@ function BackupRestorePanel() {
           email: c.email ?? null,
           phone: c.phone ?? null,
           wechat: c.wechat ?? null,
-          notes: c.notes ?? null,
           importance: c.importance ?? null,
         };
         const tagIds: string[] = [];
@@ -833,7 +832,6 @@ function BackupRestorePanel() {
           start_at: e.start_at,
           end_at: e.end_at ?? null,
           location: e.location ?? null,
-          notes: e.notes ?? null,
           contact_id: e.contact_nickname
             ? contactNicknameToId.get(e.contact_nickname) ?? null
             : null,
@@ -872,7 +870,6 @@ function BackupRestorePanel() {
         const input: CreateActionInput = {
           user_id: uid,
           title: a.title,
-          description: a.description ?? null,
           status: a.status ?? null,
           priority: a.priority ?? null,
           category: a.category ?? null,

@@ -14,12 +14,11 @@ pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
         email: row.get(7)?,
         phone: row.get(8)?,
         wechat: row.get(9)?,
-        notes: row.get(10)?,
-        importance: row.get(11)?,
-        last_interaction_at: row.get(12)?,
-        keep_in_touch_cadence_days: row.get(13)?,
-        created_at: row.get(14)?,
-        updated_at: row.get(15)?,
+        importance: row.get(10)?,
+        last_interaction_at: row.get(11)?,
+        keep_in_touch_cadence_days: row.get(12)?,
+        created_at: row.get(13)?,
+        updated_at: row.get(14)?,
         avatar_storage_key: row.get(16).ok(),
         avatar_mime: row.get(17).ok(),
         avatar_width: row.get(18).ok(),
@@ -187,13 +186,13 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
     conn.execute(
         "INSERT INTO Contact \
          (id, user_id, nickname, name, company, title, address, \
-          email, phone, wechat, notes, importance, \
+          email, phone, wechat, importance, \
           keep_in_touch_cadence_days, \
           last_interaction_at, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, \
-                 ?8, ?9, ?10, ?11, ?12, \
-                 ?13, \
-                 ?14, ?15, ?16)",
+                 ?8, ?9, ?10, ?11, \
+                 ?12, \
+                 ?13, ?14, ?15)",
         rusqlite::params![
             &id,
             &input.user_id,
@@ -205,7 +204,6 @@ pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result
             &input.email,
             &input.phone,
             &input.wechat,
-            &input.notes,
             &importance,
             // Treat 0 as "no override" — the importance default will apply.
             input.keep_in_touch_cadence_days.filter(|d| *d > 0),
@@ -283,11 +281,6 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
     if let Some(ref wechat) = input.wechat {
         set_clauses.push(format!("wechat = ?{}", param_idx));
         params.push(Box::new(wechat.clone()));
-        param_idx += 1;
-    }
-    if let Some(ref notes) = input.notes {
-        set_clauses.push(format!("notes = ?{}", param_idx));
-        params.push(Box::new(notes.clone()));
         param_idx += 1;
     }
     if let Some(ref imp) = input.importance {
@@ -642,7 +635,6 @@ mod tests {
                 email: None,
                 phone: None,
                 wechat: None,
-                notes: None,
                 importance: None,
                 tag_ids: None,
                 keep_in_touch_cadence_days: Some(7),
@@ -680,7 +672,6 @@ mod tests {
                 email: None,
                 phone: None,
                 wechat: None,
-                notes: None,
                 importance: None,
                 tag_ids: None,
                 keep_in_touch_cadence_days: Some(7),
@@ -700,7 +691,6 @@ mod tests {
                 email: None,
                 phone: None,
                 wechat: None,
-                notes: None,
                 importance: None,
                 tag_ids: None,
                 keep_in_touch_cadence_days: Some(0),

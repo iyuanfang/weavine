@@ -95,6 +95,7 @@ async fn main() {
         .route("/api/notes", get(handlers::note::list).post(handlers::note::create))
         .route("/api/notes/backlinks", get(handlers::note::list_backlinks))
         .route("/api/notes/:id", get(handlers::note::get).put(handlers::note::update).delete(handlers::note::delete))
+        .route("/api/notes/:id/entities", get(handlers::note::list_entity_links))
         .route("/api/graph/:contact_id", get(handlers::graph::get))
         .route("/api/graph/:contact_id/relations", post(handlers::graph::add_relation))
         .route("/api/graph/:contact_id/relations/:other_id", delete(handlers::graph::remove_relation))

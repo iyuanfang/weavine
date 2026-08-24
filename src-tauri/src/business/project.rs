@@ -4,22 +4,21 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const PROJECT_COLS: &str =
-    "id, user_id, title, description, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at";
+    "id, user_id, title, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at";
 
 pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
     Ok(Project {
         id: row.get(0)?,
         user_id: row.get(1)?,
         title: row.get(2)?,
-        description: row.get(3)?,
-        template: row.get(4)?,
-        stage: row.get(5)?,
-        start_at: row.get(6)?,
-        due_at: row.get(7)?,
-        completed_at: row.get(8)?,
-        archived_at: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        template: row.get(3)?,
+        stage: row.get(4)?,
+        start_at: row.get(5)?,
+        due_at: row.get(6)?,
+        completed_at: row.get(7)?,
+        archived_at: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -88,13 +87,12 @@ pub fn create(conn: &Connection, input: &CreateProjectInput) -> rusqlite::Result
 
     conn.execute(
         "INSERT INTO \"Project\" \
-         (id, user_id, title, description, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+         (id, user_id, title, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             &id,
             &input.user_id,
             &input.title,
-            &input.description,
             &input.template,
             &stage,
             &input.start_at,
@@ -134,11 +132,6 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
     if let Some(ref t) = input.title {
         set_clauses.push(format!("title = ?{}", param_idx));
         params.push(Box::new(t.clone()));
-        param_idx += 1;
-    }
-    if let Some(ref d) = input.description {
-        set_clauses.push(format!("description = ?{}", param_idx));
-        params.push(Box::new(d.clone()));
         param_idx += 1;
     }
     if let Some(ref s) = input.stage {

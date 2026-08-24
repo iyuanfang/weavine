@@ -31,7 +31,6 @@ export function EventNew() {
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [location, setLocation] = useState('');
-  const [notes, setNotes] = useState('');
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [projectId, setProjectId] = useState<string>(projectIdParam ?? '');
   const [reminderLeadMinutes, setReminderLeadMinutes] = useState<number | null>(null);
@@ -93,7 +92,6 @@ export function EventNew() {
       start_at: new Date(startAt).toISOString(),
       end_at: endAt ? new Date(endAt).toISOString() : null,
       location: location.trim() || null,
-      notes: notes.trim() || null,
       contact_id: participantIds[0] ?? null,
       project_id: projectId || null,
       reminder_lead_minutes: reminderLeadMinutes,
@@ -239,18 +237,6 @@ export function EventNew() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="section" style={{ marginTop: 14 }}>
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <textarea
-              className="input-base"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="可选"
-            />
           </div>
         </section>
 

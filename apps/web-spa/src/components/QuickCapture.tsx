@@ -237,7 +237,6 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           break;
         case 'note':
           await adapter.notes.create({
-            user_id: userId,
             title: summary.slice(0, 80),
             body: text,
           });

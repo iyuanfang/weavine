@@ -1,9 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const items = [
+interface SheetItem {
+  to?: string;
+  label: string;
+  icon: string;
+  children?: SheetItem[];
+}
+
+const items: SheetItem[] = [
   { to: '/projects', label: '项目', icon: '📁' },
-  { to: '/notes', label: '笔记', icon: '📝' },
+  {
+    label: '笔记',
+    icon: '📝',
+    children: [
+      { to: '/notes', label: '笔记列表', icon: '📄' },
+      { to: '/notes/new', label: '新建笔记', icon: '✍️' },
+    ],
+  },
   { to: '/tags', label: '标签', icon: '🏷️' },
   { to: '/archive', label: '归档', icon: '📦' },
   { to: '/settings', label: '设置', icon: '⚙️' },
@@ -16,17 +30,36 @@ interface Props {
 
 export function MoreSheet({ open, onClose }: Props) {
   const navigate = useNavigate();
+  const [stack, setStack] = useState<SheetItem[]>([]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setStack([]);
+      return;
+    }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (stack.length > 0) setStack((s) => s.slice(0, -1));
+        else onClose();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, onClose, stack.length]);
 
   if (!open) return null;
+
+  const currentItems = stack.length > 0 ? stack[stack.length - 1].children ?? [] : items;
+  const parent = stack.length > 0 ? stack[stack.length - 1] : null;
+
+  const handleItemClick = (item: SheetItem) => {
+    if (item.children && item.children.length > 0) {
+      setStack((s) => [...s, item]);
+    } else if (item.to) {
+      onClose();
+      navigate(item.to);
+    }
+  };
 
   return (
     <>
@@ -35,12 +68,22 @@ export function MoreSheet({ open, onClose }: Props) {
         className="more-sheet"
         role="dialog"
         aria-modal="true"
-        aria-label="更多"
+        aria-label={parent ? parent.label : '更多'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="more-sheet__handle" aria-hidden="true" />
         <header className="more-sheet__header">
-          <span className="more-sheet__title">更多</span>
+          {stack.length > 0 && (
+            <button
+              type="button"
+              className="more-sheet__back"
+              onClick={() => setStack((s) => s.slice(0, -1))}
+              aria-label="返回上一层"
+            >
+              ‹
+            </button>
+          )}
+          <span className="more-sheet__title">{parent ? parent.label : '更多'}</span>
           <button
             type="button"
             className="more-sheet__close"
@@ -51,23 +94,26 @@ export function MoreSheet({ open, onClose }: Props) {
           </button>
         </header>
         <ul className="more-sheet__list">
-          {items.map((item) => (
-            <li key={item.to}>
+          {currentItems.map((item) => (
+            <li key={item.label}>
               <button
                 type="button"
                 className="more-sheet__item"
-                onClick={() => {
-                  onClose();
-                  navigate(item.to);
-                }}
+                onClick={() => handleItemClick(item)}
               >
                 <span className="more-sheet__item-icon" aria-hidden="true">
                   {item.icon}
                 </span>
                 <span className="more-sheet__item-label">{item.label}</span>
-                <span className="more-sheet__item-chevron" aria-hidden="true">
-                  ›
-                </span>
+                {item.children && item.children.length > 0 ? (
+                  <span className="more-sheet__item-chevron" aria-hidden="true">
+                    ›
+                  </span>
+                ) : (
+                  <span className="more-sheet__item-chevron" aria-hidden="true">
+                    ›
+                  </span>
+                )}
               </button>
             </li>
           ))}

@@ -3,13 +3,13 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
 
 use super::auth::{extract_auth, extract_auth_with_device};
-use super::now_str;
-use weavine_lib::models::{CreateNoteInput, Note, NoteBacklink, UpdateNoteInput};
+use weavine_lib::models::{CreateNoteInput, Note, NoteBacklink, NoteEntityLink, UpdateNoteInput};
 
 #[derive(Deserialize)]
 pub struct ListQuery {
@@ -75,7 +75,12 @@ pub async fn create(
 ) -> Result<Json<Note>, (StatusCode, String)> {
     let (user_id, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
-    let now = now_str();
+    let now: DateTime<Utc> = Utc::now();
+    let now_str = now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tx: {e}")))?;
     sqlx::query(
         "INSERT INTO note (id, user_id, title, body, created_at, updated_at) \
          VALUES ($1, $2, $3, $4, $5, $5)",
@@ -84,18 +89,39 @@ pub async fn create(
     .bind(&user_id)
     .bind(&input.title)
     .bind(&input.body)
-    .bind(&now)
-    .execute(&*pool)
+    .bind(&now_str)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert: {e}")))?;
+
+    for link in &input.entity_links {
+        sqlx::query(
+            "INSERT INTO note_entity (id, note_id, user_id, entity_type, entity_id) \
+             VALUES ($1, $2, $3, $4, $5) \
+             ON CONFLICT (note_id, entity_type, entity_id) DO NOTHING",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(&id)
+        .bind(&user_id)
+        .bind(&link.entity_type)
+        .bind(&link.entity_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("link: {e}")))?;
+    }
+
     let note = sqlx::query_as::<_, Note>(
         "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
          FROM note WHERE id = $1",
     )
     .bind(&id)
-    .fetch_one(&*pool)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("reload: {e}")))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}")))?;
     Ok(Json(note))
 }
 
@@ -106,7 +132,13 @@ pub async fn update(
     Json(input): Json<UpdateNoteInput>,
 ) -> Result<Json<Note>, (StatusCode, String)> {
     let (user_id, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
-    let now = now_str();
+    let now: DateTime<Utc> = Utc::now();
+    let now_str = now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tx: {e}")))?;
+
     let res = sqlx::query(
         "UPDATE note SET \
             title      = COALESCE($3, title), \
@@ -118,21 +150,50 @@ pub async fn update(
     .bind(&user_id)
     .bind(&input.title)
     .bind(&input.body)
-    .bind(&now)
-    .execute(&*pool)
+    .bind(&now_str)
+    .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("update: {e}")))?;
     if res.rows_affected() == 0 {
         return Err((StatusCode::NOT_FOUND, "note not found".into()));
     }
+
+    if let Some(links) = &input.entity_links {
+        sqlx::query("DELETE FROM note_entity WHERE note_id = $1 AND user_id = $2")
+            .bind(&id)
+            .bind(&user_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("unlink: {e}")))?;
+        for link in links {
+            sqlx::query(
+                "INSERT INTO note_entity (id, note_id, user_id, entity_type, entity_id) \
+                 VALUES ($1, $2, $3, $4, $5) \
+                 ON CONFLICT (note_id, entity_type, entity_id) DO NOTHING",
+            )
+            .bind(uuid::Uuid::new_v4().to_string())
+            .bind(&id)
+            .bind(&user_id)
+            .bind(&link.entity_type)
+            .bind(&link.entity_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("link: {e}")))?;
+        }
+    }
+
     let note = sqlx::query_as::<_, Note>(
         "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
          FROM note WHERE id = $1",
     )
     .bind(&id)
-    .fetch_one(&*pool)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("reload: {e}")))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("commit: {e}")))?;
     Ok(Json(note))
 }
 
@@ -185,4 +246,33 @@ pub async fn list_backlinks(
         })
         .collect();
     Ok(Json(backlinks))
+}
+
+pub async fn list_entity_links(
+    headers: HeaderMap,
+    State(pool): State<Arc<PgPool>>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<NoteEntityLink>>, (StatusCode, String)> {
+    let user_id = extract_auth(&headers, pool.as_ref()).await?;
+    let rows = sqlx::query(
+        "SELECT entity_type, entity_id \
+         FROM note_entity WHERE note_id = $1 AND user_id = $2 \
+         ORDER BY entity_type, entity_id",
+    )
+    .bind(&id)
+    .bind(&user_id)
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query: {e}")))?;
+    let links = rows
+        .into_iter()
+        .map(|row| {
+            use sqlx::Row;
+            NoteEntityLink {
+                entity_type: row.get(0),
+                entity_id: row.get(1),
+            }
+        })
+        .collect();
+    Ok(Json(links))
 }

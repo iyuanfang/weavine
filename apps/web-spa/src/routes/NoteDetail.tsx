@@ -1,26 +1,212 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { MarkdownView } from '../components/MarkdownView';
-import type { Note } from '../lib/adapter/types';
+import { SearchablePicker } from '../components/SearchablePicker';
+import type {
+  Action,
+  Contact,
+  Event,
+  Note,
+  NoteEntityLink,
+  Project,
+} from '../lib/adapter/types';
+
+type EntityKind = 'contact' | 'project' | 'event' | 'action';
+
+const ENTITY_LABELS: Record<EntityKind, string> = {
+  contact: '联系人',
+  project: '项目',
+  event: '日程',
+  action: '待办',
+};
+
+function labelOf(kind: EntityKind, id: string, rosters: EntityRosters): string {
+  switch (kind) {
+    case 'contact':
+      return rosters.contacts.find((c) => c.id === id)?.nickname ?? '(已删除)';
+    case 'project':
+      return rosters.projects.find((p) => p.id === id)?.title ?? '(已删除)';
+    case 'event':
+      return rosters.events.find((e) => e.id === id)?.title ?? '(已删除)';
+    case 'action':
+      return rosters.actions.find((a) => a.id === id)?.title ?? '(已删除)';
+  }
+}
+
+function entityOptions(kind: EntityKind, rosters: EntityRosters) {
+  switch (kind) {
+    case 'contact':
+      return rosters.contacts.map((c) => ({
+        id: c.id,
+        label: c.nickname || c.name || '(无昵称)',
+        sublabel: c.company ?? null,
+      }));
+    case 'project':
+      return rosters.projects.map((p) => ({
+        id: p.id,
+        label: p.title,
+        sublabel: p.stage ?? null,
+      }));
+    case 'event':
+      return rosters.events.map((e) => ({
+        id: e.id,
+        label: e.title,
+        sublabel: e.start_at ?? null,
+      }));
+    case 'action':
+      return rosters.actions.map((a) => ({
+        id: a.id,
+        label: a.title,
+        sublabel: a.status ?? null,
+      }));
+  }
+}
+
+interface EntityRosters {
+  contacts: Contact[];
+  projects: Project[];
+  events: Event[];
+  actions: Action[];
+}
+
+function useEntityRosters(): EntityRosters {
+  const adapter = useAdapter();
+  const userId = useUserId();
+  const [data, setData] = useState<EntityRosters>({
+    contacts: [],
+    projects: [],
+    events: [],
+    actions: [],
+  });
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    Promise.all([
+      adapter.contacts.list({ user_id: userId, limit: 500 }).then((r) => r.items ?? []).catch(() => []),
+      adapter.projects.list({ user_id: userId, archived: 'false', limit: 500 }).catch(() => []),
+      adapter.events.list({ user_id: userId, limit: 500 }).catch(() => []),
+      adapter.actions.list({
+        user_id: userId,
+        archived: 'false',
+        limit: 500,
+      }).catch(() => []),
+    ]).then(([c, p, e, a]) => {
+      if (cancelled) return;
+      setData({
+        contacts: c as Contact[],
+        projects: p as Project[],
+        events: e as Event[],
+        actions: a as Action[],
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+  return data;
+}
+
+interface EntityChipProps {
+  link: NoteEntityLink;
+  onRemove?: () => void;
+  rosters: EntityRosters;
+}
+function EntityChip({ link, onRemove, rosters }: EntityChipProps) {
+  return (
+    <span className="entity-chip">
+      <span className="entity-chip__kind">{ENTITY_LABELS[link.entity_type]}</span>
+      <span className="entity-chip__label">{labelOf(link.entity_type, link.entity_id, rosters)}</span>
+      {onRemove && (
+        <button
+          type="button"
+          className="entity-chip__remove"
+          onClick={onRemove}
+          aria-label="移除关联"
+        >
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+interface EntityPickerProps {
+  rosters: EntityRosters;
+  value: NoteEntityLink[];
+  onChange: (next: NoteEntityLink[]) => void;
+}
+function EntityPicker({ rosters, value, onChange }: EntityPickerProps) {
+  const [activeKind, setActiveKind] = useState<EntityKind>('contact');
+  const [pickerValue, setPickerValue] = useState('');
+
+  const addLink = (kind: EntityKind, id: string) => {
+    if (!id) return;
+    if (value.some((l) => l.entity_type === kind && l.entity_id === id)) return;
+    onChange([...value, { entity_type: kind, entity_id: id }]);
+    setPickerValue('');
+  };
+
+  const removeLink = (kind: EntityKind, id: string) => {
+    onChange(value.filter((l) => !(l.entity_type === kind && l.entity_id === id)));
+  };
+
+  return (
+    <div className="entity-picker">
+      <div className="entity-picker__chips">
+        {value.length === 0 && <span className="entity-picker__empty">未关联任何实体</span>}
+        {value.map((l) => (
+          <EntityChip
+            key={`${l.entity_type}:${l.entity_id}`}
+            link={l}
+            rosters={rosters}
+            onRemove={() => removeLink(l.entity_type, l.entity_id)}
+          />
+        ))}
+      </div>
+      <div className="entity-picker__add">
+        <div className="entity-picker__tabs">
+          {(Object.keys(ENTITY_LABELS) as EntityKind[]).map((k) => (
+            <button
+              key={k}
+              type="button"
+              className={`entity-picker__tab ${activeKind === k ? 'is-active' : ''}`}
+              onClick={() => {
+                setActiveKind(k);
+                setPickerValue('');
+              }}
+            >
+              + {ENTITY_LABELS[k]}
+            </button>
+          ))}
+        </div>
+        <SearchablePicker
+          value={pickerValue}
+          onChange={(id) => addLink(activeKind, id)}
+          options={entityOptions(activeKind, rosters)}
+          placeholder={`搜索${ENTITY_LABELS[activeKind]}…`}
+          emptyText="没有匹配项"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function NoteNew() {
   const adapter = useAdapter();
-  const userId = useUserId() ?? '';
   const navigate = useNavigate();
+  const rosters = useEntityRosters();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [links, setLinks] = useState<NoteEntityLink[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) {
-      setError('本地用户尚未就绪');
-      return;
-    }
     if (!title.trim() && !body.trim()) {
       setError('标题或正文不能为空');
       return;
@@ -29,9 +215,9 @@ export function NoteNew() {
     setError(null);
     try {
       const created = await adapter.notes.create({
-        user_id: userId,
         title: title.trim() || '（无标题）',
         body,
+        entity_links: links,
       });
       navigate(`/notes/${created.id}`);
     } catch (err) {
@@ -57,13 +243,21 @@ export function NoteNew() {
           onChange={(e) => setTitle(e.target.value)}
           autoFocus
         />
-        <textarea
-          className="input-base note-edit__body"
-          placeholder={'Markdown 正文。引用联系人/项目/待办/日程：\n\n[[Contact:张三]] 推荐我看《XXX》\n[[Project:客户调研]] 计划下季度启动\n'}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={16}
-        />
+        <div className="note-edit__split">
+          <textarea
+            className="input-base note-edit__body"
+            placeholder={'Markdown 正文，支持 # 标题、列表、加粗、代码等。右侧实时预览。'}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+          <div className="note-edit__preview">
+            <MarkdownView body={body} />
+          </div>
+        </div>
+        <div className="note-edit__section">
+          <label className="note-edit__label">关联实体</label>
+          <EntityPicker rosters={rosters} value={links} onChange={setLinks} />
+        </div>
         {error && <p className="danger">{error}</p>}
         <div className="note-edit__actions">
           <button type="button" className="btn" onClick={() => navigate('/notes')}>
@@ -83,22 +277,35 @@ export function NoteDetail() {
   const adapter = useAdapter();
   const userId = useUserId() ?? '';
   const navigate = useNavigate();
+  const rosters = useEntityRosters();
   const [note, setNote] = useState<Note | null | undefined>(undefined);
   const [editing, setEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
+  const [draftLinks, setDraftLinks] = useState<NoteEntityLink[]>([]);
+  const [links, setLinks] = useState<NoteEntityLink[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId || !id) return;
-    adapter.notes.get(userId, id).then((n) => {
+    let cancelled = false;
+    Promise.all([
+      adapter.notes.get(userId, id),
+      adapter.notes.listEntityLinks(userId, id),
+    ]).then(([n, ls]) => {
+      if (cancelled) return;
       setNote(n);
+      setLinks(ls);
       if (n) {
         setDraftTitle(n.title);
         setDraftBody(n.body);
+        setDraftLinks(ls);
       }
     });
+    return () => {
+      cancelled = true;
+    };
   }, [adapter, userId, id]);
 
   const onSave = async () => {
@@ -110,8 +317,10 @@ export function NoteDetail() {
         id,
         title: draftTitle.trim() || '（无标题）',
         body: draftBody,
+        entity_links: draftLinks,
       });
       setNote(updated);
+      setLinks(draftLinks);
       setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -126,6 +335,14 @@ export function NoteDetail() {
     await adapter.notes.delete(userId, id);
     navigate('/notes');
   };
+
+  const viewableLinks = useMemo(
+    () =>
+      links.filter((l) =>
+        ['contact', 'project', 'event', 'action'].includes(l.entity_type),
+      ),
+    [links],
+  );
 
   if (note === undefined) return <div className="page">加载中…</div>;
   if (note === null) {
@@ -148,14 +365,24 @@ export function NoteDetail() {
         <div className="note-detail__actions">
           {editing ? (
             <>
-              <button type="button" className="btn" onClick={() => {
-                setDraftTitle(note.title);
-                setDraftBody(note.body);
-                setEditing(false);
-              }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setDraftTitle(note.title);
+                  setDraftBody(note.body);
+                  setDraftLinks(links);
+                  setEditing(false);
+                }}
+              >
                 取消
               </button>
-              <button type="button" className="btn btn-primary" onClick={onSave} disabled={saving}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={onSave}
+                disabled={saving}
+              >
                 {saving ? '保存中…' : '保存'}
               </button>
             </>
@@ -180,12 +407,20 @@ export function NoteDetail() {
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
           />
-          <textarea
-            className="input-base note-edit__body"
-            value={draftBody}
-            onChange={(e) => setDraftBody(e.target.value)}
-            rows={18}
-          />
+          <div className="note-edit__split">
+            <textarea
+              className="input-base note-edit__body"
+              value={draftBody}
+              onChange={(e) => setDraftBody(e.target.value)}
+            />
+            <div className="note-edit__preview">
+              <MarkdownView body={draftBody} />
+            </div>
+          </div>
+          <div className="note-edit__section">
+            <label className="note-edit__label">关联实体</label>
+            <EntityPicker rosters={rosters} value={draftLinks} onChange={setDraftLinks} />
+          </div>
         </div>
       ) : (
         <article className="note-detail__view">
@@ -193,6 +428,17 @@ export function NoteDetail() {
           <p className="note-detail__meta">
             更新于 {new Date(note.updated_at).toLocaleString('zh-CN')}
           </p>
+          {viewableLinks.length > 0 && (
+            <div className="note-detail__chips">
+              {viewableLinks.map((l) => (
+                <EntityChip
+                  key={`${l.entity_type}:${l.entity_id}`}
+                  link={l}
+                  rosters={rosters}
+                />
+              ))}
+            </div>
+          )}
           <MarkdownView body={note.body} />
         </article>
       )}

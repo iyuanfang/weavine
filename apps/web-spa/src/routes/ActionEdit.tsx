@@ -63,7 +63,6 @@ export function ActionEdit() {
   const projects = projectsQuery.data ?? [];
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [status, setStatus] = useState('inbox');
   const [priority, setPriority] = useState(0);
   const [category, setCategory] = useState('');
@@ -76,7 +75,6 @@ export function ActionEdit() {
     if (actionQuery.data && !hydrated) {
       const a = actionQuery.data;
       setTitle(a.title);
-      setDescription(a.description ?? '');
       setStatus(a.status);
       setPriority(a.priority ?? 0);
       setCategory(a.category ?? '');
@@ -105,7 +103,6 @@ export function ActionEdit() {
     updateMutation.mutate({
       id,
       title: title.trim(),
-      description: description.trim() || null,
       status,
       priority,
       category: category.trim() || null,
@@ -272,18 +269,6 @@ export function ActionEdit() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="section" style={{ marginTop: 14 }}>
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <textarea
-              className="input-base"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="可选"
-            />
           </div>
         </section>
 

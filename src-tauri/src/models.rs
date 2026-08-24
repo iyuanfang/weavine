@@ -37,7 +37,6 @@ pub struct Contact {
     pub email: Option<String>,
     pub phone: Option<String>,
     pub wechat: Option<String>,
-    pub notes: Option<String>,
     pub importance: String,
     pub last_interaction_at: String,
     pub keep_in_touch_cadence_days: Option<i64>,
@@ -73,7 +72,6 @@ pub struct Event {
     pub start_at: String,
     pub end_at: Option<String>,
     pub location: Option<String>,
-    pub notes: Option<String>,
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
@@ -116,7 +114,6 @@ pub struct Project {
     pub id: String,
     pub user_id: String,
     pub title: String,
-    pub description: Option<String>,
     pub template: String,
     pub stage: String,
     pub start_at: Option<String>,
@@ -133,7 +130,6 @@ pub struct Action {
     pub id: String,
     pub user_id: String,
     pub title: String,
-    pub description: Option<String>,
     pub status: String,
     pub priority: i64,
     pub category: Option<String>,
@@ -346,7 +342,6 @@ pub struct CreateContactInput {
     pub email: Option<String>,
     pub phone: Option<String>,
     pub wechat: Option<String>,
-    pub notes: Option<String>,
     pub importance: Option<String>,
     pub tag_ids: Option<Vec<String>>,
     /// Optional override for the keep-in-touch cadence (days). `None` or `0`
@@ -366,7 +361,6 @@ pub struct UpdateContactInput {
     pub email: Option<String>,
     pub phone: Option<String>,
     pub wechat: Option<String>,
-    pub notes: Option<String>,
     pub importance: Option<String>,
     pub tag_ids: Option<Vec<String>>,
     /// Sentiment is "set to this value": `None` = leave unchanged,
@@ -397,7 +391,6 @@ pub struct SearchResults {
 pub struct CreateActionInput {
     pub user_id: String,
     pub title: String,
-    pub description: Option<String>,
     pub status: Option<String>,
     pub priority: Option<i64>,
     pub category: Option<String>,
@@ -411,7 +404,6 @@ pub struct UpdateActionInput {
     #[serde(default)]
     pub id: String,
     pub title: Option<String>,
-    pub description: Option<String>,
     pub status: Option<String>,
     pub priority: Option<i64>,
     pub category: Option<String>,
@@ -435,7 +427,6 @@ pub struct CreateEventInput {
     pub start_at: String,
     pub end_at: Option<String>,
     pub location: Option<String>,
-    pub notes: Option<String>,
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
@@ -451,11 +442,12 @@ pub struct UpdateEventInput {
     pub start_at: Option<String>,
     pub end_at: Option<String>,
     pub location: Option<String>,
-    pub notes: Option<String>,
     pub contact_id: Option<String>,
     pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
     pub archived_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // ──────────────────────────────────────────────
@@ -517,7 +509,6 @@ pub struct UpdateInteractionInput {
 pub struct CreateProjectInput {
     pub user_id: String,
     pub title: String,
-    pub description: Option<String>,
     pub template: String,
     pub start_at: Option<String>,
     pub due_at: Option<String>,
@@ -528,7 +519,6 @@ pub struct UpdateProjectInput {
     #[serde(default)]
     pub id: String,
     pub title: Option<String>,
-    pub description: Option<String>,
     pub stage: Option<String>,
     pub start_at: Option<String>,
     pub due_at: Option<String>,
@@ -605,18 +595,27 @@ pub struct NoteEntity {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateNoteInput {
-    pub user_id: String,
-    pub title: String,
-    pub body: String,
+pub struct NoteEntityLink {
+    pub entity_type: String,
+    pub entity_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CreateNoteInput {
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub entity_links: Vec<NoteEntityLink>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateNoteInput {
     #[serde(default)]
     pub id: String,
     pub title: Option<String>,
     pub body: Option<String>,
+    #[serde(default)]
+    pub entity_links: Option<Vec<NoteEntityLink>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -68,7 +68,6 @@ export function ProjectsList() {
         if (!q) return true;
         return (
           p.title.toLowerCase().includes(q) ||
-          (p.description ?? '').toLowerCase().includes(q) ||
           p.stage.toLowerCase().includes(q)
         );
       });

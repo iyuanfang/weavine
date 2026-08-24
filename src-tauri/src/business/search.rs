@@ -20,9 +20,9 @@ pub fn search(
 
     let contacts: Vec<Contact> = {
         let mut stmt = conn.prepare(
-            "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, notes, importance, last_interaction_at, keep_in_touch_cadence_days, created_at, updated_at \
+            "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, importance, last_interaction_at, keep_in_touch_cadence_days, created_at, updated_at \
              FROM Contact WHERE user_id = ?1 \
-             AND (nickname LIKE ?2 OR name LIKE ?2 OR company LIKE ?2 OR notes LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2) \
+             AND (nickname LIKE ?2 OR name LIKE ?2 OR company LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2) \
              ORDER BY updated_at DESC LIMIT ?3",
         )?;
         let results = stmt
@@ -52,7 +52,7 @@ pub fn search(
              FROM Event LEFT JOIN \"Contact\" c ON c.id = Event.contact_id AND c.user_id = Event.user_id \
              LEFT JOIN \"Project\" p ON p.id = Event.project_id AND p.user_id = Event.user_id \
              WHERE Event.user_id = ?1 \
-             AND (Event.title LIKE ?2 OR Event.location LIKE ?2 OR Event.notes LIKE ?2){} \
+             AND (Event.title LIKE ?2 OR Event.location LIKE ?2){} \
              ORDER BY Event.start_at ASC LIMIT ?3",
             archive_clause
         );
@@ -66,11 +66,11 @@ pub fn search(
 
     let actions: Vec<Action> = {
         let sql = format!(
-            "SELECT Action.id, Action.user_id, Action.title, Action.description, Action.status, Action.priority, Action.category, Action.due_at, Action.contact_id, Action.project_id, Action.completed_at, Action.archived_at, Action.created_at, Action.updated_at, c.nickname AS contact_nickname, p.title AS project_title \
+            "SELECT Action.id, Action.user_id, Action.title, Action.status, Action.priority, Action.category, Action.due_at, Action.contact_id, Action.project_id, Action.completed_at, Action.archived_at, Action.created_at, Action.updated_at, c.nickname AS contact_nickname, p.title AS project_title \
              FROM Action LEFT JOIN \"Contact\" c ON c.id = Action.contact_id AND c.user_id = Action.user_id \
              LEFT JOIN \"Project\" p ON p.id = Action.project_id AND p.user_id = Action.user_id \
              WHERE Action.user_id = ?1 \
-             AND (Action.title LIKE ?2 OR Action.description LIKE ?2 OR Action.category LIKE ?2){} \
+             AND (Action.title LIKE ?2 OR Action.category LIKE ?2){} \
              ORDER BY Action.due_at ASC LIMIT ?3",
             archive_clause
         );
@@ -84,9 +84,9 @@ pub fn search(
 
     let projects: Vec<Project> = {
         let sql = format!(
-            "SELECT id, user_id, title, description, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at \
+            "SELECT id, user_id, title, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at \
              FROM \"Project\" WHERE user_id = ?1 \
-             AND (title LIKE ?2 OR description LIKE ?2){} \
+             AND (title LIKE ?2){} \
              ORDER BY updated_at DESC LIMIT ?3",
             archive_clause
         );

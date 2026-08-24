@@ -312,19 +312,6 @@ export function ProjectDetail() {
                 </span>
               )}
             </div>
-            {project.description && (
-              <p
-                style={{
-                  margin: '8px 0 0',
-                  fontSize: 'var(--text-base)',
-                  color: 'var(--muted)',
-                  whiteSpace: 'pre-wrap',
-                  lineHeight: 1.6,
-                }}
-              >
-                {project.description}
-              </p>
-            )}
             <div style={{ marginTop: 8, fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
               开始: {formatDate(project.start_at)}
               {project.due_at && <> · 截止: {formatDate(project.due_at)}</>}

@@ -12,8 +12,8 @@ const navItems = [
   { to: '/contacts', label: '联系人', icon: '👥' },
   { to: '/actions', label: '待办', icon: '✅' },
   { to: '/calendar', label: '日程', icon: '📅' },
+  { to: '/notes', label: '笔记', icon: '📝' },
   { to: '/projects', label: '项目', icon: '📁' },
-  
   { to: '/tags', label: '标签', icon: '🏷️' },
   { to: '/archive', label: '归档', icon: '📦' },
   { to: '/settings', label: '设置', icon: '⚙️' },

@@ -14,7 +14,6 @@ export interface ParsedContact {
   email?: string | null;
   phone?: string | null;
   wechat?: string | null;
-  notes?: string | null;
 }
 
 const CSV_HEADER_ALIASES: Record<keyof ParsedContact, string[]> = {
@@ -27,7 +26,6 @@ const CSV_HEADER_ALIASES: Record<keyof ParsedContact, string[]> = {
   email: ['邮箱', 'email', 'mail', 'e-mail'],
   phone: ['电话', '手机', 'phone', 'mobile', 'tel', 'telephone'],
   wechat: ['微信', 'wechat', 'wx'],
-  notes: ['备注', 'notes', 'note', 'comment', '说明'],
 };
 
 // Excel and Numbers prepend a UTF-8 BOM when exporting CSV-UTF-8;
@@ -284,7 +282,6 @@ export function parseVCard(text: string): ParsedContact[] {
         break;
       }
       case 'NOTE':
-        current.notes = parsed.value;
         break;
       case 'X-WECHAT':
       case 'X-WX':

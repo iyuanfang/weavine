@@ -29,7 +29,6 @@ export function ContactNew() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [wechat, setWechat] = useState('');
-  const [notes, setNotes] = useState('');
   const [importance, setImportance] = useState<Importance>(DEFAULT_IMPORTANCE);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [cardImageFile, setCardImageFile] = useState<File | null>(null);
@@ -72,7 +71,6 @@ export function ContactNew() {
       email: email.trim() || null,
       phone: phone.trim() || null,
       wechat: wechat.trim() || null,
-      notes: notes.trim() || null,
       importance,
       tag_ids: selectedTagIds.length > 0 ? selectedTagIds : null,
     });
@@ -232,18 +230,6 @@ export function ContactNew() {
             <TagPicker
               selectedIds={selectedTagIds}
               onChange={setSelectedTagIds}
-            />
-          </div>
-        </section>
-
-        <section className="section">
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <textarea
-              className="input-base"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="关于这个人的备注…"
             />
           </div>
         </section>

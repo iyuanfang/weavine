@@ -340,6 +340,7 @@ pub fn run() {
             note::update_note,
             note::delete_note,
             note::list_note_backlinks,
+            note::list_note_entities,
             voice::recognize_voice,
             #[cfg(feature = "voice-local")]
             commands::voice_local::check_voice_model,

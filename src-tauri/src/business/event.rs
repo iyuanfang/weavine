@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const EVENT_COLS: &str =
-    "Event.id, Event.user_id, Event.title, Event.event_type, Event.start_at, Event.end_at, Event.location, Event.notes, Event.contact_id, Event.project_id, Event.reminder_lead_minutes, Event.archived_at, Event.created_at, Event.updated_at";
+    "Event.id, Event.user_id, Event.title, Event.event_type, Event.start_at, Event.end_at, Event.location, Event.contact_id, Event.project_id, Event.reminder_lead_minutes, Event.archived_at, Event.created_at, Event.updated_at";
 
 const EVENT_REL_COLS: &str = ", c.nickname AS contact_nickname, p.title AS project_title";
 
@@ -20,15 +20,14 @@ pub(crate) fn row_to_event(row: &rusqlite::Row) -> rusqlite::Result<Event> {
         start_at: row.get(4)?,
         end_at: row.get(5)?,
         location: row.get(6)?,
-        notes: row.get(7)?,
-        contact_id: row.get(8)?,
-        project_id: row.get(9)?,
-        reminder_lead_minutes: row.get(10)?,
-        archived_at: row.get(11)?,
-        created_at: row.get(12)?,
-        updated_at: row.get(13)?,
-        contact_nickname: row.get(14)?,
-        project_title: row.get(15)?,
+        contact_id: row.get(7)?,
+        project_id: row.get(8)?,
+        reminder_lead_minutes: row.get(9)?,
+        archived_at: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+        contact_nickname: row.get(13)?,
+        project_title: row.get(14)?,
     })
 }
 
@@ -102,8 +101,8 @@ pub fn create(conn: &Connection, input: &CreateEventInput) -> rusqlite::Result<E
 
     conn.execute(
         "INSERT INTO Event \
-         (id, user_id, title, event_type, start_at, end_at, location, notes, contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+         (id, user_id, title, event_type, start_at, end_at, location, contact_id, project_id, reminder_lead_minutes, archived_at, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             &id,
             &input.user_id,
@@ -112,7 +111,6 @@ pub fn create(conn: &Connection, input: &CreateEventInput) -> rusqlite::Result<E
             &input.start_at,
             &input.end_at,
             &input.location,
-            &input.notes,
             &input.contact_id,
             input.project_id.as_deref(),
             &input.reminder_lead_minutes,
@@ -168,11 +166,6 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
     if let Some(ref loc) = input.location {
         set_clauses.push(format!("location = ?{}", param_idx));
         params.push(Box::new(loc.clone()));
-        param_idx += 1;
-    }
-    if let Some(ref n) = input.notes {
-        set_clauses.push(format!("notes = ?{}", param_idx));
-        params.push(Box::new(n.clone()));
         param_idx += 1;
     }
     if let Some(ref cid) = input.contact_id {

@@ -62,7 +62,6 @@ pub async fn list(
             email: r.email,
             phone: r.phone,
             wechat: r.wechat,
-            notes: r.notes,
             importance: r.importance,
             last_interaction_at: r.last_interaction_at,
             keep_in_touch_cadence_days: None,

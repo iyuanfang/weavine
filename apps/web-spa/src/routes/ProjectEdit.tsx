@@ -27,7 +27,6 @@ export function ProjectEdit() {
   });
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [stage, setStage] = useState('');
   const [startAt, setStartAt] = useState('');
   const [dueAt, setDueAt] = useState('');
@@ -37,7 +36,6 @@ export function ProjectEdit() {
     if (projectQuery.data && !hydrated) {
       const p = projectQuery.data;
       setTitle(p.title);
-      setDescription(p.description ?? '');
       setStage(p.stage);
       setStartAt(p.start_at ?? '');
       setDueAt(p.due_at ?? '');
@@ -60,7 +58,6 @@ export function ProjectEdit() {
     const patch: UpdateProjectInput = {
       id,
       title: title.trim(),
-      description: description.trim() || null,
       stage: stage || null,
       start_at: startAt || null,
       due_at: dueAt || null,
@@ -183,19 +180,6 @@ export function ProjectEdit() {
                 )}
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="section" style={{ marginTop: 14 }}>
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <textarea
-              className="input-base"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="可选"
-              style={{ minHeight: 80, resize: 'vertical' }}
-            />
           </div>
         </section>
 

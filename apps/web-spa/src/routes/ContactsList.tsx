@@ -189,7 +189,6 @@ export function ContactsList() {
         email: p.email ?? null,
         phone: p.phone ?? null,
         wechat: p.wechat ?? null,
-        notes: p.notes ?? null,
       }));
 
       setImporting({ done: 0, total: inputs.length });

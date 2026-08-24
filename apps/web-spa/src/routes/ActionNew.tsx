@@ -36,7 +36,6 @@ export function ActionNew() {
   const fromParam = searchParams.get('from');
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [status, setStatus] = useState('inbox');
   const [priority, setPriority] = useState(0);
   const [category, setCategory] = useState('');
@@ -92,7 +91,6 @@ export function ActionNew() {
     createMutation.mutate({
       user_id: userId,
       title: title.trim(),
-      description: description.trim() || null,
       status,
       priority,
       category: category.trim() || null,
@@ -247,18 +245,6 @@ export function ActionNew() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="section" style={{ marginTop: 14 }}>
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <textarea
-              className="input-base"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="可选"
-            />
           </div>
         </section>
 

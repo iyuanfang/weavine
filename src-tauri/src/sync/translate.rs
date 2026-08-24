@@ -161,12 +161,12 @@ pub fn default_zero_integer_columns(kind: &str) -> &'static [&'static str] {
 
 pub fn push_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["id","user_id","nickname","name","company","title","address","email","phone","wechat","notes","importance","last_interaction_at","created_at","updated_at"],
+        "contact" => &["id","user_id","nickname","name","company","title","address","email","phone","wechat","importance","last_interaction_at","created_at","updated_at"],
         "tag" => &["id","user_id","name","color","created_at"],
-        "event" => &["id","user_id","title","event_type","start_at","end_at","location","notes","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at"],
-        "action" => &["id","user_id","title","description","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at"],
+        "event" => &["id","user_id","title","event_type","start_at","end_at","location","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at"],
+        "action" => &["id","user_id","title","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at"],
         "interaction" => &["id","user_id","contact_id","action_id","event_id","occurred_at","channel","summary","created_at"],
-        "project" => &["id","user_id","title","description","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at"],
+        "project" => &["id","user_id","title","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at"],
         "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","invitation_token","created_at"],
         "setting" => &["id","user_id","key","value","updated_at"],
         "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","storage_key","width","height","alt_text","created_at","updated_at"],

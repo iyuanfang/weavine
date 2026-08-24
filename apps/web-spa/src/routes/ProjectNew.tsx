@@ -20,7 +20,6 @@ export function ProjectNew() {
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [template, setTemplate] = useState('general');
   const [stage, setStage] = useState<string>('');
   const [startAt, setStartAt] = useState('');
@@ -58,7 +57,6 @@ export function ProjectNew() {
     createMutation.mutate({
       user_id: userId,
       title: title.trim(),
-      description: description.trim() || null,
       template,
       stage: stage || null,
       start_at: startAt || null,
@@ -220,19 +218,6 @@ export function ProjectNew() {
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="section" style={{ marginTop: 14 }}>
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <textarea
-              className="input-base"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="可选"
-              style={{ minHeight: 80, resize: 'vertical' }}
-            />
           </div>
         </section>
 

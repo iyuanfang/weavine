@@ -50,6 +50,7 @@ import type {
   MediaItem,
   Note,
   NoteBacklink,
+  NoteEntityLink,
   PRMAdapter,
   Project,
   ProjectContactWithContact,
@@ -337,6 +338,8 @@ export class TauriAdapter implements PRMAdapter {
       entity_id: string,
     ): Promise<NoteBacklink[]> =>
       invoke<NoteBacklink[]>('list_note_backlinks', { user_id, entity_type, entity_id }),
+    listEntityLinks: async (user_id: string, note_id: string): Promise<NoteEntityLink[]> =>
+      invoke<NoteEntityLink[]>('list_note_entities', { user_id, note_id }),
   };
 
   settings = {

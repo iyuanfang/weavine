@@ -46,88 +46,35 @@ pub fn sync_note_entities(
     conn: &Connection,
     note_id: &str,
     user_id: &str,
-    body: &str,
+    links: &[NoteEntityLink],
 ) -> rusqlite::Result<()> {
-    let refs = parse_wikilinks(body);
-    for (entity_type, title) in refs {
-        let entity_id: Option<String> = match entity_type.as_str() {
-            "contact" => conn
-                .query_row(
-                    "SELECT id FROM Contact WHERE user_id = ?1 AND (nickname = ?2 OR name = ?2) LIMIT 1",
-                    params![user_id, title],
-                    |r| r.get(0),
-                )
-                .optional()?,
-            "project" => conn
-                .query_row(
-                    "SELECT id FROM Project WHERE user_id = ?1 AND title = ?2 LIMIT 1",
-                    params![user_id, title],
-                    |r| r.get(0),
-                )
-                .optional()?,
-            "action" => conn
-                .query_row(
-                    "SELECT id FROM Action WHERE user_id = ?1 AND title = ?2 LIMIT 1",
-                    params![user_id, title],
-                    |r| r.get(0),
-                )
-                .optional()?,
-            "event" => conn
-                .query_row(
-                    "SELECT id FROM Event WHERE user_id = ?1 AND title = ?2 LIMIT 1",
-                    params![user_id, title],
-                    |r| r.get(0),
-                )
-                .optional()?,
-            _ => None,
-        };
-        if let Some(eid) = entity_id {
-            conn.execute(
-                "INSERT OR IGNORE INTO NoteEntity (id, note_id, user_id, entity_type, entity_id, created_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![Uuid::new_v4().to_string(), note_id, user_id, entity_type, eid, now_str()],
-            )?;
-        }
+    for link in links {
+        conn.execute(
+            "INSERT OR IGNORE INTO NoteEntity (id, note_id, user_id, entity_type, entity_id, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                Uuid::new_v4().to_string(),
+                note_id,
+                user_id,
+                link.entity_type,
+                link.entity_id,
+                now_str(),
+            ],
+        )?;
     }
     Ok(())
 }
 
-fn parse_wikilinks(body: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    let bytes = body.as_bytes();
-    let mut i = 0;
-    while i + 1 < bytes.len() {
-        if bytes[i] == b'[' && bytes[i + 1] == b'[' {
-            if let Some(end_rel) = body[i + 2..].find("]]") {
-                let inner = &body[i + 2..i + 2 + end_rel];
-                if let Some(colon) = inner.find(':') {
-                    let kind = inner[..colon].to_ascii_lowercase();
-                    let title = inner[colon + 1..].trim().to_string();
-                    if matches!(kind.as_str(), "contact" | "project" | "action" | "event")
-                        && !title.is_empty()
-                    {
-                        out.push((kind, title));
-                    }
-                }
-                i += 2 + end_rel + 2;
-                continue;
-            }
-        }
-        i += 1;
-    }
-    out
-}
-
-pub fn create(conn: &Connection, input: &CreateNoteInput) -> rusqlite::Result<Note> {
+pub fn create(conn: &Connection, user_id: &str, input: &CreateNoteInput) -> rusqlite::Result<Note> {
     let id = Uuid::new_v4().to_string();
     let now = now_str();
     conn.execute(
         "INSERT INTO Note (id, user_id, title, body, created_at, updated_at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-        params![id, input.user_id, input.title, input.body, now],
+        params![id, user_id, input.title, input.body, now],
     )?;
-    sync_note_entities(conn, &id, &input.user_id, &input.body)?;
-    get(conn, &input.user_id, &id)?.ok_or_else(|| {
+    sync_note_entities(conn, &id, user_id, &input.entity_links)?;
+    get(conn, user_id, &id)?.ok_or_else(|| {
         rusqlite::Error::QueryReturnedNoRows
     })
 }
@@ -145,11 +92,9 @@ pub fn update(conn: &Connection, user_id: &str, id: &str, input: &UpdateNoteInpu
     if changed == 0 {
         return Ok(None);
     }
-    if input.body.is_some() {
+    if let Some(links) = &input.entity_links {
         conn.execute("DELETE FROM NoteEntity WHERE note_id = ?1", params![id])?;
-        if let Some(note) = get(conn, user_id, id)? {
-            sync_note_entities(conn, id, user_id, &note.body)?;
-        }
+        sync_note_entities(conn, id, user_id, links)?;
     }
     get(conn, user_id, id)
 }
@@ -185,5 +130,27 @@ pub fn list_backlinks(
         })?
         .filter_map(|r| r.ok())
         .collect::<Vec<NoteBacklink>>();
+    Ok(rows)
+}
+
+pub fn list_note_entities(
+    conn: &Connection,
+    user_id: &str,
+    note_id: &str,
+) -> rusqlite::Result<Vec<NoteEntityLink>> {
+    let mut stmt = conn.prepare(
+        "SELECT entity_type, entity_id FROM NoteEntity \
+         WHERE note_id = ?1 AND user_id = ?2 \
+         ORDER BY entity_type, entity_id",
+    )?;
+    let rows = stmt
+        .query_map(params![note_id, user_id], |row| {
+            Ok(NoteEntityLink {
+                entity_type: row.get(0)?,
+                entity_id: row.get(1)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect::<Vec<NoteEntityLink>>();
     Ok(rows)
 }

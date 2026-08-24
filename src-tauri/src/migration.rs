@@ -63,7 +63,6 @@ CREATE TABLE IF NOT EXISTS "Contact" (
     "email" TEXT,
     "phone" TEXT,
     "wechat" TEXT,
-    "notes" TEXT,
     "importance" TEXT NOT NULL DEFAULT 'low' CHECK("importance" IN ('low', 'medium', 'high')),
 "last_interaction_at" DATETIME NOT NULL,
     "keep_in_touch_cadence_days" INTEGER,
@@ -94,7 +93,6 @@ CREATE TABLE IF NOT EXISTS "Event" (
     "start_at" DATETIME NOT NULL,
     "end_at" DATETIME,
     "location" TEXT,
-    "notes" TEXT,
     "reminder_enabled" INTEGER NOT NULL DEFAULT 1,
     "reminder_at" DATETIME,
     "reminder_lead_minutes" INTEGER,
@@ -109,7 +107,6 @@ CREATE TABLE IF NOT EXISTS "Action" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
     "title" TEXT NOT NULL,
-    "description" TEXT,
     "status" TEXT NOT NULL DEFAULT 'inbox',
     "priority" INTEGER NOT NULL DEFAULT 0,
     "category" TEXT,
@@ -170,7 +167,6 @@ CREATE TABLE IF NOT EXISTS "Project" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
     "title" TEXT NOT NULL,
-    "description" TEXT,
     "template" TEXT NOT NULL,
     "stage" TEXT NOT NULL,
     "start_at" DATETIME,
@@ -318,6 +314,9 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
     // rebuild affected tables.  This runs ONCE; after the rebuild the
     // new DDL (above) matches the live schema.
     migrate_legacy_columns(conn)?;
+
+    // ── Drop vestigial notes/description columns (replaced by Notes) ──
+    migrate_drop_vestigial_notes(conn)?;
 
     seed_default_user(conn)?;
     seed_default_tags(conn)?;
@@ -1020,6 +1019,118 @@ fn migrate_legacy_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
     );
 
     conn.execute_batch("COMMIT; PRAGMA foreign_keys=ON;")?;
+    Ok(())
+}
+
+fn migrate_drop_vestigial_notes(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Idempotent: drop the legacy free-text columns on contact / event / project /
+    // action that were vestigial after Notes shipped. Each rebuild preserves every
+    // other column so user data survives.
+    let targets: &[(&str, &str, &str)] = &[
+        (
+            "Contact",
+            "\"id\", \"user_id\", \"nickname\", \"name\", \"company\", \"title\", \"address\", \"email\", \"phone\", \"wechat\", \"importance\", \"last_interaction_at\", \"keep_in_touch_cadence_days\", \"created_at\", \"updated_at\"",
+            "CREATE TABLE IF NOT EXISTS \"Contact__new\" (\
+                \"id\" TEXT NOT NULL PRIMARY KEY,\
+                \"user_id\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,\
+                \"nickname\" TEXT NOT NULL,\
+                \"name\" TEXT,\
+                \"company\" TEXT,\
+                \"title\" TEXT,\
+                \"address\" TEXT,\
+                \"email\" TEXT,\
+                \"phone\" TEXT,\
+                \"wechat\" TEXT,\
+                \"importance\" TEXT NOT NULL DEFAULT 'low' CHECK(\"importance\" IN ('low','medium','high')),\
+                \"last_interaction_at\" DATETIME NOT NULL,\
+                \"keep_in_touch_cadence_days\" INTEGER,\
+                \"created_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                \"updated_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\
+            )",
+        ),
+        (
+            "Event",
+            "\"id\", \"user_id\", \"title\", \"type\", \"start_at\", \"end_at\", \"location\", \"reminder_enabled\", \"reminder_at\", \"reminder_lead_minutes\", \"contact_id\", \"project_id\", \"archived_at\", \"created_at\", \"updated_at\"",
+            "CREATE TABLE IF NOT EXISTS \"Event__new\" (\
+                \"id\" TEXT NOT NULL PRIMARY KEY,\
+                \"user_id\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,\
+                \"title\" TEXT NOT NULL,\
+                \"type\" TEXT NOT NULL,\
+                \"start_at\" DATETIME NOT NULL,\
+                \"end_at\" DATETIME,\
+                \"location\" TEXT,\
+                \"reminder_enabled\" INTEGER NOT NULL DEFAULT 1,\
+                \"reminder_at\" DATETIME,\
+                \"reminder_lead_minutes\" INTEGER,\
+                \"contact_id\" TEXT REFERENCES \"Contact\"(\"id\") ON DELETE SET NULL,\
+                \"project_id\" TEXT REFERENCES \"Project\"(\"id\") ON DELETE SET NULL,\
+                \"archived_at\" TEXT,\
+                \"created_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                \"updated_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\
+            )",
+        ),
+        (
+            "Project",
+            "\"id\", \"user_id\", \"title\", \"template\", \"stage\", \"start_at\", \"due_at\", \"completed_at\", \"archived_at\", \"created_at\", \"updated_at\"",
+            "CREATE TABLE IF NOT EXISTS \"Project__new\" (\
+                \"id\" TEXT NOT NULL PRIMARY KEY,\
+                \"user_id\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,\
+                \"title\" TEXT NOT NULL,\
+                \"template\" TEXT NOT NULL,\
+                \"stage\" TEXT NOT NULL,\
+                \"start_at\" DATETIME,\
+                \"due_at\" DATETIME,\
+                \"completed_at\" DATETIME,\
+                \"archived_at\" TEXT,\
+                \"created_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                \"updated_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\
+            )",
+        ),
+        (
+            "Action",
+            "\"id\", \"user_id\", \"title\", \"status\", \"priority\", \"category\", \"due_at\", \"contact_id\", \"project_id\", \"completed_at\", \"archived_at\", \"created_at\", \"updated_at\"",
+            "CREATE TABLE IF NOT EXISTS \"Action__new\" (\
+                \"id\" TEXT NOT NULL PRIMARY KEY,\
+                \"user_id\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,\
+                \"title\" TEXT NOT NULL,\
+                \"status\" TEXT NOT NULL DEFAULT 'inbox',\
+                \"priority\" INTEGER NOT NULL DEFAULT 0,\
+                \"category\" TEXT,\
+                \"due_at\" DATETIME,\
+                \"contact_id\" TEXT REFERENCES \"Contact\"(\"id\") ON DELETE SET NULL,\
+                \"project_id\" TEXT REFERENCES \"Project\"(\"id\") ON DELETE SET NULL,\
+                \"completed_at\" DATETIME,\
+                \"archived_at\" TEXT,\
+                \"created_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\
+                \"updated_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\
+            )",
+        ),
+    ];
+
+    for (table, cols_csv, new_ddl) in targets {
+        let has_notes: i64 = conn
+            .query_row(
+                &format!(
+                    "SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name IN ('notes','description')"
+                ),
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if has_notes == 0 {
+            continue;
+        }
+        conn.execute_batch("PRAGMA foreign_keys=OFF; BEGIN TRANSACTION;")?;
+        let tmp = format!("{table}__new");
+        conn.execute_batch(&format!("DROP TABLE IF EXISTS \"{tmp}\""))?;
+        conn.execute_batch(new_ddl)?;
+        conn.execute(
+            &format!("INSERT INTO \"{tmp}\" ({cols_csv}) SELECT {cols_csv} FROM \"{table}\""),
+            [],
+        )?;
+        conn.execute_batch(&format!("DROP TABLE \"{table}\"; ALTER TABLE \"{tmp}\" RENAME TO \"{table}\";"))?;
+        conn.execute_batch("COMMIT; PRAGMA foreign_keys=ON;")?;
+    }
     Ok(())
 }
 

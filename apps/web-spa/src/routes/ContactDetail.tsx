@@ -304,7 +304,6 @@ export function ContactDetail() {
             </div>
           )}
         </div>
-        <BacklinksPanel entityType="contact" entityId={id} />
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}>
           <Link to={back.href} className="btn btn-ghost">
             {back.label}
@@ -411,17 +410,6 @@ export function ContactDetail() {
         </section>
       )}
 
-      {contact.notes && (
-        <section className="section">
-          <h2 className="section__title">备注</h2>
-          <div className="card" style={{ marginTop: 10 }}>
-            <p style={{ margin: 0, fontSize: 'var(--text-base)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-              {contact.notes}
-            </p>
-          </div>
-        </section>
-      )}
-
       <section className="section">
         <div className="section__header">
           <h2 className="section__title">相关日程</h2>
@@ -492,6 +480,8 @@ export function ContactDetail() {
           </div>
         )}
       </section>
+
+      <BacklinksPanel entityType="contact" entityId={id} />
 
       <section className="section">
         <div className="section__header">
