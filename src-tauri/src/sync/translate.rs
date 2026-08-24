@@ -39,7 +39,7 @@ pub fn obj_snake_to_camel(v: &Value) -> Value {
 //      project_contact (-> project, contact)
 pub const ENTITY_KINDS: &[&str] = &[
     // level 0
-    "contact", "tag", "project", "setting",
+    "contact", "tag", "project", "setting", "note",
     // level 1
     "event", "action",
     // level 2
@@ -47,14 +47,14 @@ pub const ENTITY_KINDS: &[&str] = &[
     // level 3
     "contact_tag", "project_contact", "media",
     // level 3.5 (junction-like, push-all)
-    "entity_link",
+    "entity_link", "note_entity",
 ];
 
 pub const UPDATED_AT_TABLES: &[&str] = &[
-    "contact", "project", "event", "action", "setting", "media",
+    "contact", "project", "event", "action", "setting", "media", "note",
 ];
 
-pub const JUNCTION_TABLES: &[&str] = &["contact_tag", "project_contact", "entity_link"];
+pub const JUNCTION_TABLES: &[&str] = &["contact_tag", "project_contact", "entity_link", "note_entity"];
 
 pub fn sqlite_table_to_kind(table: &str) -> Option<&'static str> {
     match table {
@@ -70,6 +70,8 @@ pub fn sqlite_table_to_kind(table: &str) -> Option<&'static str> {
         "ProjectContact" => Some("project_contact"),
         "Media" => Some("media"),
         "EntityLink" => Some("entity_link"),
+        "Note" => Some("note"),
+        "NoteEntity" => Some("note_entity"),
         _ => None,
     }
 }
@@ -91,6 +93,8 @@ pub fn kind_to_sqlite_table(kind: &str) -> Option<&'static str> {
         // PG table is plural `entity_links`; triggers log TG_TABLE_NAME,
         // so pull deliveries arrive as the plural form.
         "entity_links" => Some("EntityLink"),
+        "note" => Some("Note"),
+        "note_entity" => Some("NoteEntity"),
         _ => None,
     }
 }

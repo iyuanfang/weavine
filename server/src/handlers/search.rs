@@ -7,7 +7,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::extract_auth;
-use weavine_lib::models::{SearchResults, Contact, Interaction, Event, Action, Project};
+use weavine_lib::models::{SearchResults, Contact, Interaction, Event, Action, Project, Note};
 
 #[derive(Deserialize)]
 pub struct QueryParams {
@@ -28,7 +28,7 @@ pub async fn query(
                 notes, importance, last_interaction_at, keep_in_touch_cadence_days, \
                 created_at, updated_at, avatar_storage_key, avatar_mime, \
                 avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
-         FROM contact WHERE user_id = $1 AND (nickname ILIKE $2 OR name ILIKE $2 OR company ILIKE $2)",
+         FROM contact WHERE user_id = $1 AND (nickname ILIKE $2 OR name ILIKE $2 OR company ILIKE $2 OR notes ILIKE $2)",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
@@ -77,5 +77,14 @@ pub async fn query(
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
 
-    Ok(Json(SearchResults { contacts, interactions, events, actions, projects }))
+    let notes = sqlx::query_as::<_, Note>(
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
+         FROM note WHERE user_id = $1 AND archived_at IS NULL \
+           AND (title ILIKE $2 OR body ILIKE $2) \
+         ORDER BY updated_at DESC LIMIT 50",
+    )
+    .bind(&auth).bind(&pattern)
+    .fetch_all(&*pool).await.unwrap_or_default();
+
+    Ok(Json(SearchResults { contacts, interactions, events, actions, projects, notes }))
 }

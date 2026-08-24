@@ -9,6 +9,7 @@ pub mod event;
 pub mod graph;
 pub mod interaction;
 pub mod media;
+pub mod note;
 #[cfg(feature = "ocr")]
 pub mod ocr;
 #[cfg(feature = "stt")]
