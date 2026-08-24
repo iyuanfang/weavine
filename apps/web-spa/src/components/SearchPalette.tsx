@@ -28,6 +28,44 @@ interface PaletteItem {
   tag?: string;
 }
 
+type FilterType = 'all' | 'contact' | 'interaction' | 'event' | 'action' | 'project' | 'note';
+
+const FILTER_OPTIONS: { value: FilterType; label: string; icon: string }[] = [
+  { value: 'all', label: '全部', icon: '·' },
+  { value: 'contact', label: '联系人', icon: '👥' },
+  { value: 'interaction', label: '互动', icon: '💬' },
+  { value: 'event', label: '日程', icon: '📅' },
+  { value: 'action', label: '待办', icon: '📌' },
+  { value: 'project', label: '项目', icon: '🎯' },
+  { value: 'note', label: '笔记', icon: '📝' },
+];
+
+function PaletteFilter({
+  value,
+  onChange,
+}: {
+  value: FilterType;
+  onChange: (v: FilterType) => void;
+}) {
+  return (
+    <div className="search-palette__filter" role="radiogroup" aria-label="筛选类型">
+      {FILTER_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          role="radio"
+          aria-checked={value === opt.value}
+          className={`search-palette__filter-pill${value === opt.value ? ' is-active' : ''}`}
+          onClick={() => onChange(opt.value)}
+        >
+          <span aria-hidden style={{ marginRight: 4 }}>{opt.icon}</span>
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PaletteSection({
   title,
   items,
@@ -83,6 +121,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = useState(initialQuery);
+  const [filter, setFilter] = useState<FilterType>('all');
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const debouncedQuery = useDebouncedValue(query, 250);
 
@@ -90,6 +129,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
   useEffect(() => {
     if (open) {
       setQuery(initialQuery);
+      setFilter('all');
       // Focus after paint so the input exists.
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -113,6 +153,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
   const sections = useMemo(
     () => [
       {
+        kind: 'contact' as const,
         title: '联系人',
         viewAllHref: '/contacts',
         items: contacts.map((c) => ({
@@ -123,6 +164,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
         })),
       },
       {
+        kind: 'interaction' as const,
         title: '互动',
         viewAllHref: '/contacts',
         items: interactions.map((i) => ({
@@ -136,6 +178,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
         })),
       },
       {
+        kind: 'event' as const,
         title: '日程',
         viewAllHref: '/calendar',
         items: events.map((e) => ({
@@ -153,6 +196,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
         })),
       },
       {
+        kind: 'action' as const,
         title: '待办',
         viewAllHref: '/actions',
         items: actions.map((a) => ({
@@ -166,6 +210,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
         })),
       },
       {
+        kind: 'project' as const,
         title: '项目',
         viewAllHref: '/projects',
         items: projects.map((p) => ({
@@ -177,6 +222,7 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
         })),
       },
       {
+        kind: 'note' as const,
         title: '笔记',
         viewAllHref: '/notes',
         items: notes.map((n) => {
@@ -193,8 +239,8 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
           };
         }),
       },
-    ],
-    [contacts, interactions, events, actions, projects, notes],
+    ].filter((s) => filter === 'all' || s.kind === filter),
+    [contacts, interactions, events, actions, projects, notes, filter],
   );
 
   const flatItems = useMemo(() => sections.flatMap((s) => s.items), [sections]);
@@ -267,6 +313,8 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
             </button>
           )}
         </div>
+
+        <PaletteFilter value={filter} onChange={setFilter} />
 
         <div className="search-palette__results">
           {!debouncedQuery.trim() ? (

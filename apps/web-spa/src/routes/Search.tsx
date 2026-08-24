@@ -24,11 +24,50 @@ const SECTION_ICONS: Record<string, string> = {
   笔记: '📝',
 };
 
+type FilterType = 'all' | 'contact' | 'interaction' | 'event' | 'action' | 'project' | 'note';
+
+const FILTER_OPTIONS: { value: FilterType; label: string; icon: string }[] = [
+  { value: 'all', label: '全部', icon: '·' },
+  { value: 'contact', label: '联系人', icon: '👥' },
+  { value: 'interaction', label: '互动', icon: '💬' },
+  { value: 'event', label: '日程', icon: '📅' },
+  { value: 'action', label: '待办', icon: '📌' },
+  { value: 'project', label: '项目', icon: '🎯' },
+  { value: 'note', label: '笔记', icon: '📝' },
+];
+
+function SearchFilter({
+  value,
+  onChange,
+}: {
+  value: FilterType;
+  onChange: (v: FilterType) => void;
+}) {
+  return (
+    <div className="search-filter" role="radiogroup" aria-label="筛选类型">
+      {FILTER_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          role="radio"
+          aria-checked={value === opt.value}
+          className={`search-filter__pill${value === opt.value ? ' is-active' : ''}`}
+          onClick={() => onChange(opt.value)}
+        >
+          <span aria-hidden style={{ marginRight: 4 }}>{opt.icon}</span>
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function SearchPage() {
   const adapter = useAdapter();
   const userId = useUserId();
 
   const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<FilterType>('all');
   const [includeArchived, setIncludeArchived] = useState(true);
   const debouncedQuery = useDebouncedValue(query, 300);
 
@@ -78,14 +117,18 @@ export function SearchPage() {
       />
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <input
-          type="text"
-          className="input-base"
-          placeholder="输入关键词开始搜索…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          autoFocus
-        />
+        <div className="search-input-row">
+          <input
+            type="text"
+            className="input-base"
+            placeholder="输入关键词开始搜索…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <SearchFilter value={filter} onChange={setFilter} />
+        </div>
         <label
           style={{
             display: 'flex',
@@ -117,7 +160,7 @@ export function SearchPage() {
         <div className="loading">搜索中</div>
       ) : totalCount > 0 ? (
         <div style={{ display: 'grid', gap: 24 }}>
-          {contacts.length > 0 && (
+          {(filter === 'all' || filter === 'contact') && contacts.length > 0 && (
             <SearchSection
               title="联系人"
               viewAllHref="/contacts"
@@ -129,7 +172,7 @@ export function SearchPage() {
               }))}
             />
           )}
-          {interactions.length > 0 && (
+          {(filter === 'all' || filter === 'interaction') && interactions.length > 0 && (
             <SearchSection
               title="互动"
               viewAllHref="/contacts"
@@ -145,7 +188,7 @@ export function SearchPage() {
               }))}
             />
           )}
-          {events.length > 0 && (
+          {(filter === 'all' || filter === 'event') && events.length > 0 && (
             <SearchSection
               title="日程"
               viewAllHref="/calendar"
@@ -164,7 +207,7 @@ export function SearchPage() {
               }))}
             />
           )}
-          {actions.length > 0 && (
+          {(filter === 'all' || filter === 'action') && actions.length > 0 && (
             <SearchSection
               title="待办"
               viewAllHref="/actions"
@@ -182,7 +225,7 @@ export function SearchPage() {
               }))}
             />
           )}
-          {projects.length > 0 && (
+          {(filter === 'all' || filter === 'project') && projects.length > 0 && (
             <SearchSection
               title="项目"
               viewAllHref="/projects"
@@ -195,7 +238,7 @@ export function SearchPage() {
               }))}
             />
           )}
-          {notes.length > 0 && (
+          {(filter === 'all' || filter === 'note') && notes.length > 0 && (
             <SearchSection
               title="笔记"
               viewAllHref="/notes"
