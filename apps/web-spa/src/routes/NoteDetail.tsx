@@ -307,6 +307,7 @@ export function NoteDetail() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
+  const saveTokenRef = useRef(0);
 
   const persist = async (opts?: { force?: boolean }) => {
     if (!userId || !id || !note) return;
@@ -315,6 +316,8 @@ export function NoteDetail() {
     const linksSnapshot = draftLinks;
     const bodySnapshot = draftBody;
     dirtyRef.current = false;
+    saveTokenRef.current += 1;
+    const myToken = saveTokenRef.current;
     setSaveStatus('saving');
     try {
       const updated = await adapter.notes.update(userId, id, {
@@ -323,10 +326,12 @@ export function NoteDetail() {
         body: bodySnapshot,
         entity_links: linksSnapshot,
       });
+      if (myToken !== saveTokenRef.current) return;
       setNote(updated);
       setLastSavedAt(Date.now());
       setSaveStatus('saved');
     } catch (err) {
+      if (myToken !== saveTokenRef.current) return;
       dirtyRef.current = true;
       setSaveStatus('error');
       setError(err instanceof Error ? err.message : String(err));
