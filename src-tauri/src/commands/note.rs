@@ -3,7 +3,7 @@ use crate::db::Database;
 use crate::models::*;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_notes(
     db: State<Database>,
     user_id: String,
@@ -14,7 +14,7 @@ pub fn list_notes(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_note(
     db: State<Database>,
     user_id: String,
@@ -24,7 +24,7 @@ pub fn get_note(
     business::note::get(&conn, &user_id, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn create_note(
     db: State<Database>,
     user_id: String,
@@ -34,7 +34,7 @@ pub fn create_note(
     business::note::create(&conn, &user_id, &input).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_note(
     db: State<Database>,
     user_id: String,
@@ -45,13 +45,13 @@ pub fn update_note(
     business::note::update(&conn, &user_id, &id, &input).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_note(db: State<Database>, user_id: String, id: String) -> Result<bool, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::note::delete(&conn, &user_id, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_note_backlinks(
     db: State<Database>,
     user_id: String,
@@ -63,7 +63,7 @@ pub fn list_note_backlinks(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_note_entities(
     db: State<Database>,
     user_id: String,

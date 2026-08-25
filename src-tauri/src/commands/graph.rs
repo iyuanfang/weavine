@@ -3,7 +3,7 @@ use crate::business::graph::EntityGraphResponse;
 use crate::db::Database;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn entity_graph(
     db: State<Database>,
     user_id: String,

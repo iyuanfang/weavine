@@ -76,7 +76,7 @@ pub fn get_event(db: State<Database>, id: String) -> Result<Event, String> {
     business::event::get(&conn, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn list_event_participants(
     db: State<Database>,
     event_id: String,
@@ -97,7 +97,7 @@ pub fn add_event_participant(
     business::event_participant::add(&conn, &event_id, &contact_id, &role).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn set_event_participant_role(
     db: State<Database>,
     event_id: String,
@@ -110,7 +110,7 @@ pub fn set_event_participant_role(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn remove_event_participant(
     db: State<Database>,
     event_id: String,
