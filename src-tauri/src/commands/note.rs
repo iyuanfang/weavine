@@ -3,72 +3,62 @@ use crate::db::Database;
 use crate::models::*;
 use tauri::State;
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn list_notes(
     db: State<Database>,
-    user_id: String,
-    cursor: Option<String>,
+    input: ListNotesInput,
 ) -> Result<(Vec<Note>, bool), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::list(&conn, &user_id, cursor.as_deref())
+    business::note::list(&conn, &input.user_id, input.cursor.as_deref())
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
-pub fn get_note(
-    db: State<Database>,
-    user_id: String,
-    id: String,
-) -> Result<Option<Note>, String> {
+#[tauri::command]
+pub fn get_note(db: State<Database>, input: GetNoteInput) -> Result<Option<Note>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::get(&conn, &user_id, &id).map_err(|e| e.to_string())
+    business::note::get(&conn, &input.user_id, &input.id).map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn create_note(
     db: State<Database>,
-    user_id: String,
     input: CreateNoteInput,
 ) -> Result<Note, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::create(&conn, &user_id, &input).map_err(|e| e.to_string())
+    business::note::create(&conn, &input.user_id, &input).map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn update_note(
     db: State<Database>,
-    user_id: String,
-    id: String,
     input: UpdateNoteInput,
 ) -> Result<Option<Note>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::update(&conn, &user_id, &id, &input).map_err(|e| e.to_string())
+    business::note::update(&conn, &input.user_id, &input.id, &input).map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
-pub fn delete_note(db: State<Database>, user_id: String, id: String) -> Result<bool, String> {
+#[tauri::command]
+pub fn delete_note(db: State<Database>, input: DeleteNoteInput) -> Result<bool, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::delete(&conn, &user_id, &id).map_err(|e| e.to_string())
+    business::note::delete(&conn, &input.user_id, &input.id).map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn list_note_backlinks(
     db: State<Database>,
-    user_id: String,
-    entity_type: String,
-    entity_id: String,
+    input: ListNoteBacklinksInput,
 ) -> Result<Vec<NoteBacklink>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::list_backlinks(&conn, &user_id, &entity_type, &entity_id)
+    business::note::list_backlinks(&conn, &input.user_id, &input.entity_type, &input.entity_id)
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command(rename_all = "snake_case")]
+#[tauri::command]
 pub fn list_note_entities(
     db: State<Database>,
-    user_id: String,
-    note_id: String,
+    input: ListNoteEntitiesInput,
 ) -> Result<Vec<NoteEntityLink>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::list_note_entities(&conn, &user_id, &note_id).map_err(|e| e.to_string())
+    business::note::list_note_entities(&conn, &input.user_id, &input.note_id)
+        .map_err(|e| e.to_string())
 }

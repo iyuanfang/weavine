@@ -315,29 +315,31 @@ export class TauriAdapter implements PRMAdapter {
   notes = {
     list: async (_user_id: string, cursor?: string | null): Promise<ListNotesResult> => {
       const user_id = await this.userIdReady;
-      const [items, has_more] = await invoke<[Note[], boolean]>('list_notes', { user_id, cursor: cursor ?? null });
+      const [items, has_more] = await invoke<[Note[], boolean]>('list_notes', {
+        input: { user_id, cursor: cursor ?? null },
+      });
       const cursorOut = items.length > 0 ? `${items[items.length - 1].updated_at},${items[items.length - 1].id}` : null;
       return { items, cursor: cursorOut, has_more };
     },
     get: async (_user_id: string, id: string): Promise<Note | null> => {
       const user_id = await this.userIdReady;
-      return invoke<Note | null>('get_note', { user_id, id });
+      return invoke<Note | null>('get_note', { input: { user_id, id } });
     },
     create: async (_user_id: string, input: CreateNoteInput): Promise<Note> => {
       const user_id = await this.userIdReady;
-      return invoke<Note>('create_note', { user_id, input });
+      return invoke<Note>('create_note', { input: { user_id, ...input } });
     },
     update: async (
       _user_id: string,
-      id: string,
+      _id: string,
       input: UpdateNoteInput,
     ): Promise<Note | null> => {
       const user_id = await this.userIdReady;
-      return invoke<Note | null>('update_note', { user_id, id, input });
+      return invoke<Note | null>('update_note', { input: { user_id, ...input } });
     },
     delete: async (_user_id: string, id: string): Promise<boolean> => {
       const user_id = await this.userIdReady;
-      return invoke<boolean>('delete_note', { user_id, id });
+      return invoke<boolean>('delete_note', { input: { user_id, id } });
     },
     listBacklinks: async (
       _user_id: string,
@@ -345,11 +347,15 @@ export class TauriAdapter implements PRMAdapter {
       entity_id: string,
     ): Promise<NoteBacklink[]> => {
       const user_id = await this.userIdReady;
-      return invoke<NoteBacklink[]>('list_note_backlinks', { user_id, entity_type, entity_id });
+      return invoke<NoteBacklink[]>('list_note_backlinks', {
+        input: { user_id, entity_type, entity_id },
+      });
     },
     listEntityLinks: async (_user_id: string, note_id: string): Promise<NoteEntityLink[]> => {
       const user_id = await this.userIdReady;
-      return invoke<NoteEntityLink[]>('list_note_entities', { user_id, note_id });
+      return invoke<NoteEntityLink[]>('list_note_entities', {
+        input: { user_id, note_id },
+      });
     },
   };
 
@@ -455,8 +461,10 @@ export class TauriAdapter implements PRMAdapter {
 
   graph = {
     get: async (entity_type: EntityGraphNodeType, entity_id: string): Promise<EntityGraphResponse> => {
-      const payload = await this.withUserId({ entity_type, entity_id });
-      return invoke<EntityGraphResponse>('entity_graph', payload);
+      const user_id = await this.userIdReady;
+      return invoke<EntityGraphResponse>('entity_graph', {
+        input: { user_id, entity_type, entity_id },
+      });
     },
   };
 
