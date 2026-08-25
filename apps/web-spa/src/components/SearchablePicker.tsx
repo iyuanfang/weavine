@@ -93,7 +93,16 @@ export function SearchablePicker({
       setHighlight(0);
       const recalc = () => {
         const rect = wrapRef.current?.getBoundingClientRect();
-        if (rect) setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        if (!rect) return;
+        const DROPDOWN_MAX_H = 320;
+        const MARGIN = 4;
+        const vh = window.innerHeight;
+        let top = rect.bottom + MARGIN;
+        if (top + DROPDOWN_MAX_H > vh) {
+          top = rect.top - DROPDOWN_MAX_H - MARGIN;
+        }
+        if (top < 0) top = 0;
+        setPos({ top, left: rect.left, width: rect.width });
       };
       recalc();
       requestAnimationFrame(() => inputRef.current?.focus());
