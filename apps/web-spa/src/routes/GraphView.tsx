@@ -52,16 +52,6 @@ export function GraphView() {
 
   const [history, setHistory] = useState<Crumb[]>([]);
   const lastCenterKey = useRef<string>('');
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (clickTimer.current) {
-        clearTimeout(clickTimer.current);
-        clickTimer.current = null;
-      }
-    };
-  }, []);
 
   const graphQuery = useQuery({
     queryKey: ['entity-graph', centerType, params.entityId],
@@ -119,21 +109,14 @@ export function GraphView() {
     };
   });
 
-  function onNeighborClick(n: EntityGraphNode) {
-    if (!SUPPORTED_CENTERS.includes(n.entity_type)) return;
-    if (clickTimer.current) clearTimeout(clickTimer.current);
-    clickTimer.current = setTimeout(() => {
-      clickTimer.current = null;
-      navigate(`/graph/${n.entity_type}/${n.id}`);
-    }, 220);
+  function onNeighborOpen(n: EntityGraphNode) {
+    navigate(detailHref(n.entity_type, n.id));
   }
 
-  function onNeighborDblClick(n: EntityGraphNode) {
-    if (clickTimer.current) {
-      clearTimeout(clickTimer.current);
-      clickTimer.current = null;
-    }
-    navigate(detailHref(n.entity_type, n.id));
+  function onNeighborDrill(n: EntityGraphNode, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!SUPPORTED_CENTERS.includes(n.entity_type)) return;
+    navigate(`/graph/${n.entity_type}/${n.id}`);
   }
 
   function jumpTo(c: Crumb, idx: number) {
@@ -256,15 +239,13 @@ export function GraphView() {
             if (!p) return null;
             const meta = TYPE_META[n.entity_type];
             const isSupported = SUPPORTED_CENTERS.includes(n.entity_type);
-            const clickHandler = () => onNeighborClick(n);
-            const dblClickHandler = () => onNeighborDblClick(n);
+            const openHandler = () => onNeighborOpen(n);
             return (
               <g
                 key={key}
                 data-testid={`graph-node-${n.entity_type}-${n.id}`}
-                style={{ cursor: isSupported ? 'pointer' : 'default' }}
-                onClick={clickHandler}
-                onDoubleClick={dblClickHandler}
+                style={{ cursor: 'pointer' }}
+                onClick={openHandler}
               >
                 <circle
                   cx={p.x}
@@ -295,6 +276,33 @@ export function GraphView() {
                 >
                   {truncate(n.label, 14)}
                 </text>
+                {isSupported && (
+                  <g
+                    data-testid={`graph-node-${n.entity_type}-${n.id}-drill`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => onNeighborDrill(n, e)}
+                  >
+                    <circle
+                      cx={p.x + NODE_R - 4}
+                      cy={p.y - NODE_R + 4}
+                      r={11}
+                      fill={meta.color}
+                      stroke="#fff"
+                      strokeWidth={2}
+                    />
+                    <text
+                      x={p.x + NODE_R - 4}
+                      y={p.y - NODE_R + 8}
+                      fontSize="14"
+                      fontWeight={700}
+                      fill="#fff"
+                      textAnchor="middle"
+                      pointerEvents="none"
+                    >
+                      ⊕
+                    </text>
+                  </g>
+                )}
               </g>
             );
           })}
@@ -302,8 +310,8 @@ export function GraphView() {
       </div>
 
       <div className="card" style={{ padding: 12, marginTop: 12, fontSize: 12, color: '#64748b' }}>
-        <strong>提示：</strong>单击节点 = 钻取该节点的关联图；双击 = 打开详情页；
-        顶部面包屑可跳回任意层级；标签节点不可钻取。
+        <strong>提示：</strong>单击节点 = 打开详情页；节点右上角 ⊕ = 以此节点为中心重新画图（钻取）；
+        顶部面包屑可跳回任意层级；标签节点（🏷️）不可钻取。
       </div>
     </div>
   );

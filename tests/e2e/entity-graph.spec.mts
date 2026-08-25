@@ -137,7 +137,7 @@ test('entity graph: project center lists contacts and supports drill-down + brea
     await expect(page.locator(`[data-testid="graph-node-event-${seeded.event.id}"]`)).toBeVisible();
     await expect(page.locator(`[data-testid="graph-node-action-${seeded.action.id}"]`)).toBeVisible();
 
-    await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`).click();
+    await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}-drill"]`).click();
 
     await page.waitForURL(new RegExp(`/graph/contact/${seeded.alice.id}$`));
     await expect(page.locator('[data-testid="graph-breadcrumb"]')).toBeVisible();
@@ -150,7 +150,7 @@ test('entity graph: project center lists contacts and supports drill-down + brea
   }
 });
 
-test('entity graph: event center navigates to contact detail on dblclick', async ({ browser }) => {
+test('entity graph: event center single-click on contact node opens contact detail', async ({ browser }) => {
   const api = await request.newContext({ baseURL: SERVER_BASE });
   const stamp = Date.now();
   const session = await register(api, `entity-graph-evt-${stamp}@e2e.local`, 'entity-graph-evt-pw-12345');
@@ -163,7 +163,7 @@ test('entity graph: event center navigates to contact detail on dblclick', async
     await expect(page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`)).toBeVisible();
     await expect(page.locator(`[data-testid="graph-node-project-${seeded.project.id}"]`)).toBeVisible();
 
-    await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`).dblclick();
+    await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`).click();
 
     await page.waitForURL(`${SPA_BASE}/contacts/${seeded.alice.id}`);
   } finally {
