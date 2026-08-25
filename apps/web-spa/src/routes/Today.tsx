@@ -121,7 +121,7 @@ export function TodayPage() {
 
   const notesQuery = useQuery({
     queryKey: ['notes', userId, 'recent-for-today'],
-    queryFn: () => adapter.notes.list(userId!, { archived: 'active' }).then((all) => all.slice(0, 5)),
+    queryFn: () => adapter.notes.list(userId!).then((all) => all.slice(0, 5)),
     enabled: Boolean(userId),
   });
 

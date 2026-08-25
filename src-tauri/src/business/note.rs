@@ -14,14 +14,9 @@ pub(crate) fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {
     })
 }
 
-pub fn list(conn: &Connection, user_id: &str, include_archived: bool) -> rusqlite::Result<Vec<Note>> {
-    let sql = if include_archived {
-        "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
-         FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC"
-    } else {
-        "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
-         FROM Note WHERE user_id = ?1 AND archived_at IS NULL ORDER BY updated_at DESC"
-    };
+pub fn list(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<Note>> {
+    let sql = "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
+               FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC";
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt
         .query_map([user_id], row_to_note)?
@@ -85,10 +80,9 @@ pub fn update(conn: &Connection, user_id: &str, id: &str, input: &UpdateNoteInpu
         "UPDATE Note SET \
             title      = COALESCE(?3, title), \
             body       = COALESCE(?4, body),  \
-            updated_at = ?5, \
-            archived_at = CASE WHEN ?6 THEN ?5 ELSE NULL END \
-         WHERE id = ?1 AND user_id = ?2",
-        params![id, user_id, input.title, input.body, now, input.archived.unwrap_or(false)],
+            updated_at = ?5 \
+          WHERE id = ?1 AND user_id = ?2",
+        params![id, user_id, input.title, input.body, now],
     )?;
     if changed == 0 {
         return Ok(None);
@@ -118,8 +112,7 @@ pub fn list_backlinks(
         "SELECT n.id, n.title, substr(n.body, 1, 200) \
          FROM Note n INNER JOIN NoteEntity ne ON ne.note_id = n.id \
          WHERE ne.user_id = ?1 AND ne.entity_type = ?2 AND ne.entity_id = ?3 \
-           AND n.archived_at IS NULL \
-         ORDER BY n.updated_at DESC",
+          ORDER BY n.updated_at DESC",
     )?;
     let rows = stmt
         .query_map(params![user_id, entity_type, entity_id], |row| {

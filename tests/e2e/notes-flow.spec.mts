@@ -194,27 +194,6 @@ test.describe('Notes feature', () => {
     await page.goto(noteUrl);
     await expect(page.locator('input.note-edit__title')).toBeVisible();
 
-    // ── Archive: archive button toggles to 取消归档, badge appears
-    await expect(page.locator('.note-detail__archived-badge')).toHaveCount(0);
-    await page.getByRole('button', { name: /^归档$/ }).click();
-    await expect(page.locator('.note-detail__archived-badge')).toBeVisible({ timeout: 8000 });
-    await expect(page.getByRole('button', { name: /^取消归档$/ })).toBeVisible();
-
-    // ── Archive filter shows archived note; 活跃 tab hides it
-    await page.goto(`${SPA_BASE}/notes`);
-    await expect(page).toHaveURL(/\/notes$/);
-    await page.getByRole('tab', { name: '已归档' }).click();
-    await expect(page.locator('.notes-list__item.is-archived')).toContainText('E2E 测试笔记');
-    await page.getByRole('tab', { name: '活跃' }).click();
-    await expect(page.locator('.notes-list__item.is-archived')).toHaveCount(0);
-
-    // ── Restore: open note, click 取消归档, badge gone, button label flips back
-    await page.goto(noteUrl);
-    await expect(page.locator('.note-detail__archived-badge')).toBeVisible();
-    await page.getByRole('button', { name: /^取消归档$/ }).click();
-    await expect(page.locator('.note-detail__archived-badge')).toHaveCount(0, { timeout: 8000 });
-    await expect(page.getByRole('button', { name: /^归档$/ })).toBeVisible();
-
     // ── Delete
     page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: /^删除$/ }).click();

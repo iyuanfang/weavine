@@ -312,14 +312,8 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   notes = {
-    list: async (
-      user_id: string,
-      opts?: { archived?: 'active' | 'archived' | 'all' },
-    ): Promise<Note[]> =>
-      invoke<Note[]>('list_notes', {
-        user_id,
-        include_archived: opts?.archived === 'archived' || opts?.archived === 'all',
-      }),
+    list: async (user_id: string): Promise<Note[]> =>
+      invoke<Note[]>('list_notes', { user_id }),
     get: async (user_id: string, id: string): Promise<Note | null> =>
       invoke<Note | null>('get_note', { user_id, id }),
     create: (input: CreateNoteInput): Promise<Note> =>

@@ -582,7 +582,7 @@ export interface PRMAdapter {
   };
 
   notes: {
-    list(user_id: string, opts?: { archived?: 'active' | 'archived' | 'all' }): Promise<Note[]>;
+    list(user_id: string): Promise<Note[]>;
     get(user_id: string, id: string): Promise<Note | null>;
     create(input: CreateNoteInput): Promise<Note>;
     update(user_id: string, id: string, input: UpdateNoteInput): Promise<Note | null>;

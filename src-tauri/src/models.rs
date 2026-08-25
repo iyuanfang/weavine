@@ -616,8 +616,6 @@ pub struct UpdateNoteInput {
     pub body: Option<String>,
     #[serde(default)]
     pub entity_links: Option<Vec<NoteEntityLink>>,
-    #[serde(default)]
-    pub archived: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

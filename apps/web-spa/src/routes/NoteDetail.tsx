@@ -505,16 +505,6 @@ export function NoteDetail() {
     navigate('/notes');
   };
 
-  const onToggleArchive = async () => {
-    if (!userId || !id || !note) return;
-    const next = !note.archived_at;
-    const updated = await adapter.notes.update(userId, id, {
-      id,
-      archived: next,
-    });
-    if (updated) setNote(updated);
-  };
-
   const onCopyMarkdown = async () => {
     if (!note) return;
     const title = draftTitle.trim() || '（无标题）';
@@ -561,9 +551,6 @@ export function NoteDetail() {
           <span className={`note-detail__save-status note-detail__save-status--${saveStatus}`}>
             {saveLabel}
           </span>
-          {note?.archived_at && (
-            <span className="note-detail__archived-badge">已归档</span>
-          )}
           <button
             type="button"
             className="btn"
@@ -578,9 +565,6 @@ export function NoteDetail() {
             onClick={() => navigate(`/notes/new?clone_from=${id}`)}
           >
             克隆
-          </button>
-          <button type="button" className="btn" onClick={onToggleArchive}>
-            {note?.archived_at ? '取消归档' : '归档'}
           </button>
           <button type="button" className="btn" onClick={onDelete}>
             删除
