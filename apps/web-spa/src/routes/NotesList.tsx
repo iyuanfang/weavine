@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useInfiniteList } from '../lib/useInfiniteList';
+import { useInfiniteList, useScrollSentinel } from '../lib/useInfiniteList';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
@@ -69,11 +69,12 @@ export function NotesList() {
         </button>
       </header>
 
-      {isLoading && <div style={{textAlign:'center',padding:'8px 0',color:'var(--muted)',fontSize:'var(--text-sm)'}}>加载中…</div>}
-      {hasMore && notes && (
+      {isLoading && notes.length === 0 && <div style={{textAlign:'center',padding:'8px 0',color:'var(--muted)',fontSize:'var(--text-sm)'}}>加载中…</div>}
+      {hasMore && notes && notes.length > 0 && (
         <button type="button" className="btn btn-ghost" onClick={fetchMore} disabled={isLoading}
-          style={{display:'block',margin:'8px auto'}}>加载更多</button>
+          style={{display:'block',margin:'8px auto'}}>{isLoading ? '加载中…' : '加载更多'}</button>
       )}
+      {hasMore && notes && notes.length > 0 && <Sentinel fetchMore={fetchMore} isLoading={isLoading} hasMore={hasMore} />}
       {notes && notes.length > 0 && (
         <div className="notes-list__filter">
           <input
@@ -96,8 +97,7 @@ export function NotesList() {
           {listError instanceof Error ? listError.message : '加载失败'}
         </p>
       ) : null}
-      {!listError && isLoading && <p className="muted">加载中…</p>}
-      {notes && notes.length === 0 && (
+      {notes && notes.length === 0 && !isLoading && (
         <div className="empty-state">
           <h3 className="empty-state__title">还没有笔记</h3>
           <p className="empty-state__hint">
@@ -121,6 +121,19 @@ export function NotesList() {
       )}
     </div>
   );
+}
+
+function Sentinel({
+  fetchMore,
+  isLoading,
+  hasMore,
+}: {
+  fetchMore: () => Promise<void>;
+  isLoading: boolean;
+  hasMore: boolean;
+}) {
+  const ref = useScrollSentinel(fetchMore, { enabled: true, isLoading, hasMore });
+  return <div ref={ref} style={{ height: 1 }} />;
 }
 
 const BUCKET_ORDER = ['今天', '昨天', '本周', '过去 30 天', '更早'];

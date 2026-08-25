@@ -6,7 +6,7 @@ import { Avatar } from '../components/Avatar';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
-import { useInfiniteList } from '../lib/useInfiniteList';
+import { useInfiniteList, useScrollSentinel } from '../lib/useInfiniteList';
 import { useUserId } from '../lib/auth';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { tagColor } from '../lib/tagColor';
@@ -440,11 +440,6 @@ export function ContactsList() {
                   />
                 ))}
               </div>
-              {isLoading && (
-                <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
-                  加载中…
-                </div>
-              )}
               {hasMore && (
                 <button
                   type="button"
@@ -453,24 +448,30 @@ export function ContactsList() {
                   disabled={isLoading}
                   style={{ display: 'block', margin: '12px auto 4px' }}
                 >
-                  加载更多
+                  {isLoading ? '加载中…' : '加载更多'}
                 </button>
               )}
-              <div ref={(el) => {
-                if (el && hasMore && !isLoading) {
-                  const observer = new IntersectionObserver((entries) => {
-                    if (entries[0]?.isIntersecting) fetchMore();
-                  }, { rootMargin: '200px' });
-                  observer.observe(el);
-                  return () => observer.disconnect();
-                }
-              }} style={{ height: 1 }} />
+              {hasMore && <Sentinel fetchMore={fetchMore} isLoading={isLoading} hasMore={hasMore} />}
+
             </div>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function Sentinel({
+  fetchMore,
+  isLoading,
+  hasMore,
+}: {
+  fetchMore: () => Promise<void>;
+  isLoading: boolean;
+  hasMore: boolean;
+}) {
+  const ref = useScrollSentinel(fetchMore, { enabled: true, isLoading, hasMore });
+  return <div ref={ref} style={{ height: 1 }} />;
 }
 
 function ContactRow({
