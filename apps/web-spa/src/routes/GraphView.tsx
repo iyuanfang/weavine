@@ -236,16 +236,23 @@ export function GraphView() {
               ? cx : placedAt[toKey]?.x ?? cx;
             const by = e.to_id === params.entityId && e.to_type === centerType
               ? cy : placedAt[toKey]?.y ?? cy;
+            const dx = bx - ax;
+            const dy = by - ay;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const nx = -dy / len;
+            const ny = dx / len;
+            const bow = ((i * 7) % 11) - 5;
+            const mx = (ax + bx) / 2 + nx * bow;
+            const my = (ay + by) / 2 + ny * bow;
+            const stroke = TYPE_META[e.to_type]?.color ?? '#94a3b8';
             return (
-              <line
+              <path
                 key={i}
-                x1={ax}
-                y1={ay}
-                x2={bx}
-                y2={by}
-                stroke="#94a3b8"
+                d={`M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`}
+                stroke={stroke}
                 strokeWidth={1.5}
-                opacity={0.6}
+                fill="none"
+                opacity={0.55}
               />
             );
           })}
