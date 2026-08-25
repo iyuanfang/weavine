@@ -1902,26 +1902,6 @@ textarea.input-base {
     font-size: 16px;
   }
 
-  .more-sheet__back {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: transparent;
-    border: none;
-    color: var(--muted, #666);
-    cursor: pointer;
-    font-size: 20px;
-    line-height: 1;
-    margin-right: 4px;
-  }
-
-  .more-sheet__back:hover {
-    background: var(--accent-soft, #ecfdf5);
-    color: var(--accent, #059669);
-  }
-
   .more-sheet__list {
     list-style: none;
     margin: 0;
