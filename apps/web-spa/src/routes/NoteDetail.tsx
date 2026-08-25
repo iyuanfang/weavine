@@ -319,6 +319,17 @@ export function NoteNew() {
     }
   };
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+        e.preventDefault();
+        setMode((m) => (m === 'edit' ? 'preview' : 'edit'));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <div className="page note-edit">
       <header className="page-header">
@@ -492,10 +503,25 @@ export function NoteDetail() {
         e.preventDefault();
         void persist({ force: true });
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+        e.preventDefault();
+        setMode((m) => (m === 'edit' ? 'preview' : 'edit'));
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [persist]);
+
+  // Warn before browser navigation if there are unsaved changes.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   const onDelete = async () => {
     if (!userId || !id) return;

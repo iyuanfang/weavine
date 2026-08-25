@@ -10,13 +10,6 @@ interface Props {
   entityId: string;
 }
 
-const KIND_TO_PATH: Record<Props['entityType'], string> = {
-  contact: '/contacts',
-  project: '/projects',
-  action: '/actions',
-  event: '/events',
-};
-
 const COLLAPSED_LIMIT = 5;
 
 export function BacklinksPanel({ entityType, entityId }: Props) {
@@ -85,9 +78,6 @@ export function BacklinksPanel({ entityType, entityId }: Props) {
           {expanded ? '收起' : `展开全部（还有 ${overflow} 条）`}
         </button>
       )}
-      <Link to={KIND_TO_PATH[entityType]} className="backlinks-panel__back">
-        ← 返回
-      </Link>
     </section>
   );
 }
