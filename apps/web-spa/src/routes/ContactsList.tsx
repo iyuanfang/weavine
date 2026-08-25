@@ -411,7 +411,7 @@ export function ContactsList() {
         </aside>
 
         <div className="layout-split__main">
-          {isLoading ? (
+          {contacts.length === 0 && isLoading ? (
             <div className="loading">加载联系人…</div>
           ) : contacts.length === 0 ? (
             <div className="empty-state">
@@ -440,6 +440,11 @@ export function ContactsList() {
                   />
                 ))}
               </div>
+              {isLoading && (
+                <div style={{ textAlign: 'center', padding: '8px 0', color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
+                  加载中…
+                </div>
+              )}
               {hasMore && (
                 <button
                   type="button"
@@ -452,7 +457,6 @@ export function ContactsList() {
                 </button>
               )}
               {hasMore && <Sentinel fetchMore={fetchMore} isLoading={isLoading} hasMore={hasMore} />}
-
             </div>
           )}
         </div>
