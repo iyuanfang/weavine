@@ -322,7 +322,7 @@ export function ContactDetail() {
               {avatarError}
             </span>
           )}
-          <Link to={`/contacts/${id}/graph`} className="btn btn-secondary" data-testid="contact-graph-link">
+          <Link to={`/graph/contact/${id}`} className="btn btn-secondary" data-testid="contact-graph-link">
             🕸️ 关系图
           </Link>
           <Link

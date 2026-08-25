@@ -324,6 +324,9 @@ export function ProjectDetail() {
             <Link to={back.href} className="btn btn-ghost">
               {back.label}
             </Link>
+            <Link to={`/graph/project/${id}`} className="btn btn-secondary" data-testid="project-graph-link">
+              🕸️ 关联图
+            </Link>
             <Link
               to={`/projects/${id}/edit?from=${encodeURIComponent(fromParam || `/projects/${id}`)}`}
               className="btn btn-secondary"

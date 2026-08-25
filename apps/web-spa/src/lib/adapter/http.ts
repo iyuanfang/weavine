@@ -38,8 +38,8 @@ import type {
   CreateReminderInput,
   CreateTagInput,
   Event,
-  GraphEdge,
-  GraphResponse,
+  EntityGraphNodeType,
+  EntityGraphResponse,
   Interaction,
   ListContactsResult,
   ListNotesResult,
@@ -346,21 +346,12 @@ export class HttpAdapter implements PRMAdapter {
   };
 
   graph = {
-    get: (contact_id: string, depth?: number): Promise<GraphResponse> =>
-      request<GraphResponse>(
+    get: (entity_type: EntityGraphNodeType, entity_id: string): Promise<EntityGraphResponse> =>
+      request<EntityGraphResponse>(
         this.baseUrl,
         'GET',
-        `/api/graph/${contact_id}` + qs({ depth }),
+        `/api/entities/${entity_type}/${entity_id}/graph`,
       ),
-
-    addRelation: (
-      contact_id: string,
-      body: { other_contact_id: string; label?: string | null; relation_type?: string | null; role?: string | null },
-    ): Promise<GraphEdge> =>
-      request<GraphEdge>(this.baseUrl, 'POST', `/api/graph/${contact_id}/relations`, body),
-
-    removeRelation: (contact_id: string, other_id: string): Promise<void> =>
-      request<void>(this.baseUrl, 'DELETE', `/api/graph/${contact_id}/relations/${other_id}`),
   };
 
   reminders = {

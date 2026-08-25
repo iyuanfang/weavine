@@ -584,6 +584,14 @@ export function NoteDetail() {
           <button
             type="button"
             className="btn"
+            onClick={() => navigate(`/graph/note/${id}`)}
+            data-testid="note-graph-link"
+          >
+            🕸️ 关联图
+          </button>
+          <button
+            type="button"
+            className="btn"
             onClick={onCopyMarkdown}
             title="复制 Markdown 源码到剪贴板"
           >

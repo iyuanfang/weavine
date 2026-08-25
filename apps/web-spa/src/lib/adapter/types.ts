@@ -88,31 +88,31 @@ export interface ParticipantRow {
   nickname?: string | null;
 }
 
-export interface GraphNode {
+export type EntityGraphNodeType = 'contact' | 'project' | 'event' | 'action' | 'note' | 'tag';
+
+export interface EntityGraphNode {
   id: string;
-  nickname: string | null;
-  name: string | null;
-  company: string | null;
-  title: string | null;
-  importance: string | null;
-  avatar_storage_key?: string | null;
-  avatar_mime?: string | null;
+  entity_type: EntityGraphNodeType;
+  label: string;
+  subtitle?: string | null;
+  is_center?: boolean;
 }
 
-export interface GraphEdge {
+export interface EntityGraphEdge {
+  from_type: EntityGraphNodeType;
   from_id: string;
+  to_type: EntityGraphNodeType;
   to_id: string;
-  relation_type: string;
-  role: string | null;
-  label: string | null;
-  depth: number;
+  relation: string;
+  label?: string | null;
 }
 
-export interface GraphResponse {
+export interface EntityGraphResponse {
+  center_type: EntityGraphNodeType;
   center_id: string;
   depth: number;
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  nodes: EntityGraphNode[];
+  edges: EntityGraphEdge[];
 }
 
 export interface Interaction {
@@ -569,17 +569,7 @@ export interface PRMAdapter {
   };
 
   graph: {
-    get(contact_id: string, depth?: number): Promise<GraphResponse>;
-    addRelation(
-      contact_id: string,
-      body: {
-        other_contact_id: string;
-        label?: string | null;
-        relation_type?: string | null;
-        role?: string | null;
-      },
-    ): Promise<GraphEdge>;
-    removeRelation(contact_id: string, other_id: string): Promise<void>;
+    get(entity_type: EntityGraphNodeType, entity_id: string): Promise<EntityGraphResponse>;
   };
 
   tags: {

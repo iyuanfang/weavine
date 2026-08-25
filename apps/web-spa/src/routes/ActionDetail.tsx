@@ -151,6 +151,9 @@ export function ActionDetail() {
             <Link to={back.href} className="btn btn-ghost">
               {back.label}
             </Link>
+            <Link to={`/graph/action/${id}`} className="btn btn-secondary" data-testid="action-graph-link">
+              🕸️ 关联图
+            </Link>
             <Link
               to={`/actions/${id}/edit?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
               className="btn btn-secondary"

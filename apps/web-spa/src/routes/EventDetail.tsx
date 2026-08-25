@@ -83,6 +83,9 @@ export function EventDetail() {
             <Link to={back.href} className="btn btn-ghost">
               {back.label}
             </Link>
+            <Link to={`/graph/event/${id}`} className="btn btn-secondary" data-testid="event-graph-link">
+              🕸️ 关联图
+            </Link>
             <Link
               to={`/events/${id}/edit?from=${encodeURIComponent(fromParam || `/events/${id}`)}`}
               className="btn btn-secondary"
