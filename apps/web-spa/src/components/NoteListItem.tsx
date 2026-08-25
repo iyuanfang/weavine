@@ -14,7 +14,8 @@ function stripMarkdown(body: string): string {
   return body
     .replace(/\[\[([^\]]+)\]\]/g, '$1')
     .replace(/^#+\s+/gm, '')
-    .replace(/\*\*?(.+?)\*\*?/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1$2')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/\s+/g, ' ')
@@ -64,8 +65,4 @@ export function NoteListItem({
       )}
     </Link>
   );
-}
-
-export function makeNoteSnippet(body: string, max = 100): string {
-  return snippet(body, max);
 }

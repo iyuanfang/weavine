@@ -214,7 +214,19 @@ test.describe('Notes feature', () => {
     const stamp = Date.now();
     const session = await register(api, `long-title-${stamp}@e2e.local`, 'long-title-e2e-pw-12345');
     const longTitle = 'A'.repeat(120);
-    const longBody = 'This is a very long note body that should also be truncated to one line with ellipsis when displayed in the notes list page';
+    const longBody = [
+      '# Heading one',
+      '',
+      '## Heading two',
+      '',
+      'Paragraph with enough content to push the snippet past the 100-char display limit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+      '',
+      '- bullet 1',
+      '- bullet 2',
+      '- bullet 3',
+      '',
+      'Final line that should not appear in the rendered snippet due to truncation.',
+    ].join('\n');
     const create = await api.post(`${SERVER_BASE}/api/notes`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
       data: {
