@@ -28,9 +28,9 @@ pub fn list(conn: &Connection, user_id: &str, cursor: Option<&str>) -> rusqlite:
         "SELECT id, user_id, title, body, archived_at, created_at, updated_at          FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2".to_string()
     };
     let rows: Vec<Note> = if let Some(cursor_str) = cursor {
-        if let Some((cursor_at, _cursor_id)) = cursor_str.split_once(',') {
+        if let Some((cursor_at, cursor_id)) = cursor_str.split_once(',') {
             conn.prepare(&sql)?
-                .query_map(rusqlite::params![user_id, cursor_at, limit], row_to_note)?
+                .query_map(rusqlite::params![user_id, cursor_at, cursor_id, limit], row_to_note)?
                 .filter_map(|r| r.ok())
                 .collect()
         } else {
@@ -85,7 +85,20 @@ pub fn sync_note_entities(
     Ok(())
 }
 
+const ALLOWED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action"];
+
+fn validate_entity_links(links: &[NoteEntityLink]) -> Result<(), String> {
+    for link in links {
+        if !ALLOWED_ENTITY_TYPES.contains(&link.entity_type.as_str()) {
+            return Err(format!("不支持的关联实体类型: {}", link.entity_type));
+        }
+    }
+    Ok(())
+}
+
 pub fn create(conn: &Connection, user_id: &str, input: &CreateNoteInput) -> rusqlite::Result<Note> {
+    validate_entity_links(&input.entity_links)
+        .map_err(|m| rusqlite::Error::ToSqlConversionFailure(m.into()))?;
     let id = Uuid::new_v4().to_string();
     let now = now_str();
     conn.execute(
@@ -113,6 +126,8 @@ pub fn update(conn: &Connection, user_id: &str, id: &str, input: &UpdateNoteInpu
         return Ok(None);
     }
     if let Some(links) = &input.entity_links {
+        validate_entity_links(links)
+            .map_err(|m| rusqlite::Error::ToSqlConversionFailure(m.into()))?;
         conn.execute("DELETE FROM NoteEntity WHERE note_id = ?1", params![id])?;
         sync_note_entities(conn, id, user_id, links)?;
     }

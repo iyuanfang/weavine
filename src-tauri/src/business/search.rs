@@ -100,7 +100,7 @@ pub fn search(
 
     let notes: Vec<Note> = {
         let sql = format!(
-            "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
+            "SELECT id, user_id, title, substr(body, 1, 200), archived_at, created_at, updated_at \
              FROM Note WHERE user_id = ?1 \
              AND (title LIKE ?2 OR body LIKE ?2){} \
              ORDER BY updated_at DESC LIMIT ?3",

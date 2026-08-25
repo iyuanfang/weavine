@@ -65,6 +65,7 @@ pub async fn sync_once(conn: &mut Connection) -> anyhow::Result<SyncResult> {
 /// Each iteration re-checks `is_linked`: unlinked devices stay quiet,
 /// devices linked later via `cloud_login` start syncing on the next tick.
 pub fn spawn_periodic(db_path: std::path::PathBuf, interval_secs: u64) {
+    const FOLLOWUP_INTERVAL: u64 = 30;
     std::thread::spawn(move || {
         let rt = match tokio::runtime::Runtime::new() {
             Ok(r) => r,
@@ -85,17 +86,26 @@ pub fn spawn_periodic(db_path: std::path::PathBuf, interval_secs: u64) {
         let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
 
         let interval = std::time::Duration::from_secs(interval_secs);
+        let followup = std::time::Duration::from_secs(FOLLOWUP_INTERVAL);
         loop {
             if config::is_linked(&conn).unwrap_or(false) {
-                rt.block_on(async {
-                    match sync_once_with_conn(&mut conn).await {
-                        Ok(r) => eprintln!(
+                let pulled = match rt.block_on(sync_once_with_conn(&mut conn)) {
+                    Ok(r) => {
+                        eprintln!(
                             "[sync] periodic: pushed={} pulled={} conflicts={}",
                             r.pushed, r.pulled, r.conflicts
-                        ),
-                        Err(e) => eprintln!("[sync] periodic failed: {e}"),
+                        );
+                        r.pulled
                     }
-                });
+                    Err(e) => {
+                        eprintln!("[sync] periodic failed: {e}");
+                        0
+                    }
+                };
+                if pulled > 0 {
+                    std::thread::sleep(followup);
+                    continue;
+                }
             }
             std::thread::sleep(interval);
         }

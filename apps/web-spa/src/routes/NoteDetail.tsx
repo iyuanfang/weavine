@@ -82,6 +82,7 @@ const ENTITY_LABELS: Record<EntityKind, string> = {
 };
 
 function labelOf(kind: EntityKind, id: string, rosters: EntityRosters): string {
+  if (!rosters.loaded) return '加载中…';
   switch (kind) {
     case 'contact':
       return rosters.contacts.find((c) => c.id === id)?.nickname ?? '(已删除)';
@@ -128,6 +129,7 @@ interface EntityRosters {
   projects: Project[];
   events: Event[];
   actions: Action[];
+  loaded: boolean;
 }
 
 function useEntityRosters(): EntityRosters {
@@ -138,6 +140,7 @@ function useEntityRosters(): EntityRosters {
     projects: [],
     events: [],
     actions: [],
+    loaded: false,
   });
   useEffect(() => {
     if (!userId) return;
@@ -158,6 +161,7 @@ function useEntityRosters(): EntityRosters {
         projects: p as Project[],
         events: e as Event[],
         actions: a as Action[],
+        loaded: true,
       });
     });
     return () => {

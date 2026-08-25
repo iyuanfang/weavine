@@ -27,6 +27,21 @@ fn parse_note_cursor(cursor: &str) -> Option<(String, String)> {
     Some((updated_at, id.to_string()))
 }
 
+fn validate_entity_links(links: &[NoteEntityLink]) -> Result<(), (StatusCode, String)> {
+    for link in links {
+        match link.entity_type.as_str() {
+            "contact" | "project" | "event" | "action" => {}
+            other => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    format!("不支持的关联实体类型: {other}"),
+                ))
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 pub struct BacklinksQuery {
     pub entity_type: String,
@@ -90,6 +105,7 @@ pub async fn create(
     Json(input): Json<CreateNoteInput>,
 ) -> Result<Json<Note>, (StatusCode, String)> {
     let (user_id, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
+    validate_entity_links(&input.entity_links)?;
     let id = uuid::Uuid::new_v4().to_string();
     let now: DateTime<Utc> = Utc::now();
     let now_str = now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
@@ -175,6 +191,7 @@ pub async fn update(
     }
 
     if let Some(links) = &input.entity_links {
+        validate_entity_links(links)?;
         sqlx::query("DELETE FROM note_entity WHERE note_id = $1 AND user_id = $2")
             .bind(&id)
             .bind(&user_id)

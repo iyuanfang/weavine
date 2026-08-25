@@ -149,7 +149,7 @@ pub fn run() {
         } else {
             boot_log::log("[sync] not linked — periodic sync will idle-poll is_linked");
         }
-        sync::spawn_periodic(db::get_db_path(), 300);
+        sync::spawn_periodic(db::get_db_path(), 1800);
     }
 
     // Pull any avatars from the legacy <appdata>/Weavine/avatars/ tree into

@@ -78,7 +78,7 @@ pub async fn query(
     .fetch_all(&*pool).await.unwrap_or_default();
 
     let notes = sqlx::query_as::<_, Note>(
-        "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
+        "SELECT id, user_id, title, substr(body, 1, 200), archived_at, created_at, updated_at \
          FROM note WHERE user_id = $1 AND archived_at IS NULL \
            AND (title ILIKE $2 OR body ILIKE $2) \
          ORDER BY updated_at DESC LIMIT 50",
