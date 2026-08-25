@@ -12,19 +12,19 @@ use weavine_lib::{
 
 #[derive(Deserialize)]
 pub struct ListParams {
-    pub user_id: String,
+    pub user_id: Option<String>,
     pub tag_id: Option<String>,
     pub search: Option<String>,
     pub importance: Option<String>,
     pub sort_by: Option<String>,
     pub limit: Option<i64>,
-    pub offset: Option<i64>,
+    pub cursor: Option<String>,
 }
 
 pub async fn list(
     State(s): State<AppState>,
     Query(p): Query<ListParams>,
-) -> Result<Json<(Vec<Contact>, i64)>, (StatusCode, String)> {
+) -> Result<Json<(Vec<Contact>, bool)>, (StatusCode, String)> {
     let params = ListContactsParams {
         user_id: p.user_id,
         tag_id: p.tag_id,
@@ -32,7 +32,7 @@ pub async fn list(
         importance: p.importance,
         sort_by: p.sort_by.unwrap_or_else(|| DEFAULT_CONTACT_SORT.to_string()),
         limit: p.limit.unwrap_or(DEFAULT_CONTACT_LIMIT),
-        offset: p.offset.unwrap_or(0),
+        cursor: p.cursor,
     };
     let conn = s.db.lock().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     business::contact::list(&conn, &params)

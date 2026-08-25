@@ -45,6 +45,7 @@ import type {
   GraphResponse,
   Interaction,
   ListContactsResult,
+  ListNotesResult,
   ListMediaParams,
   LocalUser,
   MediaItem,
@@ -125,18 +126,18 @@ export class TauriAdapter implements PRMAdapter {
       sort_by?: string;
       sort_dir?: string;
       limit?: number;
-      offset?: number;
+      cursor?: string | null;
     }): Promise<ListContactsResult> => {
       const inner = await this.withUserId(p);
-      // Apply defaults so callers can omit sort/ pagination fields.
       const paramsWithDefaults = {
         sort_by: 'last_interaction_at',
         limit: 20,
-        offset: 0,
+        cursor: null,
         ...inner,
       };
-      const [items, total] = await invoke<[Contact[], number]>('list_contacts', { p: paramsWithDefaults });
-      return { items, total };
+      const [items, has_more] = await invoke<[Contact[], boolean]>('list_contacts', { p: paramsWithDefaults });
+      const cursor = items.length > 0 ? `${items[items.length - 1].updated_at},${items[items.length - 1].id}` : null;
+      return { items, cursor, has_more };
     },
     get: (id: string): Promise<Contact> =>
       invoke<Contact>('get_contact', { id }),
@@ -312,8 +313,11 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   notes = {
-    list: async (user_id: string): Promise<Note[]> =>
-      invoke<Note[]>('list_notes', { user_id }),
+    list: async (user_id: string, cursor?: string | null): Promise<ListNotesResult> => {
+      const [items, has_more] = await invoke<[Note[], boolean]>('list_notes', { user_id, cursor: cursor ?? null });
+      const cursorOut = items.length > 0 ? `${items[items.length - 1].updated_at},${items[items.length - 1].id}` : null;
+      return { items, cursor: cursorOut, has_more };
+    },
     get: async (user_id: string, id: string): Promise<Note | null> =>
       invoke<Note | null>('get_note', { user_id, id }),
     create: (input: CreateNoteInput): Promise<Note> =>

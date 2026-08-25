@@ -21,7 +21,7 @@ pub struct ListParams {
     pub importance: Option<String>,
     pub sort_by: Option<String>,
     pub limit: Option<i64>,
-    pub offset: Option<i64>,
+    pub cursor: Option<String>,
 }
 
 fn validate_sort_by(sort_by: &str) -> &'static str {
@@ -33,6 +33,16 @@ fn validate_sort_by(sort_by: &str) -> &'static str {
     }
 }
 
+fn parse_cursor(cursor: &str) -> Option<(String, String)> {
+    let mut parts = cursor.splitn(2, ',');
+    let updated_at = parts.next()?.to_string();
+    let id = parts.next()?;
+    if updated_at.is_empty() || id.is_empty() {
+        return None;
+    }
+    Some((updated_at, id.to_string()))
+}
+
 pub async fn list(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
@@ -40,22 +50,9 @@ pub async fn list(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let sort_col = validate_sort_by(p.sort_by.as_deref().unwrap_or("last_interaction_at"));
-    let limit = p.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
-    let offset = p.offset.unwrap_or(0).max(0);
+    let limit = (p.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE)) + 1;
 
-    let count_sql = "SELECT COUNT(*) FROM contact \
-        WHERE user_id = $1 \
-        AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR company ILIKE '%' || $2 || '%') \
-        AND ($3::text IS NULL OR importance = $3) \
-        AND ($4::text IS NULL OR EXISTS (SELECT 1 FROM contact_tag ct WHERE ct.contact_id = contact.id AND ct.tag_id = $4))";
-    let total: (i64,) = sqlx::query_as(count_sql)
-        .bind(&auth)
-        .bind(&p.search)
-        .bind(&p.importance)
-        .bind(&p.tag_id)
-        .fetch_one(&*pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (cursor_updated_at, cursor_id) = p.cursor.as_deref().and_then(parse_cursor).unzip();
 
     let query_sql = format!(
         "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, \
@@ -66,8 +63,11 @@ pub async fn list(
          AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR company ILIKE '%' || $2 || '%') \
          AND ($3::text IS NULL OR importance = $3) \
          AND ($4::text IS NULL OR EXISTS (SELECT 1 FROM contact_tag ct WHERE ct.contact_id = contact.id AND ct.tag_id = $4)) \
-         ORDER BY {} LIMIT ${} OFFSET ${}",
-        sort_col, 5, 6
+         AND ($5::text IS NULL OR updated_at < $5 \
+              OR (updated_at = $5 AND id > $6)) \
+         ORDER BY {}, id ASC \
+         LIMIT $7",
+        sort_col
     );
 
     let rows = sqlx::query_as::<_, Contact>(&query_sql)
@@ -75,11 +75,15 @@ pub async fn list(
         .bind(&p.search)
         .bind(&p.importance)
         .bind(&p.tag_id)
+        .bind(&cursor_updated_at)
+        .bind(&cursor_id)
         .bind(limit)
-        .bind(offset)
         .fetch_all(&*pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let has_more = rows.len() > limit as usize - 1;
+    let rows: Vec<Contact> = rows.into_iter().take(limit as usize - 1).collect();
 
     let mut items: Vec<Contact> = Vec::with_capacity(rows.len());
     for contact in rows {
@@ -93,7 +97,14 @@ pub async fn list(
         .unwrap_or_default();
         items.push(Contact { tags, ..contact });
     }
-    Ok(Json(json!({ "items": items, "total": total.0 })))
+
+    let last_item = items.last().map(|c| format!("{},{}", c.updated_at, c.id));
+    Ok(Json(json!({
+        "items": items,
+        "total": items.len(),
+        "cursor": last_item,
+        "has_more": has_more,
+    })))
 }
 
 pub async fn get(

@@ -23,7 +23,7 @@ pub fn quick_parse(
             importance: None,
             sort_by: "created_at".into(),
             limit: 50,
-            offset: 0,
+            cursor: None,
         };
         contacts = business::contact::list(&conn, &p)
             .map(|(items, _)| items)
@@ -63,7 +63,7 @@ mod tests {
             importance: None,
             sort_by: "created_at".into(),
             limit: 50,
-            offset: 0,
+            cursor: None,
         };
         business::contact::list(conn, &p).unwrap().0
     }
@@ -82,7 +82,7 @@ mod tests {
                 importance: None,
                 sort_by: "created_at".into(),
                 limit: 50,
-                offset: 0,
+                cursor: None,
             },
         )
         .unwrap()
@@ -105,7 +105,7 @@ mod tests {
                 importance: None,
                 sort_by: "created_at".into(),
                 limit: 50,
-                offset: 0,
+                cursor: None,
             },
         )
         .unwrap()

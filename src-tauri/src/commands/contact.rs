@@ -7,7 +7,7 @@ use tauri::State;
 pub fn list_contacts(
     db: State<Database>,
     p: ListContactsParams,
-) -> Result<(Vec<Contact>, i64), String> {
+) -> Result<(Vec<Contact>, bool), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     business::contact::list(&conn, &p).map_err(|e| e.to_string())
 }

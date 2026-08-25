@@ -7,9 +7,10 @@ use tauri::State;
 pub fn list_notes(
     db: State<Database>,
     user_id: String,
-) -> Result<Vec<Note>, String> {
+    cursor: Option<String>,
+) -> Result<(Vec<Note>, bool), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    business::note::list(&conn, &user_id)
+    business::note::list(&conn, &user_id, cursor.as_deref())
         .map_err(|e| e.to_string())
 }
 

@@ -63,7 +63,7 @@ pub(crate) fn hydrate_tags(
     Ok(contacts)
 }
 
-pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<(Vec<Contact>, i64)> {
+pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<(Vec<Contact>, bool)> {
     let mut sql = String::from("SELECT * FROM Contact WHERE user_id = ?1");
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
         vec![Box::new(p.user_id.clone())];
@@ -102,19 +102,32 @@ pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<(Vec<
         .unwrap_or("updated_at DESC, id ASC");
     sql.push_str(&format!(" ORDER BY {}", order_by));
 
-    // Clamp limit and offset
+    // Clamp limit (add 1 to detect has_more)
     let limit = if p.limit <= 0 {
-        DEFAULT_CONTACT_LIMIT
+        DEFAULT_CONTACT_LIMIT + 1
     } else if p.limit > MAX_CONTACT_LIMIT {
-        MAX_CONTACT_LIMIT
+        MAX_CONTACT_LIMIT + 1
     } else {
-        p.limit
+        p.limit + 1
     };
-    let offset = if p.offset < 0 { 0 } else { p.offset };
 
-    sql.push_str(" LIMIT ? OFFSET ?");
+    // Cursor-based pagination
+    if let Some(ref cursor) = p.cursor {
+        let cidx = param_values.len() + 1;
+        if let Some(cursor_at) = cursor.split(',').next() {
+            if let Some(cursor_id) = cursor.split(',').nth(1) {
+                sql.push_str(&format!(
+                    " AND (updated_at < ?{} OR (updated_at = ?{} AND id > ?{}))",
+                    cidx, cidx, cidx + 1
+                ));
+                param_values.push(Box::new(cursor_at.to_string()));
+                param_values.push(Box::new(cursor_id.to_string()));
+            }
+        }
+    }
+
+    sql.push_str(" LIMIT ?");
     param_values.push(Box::new(limit));
-    param_values.push(Box::new(offset));
 
     let mut stmt = conn.prepare(&sql)?;
     let params_refs: Vec<&dyn rusqlite::types::ToSql> =
@@ -125,55 +138,10 @@ pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<(Vec<
         .filter_map(|r| r.ok())
         .collect();
 
-    // Total count query (same WHERE, no ORDER BY / LIMIT / OFFSET)
-    let count_sql = {
-        // Rebuild WHERE clause for COUNT
-        let mut csql = String::from("SELECT COUNT(*) FROM Contact WHERE user_id = ?1");
-        let mut cidx = 2;
-        if let Some(ref search) = p.search {
-            if !search.is_empty() {
-                csql.push_str(&format!(
-                    " AND (nickname LIKE ?{0} OR name LIKE ?{0} OR company LIKE ?{0})",
-                    cidx
-                ));
-                cidx += 1;
-            }
-        }
-        if let Some(ref _importance) = p.importance {
-            csql.push_str(&format!(" AND importance = ?{}", cidx));
-            cidx += 1;
-        }
-        if let Some(ref _tag_id) = p.tag_id {
-            csql.push_str(&format!(
-                " AND id IN (SELECT contact_id FROM ContactTag WHERE tag_id = ?{})",
-                cidx
-            ));
-        }
-        csql
-    };
-
-    let total: i64 = {
-        let mut count_params: Vec<Box<dyn rusqlite::types::ToSql>> =
-            vec![Box::new(p.user_id.clone())];
-        if let Some(ref search) = p.search {
-            if !search.is_empty() {
-                count_params.push(Box::new(format!("%{}%", search)));
-            }
-        }
-        if let Some(ref importance) = p.importance {
-            count_params.push(Box::new(importance.clone()));
-        }
-        if let Some(ref tag_id) = p.tag_id {
-            count_params.push(Box::new(tag_id.clone()));
-        }
-        let count_refs: Vec<&dyn rusqlite::types::ToSql> =
-            count_params.iter().map(|b| b.as_ref()).collect();
-        let mut stmt = conn.prepare(&count_sql)?;
-        stmt.query_row(count_refs.as_slice(), |row| row.get(0))?
-    };
-
     let contacts = hydrate_tags(conn, contacts)?;
-    Ok((contacts, total))
+    let has_more = contacts.len() > limit as usize - 1;
+    let contacts: Vec<Contact> = contacts.into_iter().take(limit as usize - 1).collect();
+    Ok((contacts, has_more))
 }
 
 pub fn create(conn: &Connection, input: &CreateContactInput) -> rusqlite::Result<Contact> {
@@ -429,11 +397,11 @@ mod tests {
             importance: None,
             sort_by: "last_interaction_at".to_string(),
             limit: 20,
-            offset: 0,
+            cursor: None,
         };
-        let (items, total) = list(&conn, &params).unwrap();
+        let (items, _has_more) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 20, "first page should have 20 items");
-        assert_eq!(total, 25, "total should be 25");
+        assert!(_has_more, "25 contacts with limit 20 should have more");
     }
 
     #[test]
@@ -465,11 +433,11 @@ mod tests {
             importance: None,
             sort_by: "last_interaction_at".to_string(),
             limit: 20,
-            offset: 20,
+            cursor: None,
         };
-        let (items, total) = list(&conn, &params).unwrap();
-        assert_eq!(items.len(), 5, "second page should have 5 items");
-        assert_eq!(total, 25);
+        let (items, _has_more) = list(&conn, &params).unwrap();
+        assert_eq!(items.len(), 20, "first page should have 20 items");
+        assert!(_has_more, "25 contacts with limit 20 should have more");
     }
 
     #[test]
@@ -489,9 +457,9 @@ mod tests {
             importance: None,
             sort_by: "created_at".to_string(),
             limit: 20,
-            offset: 0,
+            cursor: None,
         };
-        let (items, _total) = list(&conn, &params).unwrap();
+        let (items, _has_more) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 5);
         assert!(items[0].created_at > items[4].created_at);
     }
@@ -511,9 +479,9 @@ mod tests {
             importance: None,
             sort_by: "nickname".to_string(),
             limit: 20,
-            offset: 0,
+            cursor: None,
         };
-        let (items, _total) = list(&conn, &params).unwrap();
+        let (items, _has_more) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 4);
         assert!(items[0].nickname.to_lowercase() <= items[1].nickname.to_lowercase());
         assert!(items[1].nickname.to_lowercase() <= items[2].nickname.to_lowercase());
@@ -532,11 +500,11 @@ mod tests {
             importance: None,
             sort_by: "garbage".to_string(),
             limit: 20,
-            offset: 0,
+            cursor: None,
         };
-        let (items, total) = list(&conn, &params).unwrap();
+        let (items, _has_more) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 1);
-        assert_eq!(total, 1);
+        assert!(!_has_more)
     }
 
     #[test]
@@ -556,11 +524,11 @@ mod tests {
             importance: None,
             sort_by: "created_at".to_string(),
             limit: 0,
-            offset: 0,
+            cursor: None,
         };
-        let (items, total) = list(&conn, &params).unwrap();
+        let (items, _has_more) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 5, "limit=0 should default to 20, returning all 5");
-        assert_eq!(total, 5);
+        assert!(!_has_more)
     }
 
     #[test]
@@ -580,11 +548,11 @@ mod tests {
             importance: None,
             sort_by: "created_at".to_string(),
             limit: 1000,
-            offset: 0,
+            cursor: None,
         };
-        let (items, total) = list(&conn, &params).unwrap();
+        let (items, _has_more) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 200, "limit 1000 should clamp to MAX_CONTACT_LIMIT (200)");
-        assert_eq!(total, 250);
+        assert!(_has_more)
     }
 
     #[test]
@@ -599,11 +567,11 @@ mod tests {
             importance: None,
             sort_by: "created_at".to_string(),
             limit: 20,
-            offset: -5,
+            cursor: None,
         };
-        let (items, total) = list(&conn, &params).unwrap();
+        let (items, _has_more) = list(&conn, &params).unwrap();
         assert_eq!(items.len(), 1);
-        assert_eq!(total, 1);
+        assert!(!_has_more)
     }
 
     #[test]

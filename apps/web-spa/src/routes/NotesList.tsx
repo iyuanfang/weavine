@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useInfiniteList } from '../lib/useInfiniteList';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
@@ -40,14 +41,11 @@ export function NotesList() {
   const adapter = useAdapter();
   const userId = useUserId() ?? '';
   const navigate = useNavigate();
-  const [notes, setNotes] = useState<Note[] | null>(null);
   const [filter, setFilter] = useState('');
-
-  useEffect(() => {
-    if (!userId) return;
-    setNotes(null);
-    adapter.notes.list(userId).then(setNotes).catch(() => setNotes([]));
-  }, [adapter, userId]);
+  const { items: notes, hasMore, isLoading, error: listError, fetchMore } = useInfiniteList({
+    fetcher: (cursor) => adapter.notes.list(userId, cursor),
+    resetTrigger: userId,
+  });
 
   const filteredNotes = useMemo(() => {
     if (!notes) return null;
@@ -71,6 +69,11 @@ export function NotesList() {
         </button>
       </header>
 
+      {isLoading && <div style={{textAlign:'center',padding:'8px 0',color:'var(--muted)',fontSize:'var(--text-sm)'}}>加载中…</div>}
+      {hasMore && notes && (
+        <button type="button" className="btn btn-ghost" onClick={fetchMore} disabled={isLoading}
+          style={{display:'block',margin:'8px auto'}}>加载更多</button>
+      )}
       {notes && notes.length > 0 && (
         <div className="notes-list__filter">
           <input
@@ -88,7 +91,8 @@ export function NotesList() {
         </div>
       )}
 
-      {notes === null && <p className="muted">加载中…</p>}
+      {listError && <p className="muted" style={{ color: 'var(--error)' }}>{String(listError)}</p>}
+      {!listError && isLoading && <p className="muted">加载中…</p>}
       {notes && notes.length === 0 && (
         <div className="empty-state">
           <h3 className="empty-state__title">还没有笔记</h3>

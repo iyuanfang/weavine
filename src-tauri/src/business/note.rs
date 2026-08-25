@@ -14,15 +14,40 @@ pub(crate) fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {
     })
 }
 
-pub fn list(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<Note>> {
-    let sql = "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
-               FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC";
-    let mut stmt = conn.prepare(sql)?;
-    let rows = stmt
-        .query_map([user_id], row_to_note)?
-        .filter_map(|r| r.ok())
-        .collect::<Vec<Note>>();
-    Ok(rows)
+pub fn list(conn: &Connection, user_id: &str, cursor: Option<&str>) -> rusqlite::Result<(Vec<Note>, bool)> {
+    let limit: i64 = 31;
+    let sql = if let Some(cursor_str) = cursor {
+        if let Some((cursor_at, cursor_id)) = cursor_str.split_once(',') {
+            format!(
+                "SELECT id, user_id, title, body, archived_at, created_at, updated_at                  FROM Note WHERE user_id = ?1                  AND (updated_at < ?2 OR (updated_at = ?2 AND id > ?3))                  ORDER BY updated_at DESC, id ASC LIMIT ?4",
+            )
+        } else {
+            "SELECT id, user_id, title, body, archived_at, created_at, updated_at              FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2".to_string()
+        }
+    } else {
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at          FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2".to_string()
+    };
+    let rows: Vec<Note> = if let Some(cursor_str) = cursor {
+        if let Some((cursor_at, _cursor_id)) = cursor_str.split_once(',') {
+            conn.prepare(&sql)?
+                .query_map(rusqlite::params![user_id, cursor_at, limit], row_to_note)?
+                .filter_map(|r| r.ok())
+                .collect()
+        } else {
+            conn.prepare(&sql)?
+                .query_map(rusqlite::params![user_id, limit], row_to_note)?
+                .filter_map(|r| r.ok())
+                .collect()
+        }
+    } else {
+        conn.prepare(&sql)?
+            .query_map(rusqlite::params![user_id, limit], row_to_note)?
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    let has_more = rows.len() >= limit as usize;
+    let items: Vec<Note> = rows.into_iter().take(limit as usize - 1).collect();
+    Ok((items, has_more))
 }
 
 pub fn get(conn: &Connection, user_id: &str, id: &str) -> rusqlite::Result<Option<Note>> {

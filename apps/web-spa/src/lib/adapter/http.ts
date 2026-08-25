@@ -42,6 +42,7 @@ import type {
   GraphResponse,
   Interaction,
   ListContactsResult,
+  ListNotesResult,
   ListMediaParams,
   LocalUser,
   MediaItem,
@@ -207,9 +208,9 @@ export class HttpAdapter implements PRMAdapter {
       sort_by?: string;
       sort_dir?: string;
       limit?: number;
-      offset?: number;
+      cursor?: string | null;
     }): Promise<ListContactsResult> =>
-      request<{ items: Contact[]; total: number }>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })),
+      request<{ items: Contact[]; cursor: string | null; has_more: boolean }>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })),
 
     get: (id: string): Promise<Contact> =>
       request<Contact>(this.baseUrl, 'GET', `/api/contacts/${id}`),
@@ -408,8 +409,8 @@ export class HttpAdapter implements PRMAdapter {
   };
 
   notes = {
-    list: (_user_id: string): Promise<Note[]> =>
-      request<Note[]>(this.baseUrl, 'GET', '/api/notes'),
+    list: (_user_id: string, cursor?: string | null): Promise<ListNotesResult> =>
+      request<{ items: Note[]; cursor: string | null; has_more: boolean }>(this.baseUrl, 'GET', '/api/notes' + qs({ cursor })),
 
     get: async (_user_id: string, id: string): Promise<Note | null> => {
       try {

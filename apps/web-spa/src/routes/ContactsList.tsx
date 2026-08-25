@@ -6,6 +6,7 @@ import { Avatar } from '../components/Avatar';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
+import { useInfiniteList } from '../lib/useInfiniteList';
 import { useUserId } from '../lib/auth';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { tagColor } from '../lib/tagColor';
@@ -64,8 +65,6 @@ async function runWithConcurrency<T>(
   return results;
 }
 
-const PAGE_SIZE = 20;
-
 const SORT_OPTIONS: { value: ContactSortBy; label: string }[] = [
   { value: 'last_interaction_at', label: '最近互动' },
   { value: 'created_at', label: '最近添加' },
@@ -82,7 +81,6 @@ export function ContactsList() {
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [selectedImportance, setSelectedImportance] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<ContactSortBy>('last_interaction_at');
-  const [page, setPage] = useState(0);
 
   const importFileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState<{ done: number; total: number } | null>(null);
@@ -100,47 +98,34 @@ export function ContactsList() {
     enabled: !!userId,
   });
 
-  const contactsQuery = useQuery({
-    queryKey: [
-      'contacts',
-      userId,
-      {
-        search: debouncedSearch,
-        tag_id: selectedTagId,
-        importance: selectedImportance,
-        sortBy,
-        page,
-      },
-    ],
-    queryFn: () =>
+  const resetTrigger = [debouncedSearch, selectedTagId, selectedImportance, sortBy].join('|');
+  const { items: contacts, hasMore, isLoading, error: listError, fetchMore } = useInfiniteList({
+    fetcher: (cursor) =>
       adapter.contacts.list({
         user_id: userId!,
         tag_id: selectedTagId,
         search: debouncedSearch || null,
         importance: selectedImportance,
         sort_by: sortBy,
-        limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
+        limit: 20,
+        cursor,
       }),
-    enabled: !!userId,
+    resetTrigger,
   });
 
   if (!userId) {
     return <div className="loading">正在加载用户…</div>;
   }
 
-  if (contactsQuery.isError) {
+  if (listError) {
     return (
       <div className="page">
-        <div className="error-banner">加载失败: {String(contactsQuery.error)}</div>
+        <div className="error-banner">加载失败: {String(listError)}</div>
       </div>
     );
   }
 
-  const contacts = contactsQuery.data?.items ?? [];
-  const total = contactsQuery.data?.total ?? 0;
   const tags = tagsQuery.data ?? [];
-  const isLoading = contactsQuery.isLoading;
   const hasActiveFilter = Boolean(debouncedSearch || selectedTagId || selectedImportance);
 
   const countsByImportance = IMPORTANCE_VALUES.reduce<Record<string, number>>(
@@ -160,7 +145,7 @@ export function ContactsList() {
     setSearch('');
     setSelectedTagId(null);
     setSelectedImportance(null);
-    setPage(0);
+    setSortBy('last_interaction_at');
   };
 
   const handleImportFile = (file: File) => {
@@ -219,7 +204,7 @@ export function ContactsList() {
         <div>
           <h1 className="page-title">联系人</h1>
           <p className="page-subtitle">
-            {total} 个人 ·{' '}
+            {contacts.length} 个人 ·{' '}
             {hasActiveFilter ? (
               <button
                 type="button"
@@ -281,7 +266,7 @@ export function ContactsList() {
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
-                setPage(0);
+                
               }}
               autoComplete="off"
             />
@@ -297,7 +282,7 @@ export function ContactsList() {
                 type="button"
                 onClick={() => {
                   setSortBy(opt.value);
-                  setPage(0);
+                  
                 }}
                 className={`filter-panel__item ${
                   sortBy === opt.value ? 'filter-panel__item--active' : ''
@@ -316,7 +301,7 @@ export function ContactsList() {
               type="button"
               onClick={() => {
                 setSelectedImportance(null);
-                setPage(0);
+                
               }}
               className={`filter-panel__item ${
                 selectedImportance === null ? 'filter-panel__item--active' : ''
@@ -336,7 +321,7 @@ export function ContactsList() {
                   type="button"
                   onClick={() => {
                     setSelectedImportance(value);
-                    setPage(0);
+                    
                   }}
                   className={`filter-panel__item ${
                     selectedImportance === value ? 'filter-panel__item--active' : ''
@@ -363,7 +348,7 @@ export function ContactsList() {
                   type="button"
                   onClick={() => {
                     setSelectedTagId(null);
-                    setPage(0);
+                    
                   }}
                   className={`filter-panel__item ${
                     selectedTagId === null ? 'filter-panel__item--active' : ''
@@ -383,7 +368,7 @@ export function ContactsList() {
                       type="button"
                       onClick={() => {
                         setSelectedTagId(tag.id);
-                        setPage(0);
+                        
                       }}
                       className={`filter-panel__item ${
                         selectedTagId === tag.id ? 'filter-panel__item--active' : ''
@@ -455,46 +440,31 @@ export function ContactsList() {
                   />
                 ))}
               </div>
-              {total > PAGE_SIZE && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 12,
-                    padding: '16px 0 4px',
-                    marginTop: 12,
-                    borderTop: '1px solid var(--border)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                  >
-                    ← 上一页
-                  </button>
-                  <span
-                    style={{
-                      fontSize: 'var(--text-sm)',
-                      color: 'var(--muted)',
-                      minWidth: 160,
-                      textAlign: 'center',
-                    }}
-                  >
-                    第 {page + 1} / {Math.max(1, Math.ceil(total / PAGE_SIZE))} 页 · 共 {total} 人
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={page >= Math.ceil(total / PAGE_SIZE) - 1}
-                  >
-                    下一页 →
-                  </button>
+              {isLoading && (
+                <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>
+                  加载中…
                 </div>
               )}
+              {hasMore && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={fetchMore}
+                  disabled={isLoading}
+                  style={{ display: 'block', margin: '12px auto 4px' }}
+                >
+                  加载更多
+                </button>
+              )}
+              <div ref={(el) => {
+                if (el && hasMore && !isLoading) {
+                  const observer = new IntersectionObserver((entries) => {
+                    if (entries[0]?.isIntersecting) fetchMore();
+                  }, { rootMargin: '200px' });
+                  observer.observe(el);
+                  return () => observer.disconnect();
+                }
+              }} style={{ height: 1 }} />
             </div>
           )}
         </div>

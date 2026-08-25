@@ -14,6 +14,17 @@ use weavine_lib::models::{CreateNoteInput, Note, NoteBacklink, NoteEntityLink, U
 #[derive(Deserialize)]
 pub struct ListQuery {
     pub limit: Option<i64>,
+    pub cursor: Option<String>,
+}
+
+fn parse_note_cursor(cursor: &str) -> Option<(String, String)> {
+    let mut parts = cursor.splitn(2, ',');
+    let updated_at = parts.next()?.to_string();
+    let id = parts.next()?;
+    if updated_at.is_empty() || id.is_empty() {
+        return None;
+    }
+    Some((updated_at, id.to_string()))
 }
 
 #[derive(Deserialize)]
@@ -26,19 +37,32 @@ pub async fn list(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
     Query(q): Query<ListQuery>,
-) -> Result<Json<Vec<Note>>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let user_id = extract_auth(&headers, pool.as_ref()).await?;
-    let limit = q.limit.unwrap_or(100).clamp(1, 500);
+    let limit = q.limit.unwrap_or(30).clamp(1, 200) + 1;
+    let (cursor_updated_at, cursor_id) = q.cursor.as_deref().and_then(parse_note_cursor).unzip();
     let sql = "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
                FROM note WHERE user_id = $1 \
-               ORDER BY updated_at DESC LIMIT $2";
-    let notes = sqlx::query_as::<_, Note>(sql)
+               AND ($2::text IS NULL OR updated_at < $2 \
+                    OR (updated_at = $2 AND id > $3)) \
+               ORDER BY updated_at DESC, id ASC \
+               LIMIT $4";
+    let rows = sqlx::query_as::<_, Note>(sql)
         .bind(&user_id)
+        .bind(&cursor_updated_at)
+        .bind(&cursor_id)
         .bind(limit)
         .fetch_all(&*pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query: {e}")))?;
-    Ok(Json(notes))
+    let has_more = rows.len() > limit as usize - 1;
+    let rows: Vec<Note> = rows.into_iter().take(limit as usize - 1).collect();
+    let last_item = rows.last().map(|n| format!("{},{}", n.updated_at, n.id));
+    Ok(Json(serde_json::json!({
+        "items": rows,
+        "cursor": last_item,
+        "has_more": has_more,
+    })))
 }
 
 pub async fn get(

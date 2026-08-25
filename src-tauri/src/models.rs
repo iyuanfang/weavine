@@ -309,8 +309,7 @@ pub struct ListContactsParams {
     pub sort_by: String,
     #[serde(default = "default_contact_limit")]
     pub limit: i64,
-    #[serde(default)]
-    pub offset: i64,
+    pub cursor: Option<String>,
 }
 
 pub const CONTACT_SORT_WHITELIST: &[(&str, &str)] = &[

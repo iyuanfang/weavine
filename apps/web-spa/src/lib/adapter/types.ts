@@ -228,12 +228,19 @@ export interface ListContactsParams {
   sort_by?: ContactSortBy;
   sort_dir?: ContactSortDir;
   limit?: number;
-  offset?: number;
+  cursor?: string | null;
 }
 
 export interface ListContactsResult {
   items: Contact[];
-  total: number;
+  cursor: string | null;
+  has_more: boolean;
+}
+
+export interface ListNotesResult {
+  items: Note[];
+  cursor: string | null;
+  has_more: boolean;
 }
 
 export interface CreateContactInput {
@@ -582,7 +589,7 @@ export interface PRMAdapter {
   };
 
   notes: {
-    list(user_id: string): Promise<Note[]>;
+    list(user_id: string, cursor?: string | null): Promise<ListNotesResult>;
     get(user_id: string, id: string): Promise<Note | null>;
     create(input: CreateNoteInput): Promise<Note>;
     update(user_id: string, id: string, input: UpdateNoteInput): Promise<Note | null>;
