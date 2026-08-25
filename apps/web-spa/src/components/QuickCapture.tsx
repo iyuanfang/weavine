@@ -236,7 +236,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           queryClient.invalidateQueries({ queryKey: ['interactions', userId] });
           break;
         case 'note':
-          await adapter.notes.create({
+          await adapter.notes.create(userId!, {
             title: summary.slice(0, 80),
             body: text,
           });

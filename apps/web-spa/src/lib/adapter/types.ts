@@ -581,7 +581,7 @@ export interface PRMAdapter {
   notes: {
     list(user_id: string, cursor?: string | null): Promise<ListNotesResult>;
     get(user_id: string, id: string): Promise<Note | null>;
-    create(input: CreateNoteInput): Promise<Note>;
+    create(user_id: string, input: CreateNoteInput): Promise<Note>;
     update(user_id: string, id: string, input: UpdateNoteInput): Promise<Note | null>;
     delete(user_id: string, id: string): Promise<boolean>;
     listBacklinks(user_id: string, entity_type: string, entity_id: string): Promise<NoteBacklink[]>;

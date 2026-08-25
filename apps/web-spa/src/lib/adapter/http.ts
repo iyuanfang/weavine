@@ -412,7 +412,7 @@ export class HttpAdapter implements PRMAdapter {
       }
     },
 
-    create: (input: CreateNoteInput): Promise<Note> =>
+    create: (_user_id: string, input: CreateNoteInput): Promise<Note> =>
       request<Note>(this.baseUrl, 'POST', '/api/notes', input),
 
     update: async (_user_id: string, id: string, input: UpdateNoteInput): Promise<Note | null> => {

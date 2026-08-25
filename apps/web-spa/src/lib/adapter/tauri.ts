@@ -320,8 +320,8 @@ export class TauriAdapter implements PRMAdapter {
     },
     get: async (user_id: string, id: string): Promise<Note | null> =>
       invoke<Note | null>('get_note', { user_id, id }),
-    create: (input: CreateNoteInput): Promise<Note> =>
-      invoke<Note>('create_note', { input }),
+    create: async (user_id: string, input: CreateNoteInput): Promise<Note> =>
+      invoke<Note>('create_note', { user_id, input }),
     update: async (
       user_id: string,
       id: string,
@@ -441,8 +441,10 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   graph = {
-    get: (entity_type: EntityGraphNodeType, entity_id: string): Promise<EntityGraphResponse> =>
-      invoke<EntityGraphResponse>('entity_graph', { entity_type, entity_id }),
+    get: async (entity_type: EntityGraphNodeType, entity_id: string): Promise<EntityGraphResponse> => {
+      const payload = await this.withUserId({ entity_type, entity_id });
+      return invoke<EntityGraphResponse>('entity_graph', payload);
+    },
   };
 
   media = {

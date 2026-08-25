@@ -417,7 +417,7 @@ export function NoteNew() {
     setSubmitting(true);
     setError(null);
     try {
-      const created = await adapter.notes.create({
+      const created = await adapter.notes.create(userId, {
         title: title.trim() || '（无标题）',
         body,
         entity_links: links,
