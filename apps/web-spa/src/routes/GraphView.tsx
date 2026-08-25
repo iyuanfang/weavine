@@ -27,7 +27,7 @@ const TYPE_META: Record<EntityGraphNodeType, { icon: string; color: string; labe
   interaction: { icon: '💬', color: '#0ea5e9', label: '互动' },
 };
 
-const SUPPORTED_CENTERS: EntityGraphNodeType[] = ['contact', 'project', 'event', 'action', 'note'];
+const SUPPORTED_CENTERS: EntityGraphNodeType[] = ['contact', 'project', 'event', 'action', 'note', 'tag'];
 
 function detailHref(type: EntityGraphNodeType, id: string): string {
   switch (type) {
@@ -36,6 +36,7 @@ function detailHref(type: EntityGraphNodeType, id: string): string {
     case 'event': return `/events/${id}`;
     case 'action': return `/actions/${id}`;
     case 'note': return `/notes/${id}`;
+    case 'tag': return `/tags/${id}`;
     case 'interaction': return `/interactions/${id}`;
     default: return '/';
   }

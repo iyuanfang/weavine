@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use super::auth::extract_auth;
 
-pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note"];
+pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note", "tag"];
 
 #[derive(Debug, Serialize)]
 pub struct EntityGraphNode {
@@ -75,6 +75,7 @@ pub async fn entity_graph(
         "event" => expand_event(&pool, &auth, &entity_id, &mut response).await?,
         "action" => expand_action(&pool, &auth, &entity_id, &mut response).await?,
         "note" => expand_note(&pool, &auth, &entity_id, &mut response).await?,
+        "tag" => expand_tag(&pool, &auth, &entity_id, &mut response).await?,
         _ => unreachable!("validated above"),
     }
 
@@ -128,6 +129,14 @@ async fn load_center_node(
         .fetch_optional(pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+        "tag" => sqlx::query_as(
+            "SELECT id, name FROM tag WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+        )
+        .bind(entity_id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         _ => unreachable!(),
     };
 
@@ -141,6 +150,7 @@ async fn load_center_node(
         "event" => "event",
         "action" => "action",
         "note" => "note",
+        "tag" => "tag",
         _ => unreachable!(),
     };
     Ok(EntityGraphNode {
@@ -257,7 +267,8 @@ async fn expand_contact(
     let tags: Vec<(String, String)> = sqlx::query_as(
         "SELECT t.id, t.name FROM contact_tag ct \
          JOIN tag t ON t.id = ct.tag_id \
-         WHERE ct.contact_id = $1 AND ct.user_id = $2 AND t.deleted_at IS NULL",
+         WHERE ct.contact_id = $1 AND ct.user_id = $2 \
+           AND ct.deleted_at IS NULL AND t.deleted_at IS NULL",
     )
     .bind(contact_id)
     .bind(user_id)
@@ -265,7 +276,7 @@ async fn expand_contact(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     for (id, name) in tags {
-        push_neighbor(response, "tag", id, name, None, "contact", contact_id, "tag");
+        push_neighbor(response, "tag", id, name, None, "contact", contact_id, "contact_tagged");
     }
 
     Ok(())
@@ -591,6 +602,30 @@ async fn expand_note(
                 "note_mentions",
             );
         }
+    }
+
+    Ok(())
+}
+
+async fn expand_tag(
+    pool: &PgPool,
+    user_id: &str,
+    tag_id: &str,
+    response: &mut EntityGraphResponse,
+) -> Result<(), (StatusCode, String)> {
+    let contacts: Vec<(String, String)> = sqlx::query_as(
+        "SELECT c.id, c.nickname FROM contact_tag ct \
+         JOIN contact c ON c.id = ct.contact_id \
+         WHERE ct.tag_id = $1 AND ct.user_id = $2 \
+           AND ct.deleted_at IS NULL AND c.deleted_at IS NULL",
+    )
+    .bind(tag_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    for (id, nickname) in contacts {
+        push_neighbor(response, "contact", id, nickname, None, "tag", tag_id, "tag_member");
     }
 
     Ok(())

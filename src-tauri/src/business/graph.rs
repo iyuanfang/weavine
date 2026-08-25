@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 
-pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note"];
+pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note", "tag"];
 
 #[derive(Debug, Serialize)]
 pub struct EntityGraphNode {
@@ -101,6 +101,11 @@ fn load_center_node(
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
+        "tag" => conn.query_row(
+            "SELECT id, name FROM \"Tag\" WHERE id = ?1 AND user_id = ?2",
+            params![entity_id, user_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).optional()?,
         _ => return Ok(None),
     };
 
@@ -110,6 +115,7 @@ fn load_center_node(
         "event" => "event",
         "action" => "action",
         "note" => "note",
+        "tag" => "tag",
         _ => return Ok(None),
     };
 
@@ -197,7 +203,7 @@ fn expand_contact(
         .filter_map(|r| r.ok())
         .collect();
     for (id, name) in rows {
-        push_neighbor(response, "tag", id, name, None, "contact", contact_id, "tag");
+        push_neighbor(response, "tag", id, label_or(Some(name), "(untitled)"), None, "contact", contact_id, "contact_tagged");
     }
 
     Ok(())
@@ -503,8 +509,31 @@ pub fn entity_graph(
         "event" => expand_event(conn, user_id, entity_id, &mut response)?,
         "action" => expand_action(conn, user_id, entity_id, &mut response)?,
         "note" => expand_note(conn, user_id, entity_id, &mut response)?,
+        "tag" => expand_tag(conn, user_id, entity_id, &mut response)?,
         _ => {}
     }
 
     Ok(Some(response))
+}
+
+fn expand_tag(
+    conn: &Connection,
+    user_id: &str,
+    tag_id: &str,
+    response: &mut EntityGraphResponse,
+) -> rusqlite::Result<()> {
+    let mut stmt = conn.prepare(
+        "SELECT c.id, c.nickname FROM \"ContactTag\" ct \
+         JOIN \"Contact\" c ON c.id = ct.contact_id \
+         WHERE ct.tag_id = ?1 AND ct.user_id = ?2 AND c.archived_at IS NULL",
+    )?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map(params![tag_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    for (id, nickname) in rows {
+        push_neighbor(response, "contact", id, label_or(Some(nickname), "(untitled)"), None, "tag", tag_id, "tag_member");
+    }
+
+    Ok(())
 }
