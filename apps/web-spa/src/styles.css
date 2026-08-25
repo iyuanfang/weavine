@@ -2829,3 +2829,61 @@ textarea.input-base {
 .backlinks-panel__toggle:hover {
   background: var(--primary-soft, rgba(59, 130, 246, 0.08));
 }
+
+.note-list-item {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+  max-width: 100%;
+}
+.note-list-item__line1 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.note-list-item__title {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  display: block;
+  font-weight: 600;
+  font-size: var(--text-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-list-item__time {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.note-list-item__snippet {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-list-item--card {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  transition: border-color var(--transition);
+}
+.note-list-item--card:hover {
+  border-color: var(--accent, #8b5cf6);
+}
+.note-list-item--row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.note-list-item--row:last-child {
+  border-bottom: none;
+}

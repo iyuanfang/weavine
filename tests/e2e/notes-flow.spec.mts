@@ -208,4 +208,43 @@ test.describe('Notes feature', () => {
 
     await ctx.close();
   });
+
+  test('long title truncates to one line in list', async ({ browser }) => {
+    const api = await request.newContext({ baseURL: SERVER_BASE });
+    const stamp = Date.now();
+    const session = await register(api, `long-title-${stamp}@e2e.local`, 'long-title-e2e-pw-12345');
+    const longTitle = 'A'.repeat(120);
+    const longBody = 'This is a very long note body that should also be truncated to one line with ellipsis when displayed in the notes list page';
+    const create = await api.post(`${SERVER_BASE}/api/notes`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      data: {
+        user_id: session.user_id,
+        title: longTitle,
+        body: longBody,
+        entity_links: [],
+      },
+    });
+    expect(create.ok()).toBeTruthy();
+    const ctx = await browser.newContext();
+    await ctx.addInitScript(
+      ({ token, refresh, uid }: { token: string; refresh: string; uid: string }) => {
+        localStorage.setItem('weavine.access_token', token);
+        localStorage.setItem('weavine.refresh_token', refresh);
+        localStorage.setItem('weavine.user_id', uid);
+      },
+      { token: session.access_token, refresh: session.refresh_token, uid: session.user_id },
+    );
+    const page = await ctx.newPage();
+    await page.goto(`${SPA_BASE}/notes`);
+    await expect(page.locator('.note-list-item').first()).toBeVisible({ timeout: 15000 });
+    const titleEl = page.locator('.note-list-item__title').first();
+    const titleBox = await titleEl.boundingBox();
+    expect(titleBox).not.toBeNull();
+    expect(titleBox!.height).toBeLessThan(30);
+    const snippetEl = page.locator('.note-list-item__snippet').first();
+    const snippetBox = await snippetEl.boundingBox();
+    expect(snippetBox).not.toBeNull();
+    expect(snippetBox!.height).toBeLessThan(30);
+    await ctx.close();
+  });
 });

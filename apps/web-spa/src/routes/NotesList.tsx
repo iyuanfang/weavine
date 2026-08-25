@@ -1,29 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useInfiniteList, useScrollSentinel } from '../lib/useInfiniteList';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import type { Note } from '../lib/adapter/types';
-
-function relTime(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return '';
-  const diff = Date.now() - t;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return '刚刚';
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d} 天前`;
-  return new Date(iso).toLocaleDateString('zh-CN');
-}
-
-function snippet(body: string, max = 140): string {
-  const stripped = body.replace(/\[\[[^\]]+\]\]/g, '').replace(/\s+/g, ' ').trim();
-  return stripped.length > max ? `${stripped.slice(0, max)}…` : stripped;
-}
+import { NoteListItem } from '../components/NoteListItem';
 
 function dateBucket(iso: string): string {
   const t = new Date(iso);
@@ -156,11 +138,13 @@ function NotesGroups({ notes }: { notes: Note[] }) {
           <ul className="notes-list__items">
             {g.items.map((n) => (
               <li key={n.id} className="notes-list__item">
-                <Link to={`/notes/${n.id}`} className="notes-list__link">
-                  <div className="notes-list__title">{n.title || '（无标题）'}</div>
-                  <div className="notes-list__snippet">{snippet(n.body) || '（空白）'}</div>
-                  <div className="notes-list__meta">更新于 {relTime(n.updated_at)}</div>
-                </Link>
+                <NoteListItem
+                  id={n.id}
+                  title={n.title}
+                  body={n.body}
+                  updatedAt={n.updated_at}
+                  from="/notes"
+                />
               </li>
             ))}
           </ul>

@@ -622,4 +622,5 @@ pub struct NoteBacklink {
     pub note_id: String,
     pub note_title: String,
     pub snippet: String,
+    pub updated_at: String,
 }

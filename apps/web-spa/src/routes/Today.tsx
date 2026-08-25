@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { ContactBadge } from '../components/ContactBadge';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
+import { NoteListItem } from '../components/NoteListItem';
 import { ProjectBadge } from '../components/ProjectBadge';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
@@ -405,22 +406,17 @@ export function TodayPage() {
         {notesQuery.isLoading ? (
           <Skeleton />
         ) : (notesQuery.data ?? []).length > 0 ? (
-          <div className="card" style={{ padding: 0 }}>
+          <div className="card" style={{ padding: '4px 14px' }}>
             {(notesQuery.data ?? []).map((n) => (
-              <Link
+              <NoteListItem
                 key={n.id}
-                to={`/notes/${n.id}?from=/today`}
-                className="digest-row"
-              >
-                <span style={{ fontSize: 'var(--text-lg)' }}>🗒️</span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span className="digest-row__title">{n.title || '（无标题）'}</span>
-                  <span className="digest-row__meta" style={{ marginLeft: 8 }}>
-                    {daysSinceLabel(n.updated_at)}
-                  </span>
-                </span>
-                <span className="text-muted">→</span>
-              </Link>
+                id={n.id}
+                title={n.title}
+                body={n.body}
+                updatedAt={n.updated_at}
+                from="/today"
+                variant="row"
+              />
             ))}
           </div>
         ) : (

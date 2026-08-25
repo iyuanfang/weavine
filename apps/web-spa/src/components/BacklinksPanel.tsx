@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import type { NoteBacklink } from '../lib/adapter/types';
+import { NoteListItem } from './NoteListItem';
 
 interface Props {
   entityType: 'contact' | 'project' | 'action' | 'event';
@@ -62,10 +63,13 @@ export function BacklinksPanel({ entityType, entityId }: Props) {
       <ul className="backlinks-panel__list">
         {visible.map((b) => (
           <li key={b.note_id} className="backlinks-panel__item">
-            <Link to={`/notes/${b.note_id}`} className="backlinks-panel__link">
-              <span className="backlinks-panel__title-text">{b.note_title || '（无标题）'}</span>
-              <span className="backlinks-panel__snippet">{b.snippet}</span>
-            </Link>
+            <NoteListItem
+              id={b.note_id}
+              title={b.note_title}
+              body={b.snippet ?? ''}
+              updatedAt={b.updated_at ?? ''}
+              variant="row"
+            />
           </li>
         ))}
       </ul>

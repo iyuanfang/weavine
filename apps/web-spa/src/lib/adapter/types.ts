@@ -438,6 +438,7 @@ export interface NoteBacklink {
   note_id: string;
   note_title: string;
   snippet: string;
+  updated_at: string;
 }
 
 // ──────────────────────────────────────────────

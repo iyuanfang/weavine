@@ -134,7 +134,7 @@ pub fn list_backlinks(
     entity_id: &str,
 ) -> rusqlite::Result<Vec<NoteBacklink>> {
     let mut stmt = conn.prepare(
-        "SELECT n.id, n.title, substr(n.body, 1, 200) \
+        "SELECT n.id, n.title, substr(n.body, 1, 200), n.updated_at \
          FROM Note n INNER JOIN NoteEntity ne ON ne.note_id = n.id \
          WHERE ne.user_id = ?1 AND ne.entity_type = ?2 AND ne.entity_id = ?3 \
           ORDER BY n.updated_at DESC",
@@ -145,6 +145,7 @@ pub fn list_backlinks(
                 note_id: row.get(0)?,
                 note_title: row.get(1)?,
                 snippet: row.get(2)?,
+                updated_at: row.get(3)?,
             })
         })?
         .filter_map(|r| r.ok())
