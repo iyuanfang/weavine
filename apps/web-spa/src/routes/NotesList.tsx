@@ -91,7 +91,11 @@ export function NotesList() {
         </div>
       )}
 
-      {listError && <p className="muted" style={{ color: 'var(--error)' }}>{String(listError)}</p>}
+      {listError ? (
+        <p className="muted" style={{ color: 'var(--error)' }}>
+          {listError instanceof Error ? listError.message : '加载失败'}
+        </p>
+      ) : null}
       {!listError && isLoading && <p className="muted">加载中…</p>}
       {notes && notes.length === 0 && (
         <div className="empty-state">
