@@ -164,7 +164,9 @@ Heuristic regex + lang rules:
 
 ## 5. #4 Relationship Graph — design
 
-> **Actual (2026-08-13):** IMPLEMENTED but renderer deviates: shipped as **custom SVG view** (`apps/web-spa/src/routes/ContactGraph.tsx` + `f16fe2a`), **not React Flow** — no 3rd-party graph dependency. Server endpoints: `GET /api/graph/:contact_id`, `POST /api/graph/:contact_id/relations`, `DELETE /api/graph/:contact_id/relations/:other_id` (`server/src/handlers/graph.rs`). Frontend route `/contacts/:id/graph`. Node avatars wired via Avatar component (`912c7d4`).
+> **Actual (2026-08-13, superseded 2026-08-25):** First shipped as **custom SVG view** (`apps/web-spa/src/routes/ContactGraph.tsx` + `f16fe2a`), **not React Flow** — no 3rd-party graph dependency. Server endpoints: `GET /api/graph/:contact_id`, `POST /api/graph/:contact_id/relations`, `DELETE /api/graph/:contact_id/relations/:other_id` (`server/src/handlers/graph.rs`). Frontend route `/contacts/:id/graph`. Node avatars wired via Avatar component (`912c7d4`).
+>
+> **Actual (2026-08-25, commit `1a6f720`):** Rewritten as **5-center entity graph**. ContactGraph + `/api/graph/:contact_id` + `knows` 边增删 已删除（用户显式要求"直接删掉，不用兼容"）。新 endpoint `GET /api/entities/:entity_type/:entity_id/graph` + 5 个 expander（contact/project/event/action/note）。Tauri `entity_graph`（本地 SQLite，同 5 个 expander）。新 frontend `apps/web-spa/src/routes/GraphView.tsx`（5 中心 SVG，breadcrumb，click 钻取 + dblclick 跳转详情）。5 个 detail page 加 🕸️ 按钮。4 E2E pass。
 
 ### 5.1 Goal
 Visualize contact → events/actions/projects/interactions/contacts as a force-directed graph.
@@ -219,7 +221,8 @@ Visualize contact → events/actions/projects/interactions/contacts as a force-d
 - `apps/web-spa/src/components/AvatarCropModal.tsx` / `AvatarViewModal.tsx` ✅ (#1)
 - `apps/web-spa/src/components/CardScanner.tsx` ✅ (#11)
 - `apps/web-spa/src/components/QuickCapture.tsx` ✅ (§3.5 Ctrl+K panel)
-- `apps/web-spa/src/routes/ContactGraph.tsx` ✅ (#4, SVG render — not React Flow as planned)
+- `apps/web-spa/src/routes/ContactGraph.tsx` ❌ 已删除（2026-08-25，commit `1a6f720`）
+- `apps/web-spa/src/routes/GraphView.tsx` ✅ (#4 重写，2026-08-25，5 中心通用 SVG，breadcrumb + 钻取)
 - `apps/web-spa/src/lib/avatarUrl.ts` ✅ (#1, `avatarUrlFor()` → `/files/{storage_key}`)
 
 **Modified files:**
@@ -263,7 +266,7 @@ Visualize contact → events/actions/projects/interactions/contacts as a force-d
 > **Spec-authorized work that is NOT yet implemented.** Each item below is explicitly designed/decided in this brief or the product spec (§3.5.6) but has no shipped code using it. Status verified against code on 2026-08-13.
 
 1. **Android native STT (语音快速捕获 on Android)** — product spec §3.5.6 Task 5 + decision D3 call for `tauri-plugin-android-speechrecognition` + `RECORD_AUDIO` permission. Shipped code instead uses Web Speech API on Desktop (macOS/Windows) + Web, with Android **degraded to manual input**: `QuickFab.tsx` returns `null` whenever the app runs in the Android Tauri WebView (`if (!isAndroid() || isTauri) return null`, commit `0a8a842`). To close: integrate a native plugin (tauri-plugin-android-speechrecognition / sherpa-onnx / 讯飞), re-enable the FAB, add RECORD_AUDIO to the Android manifest.
-2. **Graph 500-node cap + "聚焦此区域" picker** (§5.5) — server `GET /api/graph/:contact_id` is BFS to depth 2 with **no node limit**; `ContactGraph.tsx` SVG renderer has no cap either (the `limit: 500` at line 363 is only the AddRelationModal candidate list, not the graph). To close: cap nodes in the server response or renderer and show the "聚焦此区域" focus picker when exceeded (spec §5.5: "数百~数千" headroom).
+2. **Graph 500-node cap + "聚焦此区域" picker** (§5.5) — **SUPERSEDED 2026-08-25**: original server `GET /api/graph/:contact_id` is BFS to depth 2 with no node limit; ContactGraph SVG renderer had no cap. The 500-node cap goal remains valid for the new 5-center entity graph (`/api/entities/:type/:id/graph` is one-hop breadth-first, so the typical node count is bounded by neighbor cardinality — much smaller in practice). To close: cap nodes in `GraphView` SVG renderer and show the "聚焦此区域" focus picker when exceeded.
 3. **Media `kind='card_image'` storage** (§4.3) — the API accepts the kind (`validate_kind` allows `avatar | card_image | attachment` in `media.rs`), but nothing ever writes it: `ocr.rs` is one-shot extract, `CardScanner.tsx` discards the image after `POST /api/cards/extract`. To close: persist the card image via `/api/media` (kind=card_image) so §4.3 reuse + the §2.5 2-phase blob sync protocol become reachable. Until then, `card_image` cross-device sync (the only remaining untested sync path) is **N/A**, not merely untested.
 4. **Media `kind='attachment'`** — accepted by the API, **zero consumers** (no UI, no sync path, no desktop command). Deferred until a feature needs file attachments (e.g. event/action attachments in a later phase).
 

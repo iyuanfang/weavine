@@ -3,6 +3,7 @@ pub mod archive;
 pub mod contact;
 pub mod diagnostic;
 pub mod event;
+pub mod graph;
 pub mod interaction;
 pub mod install_id;
 pub mod notification;

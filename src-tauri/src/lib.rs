@@ -341,6 +341,7 @@ pub fn run() {
             note::delete_note,
             note::list_note_backlinks,
             note::list_note_entities,
+            commands::graph::entity_graph,
             voice::recognize_voice,
             #[cfg(feature = "voice-local")]
             commands::voice_local::check_voice_model,

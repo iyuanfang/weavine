@@ -63,7 +63,7 @@
 |------|------|---------|----------|
 | 项目多人 | 项目聚合多人 + 角色 | ✅ 已实现 | `project_contact` 关联表，复合主键 `(project_id, contact_id)` + `role` 字段 |
 | 事件多人 | 日程/事件多人 + 角色 | ✅ 已实现 | `entity_links` `participated` 边 + server `event_participants` CRUD + web `ContactMultiPicker` 多选（commit `7491e1d` / `a9b8e6a`） |
-| 联系人间关系图 | 联系人 A↔B 直接边 | ✅ 已实现 | `entity_links` `contact↔contact` 边 + `GET /api/graph/:contact_id` + web `ContactGraph` SVG 视图（commit `597a6f8` / `f16fe2a`） |
+| 实体关联图 | 5 类实体（contact/project/event/action/note）一跳关系 | ✅ 已实现（2026-08-25） | server `GET /api/entities/:entity_type/:entity_id/graph`（5 个 expander） + Tauri `entity_graph`（本地 SQLite，同 5 个 expander） + web `GraphView` SVG 视图 + 4 E2E（commit `1a6f720`）。原 ContactGraph（`597a6f8`/`f16fe2a`，`/contacts/:id/graph`，`knows` 边增删）已删除，由 5 中心通用视图取代 |
 
 **结论**：多人关系底座（#3）与关系图谱（#4）均已完成；§5.7 同步白名单断链已修复，跨端同步闭环。
 
@@ -109,7 +109,7 @@ relation_type × role 枚举:
 
 - ✅ 项目侧 `project_contact` 已存在，已对齐到 `entity_links` 的 `involved` 边。
 - ✅ **事件侧**：移除 `event.contact_id` 单外键，改为经 `entity_links`（`participated` 边）查询；server `event_participants` CRUD + web `ContactMultiPicker` 多选 + E2E 覆盖。
-- ✅ **联系人间关系边**：`entity_links` 中 `contact↔contact` 的边类型（图谱底座）已实现，`GET /api/graph/:contact_id` + `ContactGraph`。
+- ✅ **联系人间关系边**：`entity_links` 中 `contact↔contact` 的边类型（图谱底座）已实现。已扩展为通用 5 中心实体关联图：`GET /api/entities/:entity_type/:entity_id/graph` + `GraphView`（2026-08-25）。
 - ✅ 跨端同步已闭环：`entity_links` 已入服务端同步白名单（§5.7 修复，2026-08-09）。
 
 **验收标准**：
@@ -150,7 +150,7 @@ relation_type × role 枚举:
 - 节点规模：先支持数百~数千节点（力导向布局 d3-force / cytoscape）；仅画直接关系。
 - 节点带头像（#1）提升可读性。
   **依赖**：#3（数据底座）、#1（头像）。
-  **验收**：打开任一联系人可见其关系子图；正查/反查均可图形化且角色可区分；数百节点不卡顿。（已实现：`/api/graph/:contact_id` 正反查 + `ContactGraph` SVG 视图 + `knows` 边增删端点 + 节点头像）
+  **验收**：打开任一联系人/项目/事件/行动/笔记可见其关联子图；5 类实体可互为中心；数百节点不卡顿。（已实现：`/api/entities/:type/:id/graph` 一跳广度优先 + `GraphView` SVG 视图 + 5 个 detail page 加 🕸️ 按钮 + 4 E2E，commit `1a6f720`。2026-08-25 删除旧的 ContactGraph + `knows` 边增删，因通用视图已覆盖）
 
 #### ○ #5 查找环节允许新建（✅ 已实现，2026-08-09 复查）
 
@@ -825,7 +825,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | --- | --------------- | --- | ------------------------------------------------------------ |
 | #3  | 关系模型重构（事件侧）     | P0  | ✅ 已实现（事件多人 + 联系人间边 + 前端 UI + E2E）；跨端同步已闭环 §5.7            |
 | #12 | 多端同步 + 性能优化     | P0  | ✅ F1–F6 已落地；§5.7 白名单断链已修复（entity_link/media 跨端已通）          |
-| #4  | 关系图谱可视化         | P1  | ✅ 已实现（schema + endpoint + ContactGraph SVG + E2E）              |
+| #4  | 关系图谱可视化         | P1  | ✅ 已实现，2026-08-25 重写为 5 中心通用视图（server `entity_graph` + Tauri `entity_graph` + `GraphView` SVG + 4 E2E；commit `1a6f720`）。原 ContactGraph 已删除 |
 | #5  | 查找即新建           | P1  | ✅ 已实现（SearchablePicker emptyState CTA）                         |
 | #11 | 名片提取联系人         | P1  | ✅ 已实现（leptess 真集成 + CardScanner + E2E）；**v1.0.9 重新拍名片入口从 `ContactDetail`（查看页）移到 `ContactEdit`（编辑页）**（§7 Q9） |
 | #1  | 头像              | P1  | ✅ 已实现（crop + graph 节点 + server 持久化）；跨端同步已闭环 §5.7；**v1.0.9 补齐桌面渲染**：`upload_avatar`/`delete_avatar` 写回 `Contact.avatar_storage_key`、修 `get_avatar` 路径双 join bug、注册 `files://` 协议 + `TauriAdapter.baseUrl='files://localhost'` |
@@ -864,8 +864,8 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | ---------------- | -------- | ------ | -------------------------------------------------------------------------------- |
 | **#11 名片 OCR**   | ⬜        | ✅      | `server/src/handlers/ocr.rs`（leptess 真调用）+ `CardScanner` + `ContactNew` 接入 + E2E |
 | **#8 提醒声音**      | ⬜        | ✅      | `Settings.tsx` + `use-reminder-poller.ts` + `notifications.ts` WebAudio          |
-| **#3 关系模型（事件多人 + 联系人间边）** | ⬜（项目侧已做） | ✅ | `entity_links` 边 + server `event_participants` CRUD + web `ContactMultiPicker` + `ContactGraph` + E2E（`7491e1d`/`597a6f8`/`f16fe2a`/`a9b8e6a`） |
-| **#4 关系图谱**      | ⬜        | ✅      | `graph.rs` schema + `GET /api/graph/:contact_id` + web `ContactGraph` SVG 视图 + 增删端点 + E2E |
+| **#3 关系模型（事件多人 + 联系人间边）** | ⬜（项目侧已做） | ✅ | `entity_links` 边 + server `event_participants` CRUD + web `ContactMultiPicker` + `GraphView`（5 中心通用关联图）+ E2E（`7491e1d`/`597a6f8`/`f16fe2a`/`a9b8e6a`/`1a6f720`） |
+| **#4 关系图谱**      | ⬜        | ✅      | `graph.rs` schema + server `GET /api/entities/:type/:id/graph` + Tauri 本地 `entity_graph` + web `GraphView` SVG 视图 + 4 E2E。ContactGraph + `knows` 增删已删除（2026-08-25） |
 | **#1 头像**        | ⬜        | ✅      | `media.rs` 命令 + Media 表 + server `/api/media` + crop modal + graph 节点头像 + server 持久化（`d0fa495`/`beb8bfa`/`912c7d4`） |
 | **#5 查找即新建**     | ⬜        | ✅      | `SearchablePicker` emptyState CTA + E2E（`d9c6e1e`）                              |
 | **#12 F1**       | 🔴 自激    | ✅ 已修   | `sync.rs` 严格 `>`，`==` 静默 no-op                                          |
@@ -1282,7 +1282,7 @@ extract_endpoint_auth() -> EndpointAuth
 ##### 🆕 #30 关系图谱增强（影响力 / 中心度）
 
 - **价值**：让用户看到"谁是网络核心节点"（帮用户识别关键人脉）。
-- **核心 UX**：ContactGraph 加开关："显示中心度" → 节点大小/颜色映射 degree / betweenness centrality。
+- **核心 UX**：GraphView 加开关："显示中心度" → 节点大小/颜色映射 degree / betweenness centrality（基于一跳子图）。
 - **依赖**：本地算法（networkx 风格），无 server。
 - **工作量**：~3 人/日（算法 + UI + e2e）。
 - **关联**：扩展现有 #4 关系图谱。

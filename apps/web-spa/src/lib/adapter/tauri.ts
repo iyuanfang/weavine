@@ -441,8 +441,8 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   graph = {
-    get: (_entity_type: EntityGraphNodeType, _entity_id: string): Promise<EntityGraphResponse> =>
-      Promise.reject(new Error('graph is cloud-only — sign in via the cloud path')),
+    get: (entity_type: EntityGraphNodeType, entity_id: string): Promise<EntityGraphResponse> =>
+      invoke<EntityGraphResponse>('entity_graph', { entity_type, entity_id }),
   };
 
   media = {
