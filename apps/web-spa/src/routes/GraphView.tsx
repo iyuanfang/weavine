@@ -5,11 +5,21 @@ import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
 
-const RING_RADIUS = 220;
+const RING_RADII = [150, 240, 330] as const;
 const NODE_R = 32;
 const CENTER_R = 44;
 const W = 800;
-const H = 600;
+const H = 760;
+
+const RING_LEVEL: Record<EntityGraphNodeType, 0 | 1 | 2> = {
+  interaction: 0,
+  contact: 1,
+  event: 1,
+  action: 1,
+  project: 2,
+  note: 2,
+  tag: 2,
+};
 
 interface Crumb {
   type: EntityGraphNodeType;
@@ -104,12 +114,22 @@ export function GraphView() {
   const placedAt: Record<string, { x: number; y: number }> = {};
   const cx = W / 2;
   const cy = H / 2;
-  others.forEach((n, i) => {
-    const a = (2 * Math.PI * i) / Math.max(others.length, 1);
-    placedAt[`${n.entity_type}:${n.id}`] = {
-      x: cx + RING_RADIUS * Math.cos(a),
-      y: cy + RING_RADIUS * Math.sin(a),
-    };
+  const byRing: EntityGraphNode[][] = [[], [], []];
+  others.forEach((n) => {
+    const lvl = RING_LEVEL[n.entity_type] ?? 1;
+    byRing[lvl].push(n);
+  });
+  byRing.forEach((nodes, ringIdx) => {
+    if (nodes.length === 0) return;
+    const R = RING_RADII[ringIdx];
+    const offset = ringIdx * (Math.PI / Math.max(nodes.length, 1));
+    nodes.forEach((n, i) => {
+      const a = (2 * Math.PI * i) / nodes.length + offset;
+      placedAt[`${n.entity_type}:${n.id}`] = {
+        x: cx + R * Math.cos(a),
+        y: cy + R * Math.sin(a),
+      };
+    });
   });
 
   function onNeighborOpen(n: EntityGraphNode) {
@@ -191,7 +211,19 @@ export function GraphView() {
           style={{ display: 'block', background: 'linear-gradient(180deg,#fafbff,#f3f4f8)' }}
           data-testid="graph-svg"
         >
-          <circle cx={cx} cy={cy} r={RING_RADIUS + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" />
+          <circle cx={cx} cy={cy} r={RING_RADII[2] + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" />
+          {RING_RADII.map((R, i) => (
+            <circle
+              key={`ring-${i}`}
+              cx={cx}
+              cy={cy}
+              r={R}
+              fill="none"
+              stroke="#e5e7eb"
+              strokeDasharray={i === 2 ? '2 4' : '1 6'}
+              opacity={0.6}
+            />
+          ))}
 
           {graph.edges.map((e, i) => {
             const fromKey = `${e.from_type}:${e.from_id}`;
@@ -231,7 +263,7 @@ export function GraphView() {
           )}
 
           {others.length === 0 && (
-            <text x={cx} y={cy + RING_RADIUS + 70} fontSize="13" fill="#94a3b8" textAnchor="middle">
+            <text x={cx} y={cy + RING_RADII[2] + 70} fontSize="13" fill="#94a3b8" textAnchor="middle">
               暂无关联
             </text>
           )}
