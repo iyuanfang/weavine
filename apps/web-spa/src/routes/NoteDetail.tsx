@@ -441,10 +441,15 @@ export function NoteDetail() {
   const [error, setError] = useState<string | null>(null);
   const dirtyRef = useRef(false);
   const saveTokenRef = useRef(0);
+  const debounceHandleRef = useRef<number | null>(null);
 
   const persist = async (opts?: { force?: boolean }) => {
     if (!userId || !id || !note) return;
     if (!opts?.force && !dirtyRef.current) return;
+    if (debounceHandleRef.current !== null) {
+      window.clearTimeout(debounceHandleRef.current);
+      debounceHandleRef.current = null;
+    }
     const title = draftTitle.trim() || '（无标题）';
     const linksSnapshot = draftLinks;
     const bodySnapshot = draftBody;
@@ -496,9 +501,14 @@ export function NoteDetail() {
   useEffect(() => {
     dirtyRef.current = true;
     const handle = window.setTimeout(() => {
+      debounceHandleRef.current = null;
       void persist();
     }, 3000);
-    return () => window.clearTimeout(handle);
+    debounceHandleRef.current = handle;
+    return () => {
+      window.clearTimeout(handle);
+      if (debounceHandleRef.current === handle) debounceHandleRef.current = null;
+    };
   }, [draftTitle, draftBody, draftLinks]);
 
   useEffect(() => {

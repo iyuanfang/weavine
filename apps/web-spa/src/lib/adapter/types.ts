@@ -431,7 +431,6 @@ export interface UpdateNoteInput {
   title?: string | null;
   body?: string | null;
   entity_links?: NoteEntityLink[] | null;
-  archived?: boolean | null;
 }
 
 export interface NoteBacklink {

@@ -57,7 +57,7 @@ pub async fn list(
     let limit = q.limit.unwrap_or(30).clamp(1, 200) + 1;
     let (cursor_updated_at, cursor_id) = q.cursor.as_deref().and_then(parse_note_cursor).unzip();
     let sql = "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
-               FROM note WHERE user_id = $1 \
+               FROM note WHERE user_id = $1 AND archived_at IS NULL \
                AND ($2::text IS NULL OR updated_at < $2 \
                     OR (updated_at = $2 AND id > $3)) \
                ORDER BY updated_at DESC, id ASC \
@@ -88,7 +88,7 @@ pub async fn get(
     let user_id = extract_auth(&headers, pool.as_ref()).await?;
     let note = sqlx::query_as::<_, Note>(
         "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
-         FROM note WHERE id = $1 AND user_id = $2",
+         FROM note WHERE id = $1 AND user_id = $2 AND archived_at IS NULL",
     )
     .bind(&id)
     .bind(&user_id)
@@ -258,6 +258,7 @@ pub async fn list_backlinks(
         "SELECT n.id, n.title, substr(n.body, 1, 200), n.updated_at \
          FROM note n INNER JOIN note_entity ne ON ne.note_id = n.id \
          WHERE ne.user_id = $1 AND ne.entity_type = $2 AND ne.entity_id = $3 \
+           AND n.archived_at IS NULL \
           ORDER BY n.updated_at DESC",
     )
     .bind(&user_id)

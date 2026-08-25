@@ -39,10 +39,6 @@ function detailHref(type: EntityGraphNodeType, id: string): string {
   }
 }
 
-function placeholderLabel(type: EntityGraphNodeType): string {
-  return TYPE_META[type]?.label ?? type;
-}
-
 export function GraphView() {
   const params = useParams() as { entityType: string; entityId: string };
   const adapter = useAdapter();
@@ -57,6 +53,15 @@ export function GraphView() {
   const [history, setHistory] = useState<Crumb[]>([]);
   const lastCenterKey = useRef<string>('');
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current);
+        clickTimer.current = null;
+      }
+    };
+  }, []);
 
   const graphQuery = useQuery({
     queryKey: ['entity-graph', centerType, params.entityId],
@@ -309,5 +314,3 @@ function truncate(s: string, n: number): string {
 }
 
 export default GraphView;
-
-void placeholderLabel;

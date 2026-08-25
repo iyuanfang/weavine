@@ -478,8 +478,8 @@ async fn expand_note(
     note_id: &str,
     response: &mut EntityGraphResponse,
 ) -> Result<(), (StatusCode, String)> {
-    let rows: Vec<(String, String, String)> = sqlx::query_as(
-        "SELECT entity_type, entity_id, entity_id FROM note_entity \
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT entity_type, entity_id FROM note_entity \
          WHERE note_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(note_id)
@@ -488,7 +488,7 @@ async fn expand_note(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    for (entity_type, entity_id, _) in rows {
+    for (entity_type, entity_id) in rows {
         let label_opt: Option<String> = match entity_type.as_str() {
             "contact" => sqlx::query_scalar(
                 "SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
