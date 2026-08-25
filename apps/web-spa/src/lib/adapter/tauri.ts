@@ -313,31 +313,44 @@ export class TauriAdapter implements PRMAdapter {
   };
 
   notes = {
-    list: async (user_id: string, cursor?: string | null): Promise<ListNotesResult> => {
+    list: async (_user_id: string, cursor?: string | null): Promise<ListNotesResult> => {
+      const user_id = await this.userIdReady;
       const [items, has_more] = await invoke<[Note[], boolean]>('list_notes', { user_id, cursor: cursor ?? null });
       const cursorOut = items.length > 0 ? `${items[items.length - 1].updated_at},${items[items.length - 1].id}` : null;
       return { items, cursor: cursorOut, has_more };
     },
-    get: async (user_id: string, id: string): Promise<Note | null> =>
-      invoke<Note | null>('get_note', { user_id, id }),
-    create: async (user_id: string, input: CreateNoteInput): Promise<Note> =>
-      invoke<Note>('create_note', { user_id, input }),
+    get: async (_user_id: string, id: string): Promise<Note | null> => {
+      const user_id = await this.userIdReady;
+      return invoke<Note | null>('get_note', { user_id, id });
+    },
+    create: async (_user_id: string, input: CreateNoteInput): Promise<Note> => {
+      const user_id = await this.userIdReady;
+      return invoke<Note>('create_note', { user_id, input });
+    },
     update: async (
-      user_id: string,
+      _user_id: string,
       id: string,
       input: UpdateNoteInput,
-    ): Promise<Note | null> =>
-      invoke<Note | null>('update_note', { user_id, id, input }),
-    delete: async (user_id: string, id: string): Promise<boolean> =>
-      invoke<boolean>('delete_note', { user_id, id }),
+    ): Promise<Note | null> => {
+      const user_id = await this.userIdReady;
+      return invoke<Note | null>('update_note', { user_id, id, input });
+    },
+    delete: async (_user_id: string, id: string): Promise<boolean> => {
+      const user_id = await this.userIdReady;
+      return invoke<boolean>('delete_note', { user_id, id });
+    },
     listBacklinks: async (
-      user_id: string,
+      _user_id: string,
       entity_type: string,
       entity_id: string,
-    ): Promise<NoteBacklink[]> =>
-      invoke<NoteBacklink[]>('list_note_backlinks', { user_id, entity_type, entity_id }),
-    listEntityLinks: async (user_id: string, note_id: string): Promise<NoteEntityLink[]> =>
-      invoke<NoteEntityLink[]>('list_note_entities', { user_id, note_id }),
+    ): Promise<NoteBacklink[]> => {
+      const user_id = await this.userIdReady;
+      return invoke<NoteBacklink[]>('list_note_backlinks', { user_id, entity_type, entity_id });
+    },
+    listEntityLinks: async (_user_id: string, note_id: string): Promise<NoteEntityLink[]> => {
+      const user_id = await this.userIdReady;
+      return invoke<NoteEntityLink[]>('list_note_entities', { user_id, note_id });
+    },
   };
 
   settings = {
