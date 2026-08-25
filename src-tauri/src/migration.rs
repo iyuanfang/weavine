@@ -345,6 +345,19 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    // Idempotent migration: add Event.event_type if missing (v1.2.1).
+    let has_event_type: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Event') WHERE name='event_type'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_event_type == 0 {
+        conn.execute(
+            "ALTER TABLE \"Event\" ADD COLUMN \"event_type\" TEXT NOT NULL DEFAULT 'event'",
+            [],
+        )?;
+    }
+
     // Idempotent migration: Project table + ProjectContact
     // Fresh DBs get these from SCHEMA_SQL; this no-ops for them.
     let has_project: i64 = conn.query_row(
