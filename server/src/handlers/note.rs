@@ -30,7 +30,7 @@ fn parse_note_cursor(cursor: &str) -> Option<(String, String)> {
 fn validate_entity_links(links: &[NoteEntityLink]) -> Result<(), (StatusCode, String)> {
     for link in links {
         match link.entity_type.as_str() {
-            "contact" | "project" | "event" | "action" => {}
+            "contact" | "project" | "event" | "action" | "interaction" => {}
             other => {
                 return Err((
                     StatusCode::BAD_REQUEST,

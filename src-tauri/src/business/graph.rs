@@ -164,6 +164,17 @@ fn expand_contact(
     }
 
     let mut stmt = conn.prepare(
+        "SELECT id, summary FROM \"Interaction\" WHERE contact_id = ?1 AND user_id = ?2",
+    )?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map(params![contact_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    for (id, summary) in rows {
+        push_neighbor(response, "interaction", id, label_or(Some(summary), "(no summary)"), None, "contact", contact_id, "has_interaction");
+    }
+
+    let mut stmt = conn.prepare(
         "SELECT n.id, n.title FROM \"NoteEntity\" ne \
          JOIN \"Note\" n ON n.id = ne.note_id \
          WHERE ne.entity_type = 'contact' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
@@ -296,6 +307,17 @@ fn expand_event(
     }
 
     let mut stmt = conn.prepare(
+        "SELECT id, summary FROM \"Interaction\" WHERE event_id = ?1 AND user_id = ?2",
+    )?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map(params![event_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    for (id, summary) in rows {
+        push_neighbor(response, "interaction", id, label_or(Some(summary), "(no summary)"), None, "event", event_id, "event_has_interaction");
+    }
+
+    let mut stmt = conn.prepare(
         "SELECT n.id, n.title FROM \"NoteEntity\" ne \
          JOIN \"Note\" n ON n.id = ne.note_id \
          WHERE ne.entity_type = 'event' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
@@ -356,6 +378,17 @@ fn expand_action(
         .collect();
     for (id, title) in rows {
         push_neighbor(response, "event", id, label_or(Some(title), "(untitled)"), None, "action", action_id, "action_in_event");
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT id, summary FROM \"Interaction\" WHERE action_id = ?1 AND user_id = ?2",
+    )?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map(params![action_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    for (id, summary) in rows {
+        push_neighbor(response, "interaction", id, label_or(Some(summary), "(no summary)"), None, "action", action_id, "action_has_interaction");
     }
 
     let mut stmt = conn.prepare(
@@ -421,6 +454,14 @@ fn expand_note(
                     |r| r.get(0),
                 ).optional()?;
                 ("action", label)
+            }
+            "interaction" => {
+                let label = conn.query_row(
+                    "SELECT summary FROM \"Interaction\" WHERE id = ?1 AND user_id = ?2",
+                    params![&entity_id, user_id],
+                    |r| r.get(0),
+                ).optional()?;
+                ("interaction", label)
             }
             _ => continue,
         };

@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { PageHeader } from '../components/PageHeader';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
+import { BacklinksPanel } from '../components/BacklinksPanel';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 
@@ -336,6 +337,8 @@ export function InteractionDetail() {
           </div>
         </section>
       )}
+
+      <BacklinksPanel entityType="interaction" entityId={id} />
     </div>
   );
 }

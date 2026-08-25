@@ -157,18 +157,20 @@ import type {
   Action,
   Contact,
   Event,
+  Interaction,
   Note,
   NoteEntityLink,
   Project,
 } from '../lib/adapter/types';
 
-type EntityKind = 'contact' | 'project' | 'event' | 'action';
+type EntityKind = 'contact' | 'project' | 'event' | 'action' | 'interaction';
 
 const ENTITY_LABELS: Record<EntityKind, string> = {
   contact: '联系人',
   project: '项目',
   event: '日程',
   action: '待办',
+  interaction: '互动',
 };
 
 function labelOf(kind: EntityKind, id: string, rosters: EntityRosters): string {
@@ -182,6 +184,8 @@ function labelOf(kind: EntityKind, id: string, rosters: EntityRosters): string {
       return rosters.events.find((e) => e.id === id)?.title ?? '(已删除)';
     case 'action':
       return rosters.actions.find((a) => a.id === id)?.title ?? '(已删除)';
+    case 'interaction':
+      return rosters.interactions.find((i) => i.id === id)?.summary ?? '(已删除)';
   }
 }
 
@@ -211,6 +215,12 @@ function entityOptions(kind: EntityKind, rosters: EntityRosters) {
         label: a.title,
         sublabel: a.status ?? null,
       }));
+    case 'interaction':
+      return rosters.interactions.map((i) => ({
+        id: i.id,
+        label: i.summary || '(空)',
+        sublabel: i.channel ?? i.occurred_at?.slice(0, 10) ?? null,
+      }));
   }
 }
 
@@ -219,6 +229,7 @@ interface EntityRosters {
   projects: Project[];
   events: Event[];
   actions: Action[];
+  interactions: Interaction[];
   loaded: boolean;
 }
 
@@ -230,6 +241,7 @@ function useEntityRosters(): EntityRosters {
     projects: [],
     events: [],
     actions: [],
+    interactions: [],
     loaded: false,
   });
   useEffect(() => {
@@ -244,13 +256,15 @@ function useEntityRosters(): EntityRosters {
         archived: 'false',
         limit: 500,
       }).catch(() => []),
-    ]).then(([c, p, e, a]) => {
+      adapter.interactions.list({ user_id: userId, limit: 500 }).catch(() => []),
+    ]).then(([c, p, e, a, i]) => {
       if (cancelled) return;
       setData({
         contacts: c as Contact[],
         projects: p as Project[],
         events: e as Event[],
         actions: a as Action[],
+        interactions: i as Interaction[],
         loaded: true,
       });
     });
@@ -270,8 +284,8 @@ interface EntityChipProps {
 function EntityChip({ link, onRemove, rosters }: EntityChipProps) {
   return (
     <span className="entity-chip">
-      <span className="entity-chip__kind">{ENTITY_LABELS[link.entity_type]}</span>
-      <span className="entity-chip__label">{labelOf(link.entity_type, link.entity_id, rosters)}</span>
+      <span className="entity-chip__kind">{ENTITY_LABELS[link.entity_type as EntityKind] ?? link.entity_type}</span>
+      <span className="entity-chip__label">{labelOf(link.entity_type as EntityKind, link.entity_id, rosters)}</span>
       {onRemove && (
         <button
           type="button"
@@ -357,6 +371,7 @@ export function NoteNew() {
   const preProject = searchParams.get('link_project');
   const preEvent = searchParams.get('link_event');
   const preAction = searchParams.get('link_action');
+  const preInteraction = searchParams.get('link_interaction');
   const cloneFrom = searchParams.get('clone_from');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -367,6 +382,7 @@ export function NoteNew() {
     if (preProject) init.push({ entity_type: 'project', entity_id: preProject });
     if (preEvent) init.push({ entity_type: 'event', entity_id: preEvent });
     if (preAction) init.push({ entity_type: 'action', entity_id: preAction });
+    if (preInteraction) init.push({ entity_type: 'interaction', entity_id: preInteraction });
     return init;
   });
   const [submitting, setSubmitting] = useState(false);

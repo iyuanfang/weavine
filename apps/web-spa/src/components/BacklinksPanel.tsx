@@ -7,7 +7,7 @@ import type { NoteBacklink } from '../lib/adapter/types';
 import { NoteListItem } from './NoteListItem';
 
 interface Props {
-  entityType: 'contact' | 'project' | 'action' | 'event';
+  entityType: 'contact' | 'project' | 'action' | 'event' | 'interaction';
   entityId: string;
 }
 

@@ -226,6 +226,19 @@ async fn expand_contact(
         push_neighbor(response, "action", id, title, None, "contact", contact_id, "action_assignee");
     }
 
+    let interactions: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, summary FROM interaction WHERE contact_id = $1 AND user_id = $2 \
+           AND deleted_at IS NULL",
+    )
+    .bind(contact_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    for (id, summary) in interactions {
+        push_neighbor(response, "interaction", id, summary, None, "contact", contact_id, "has_interaction");
+    }
+
     let notes: Vec<(String, String)> = sqlx::query_as(
         "SELECT n.id, n.title FROM note_entity ne \
          JOIN note n ON n.id = ne.note_id \
@@ -379,6 +392,19 @@ async fn expand_event(
         push_neighbor(response, "action", id, title, None, "event", event_id, "action_in_event");
     }
 
+    let interactions: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, summary FROM interaction WHERE event_id = $1 AND user_id = $2 \
+           AND deleted_at IS NULL",
+    )
+    .bind(event_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    for (id, summary) in interactions {
+        push_neighbor(response, "interaction", id, summary, None, "event", event_id, "event_has_interaction");
+    }
+
     let notes: Vec<(String, String)> = sqlx::query_as(
         "SELECT n.id, n.title FROM note_entity ne \
          JOIN note n ON n.id = ne.note_id \
@@ -454,6 +480,19 @@ async fn expand_action(
         push_neighbor(response, "event", id, title, None, "action", action_id, "action_in_event");
     }
 
+    let interactions: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, summary FROM interaction WHERE action_id = $1 AND user_id = $2 \
+           AND deleted_at IS NULL",
+    )
+    .bind(action_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    for (id, summary) in interactions {
+        push_neighbor(response, "interaction", id, summary, None, "action", action_id, "action_has_interaction");
+    }
+
     let notes: Vec<(String, String)> = sqlx::query_as(
         "SELECT n.id, n.title FROM note_entity ne \
          JOIN note n ON n.id = ne.note_id \
@@ -522,6 +561,14 @@ async fn expand_note(
             .fetch_optional(pool)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+            "interaction" => sqlx::query_scalar(
+                "SELECT summary FROM interaction WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+            )
+            .bind(&entity_id)
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
             _ => None,
         };
         let entity_type_static: &'static str = match entity_type.as_str() {
@@ -529,6 +576,7 @@ async fn expand_note(
             "project" => "project",
             "event" => "event",
             "action" => "action",
+            "interaction" => "interaction",
             _ => continue,
         };
         if let Some(label) = label_opt {
