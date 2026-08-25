@@ -47,6 +47,11 @@ export function ActionNew() {
     if (projectIdParam) setProjectId(projectIdParam);
   }, [projectIdParam]);
 
+  const contactIdParam = searchParams.get('contactId');
+  useEffect(() => {
+    if (contactIdParam) setContactId(contactIdParam);
+  }, [contactIdParam]);
+
   const contactsQuery = useQuery({
     queryKey: ['contacts', userId],
     queryFn: () => adapter.contacts.list({ user_id: userId! }),

@@ -413,9 +413,18 @@ export function ContactDetail() {
       <section className="section">
         <div className="section__header">
           <h2 className="section__title">相关日程</h2>
-          <Link to="/calendar" className="section__view-all">
-            全部 →
-          </Link>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Link
+              to={`/events/new?contactId=${id}&from=${encodeURIComponent(`/contacts/${id}`)}`}
+              className="section__view-all"
+              data-testid="contact-new-event-link"
+            >
+              + 新建日程
+            </Link>
+            <Link to="/calendar" className="section__view-all">
+              全部 →
+            </Link>
+          </div>
         </div>
         {isLoading ? (
           <div className="loading">加载中</div>
@@ -447,9 +456,18 @@ export function ContactDetail() {
       <section className="section">
         <div className="section__header">
           <h2 className="section__title">待办</h2>
-          <Link to="/actions" className="section__view-all">
-            全部 →
-          </Link>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Link
+              to={`/actions/new?contactId=${id}&from=${encodeURIComponent(`/contacts/${id}`)}`}
+              className="section__view-all"
+              data-testid="contact-new-action-link"
+            >
+              + 新建待办
+            </Link>
+            <Link to="/actions" className="section__view-all">
+              全部 →
+            </Link>
+          </div>
         </div>
         {isLoading ? (
           <div className="loading">加载中</div>

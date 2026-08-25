@@ -39,6 +39,11 @@ export function EventNew() {
     if (projectIdParam) setProjectId(projectIdParam);
   }, [projectIdParam]);
 
+  const contactIdParam = searchParams.get('contactId');
+  useEffect(() => {
+    if (contactIdParam) setParticipantIds([contactIdParam]);
+  }, [contactIdParam]);
+
   useEffect(() => {
     if (!startAt) return;
     const start = new Date(startAt);
