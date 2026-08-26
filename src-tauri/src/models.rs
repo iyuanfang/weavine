@@ -580,6 +580,12 @@ pub struct Note {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub imported_from: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub imported_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

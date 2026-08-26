@@ -179,6 +179,25 @@ pub fn push_columns(kind: &str) -> &'static [&'static str] {
     }
 }
 
+/// Defensive drop: local-only columns that must never reach the server.
+///
+/// `push_columns(kind)` already excludes these by virtue of not listing them.
+/// This function is belt-and-suspenders — if a future change accidentally widens
+/// the whitelist, the privacy guarantee still holds (`imported_from` is a local
+/// filesystem path that must not leak). See §11.7.9.
+///
+/// Add new desktop-only columns here when introducing them. Tests must
+/// accompany every addition.
+pub fn drop_desktop_only_columns(kind: &str, data: &mut serde_json::Map<String, Value>) {
+    match kind {
+        "note" => {
+            data.remove("imported_from");
+            data.remove("imported_at");
+        }
+        _ => {}
+    }
+}
+
 /// Generate a UUID for junction tables that PG requires but SQLite doesn't have.
 pub fn add_junction_id(kind: &str, data: &mut serde_json::Map<String, Value>) {
     if JUNCTION_TABLES.contains(&kind) && !data.contains_key("id") {
@@ -224,5 +243,42 @@ mod tests {
     fn push_columns_reminder_includes_invitation_token() {
         let cols = push_columns("reminder");
         assert!(cols.contains(&"invitation_token"), "reminder push must include invitation_token for cross-device cadence dedup");
+    }
+
+    #[test]
+    fn drop_desktop_only_columns_strips_imported_from_note() {
+        let mut map = serde_json::Map::new();
+        map.insert("id".into(), json!("n1"));
+        map.insert("user_id".into(), json!("u1"));
+        map.insert("title".into(), json!("hello"));
+        map.insert("body".into(), json!("world"));
+        map.insert("imported_from".into(), json!("C:\\Users\\foo\\note.md"));
+        map.insert("imported_at".into(), json!("2026-08-26T00:00:00.000Z"));
+
+        drop_desktop_only_columns("note", &mut map);
+
+        assert!(map.get("imported_from").is_none(), "imported_from must not leak to server");
+        assert!(map.get("imported_at").is_none(), "imported_at must not leak to server");
+        assert_eq!(map.get("id").unwrap(), "n1", "other fields preserved");
+        assert_eq!(map.get("title").unwrap(), "hello");
+    }
+
+    #[test]
+    fn drop_desktop_only_columns_no_op_for_other_kinds() {
+        let mut map = serde_json::Map::new();
+        map.insert("id".into(), json!("c1"));
+        map.insert("imported_from".into(), json!("not-a-note"));
+
+        drop_desktop_only_columns("contact", &mut map);
+
+        assert_eq!(map.get("imported_from").unwrap(), "not-a-note");
+        assert_eq!(map.get("id").unwrap(), "c1");
+    }
+
+    #[test]
+    fn push_columns_note_excludes_imported_columns() {
+        let cols = push_columns("note");
+        assert!(!cols.contains(&"imported_from"), "imported_from must not be pushed to server");
+        assert!(!cols.contains(&"imported_at"), "imported_at must not be pushed to server");
     }
 }

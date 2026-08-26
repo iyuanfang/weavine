@@ -287,6 +287,7 @@ async fn push_all(
                         Value::String(cloud_user_id.to_string()),
                     );
                     add_junction_id(kind, obj);
+                    drop_desktop_only_columns(kind, obj);
                 }
                 snake
             })

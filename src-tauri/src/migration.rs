@@ -221,14 +221,16 @@ CREATE TABLE IF NOT EXISTS "Note" (
     "body" TEXT NOT NULL DEFAULT '',
     "archived_at" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "imported_from" TEXT,
+    "imported_at" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "NoteEntity" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "note_id" TEXT NOT NULL REFERENCES "Note"("id") ON DELETE CASCADE,
     "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-    "entity_type" TEXT NOT NULL CHECK("entity_type" IN ('contact','project','action','event')),
+    "entity_type" TEXT NOT NULL CHECK("entity_type" IN ('contact','project','action','event','interaction')),
     "entity_id" TEXT NOT NULL,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE("note_id", "entity_type", "entity_id")
@@ -359,6 +361,32 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    // Idempotent migration: add Note.imported_from if missing (§11.7 Phase A).
+    let has_imported_from: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Note') WHERE name='imported_from'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_imported_from == 0 {
+        conn.execute(
+            "ALTER TABLE \"Note\" ADD COLUMN \"imported_from\" TEXT",
+            [],
+        )?;
+    }
+
+    // Idempotent migration: add Note.imported_at if missing (§11.7 Phase A).
+    let has_imported_at: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('Note') WHERE name='imported_at'",
+        [],
+        |r| r.get(0),
+    )?;
+    if has_imported_at == 0 {
+        conn.execute(
+            "ALTER TABLE \"Note\" ADD COLUMN \"imported_at\" TEXT",
+            [],
+        )?;
+    }
+
     // Idempotent migration: Project table + ProjectContact
     // Fresh DBs get these from SCHEMA_SQL; this no-ops for them.
     let has_project: i64 = conn.query_row(
@@ -431,6 +459,36 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS \"Event_archived_at_idx\" ON \"Event\"(\"archived_at\");
          CREATE INDEX IF NOT EXISTS \"Project_archived_at_idx\" ON \"Project\"(\"archived_at\");",
     )?;
+
+    // Idempotent migration: allow 'interaction' in NoteEntity.entity_type CHECK.
+    // SQLite cannot ALTER a CHECK constraint, so rebuild the table if the
+    // existing DDL still restricts to the old 4-type enum.
+    let ne_sql: String = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='NoteEntity'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or_default();
+    if !ne_sql.contains("'interaction'") {
+        conn.execute_batch(
+            "ALTER TABLE \"NoteEntity\" RENAME TO \"NoteEntity__mig\";
+             CREATE TABLE \"NoteEntity\" (
+                \"id\" TEXT NOT NULL PRIMARY KEY,
+                \"note_id\" TEXT NOT NULL REFERENCES \"Note\"(\"id\") ON DELETE CASCADE,
+                \"user_id\" TEXT NOT NULL REFERENCES \"User\"(\"id\") ON DELETE CASCADE,
+                \"entity_type\" TEXT NOT NULL CHECK(\"entity_type\" IN ('contact','project','action','event','interaction')),
+                \"entity_id\" TEXT NOT NULL,
+                \"created_at\" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(\"note_id\", \"entity_type\", \"entity_id\")
+             );
+             INSERT INTO \"NoteEntity\" (\"id\",\"note_id\",\"user_id\",\"entity_type\",\"entity_id\",\"created_at\")
+                SELECT \"id\",\"note_id\",\"user_id\",\"entity_type\",\"entity_id\",\"created_at\" FROM \"NoteEntity__mig\";
+             DROP TABLE \"NoteEntity__mig\";
+             CREATE INDEX IF NOT EXISTS \"ix_NoteEntity_note\" ON \"NoteEntity\"(\"note_id\");
+             CREATE INDEX IF NOT EXISTS \"ix_NoteEntity_target\" ON \"NoteEntity\"(\"entity_type\", \"entity_id\");",
+        )?;
+    }
 
     // Avatar mirror columns on Contact + storage fields on Media. Idempotent.
     let avatar_mirror_cols = [
