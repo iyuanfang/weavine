@@ -288,10 +288,12 @@ pub fn run() {
                 )?;
             }
             app.handle().plugin(tauri_plugin_notification::init())?;
-            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
-            // .md file editor plugins
+            // .md file editor plugins + updater are desktop-only
+            // (tauri-plugin-updater fails to compile on aarch64-linux-android
+            //  because its signing/download impl assumes a desktop file system).
             #[cfg(desktop)]
             {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
                 app.handle().plugin(tauri_plugin_dialog::init())?;
                 app.handle().plugin(tauri_plugin_fs::init())?;
             }
