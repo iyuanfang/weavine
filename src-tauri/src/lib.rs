@@ -158,10 +158,12 @@ pub fn run() {
     // the new com.weavine.desktop/ tree. Idempotent; skipped on first install.
     commands::media::migrate_legacy_avatars();
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            // OS file association forwarded from a second-instance launch.
-            // Find the first .md path in argv and emit to the frontend.
+    // §11.7 desktop-only: single-instance forwarding of OS file association argv.
+    // On Android `tauri_plugin_single_instance` does not compile — there is no
+    // OS-level "second instance" concept, so we skip the .plugin() call entirely.
+    #[cfg(desktop)]
+    let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
+        |app, argv, _cwd| {
             let path = argv
                 .iter()
                 .skip(1)
@@ -169,12 +171,16 @@ pub fn run() {
             if let Some(p) = path {
                 let _ = tauri::Emitter::emit(app, "open-md-from-argv", p.clone());
             }
-            // Bring window to foreground
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
                 let _ = win.set_focus();
                 let _ = win.unminimize();
             }
-        }))
+        },
+    ));
+    #[cfg(not(desktop))]
+    let builder = tauri::Builder::default();
+
+    builder
         .manage(database)
         .register_uri_scheme_protocol("files", |_ctx, request| {
             use tauri::http::{Response, StatusCode};
