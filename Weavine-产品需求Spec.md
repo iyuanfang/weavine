@@ -1,6 +1,8 @@
 # Weavine 产品蓝图（Product Blueprint / Spec）
 
 > 版本：**v1.2（产品蓝图合并版）** ｜ 整理日期：2026-08-07 ｜ 最近更新：**2026-08-17 — v1.0.9 P0 修复 sweep**：(1) **P0-a 同步游标饿死** —— `commands/media.rs` `updated_at` 空格格式 `%Y-%m-%d %H:%M:%S` 与全栈 Z 格式 `%Y-%m-%dT%H:%M:%S%.3fZ` 混用 → 全局游标 `KEY_LAST_PUSHED_AT` 一旦推到 Z 行,后续空格格式 media 行 string-cmp 永远 `<` 游标,media 永不重推。已统一为 Z 格式。(2) **P0-b 桌面 avatar write-back** —— `upload_avatar`/`delete_avatar` 不更新 `Contact.avatar_storage_key`(服务端有 trigger 镜像,桌面无),已加手动写回镜像 `Contact` 行 + 修复 `get_avatar` 路径 user_id 双 join bug。(3) **桌面头像/名片图渲染** —— `register_uri_scheme_protocol("files")` 接管 `files://localhost/files/{key}` 请求,从 `data_dir()` 服务;`TauriAdapter.baseUrl='files://localhost'` 让所有 `avatarUrlFor`/`cardImageUrl` 命中协议。(4) **server `now_str()` Z 统一** —— `handlers/mod.rs:32` 改为 Z 格式,server↔client LWW 比较一致;`archive_sweep`/`archive`/`cadence_server`/`activation` 的 `DateTime::parse_from_rfc3339` 不再因 server 写空格失败。(5) **QuickCapture 静默失败** —— `submit()` `if (!userId) return;` 改为显式 `setError('本地用户尚未就绪')`,E2E quick-capture ×3 全绿。(6) **ContactDetail avatar 错误透出** —— `err instanceof Error ? err.message : String(err)`,Tauri v2 invoke 拒绝时返 raw Rust string 不再吞成通用文案。(7) **Re-OCR 入口从 ContactDetail 移到 ContactEdit** —— 扫描结果填入表单由用户确认(§7 Q9 拍板 2026-08-17)。**§11.5.6 Q4 部分启用**:FREE quota 20→100/天,TRIAL 50,PRO 不限,仅匿名 device_key 路径生效。**状态:v1.0.9 已发布(tag v1.0.9,commit e38762f,2026-08-17,Phase 2.7 bugfix sweep 全部落地);P2/P3 与 #16–#20 待排期** **2026-08-18 增补 (8)(9)**:(8) **Windows/Android 头像不显示(裁剪正常但最终不换)** —— Tauri v2 自定义协议跨平台映射不同:macOS/Linux=`files://localhost/<path>`,Windows(WebView2)/Android(WebView)=`http://files.localhost/<path>`;v1.0.9 的 `TauriAdapter.baseUrl='files://localhost'` 仅在 macOS/Linux 生效,Windows/Android 上 `<img>` 加载失败回退首字母。已改 `filesBaseUrl()` 按 UA 区分。(9) **Android 麦克风授权后仍报无权限** —— `AndroidManifest.xml` 只声明 INTERNET,`RustWebChromeClient.onPermissionRequest` 的 RECORD_AUDIO 运行时请求被系统自动拒绝(部分 OEM 仍弹窗但回调 denied);已在 manifest 补 `RECORD_AUDIO`/`MODIFY_AUDIO_SETTINGS`/`CAMERA`。**注意:`src-tauri/gen/` 在 .gitignore 中,manifest 修改不入 git,重克隆后需 `tauri android init` 重新补权限(建议把权限清单记入部署文档)** **2026-08-18 增补 (10) Android 录音"说话没反应"**:`voice.ts` `recordAudio` 的"warm-up"实现把 `stream.getTracks().forEach(t => t.stop())` 立即关掉了所有音频轨道,返回的是**已停止的 stream** → `MediaRecorder` 拿到死流 → `ondataavailable` 不出数据 → onstop 产出空 blob → 服务端 400 "empty audio"(被 `.catch(fail)` 吞成 setError,用户感知为"没反应")。已改为**延迟 200ms 再 `recorder.start()`**(正确 warm-up,不动 track),并对 `new MediaRecorder` 包 try/catch 让"NotSupported"等错误透出而非被通用文案吞掉。**残留风险**:Android System WebView 的 MediaRecorder 对纯音频流支持有限,若修复后仍产空 blob/NotSupportedError,则需按 §3.5/§7 拍板改用 Android 原生 SpeechRecognizer 插件(当前代码违背该拍板,走的是 MediaRecorder+云端 whisper)。
+> **最近更新（2026-08-26 增补 / 2026-08-27 落地）**：新增 §11.7「md 文件编辑器 + 显式『导入库』架构定稿」——**Windows / Linux / macOS 三桌面版**打开本地 `.md` 仅作纯编辑器（保存只写文件、不写库、不参与云端同步）；仅「导入库」显式桥接进 `Note` 表 + `EntityLink` 体系（可关联联系人/待办/日程、随库同步、记来源路径+时间，**`imported_from` 路径不上云**——服务端 drop 防泄露）；库笔记可导出 `.md`；三平台安装注册 `.md` 默认打开程序（Windows WiX / macOS `Info.plist` UTI / Linux `.desktop` MimeType）+ `tauri-plugin-single-instance` 处理冷启动 argv，作为扩大使用范围、提高打开频次与粘性的顶级分发入口。补充：re-import 弹选择框、UTF-8/GBK 自动嗅探、>1 MB 禁入库但仍可本地编辑、最近文件列表（LRU 10）、编辑器 MVP 范围（不做协同/AI/Vim）。**2026-08-27 实现落地**：commit `f04d944` 主干。新增 `src-tauri/src/md_editor.rs`（12 个 tauri command：`read_md_file`/`write_md_file`/`open_md_dialog`/`save_md_dialog`/`md_get_recent_files`/`md_add_recent_file`/`md_clear_recent_files`/`md_check_import_status`/`md_import_to_library`/`md_export_note_as_md`/`md_get_file_info`），`apps/web-spa/src/routes/MdEditor.tsx` 路由（分屏编辑/预览切换、`Ctrl+S` 保存、>1 MB 顶部 banner、`导入库` 按钮），`AppShell` 菜单项 `📝 编辑 .md`，`NoteDetail` 增加 `导出 .md` 按钮（导出时 `setFileTimes` 把文件 mtime 设为 `imported_at` 让重导入走快速路径），`App.tsx` 监听 `open-md-from-argv` 事件接收 OS 文件关联的冷启动 argv。新增需求 #40。
+
 > **产品蓝图（唯一权威）**：本文档是 Weavine 的**唯一产品蓝图**。所有需求设计、状态调整、平台策略、中国特性、技术债均回写此处，不再创建独立 spec 文件。文档结构一旦建立保持稳定，后续只追加章节、不重排结构。
 > **维护约定（living spec）**：本文档为活文档。每次需求变动须回写本节并更新上方「最近更新」日期；对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下，与 spec 编号（#1–#20）一一对应，便于持续跟踪。
 > **拍板溯源**：§3.5 子系统设计的所有关键决策（解析引擎选型、节奏模型、范围、Android 验证方式）来源于 2026-08-09 brainstorming 会话，详见各小节顶部加粗的「拍板结论」标注。
@@ -1152,6 +1154,116 @@ extract_endpoint_auth() -> EndpointAuth
 - 根因 2：sherpa 的 3 个 .so（`libsherpa-onnx-c-api.so` / `libonnxruntime.so` / `libc++_shared.so`）未打进 APK（build.rs 拷贝目录错位），`Rust.kt` 启动 `loadLibrary` 失败。已修拷贝逻辑。
 - **遗留**：`gen/` 在 gitignore → `MainActivity.kt` 等手写文件无版本保护，建议在仓库留副本 + 构建脚本拷贝（或 `git add -f`），避免再次误删复现。
 
+### 11.7 md 文件编辑器 + 显式「导入库」架构定稿（2026-08-26 拍板）
+
+> 背景：用户提出让 weavine 也能打开/编辑本地 `.md` 文件，以扩大使用范围、提高打开频次与粘性。经三轮讨论收敛为如下 v3 模型（2026-08-26）。
+
+**一句话定位**：**Windows / Linux / macOS 三桌面版**同时是本地 `.md` 编辑器；打开/编辑任意 `.md` **只读写文件、不写库、不参与云端同步**。只有当用户显式点「导入库」时，才把当前文件内容作为一条笔记复制进 weavine 笔记库（可关联、可同步）。Web 与移动端不在本期。
+
+#### 11.7.1 三态模型（关键，彻底规避双副本分歧）
+- **编辑器态（打开外部 `.md`）**：纯文件编辑。保存（Ctrl+S）= 仅写回原文件。不创建/更新任何库记录，不触发 sync。
+- **库笔记态（导入后）**：成为 `Note` 表 + `EntityLink` 体系内的一等公民笔记，可关联联系人/项目/待办/日程/互动，随库同步。
+- **导入是显式桥接（一次性快照语义）**：「导入库」把**当前文件内容**复制进库，并记 `imported_from`（原路径）+ `imported_at`（时间）作为来源留痕。导入后文件再被外部改动**不影响**库副本（库是 canonical，文件是 source 快照）。
+
+> 为什么不做"保存时同时写文件和库"：那会让"文件"和"库"成为同一笔记的两个副本，各自可独立改动 → 双副本分歧（mtime 对账 / 静默覆盖）。v3 用"编辑器态完全不碰库"彻底规避，且无跨设备文件冲突（文件本就不入同步）。
+
+#### 11.7.2 重导入语义（Re-import）
+对同一路径再次「导入库」（已存在 `imported_from` 命中）时：
+- **快速路径**：若文件 mtime ≤ 该 note 的 `imported_at`（文件没被外部改动过），自动跳过、toast 提示「该文件已是最新，无需重导」；
+- **冲突路径**：若文件 mtime > `imported_at`（外部改过了），**弹选择框**：
+  - **更新已有笔记**：覆盖该 note 的 `body`（不动 `title` 与 `EntityLink`，避免破坏已有关系网），`imported_at` 刷新；
+  - **跳过**：什么都不做；
+  - **作为新笔记导入**：保留原 note 不动，新建一条 note 携带相同 `imported_from` 路径。
+
+> 不做静默覆盖——重导入是少数必须打扰用户的时刻，避免用户工作被静默丢失。
+> 此语义让 §11.7.7 的「导出 `.md`」自然闭环：导出时**显式用 `setFileTimes` 将文件 mtime 设为 `note.imported_at`**，使其再次被 weavine 重导时 mtime ≤ imported_at → 走快速路径（「已是最新」），无摩擦。若平台/FS 不支持改 mtime，则回退为正常弹选择框，不影响正确性。
+
+#### 11.7.3 隐私、信任与编码
+- 打开任意 `.md` ≠ 把文件交给 weavine；未点「导入库」前，文件内容不出本机、不上云。契合 §11.1「数据主权」叙事，避免"打开即同步"的惊吓感。
+- **编码策略**（国内用户为重要使用场景，P0 细节）：
+  - 读时自动嗅探 UTF-8（默认）/ UTF-8 BOM（自动剥）/ GBK / GB18030；
+  - 写回统一 UTF-8 无 BOM；
+  - 不可表示字符 → 弹"无法保存"明确错误，不静默吞漏。
+- **不监听文件外部改动**：编辑器打开期间，外部修改该 `.md` 不触发自动覆盖（避免互相打架）。关闭编辑器时若检测到 mtime > 打开时的 mtime → 弹「磁盘已变化」三选项（**重新加载** / **保留我的修改** / **取消关闭**）。
+
+#### 11.7.4 三平台分发杠杆（顶级漏斗入口）
+
+| 平台 | 注册机制 |
+|---|---|
+| Windows | WiX/MSI 安装程序注册 `.md` 默认打开程序（`HKCR\.md` + ProgID） |
+| macOS | `Info.plist` 通过 `CFBundleDocumentTypes` + `UTExportedTypeDeclarations` 注册 `net.daringfireball.markdown` UTI |
+| Linux | `.desktop` 文件 `MimeType=text/markdown;`（deb / AppImage 安装时打入） |
+
+资源管理器 / Finder / Nautilus 双击 `.md` → weavine 以纯编辑器打开（无上传惊吓）→ 用爽后按需「导入库」。这是 web/Android 做不到的顶级漏斗入口。
+
+**冷启动 argv 处理**（OS 关联必须，否则双击会闪退或开多进程）：
+- `tauri-plugin-single-instance`：双击触发第二次启动 → argv 转发到首实例 → 在主窗口新 tab 打开该文件，不开新进程、不闪屏；
+- 启动时解析 `argv[1]` 为文件路径；解析失败 → 不闪退，回主界面 + toast「无法打开该文件」。
+
+#### 11.7.5 文件大小策略
+
+| 大小 | 编辑器态（打开/编辑/保存文件） | 「导入库」 |
+|---|---|---|
+| 任意大小 | **始终允许**——双击即用 weavine 打开、编辑并 Ctrl+S 写回磁盘，不限制文件体积 | — |
+| ≤ 1 MB | 正常 | ✅ 允许导入库 |
+| > 1 MB | 正常（超大文件顶部轻量 banner「文件较大，编辑器性能可能下降」） | ⛔ **置灰禁用**，提示「文件超过 1 MB，导入库会拖慢同步与备份」 |
+
+> 设计选择：编辑态只碰本地文件、不进库、不占云端，所以**不限制编辑大小**；但「导入库」会把内容写入 `Note` 并参与 LWW 同步，1 MB 阈值是为了避免单条 note 撑大 SQLite + 拖慢同步（库内 note 一般 < 100 KB，1 MB 已属极端）。超过即不引入库，但本地纯编辑仍支持（满足"想用 weavine 临时看一眼 / 改一下大文件"的需求）。
+
+#### 11.7.6 编辑器 MVP UX
+
+**做**：
+- 编辑 / 预览分屏切换按钮
+- 主题跟随 weavine 系统设置（亮 / 暗）
+- **自动保存关闭**（避免悄悄写用户文件）
+- 脏标记 + 关闭 / 切 tab 时未保存拦截（弹"是否保存"三选项：保存 / 放弃 / 取消）
+- 行号、查找替换、字数统计
+- 外部文件监视关闭（见 §11.7.3）
+
+**不做**（明确）：
+- 协同编辑、AI 补全、Vim mode、表格可视化、宏、插件
+- wikilink `[[xxx]]` 解析（保留原文以便未来升级为可选功能）
+
+**编辑器态隐藏**：关系面板、backlink 区、`EntityPicker`、`@` 智能建议——避免干扰"只想写个字"的用户。导入后才出现关联能力。
+
+#### 11.7.7 导入即关联 + 导出闭环
+- 「导入库」时弹 `EntityPicker`（复用现有能力），并按正文 `@人名` 自动建议关联，把外来文件挂上关系网（weavine 相对 Typora / VS Code 的差异化）。
+- 库内笔记支持「导出 `.md` 文件」回到磁盘，形成闭环（强化数据可携）。导出文件**不含 frontmatter**——保留纯 markdown，未来若做双向同步可平滑升级。
+
+#### 11.7.8 最近文件（Recent files）
+- 路径列表存于 `sync::config` SQLite KV 表（key `recent_files`），存最近 10 条 `{path, last_opened_at}`；按 LRU 淘汰。
+- `File → 最近` 菜单列出，点击即打开对应 `.md`（路径不存在则提示"文件已被移动或删除"，从列表中移除）。
+- **不跨设备同步**（路径无意义）。
+
+#### 11.7.9 数据模型增量（实施时落 migration）
+
+**桌面 SQLite `Note` 表**（新增两列）：
+- `imported_from TEXT`（来源文件路径，仅编辑器态导入的记录有值；纯库笔记 NULL）
+- `imported_at TEXT`（来源时间，ISO8601 Z）
+
+**服务端 Postgres `note` 表**（**不加**这两列）：
+- `imported_from` 是本机路径，上云泄露用户文件系统布局、跨设备无意义。
+- desktop → server sync translate 时显式 drop：避免 web SPA 用户看到 `C:\Users\...` 路径造成隐私事故。
+
+**Migration 文件**（明确）：
+- desktop: `src-tauri/migrations/2026xxxx_imported_from.sql`（加两列）
+- server: **本期不加列、不写 migration**；列从一开始就不存在，无 drop 必要
+- sync translate: `sync/translate.rs::translate_note_local_to_server` 显式 `note.remove("imported_from"); note.remove("imported_at");`（防止后续误加列时泄露）
+- 防御性 add migration（仅当服务端未来误加列时使用，**本期不创建文件**）：`server/migrations/2026xxxx_drop_imported_from.sql`
+
+#### 11.7.10 平台范围
+- **本期范围**：Windows / Linux / macOS 三桌面端均支持 `.md` 编辑 + 导入库 + 导出 `.md` + 文件关联注册 + 最近文件。
+- 三平台共用同一编辑器实现；差异仅在 bundle 元数据（`tauri.conf.json` → Windows WiX / macOS Info.plist / Linux .desktop）。
+- **不在本期**：Web、移动端；但库内已存在的笔记在 web/移动端已有能力可查看。
+
+#### 11.7.11 不在范围（明确）
+- 不做"保存双写文件+库"——彻底规避双副本分歧。
+- 不做 Obsidian 式 `[[wikilink]]` 双链解析（关联走 `EntityLink`）；但保留原文 `[[xxx]]` 串以备未来扩展。
+- 不把外部文件路径纳入云端同步（`imported_from` 在 server drop）。
+- 不做协同编辑、外部编辑器插件、AI 补全、Vim mode、表格可视化。
+- 不监听编辑器态期间的文件外部改动（见 §11.7.3）。
+- 不支持 `.markdown` / `.mdown` / `.mkd` 等扩展名变体（仅 `.md`，覆盖 99% 用例；变体可后续再加）。
+
 ## 12. 产品调研与新功能提案（2026-08-17 独立撰写，待拍板）
 
 > **状态**：草稿，待用户回来 review 后进入 Phase 3 实施。**不发布新版。**
@@ -1313,6 +1425,16 @@ extract_endpoint_auth() -> EndpointAuth
 - **依赖**：聚合查询 + 简单图表库。
 - **工作量**：~5 人/日。
 
+##### 🆕 #40 md 文件编辑器 + 显式「导入库」（桌面三端）
+
+- **价值**：把 weavine 变成日常 `.md` 编辑器（扩大使用范围、提高打开频次与粘性）；用「导入库」把外来知识桥接进 PRM 关系网与 AI 上下文，是 C4「第二大脑」的顶级漏斗。
+- **核心 UX**：双击 `.md` → weavine 以纯编辑器打开（Windows / Linux / macOS 三桌面通用），保存只写文件、不写库、不同步；点「导入库」才复制进笔记库并支持关联联系人/待办/日程。
+- **架构**：见 §11.7（三态模型 + 显式桥接 + 文件关联注册）。
+- **平台**：Windows / Linux / macOS 三桌面端；Web/Android 不在本期。
+- **依赖**：#26 笔记体系、EntityLink、三端安装注册 `.md` 文件关联。
+- **工作量**：编辑器复用现有 MarkdownEditor/MarkdownView；主要为导入桥接 + 文件关联注册 + 来源留痕，约 3–5 人/日。
+- **风险**：编辑器打磨勿与 Typora/VS Code 死磕，差异化在「关系联网」而非 textarea。
+
 ### 12.5 实施路径建议（待拍板）
 
 如果用户批准，建议的 Phase 3 推进顺序（按 ROI 排序）：
@@ -1356,6 +1478,7 @@ extract_endpoint_auth() -> EndpointAuth
 - **Q12 #23 微信聊天导入是否做？合规审查？** → 用户拍板
 - **Q13 #28 Tag vs Group 边界怎么定？** → 用户拍板
 - **Q14 Phase 3 总节奏（每周 / 每月 / 一次性）？** → 用户拍板
+- **#40 md 文件编辑器 + 显式导入库（2026-08-26 拍板，定稿见 §11.7）**：桌面三端打开 `.md` 仅作纯编辑器（不写库/不同步），「导入库」显式桥接进 #26 笔记库；安装注册为 `.md` 默认打开程序作为分发入口。
 
 ---
 
@@ -1409,7 +1532,7 @@ extract_endpoint_auth() -> EndpointAuth
 - **影响**：README 在撒谎。这是 §12 #33 仪表盘的低成本先期版（聚合查询 + 简单列表即可）。
 - **范围**：S2 — 加 `StatsPage` 路由 + 4 个聚合查询 + 简单列表展示。
 
-##### 🆕 #40 README / 营销文案刷新
+##### 🆕 #47 README / 营销文案刷新
 
 - **背景**：当前 `README.md`：
   - "Latest release: v0.2.23" — 实际已 v1.0.11
@@ -1472,7 +1595,7 @@ extract_endpoint_auth() -> EndpointAuth
 | 优先级 | 项 | 估时 | 风险 |
 | --- | --- | --- | --- |
 | 🔴 本周 | #34 sync boolean bug 修 | 0.5d | 数据安全 |
-| 🔴 本周 | #40 README 刷新 | 0.25d | 营销一致性 |
+| 🔴 本周 | #47 README 刷新 | 0.25d | 营销一致性 |
 | 🟠 下周 | #37 console.log 清扫 | 0.25d | 噪音清理 |
 | 🟠 下周 | #41 panic → Result | 0.1d | 服务稳定 |
 | 🟠 下周 | #36 weavine-mcp lib | 0.5d | 工具链 |
@@ -1489,5 +1612,5 @@ extract_endpoint_auth() -> EndpointAuth
 待用户回来 review 后填写：
 - **Q15 #34 sync boolean bug 是否本周修？** → 用户拍板
 - **Q16 #39 仪表盘是否单独做，还是合并到 §12 #33 Phase 3.5？** → 用户拍板
-- **Q17 #40 README 刷新是否一起做？** → 用户拍板
+- **Q17 #47 README 刷新是否一起做？** → 用户拍板
 - **Q18 iOS 路线是否继续（#45）？** → 用户拍板
