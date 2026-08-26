@@ -665,6 +665,21 @@ export function NoteDetail() {
     }
   };
 
+  const onExportMd = async () => {
+    if (!note || !userId) return;
+    try {
+      await persist({ force: true });
+      const safeTitle = (draftTitle.trim() || 'note').replace(/[\\/:*?"<>|]/g, '_');
+      const defaultName = `${safeTitle}.md`;
+      const target = await adapter.md.saveDialog(defaultName);
+      if (!target) return;
+      await adapter.md.exportNoteAsMd(userId, note.id, target);
+      window.alert(`已导出到:\n${target}\n\n文件 mtime 已设为笔记 imported_at，下次导入库走快速路径。`);
+    } catch (e) {
+      window.alert(`导出失败: ${String(e)}`);
+    }
+  };
+
   const saveLabel = (() => {
     if (saveStatus === 'saving') return '保存中…';
     if (saveStatus === 'error') return '保存失败';
@@ -712,6 +727,14 @@ export function NoteDetail() {
             title="复制 Markdown 源码到剪贴板"
           >
             复制 MD
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={onExportMd}
+            title="导出为本地 .md 文件；文件 mtime = imported_at，下次导入走快速路径"
+          >
+            导出 .md
           </button>
           <button
             type="button"

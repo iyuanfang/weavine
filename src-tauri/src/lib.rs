@@ -5,6 +5,7 @@ pub mod business;
 pub mod commands;
 pub mod db;
 pub mod install_id;
+pub mod md_editor;
 pub mod migration;
 pub mod models;
 pub mod project_template;
@@ -157,6 +158,22 @@ pub fn run() {
     commands::media::migrate_legacy_avatars();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // OS file association forwarded from a second-instance launch.
+            // Find the first .md path in argv and emit to the frontend.
+            let path = argv
+                .iter()
+                .skip(1)
+                .find(|a| a.to_lowercase().ends_with(".md"));
+            if let Some(p) = path {
+                let _ = tauri::Emitter::emit(app, "open-md-from-argv", p.clone());
+            }
+            // Bring window to foreground
+            if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
+                let _ = win.set_focus();
+                let _ = win.unminimize();
+            }
+        }))
         .manage(database)
         .register_uri_scheme_protocol("files", |_ctx, request| {
             use tauri::http::{Response, StatusCode};
@@ -243,6 +260,12 @@ pub fn run() {
                 )?;
             }
             app.handle().plugin(tauri_plugin_notification::init())?;
+            // .md file editor plugins
+            #[cfg(desktop)]
+            {
+                app.handle().plugin(tauri_plugin_dialog::init())?;
+                app.handle().plugin(tauri_plugin_fs::init())?;
+            }
             let handle = app.handle().clone();
             let db = handle.state::<crate::db::Database>();
             commands::notification::startup_catch_up(&handle, db.inner());
@@ -355,6 +378,17 @@ pub fn run() {
             quick::quick_parse,
             commands::notification::fire_notification,
             commands::notification::schedule_notification,
+            md_editor::read_md_file,
+            md_editor::write_md_file,
+            md_editor::md_get_file_info,
+            md_editor::open_md_dialog,
+            md_editor::save_md_dialog,
+            md_editor::md_get_recent_files,
+            md_editor::md_add_recent_file,
+            md_editor::md_clear_recent_files,
+            md_editor::md_check_import_status,
+            md_editor::md_import_to_library,
+            md_editor::md_export_note_as_md,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

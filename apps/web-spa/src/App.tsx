@@ -129,6 +129,35 @@ export function AppInner({ children }: { children?: ReactNode }) {
     return () => window.removeEventListener('weavine:reminder', handler);
   }, []);
 
+  // §11.7 cold-start argv: single-instance plugin emits when OS forwards a file.
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const mod = await import('@tauri-apps/api/event').catch(() => null);
+        if (!mod) return;
+        const off = await mod.listen<string>('open-md-from-argv', (ev) => {
+          if (typeof ev.payload !== 'string' || !ev.payload) return;
+          const url = `/md-editor?path=${encodeURIComponent(ev.payload)}`;
+          window.history.pushState({}, '', url);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        });
+        if (cancelled) {
+          off();
+        } else {
+          unlisten = off;
+        }
+      } catch {
+        // Web fallback: silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   const dismissReminder = useCallback(
     (id: string) => {
       setPendingReminders((prev) => prev.filter((r) => r.id !== id));

@@ -539,6 +539,21 @@ export class HttpAdapter implements PRMAdapter {
     syncNow: () => Promise.reject(new Error('cloud sync is desktop-only')),
   };
 
+  md = {
+    readFile: () => Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+    writeFile: () => Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+    getFileInfo: () => Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+    openDialog: () => Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+    saveDialog: () => Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+    getRecentFiles: () => Promise.resolve([]),
+    addRecentFile: () => Promise.resolve([]),
+    clearRecentFiles: () => Promise.resolve(),
+    checkImportStatus: () =>
+      Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+    importToLibrary: () => Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+    exportNoteAsMd: () => Promise.reject(new Error('.md 编辑器仅桌面版可用')),
+  };
+
   apiKeys = {
     list: (user_id: string): Promise<ApiKeySummary[]> =>
       request<ApiKeySummary[]>(this.baseUrl, 'GET', `/api/api_keys${qs({ user_id })}`),

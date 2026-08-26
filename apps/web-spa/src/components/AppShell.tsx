@@ -93,6 +93,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <kbd className="app-shell__menu-kbd">{shortcutLabel()}</kbd>
         </button>
 
+        <NavLink
+          to="/md-editor"
+          onClick={() => setDrawerOpen(false)}
+          className={({ isActive }) =>
+            isActive
+              ? 'app-shell__menu-item app-shell__menu-item--active'
+              : 'app-shell__menu-item'
+          }
+        >
+          <span className="app-shell__menu-icon">📝</span>
+          <span>编辑 .md</span>
+        </NavLink>
+
         {navItems.map((item) => (
           <NavLink
             key={item.to}

@@ -61,6 +61,15 @@
     },
     "iOS": {
       "minimumSystemVersion": "15.0"
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["md"],
+        "name": "Markdown Document",
+        "description": "Markdown document file",
+        "role": "Editor",
+        "mimeType": "text/markdown"
+      }
+    ]
   }
 }

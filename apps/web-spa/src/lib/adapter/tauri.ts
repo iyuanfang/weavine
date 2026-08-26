@@ -48,6 +48,12 @@ import type {
   ListNotesResult,
   ListMediaParams,
   LocalUser,
+  MdImportInput,
+  MdImportResult,
+  MdImportStatus,
+  MdReadResult,
+  MdRecentFile,
+  MdWriteResult,
   MediaItem,
   Note,
   NoteBacklink,
@@ -446,6 +452,26 @@ export class TauriAdapter implements PRMAdapter {
     logout: (): Promise<void> => invoke<void>('cloud_logout'),
     syncNow: (): Promise<CloudSyncResult> =>
       invoke<CloudSyncResult>('cloud_sync_now'),
+  };
+
+  md = {
+    readFile: (path: string) => invoke<MdReadResult>('read_md_file', { path }),
+    writeFile: (path: string, content: string) =>
+      invoke<MdWriteResult>('write_md_file', { path, content }),
+    getFileInfo: (path: string) => invoke<MdReadResult>('md_get_file_info', { path }),
+    openDialog: () => invoke<string | null>('open_md_dialog'),
+    saveDialog: (defaultName?: string | null) =>
+      invoke<string | null>('save_md_dialog', { default_name: defaultName ?? null }),
+    getRecentFiles: () => invoke<MdRecentFile[]>('md_get_recent_files'),
+    addRecentFile: (path: string) =>
+      invoke<MdRecentFile[]>('md_add_recent_file', { path }),
+    clearRecentFiles: () => invoke<void>('md_clear_recent_files'),
+    checkImportStatus: (user_id: string, path: string) =>
+      invoke<MdImportStatus>('md_check_import_status', { user_id, path }),
+    importToLibrary: (input: MdImportInput) =>
+      invoke<MdImportResult>('md_import_to_library', { input }),
+    exportNoteAsMd: (user_id: string, note_id: string, path: string) =>
+      invoke<MdWriteResult>('md_export_note_as_md', { user_id, note_id, path }),
   };
 
   apiKeys = {

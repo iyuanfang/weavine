@@ -38,6 +38,7 @@ import { ApiKeysPage } from './routes/ApiKeys';
 import ArchivePage from './routes/Archive';
 import { NotesList } from './routes/NotesList';
 import { NoteNew, NoteDetail } from './routes/NoteDetail';
+import { MdEditor } from './routes/MdEditor';
 
 export interface AppRoute {
   /** React Router path pattern, e.g. `/contacts/:id`. */
@@ -93,6 +94,7 @@ export const routes: AppRoute[] = [
   { path: '/notes', Component: NotesList, label: 'Notes' },
   { path: '/notes/new', Component: NoteNew, label: 'NoteNew' },
   { path: '/notes/:id', Component: NoteDetail, label: 'NoteDetail' },
+  { path: '/md-editor', Component: MdEditor, label: 'MdEditor' },
   { path: '/graph/:entityType/:entityId', Component: GraphView, label: 'GraphView' },
 ];
 

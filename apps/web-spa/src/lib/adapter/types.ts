@@ -440,6 +440,49 @@ export interface NoteBacklink {
   updated_at: string;
 }
 
+export interface MdReadResult {
+  content: string;
+  encoding: string;
+  size_bytes: number;
+  mtime_unix_ms: number;
+  bom_detected: boolean;
+  had_replacement_chars: boolean;
+}
+
+export interface MdWriteResult {
+  mtime_unix_ms: number;
+  size_bytes: number;
+}
+
+export interface MdRecentFile {
+  path: string;
+  last_opened_at: number;
+}
+
+export interface MdImportStatus {
+  already_imported: boolean;
+  note_id: string | null;
+  note_title: string | null;
+  imported_at: string | null;
+  file_mtime_unix_ms: number;
+  reimport_needed: boolean;
+}
+
+export interface MdImportInput {
+  user_id: string;
+  path: string;
+  title?: string | null;
+  body?: string | null;
+  mode?: 'create' | 'update' | 'as-new' | 'skip' | null;
+  existing_note_id?: string | null;
+}
+
+export interface MdImportResult {
+  action: 'fast-skip' | 'created' | 'updated' | 'imported-as-new';
+  note_id: string;
+  note: Note & { imported_from?: string | null; imported_at?: string | null };
+}
+
 // ──────────────────────────────────────────────
 // Search
 // ──────────────────────────────────────────────
@@ -586,6 +629,23 @@ export interface PRMAdapter {
     delete(user_id: string, id: string): Promise<boolean>;
     listBacklinks(user_id: string, entity_type: string, entity_id: string): Promise<NoteBacklink[]>;
     listEntityLinks(user_id: string, note_id: string): Promise<NoteEntityLink[]>;
+  };
+
+  /** Tauri-only: returns the seeded local user (anonymous install). HttpAdapter throws. */
+  getLocalUser(): Promise<LocalUser>;
+
+  md: {
+    readFile(path: string): Promise<MdReadResult>;
+    writeFile(path: string, content: string): Promise<MdWriteResult>;
+    getFileInfo(path: string): Promise<MdReadResult>;
+    openDialog(): Promise<string | null>;
+    saveDialog(defaultName?: string | null): Promise<string | null>;
+    getRecentFiles(): Promise<MdRecentFile[]>;
+    addRecentFile(path: string): Promise<MdRecentFile[]>;
+    clearRecentFiles(): Promise<void>;
+    checkImportStatus(user_id: string, path: string): Promise<MdImportStatus>;
+    importToLibrary(input: MdImportInput): Promise<MdImportResult>;
+    exportNoteAsMd(user_id: string, note_id: string, path: string): Promise<MdWriteResult>;
   };
 
   settings: {
