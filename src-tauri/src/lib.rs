@@ -5,6 +5,7 @@ pub mod business;
 pub mod commands;
 pub mod db;
 pub mod install_id;
+#[cfg(feature = "tauri")]
 pub mod md_editor;
 pub mod migration;
 pub mod models;
