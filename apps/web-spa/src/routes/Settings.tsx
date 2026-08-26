@@ -601,6 +601,22 @@ function UpdaterPanel() {
     downloadProgress: 0,
   });
 
+  // Detect Android sideload fallback (tauri-plugin-updater doesn't link on Android).
+  const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+
+  const openReleasesPage = useCallback(async () => {
+    const url = 'https://github.com/iyuanfang/weavine/releases/latest';
+    try {
+      // Tauri path: use opener plugin (works on Android + desktop).
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        const { openUrl } = await import('@tauri-apps/plugin-opener');
+        await openUrl(url, 'browser');
+        return;
+      }
+    } catch {}
+    window.open(url, '_blank', 'noopener');
+  }, []);
+
   const checkUpdate = useCallback(async () => {
     setState((s) => ({ ...s, checking: true, status: 'idle', message: '正在检查更新…' }));
     try {
@@ -705,12 +721,12 @@ function UpdaterPanel() {
             type="button"
             className="btn btn-secondary"
             onClick={checkUpdate}
-            disabled={state.checking || state.downloading}
+            disabled={state.checking || state.downloading || isAndroid}
             style={{ opacity: state.checking ? 0.6 : 1 }}
           >
             {state.checking ? '检查中…' : '🔍 检查更新'}
           </button>
-          {state.status === 'available' && (
+          {state.status === 'available' && !isAndroid && (
             <button
               type="button"
               className="btn btn-primary"
@@ -718,6 +734,15 @@ function UpdaterPanel() {
               disabled={state.downloading}
             >
               {buttonLabel}
+            </button>
+          )}
+          {isAndroid && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={openReleasesPage}
+            >
+              📥 下载最新 APK
             </button>
           )}
         </div>
