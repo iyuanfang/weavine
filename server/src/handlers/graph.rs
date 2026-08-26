@@ -90,7 +90,7 @@ async fn load_center_node(
 ) -> Result<EntityGraphNode, (StatusCode, String)> {
     let row: Option<(String, Option<String>)> = match entity_type {
         "contact" => sqlx::query_as(
-            "SELECT id, nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+            "SELECT id, nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND archived_at IS NULL",
         )
         .bind(entity_id)
         .bind(user_id)
@@ -291,7 +291,7 @@ async fn expand_project(
     let contacts: Vec<(String, String)> = sqlx::query_as(
         "SELECT c.id, c.nickname FROM project_contact pc \
          JOIN contact c ON c.id = pc.contact_id \
-         WHERE pc.project_id = $1 AND pc.user_id = $2 AND c.deleted_at IS NULL",
+         WHERE pc.project_id = $1 AND pc.user_id = $2 AND c.deleted_at IS NULL AND c.archived_at IS NULL",
     )
     .bind(project_id)
     .bind(user_id)
@@ -364,7 +364,7 @@ async fn expand_event(
 
     if let Some(cid) = contact_id {
         let nickname: Option<String> = sqlx::query_scalar(
-            "SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+            "SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND archived_at IS NULL",
         )
         .bind(&cid)
         .bind(user_id)
@@ -452,7 +452,7 @@ async fn expand_action(
 
     if let Some(cid) = contact_id {
         let nickname: Option<String> = sqlx::query_scalar(
-            "SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+            "SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND archived_at IS NULL",
         )
         .bind(&cid)
         .bind(user_id)
@@ -541,8 +541,8 @@ async fn expand_note(
     for (entity_type, entity_id) in rows {
         let label_opt: Option<String> = match entity_type.as_str() {
             "contact" => sqlx::query_scalar(
-                "SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
-            )
+"SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND archived_at IS NULL",
+        )
             .bind(&entity_id)
             .bind(user_id)
             .fetch_optional(pool)
@@ -616,8 +616,8 @@ async fn expand_tag(
     let contacts: Vec<(String, String)> = sqlx::query_as(
         "SELECT c.id, c.nickname FROM contact_tag ct \
          JOIN contact c ON c.id = ct.contact_id \
-         WHERE ct.tag_id = $1 AND ct.user_id = $2 \
-           AND ct.deleted_at IS NULL AND c.deleted_at IS NULL",
+WHERE ct.tag_id = $1 AND ct.user_id = $2 \
+            AND ct.deleted_at IS NULL AND c.deleted_at IS NULL AND c.archived_at IS NULL",
     )
     .bind(tag_id)
     .bind(user_id)
