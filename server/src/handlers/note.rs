@@ -5,11 +5,12 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 
 use super::auth::{extract_auth, extract_auth_with_device};
-use weavine_lib::models::{CreateNoteInput, Note, NoteBacklink, NoteEntityLink, UpdateNoteInput};
+use weavine_lib::models::{Note, NoteBacklink, NoteEntityLink};
 
 #[derive(Deserialize)]
 pub struct ListQuery {
@@ -102,10 +103,29 @@ pub async fn get(
 pub async fn create(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
-    Json(input): Json<CreateNoteInput>,
+    Json(body): Json<Value>,
 ) -> Result<Json<Note>, (StatusCode, String)> {
     let (user_id, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
-    validate_entity_links(&input.entity_links)?;
+    let title = body
+        .get("title")
+        .and_then(|v| v.as_str())
+        .ok_or((StatusCode::BAD_REQUEST, "缺少 title".into()))?
+        .to_string();
+    let note_body = body
+        .get("body")
+        .and_then(|v| v.as_str())
+        .ok_or((StatusCode::BAD_REQUEST, "缺少 body".into()))?
+        .to_string();
+    let entity_links: Vec<NoteEntityLink> = body
+        .get("entity_links")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    validate_entity_links(&entity_links)?;
     let id = uuid::Uuid::new_v4().to_string();
     let now: DateTime<Utc> = Utc::now();
     let now_str = now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
@@ -119,14 +139,14 @@ pub async fn create(
     )
     .bind(&id)
     .bind(&user_id)
-    .bind(&input.title)
-    .bind(&input.body)
+    .bind(&title)
+    .bind(&note_body)
     .bind(&now_str)
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert: {e}")))?;
 
-    for link in &input.entity_links {
+    for link in &entity_links {
         sqlx::query(
             "INSERT INTO note_entity (id, note_id, user_id, entity_type, entity_id) \
              VALUES ($1, $2, $3, $4, $5) \
@@ -161,7 +181,7 @@ pub async fn update(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
     Path(id): Path<String>,
-    Json(input): Json<UpdateNoteInput>,
+    Json(body): Json<Value>,
 ) -> Result<Json<Note>, (StatusCode, String)> {
     let (user_id, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let now: DateTime<Utc> = Utc::now();
@@ -171,6 +191,8 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tx: {e}")))?;
 
+    let new_title = body.get("title").and_then(|v| v.as_str());
+    let new_body = body.get("body").and_then(|v| v.as_str());
     let res = sqlx::query(
         "UPDATE note SET \
             title      = COALESCE($3, title), \
@@ -180,8 +202,8 @@ pub async fn update(
     )
     .bind(&id)
     .bind(&user_id)
-    .bind(&input.title)
-    .bind(&input.body)
+    .bind(new_title)
+    .bind(new_body)
     .bind(&now_str)
     .execute(&mut *tx)
     .await
@@ -190,15 +212,19 @@ pub async fn update(
         return Err((StatusCode::NOT_FOUND, "note not found".into()));
     }
 
-    if let Some(links) = &input.entity_links {
-        validate_entity_links(links)?;
+    if let Some(arr) = body.get("entity_links").and_then(|v| v.as_array()) {
+        let links: Vec<NoteEntityLink> = arr
+            .iter()
+            .filter_map(|v| serde_json::from_value(v.clone()).ok())
+            .collect();
+        validate_entity_links(&links)?;
         sqlx::query("DELETE FROM note_entity WHERE note_id = $1 AND user_id = $2")
             .bind(&id)
             .bind(&user_id)
             .execute(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("unlink: {e}")))?;
-        for link in links {
+        for link in &links {
             sqlx::query(
                 "INSERT INTO note_entity (id, note_id, user_id, entity_type, entity_id) \
                  VALUES ($1, $2, $3, $4, $5) \

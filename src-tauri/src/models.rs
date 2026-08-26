@@ -601,6 +601,7 @@ pub struct NoteEntityLink {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CreateNoteInput {
+    #[serde(default)]
     pub user_id: String,
     pub title: String,
     pub body: String,
@@ -610,6 +611,7 @@ pub struct CreateNoteInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateNoteInput {
+    #[serde(default)]
     pub user_id: String,
     #[serde(default)]
     pub id: String,
@@ -621,24 +623,28 @@ pub struct UpdateNoteInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListNotesInput {
+    #[serde(default)]
     pub user_id: String,
     pub cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetNoteInput {
+    #[serde(default)]
     pub user_id: String,
     pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteNoteInput {
+    #[serde(default)]
     pub user_id: String,
     pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListNoteBacklinksInput {
+    #[serde(default)]
     pub user_id: String,
     pub entity_type: String,
     pub entity_id: String,
@@ -646,12 +652,14 @@ pub struct ListNoteBacklinksInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListNoteEntitiesInput {
+    #[serde(default)]
     pub user_id: String,
     pub note_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityGraphInput {
+    #[serde(default)]
     pub user_id: String,
     pub entity_type: String,
     pub entity_id: String,
