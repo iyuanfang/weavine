@@ -71,5 +71,17 @@
         "mimeType": "text/markdown"
       }
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/iyuanfang/weavine/releases/latest/download/latest.json"
+      ],
+      "pubkey": "kMX9WgTNpGW968GReA54XzcvIauj9vVjZfG6Wk0w8/E=",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

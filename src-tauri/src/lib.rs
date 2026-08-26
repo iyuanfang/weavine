@@ -261,6 +261,7 @@ pub fn run() {
                 )?;
             }
             app.handle().plugin(tauri_plugin_notification::init())?;
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
             // .md file editor plugins
             #[cfg(desktop)]
             {
