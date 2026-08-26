@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS "Contact" (
 "last_interaction_at" DATETIME NOT NULL,
     "keep_in_touch_cadence_days" INTEGER,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL
+    "updated_at" DATETIME NOT NULL,
+    "archived_at" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "Tag" (
@@ -409,6 +410,7 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
 
     // archive (归档) feature – see docs/superpowers/specs/2026-07-04-archive-feature-design.md
     let archive_cols = [
+        ("Contact", "archived_at", "TEXT"),
         ("Action", "archived_at", "TEXT"),
         ("Event", "archived_at", "TEXT"),
         ("Project", "archived_at", "TEXT"),
@@ -424,7 +426,8 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         }
     }
     conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS \"Action_archived_at_idx\" ON \"Action\"(\"archived_at\");
+        "CREATE INDEX IF NOT EXISTS \"Contact_archived_at_idx\" ON \"Contact\"(\"archived_at\");
+         CREATE INDEX IF NOT EXISTS \"Action_archived_at_idx\" ON \"Action\"(\"archived_at\");
          CREATE INDEX IF NOT EXISTS \"Event_archived_at_idx\" ON \"Event\"(\"archived_at\");
          CREATE INDEX IF NOT EXISTS \"Project_archived_at_idx\" ON \"Project\"(\"archived_at\");",
     )?;
