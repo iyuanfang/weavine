@@ -5,10 +5,10 @@ import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
 
-const W = 900;
-const H = 820;
+const W = 1000;
+const H = 900;
 const R_INNER = 110;
-const R_OUTER = 320;
+const R_OUTER = 380;
 const NODE_R = 32;
 const CENTER_R = 44;
 const SECTOR_GAP_DEG = 2;
