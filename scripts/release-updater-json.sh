@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Generate latest.json for the Tauri updater, sign it with minisign (ed25519),
-# and upload both alongside the release assets on GitHub Releases.
+# Generate latest.json for the Tauri updater and sign it with minisign.
+# Output is written under $ARTIFACTS_DIR/ so the next workflow step
+# (softprops/action-gh-release) can pick up everything via its files: glob
+# in a single upload. No upload happens in this script.
 #
 # Replaces the now-removed `tauri-action gh release create-or-update` CLI call.
 # tauri-action v1 ships only as a Node-based GitHub Action; the standalone Rust
 # CLI binary is gone from crates.io (404). We do the equivalent of what it did:
-#   1. Walk artifacts/, identify each platform bundle by filename suffix.
+#   1. Walk $ARTIFACTS_DIR/, identify each platform bundle by filename suffix.
 #   2. Map filename → updater platform key (windows-x86_64-msvc, darwin-aarch64, ...).
 #   3. Write latest.json with the GitHub release CDN URLs (NOT the
 #      browser_download_url — that's what tauri-action v1.0.0 changed in 2026,
@@ -24,11 +26,11 @@
 #            [RELEASE_TAG=v1.3.0] [REPO=iyuanfang/weavine] \
 #       ./scripts/release-updater-json.sh /path/to/artifacts
 #
-# Requires: minisign (apt), jq, gh CLI.
+# Requires: minisign (apt), jq.
 
 set -euo pipefail
 
-# Echo every command for debugging. Run log is archived on failure.
+# Echo every command for debugging.
 PS4='+ [${LINENO}] '
 set -x
 
@@ -77,13 +79,28 @@ APP_VERSION="$(jq -r .version apps/web-spa/package.json 2>/dev/null \
   || jq -r .version package.json 2>/dev/null \
   || echo "${RELEASE_TAG#v}")"
 
-TMP_JSON="$(mktemp -t latest-XXXXXX.json)"
+# Write directly under $ARTIFACTS_DIR/ so softprops/action-gh-release can
+# upload it in the same step as the platform binaries. The previous version
+# of this script wrote to a mktemp tempfile and tried to `gh release upload`
+# after softprops — that upload silently no-op'd for several runs.
+LATEST_JSON="${ARTIFACTS_DIR}/latest.json"
+LATEST_SIG="${LATEST_JSON}.sig"
+
 TMP_KEY="$(mktemp -t weavine-key-XXXXXX.key)"
-trap 'rm -f "$TMP_JSON" "${TMP_JSON}.sig" "$TMP_KEY"' EXIT
+# Clean up the keyfile on exit; latest.json + .sig must persist for the
+# softprops step that runs immediately after this one.
+trap 'rm -f "$TMP_KEY"' EXIT
 
 declare -A PLATFORMS
 declare -a PLATFORM_KEYS
 
+# Include *.apk in the walk so the manifest knows about the Android APK even
+# though Android doesn't auto-update via latest.json (no tauri-plugin-updater
+# on Android — desktop only). The Android entry is informational: the JSON
+# map is platform-keyed by Tauri updater convention, and Android doesn't use
+# any of those keys, so the apk is ignored at lookup time on devices. Keeping
+# the apk out of the platform map entirely would leave it orphaned from the
+# manifest but still listed in `gh release view`.
 while IFS= read -r f; do
   [[ -f "$f" ]] || continue
   fname="$(basename "$f")"
@@ -115,10 +132,10 @@ jq -n \
     notes: "",
     pub_date: $pub,
     platforms: $platforms
-  }' > "$TMP_JSON"
+  }' > "$LATEST_JSON"
 
-echo "=== latest.json ==="
-cat "$TMP_JSON"
+echo "=== latest.json written to $LATEST_JSON ==="
+cat "$LATEST_JSON"
 echo
 
 if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]]; then
@@ -134,21 +151,11 @@ if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]]; then
   export MINISIGN_KEY_PASSWD="$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
 fi
 
-minisign -S -s "$TMP_KEY" -m "$TMP_JSON" -x "${TMP_JSON}.sig" \
+minisign -S -s "$TMP_KEY" -m "$LATEST_JSON" -x "$LATEST_SIG" \
   -t "weavine updater manifest ${RELEASE_TAG}"
-echo "Wrote ${TMP_JSON}.sig"
+echo "=== wrote $LATEST_SIG ==="
 
-if command -v gh >/dev/null 2>&1; then
-  GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  if [[ -n "$GH_TOKEN" ]]; then
-    for asset in "$TMP_JSON" "${TMP_JSON}.sig"; do
-      gh release upload "$RELEASE_TAG" "$asset" \
-        --repo "$REPO" --clobber
-    done
-    echo "Uploaded latest.json + .sig to ${REPO}@${RELEASE_TAG}"
-  else
-    echo "WARN: GH_TOKEN/GITHUB_TOKEN not set, skipping upload"
-  fi
-else
-  echo "WARN: gh CLI not on PATH, skipping upload"
-fi
+# Sanity check before softprops picks it up.
+[[ -s "$LATEST_JSON" ]]  || { echo "FATAL: $LATEST_JSON empty" >&2; exit 1; }
+[[ -s "$LATEST_SIG" ]]   || { echo "FATAL: $LATEST_SIG empty" >&2; exit 1; }
+echo "Manifest + signature staged under $ARTIFACTS_DIR/ — softprops will upload next."
