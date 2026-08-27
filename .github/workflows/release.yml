@@ -701,6 +701,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Install tauri-cli (for `cargo tauri signer sign`)
+        # The release job runs on a fresh ubuntu-latest runner that doesn't
+        # have tauri-cli installed. We need it here only for the `signer sign`
+        # subcommand — script does the rest in pure bash + jq + gh.
+        run: cargo install tauri-cli --version "^2" --locked
+
       - name: Generate + sign + upload updater manifest (latest.json)
         # Tauri updater fetches $endpoint/latest.json on every check, verifies
         # the signature with the pubkey embedded in the binary, then offers
