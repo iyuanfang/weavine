@@ -707,24 +707,17 @@ jobs:
         # the matching platform artifact for download. Without this step the
         # updater button in Settings returns "no update" forever.
         #
-        # tauri-action CLI reads the artifact paths under artifacts/, signs
-        # latest.json with TAURI_SIGNING_PRIVATE_KEY, and uploads it to the
-        # same release. The sig uses ed25519 (the same keypair as the Tauri
-        # doc-spec sign command); the pubkey lives in tauri.conf.json.
+        # `tauri-action` no longer ships a standalone Rust CLI on crates.io
+        # (404 as of 2026-06). v1 is a Node-based GitHub Action only.
+        # scripts/release-updater-json.sh reproduces the subset we need:
+        # walk artifacts/, write latest.json with GitHub release CDN URLs
+        # (matching tauri-action v1.0.0 PR #1315), sign with `cargo tauri
+        # signer sign` (ed25519, same keypair as tauri.conf.json pubkey),
+        # upload both latest.json and latest.json.sig via gh CLI.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          cargo install tauri-action --version "^0" --locked
-          tauri-action gh release create-or-update \
-            --repo "${{ github.repository }}" \
-            --tag "${{ github.ref_name }}" \
-            --release-dir artifacts \
-            --include-updater-json \
-            --target x86_64-unknown-linux-gnu \
-            || tauri-action gh release create-or-update \
-                 --repo "${{ github.repository }}" \
-                 --tag "${{ github.ref_name }}" \
-                 --release-dir artifacts \
-                 --include-updater-json
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: bash scripts/release-updater-json.sh artifacts
