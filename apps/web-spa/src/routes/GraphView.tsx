@@ -144,41 +144,40 @@ export function GraphView() {
       const endAngle = cursor + sweep - gapRad / 2;
       const midAngle = (startAngle + endAngle) / 2;
 
-      // Cluster layout: same-type nodes form a tight multi-ring cluster so the
-      // outermost node always sits at the sector midAngle (not at the sector
-      // boundary), preventing overlap with the adjacent sector's outermost
-      // node. Rings spiral inward with 50 px spacing (so center→node line
-      // lengths differ noticeably). Angular spread is computed from slot count
-      // and ring radius so neighbouring nodes never collide (min 70 px
-      // center-to-center). Within a ring with 2+ nodes, alternating radial
-      // jitter of ±8 px breaks visual monotony.
+      // Multi-ring cluster (preserved algorithm) with bigger parameters:
+// ring spacing 50 → 70 px so center→node line lengths visibly differ more;
+// radial jitter ±8 → ±25 px so line lengths vary within the same ring too;
+// angular spread capped at 95% of the sector arc (was 80%) so the cluster
+// uses the wedge's full width.
       const ringCapacity = (ring: number): number => {
         if (ring === 0) return 1;
         return Math.floor(ring / 2) + 2;
       };
       const minSpacing = NODE_R * 2 + 6; // 70 px center-to-center
+      const ringSpacing = 70;
+      const maxRings = Math.floor((R_OUTER - R_INNER) / ringSpacing) + 1;
       const clusterPos: Array<{ angle: number; radius: number }> = [];
       let placed = 0;
       let ring = 0;
-      while (placed < nodes.length) {
+      while (placed < nodes.length && ring < maxRings) {
         const cap = ringCapacity(ring);
         const slots = Math.min(cap, nodes.length - placed);
-        const ringR = R_OUTER - ring * 50;
+        const ringR = R_OUTER - ring * ringSpacing;
         if (slots === 1) {
           clusterPos.push({ angle: midAngle, radius: ringR });
         } else {
-          // Spread = (slots-1) * minSpacing / ringR; ensures every gap ≥
-          // minSpacing. Capped at 80% of the sector arc so the cluster stays
-          // inside its wedge even when the sector is narrow.
+          // Spread = (slots-1) * minSpacing / ringR ensures neighbour gaps
+          // stay above minSpacing. Capped at 95% of the sector arc so the
+          // cluster fills the wedge width without touching sector edges.
           const spreadRad = Math.min(
             ((slots - 1) * minSpacing) / ringR,
-            sweep * 0.8
+            sweep * 0.95
           );
           for (let j = 0; j < slots; j++) {
             const t2 = j / (slots - 1);
-            // Alternating ±8 px radial jitter so line lengths vary within the
-            // same ring too.
-            const jitter = j % 2 === 0 ? -8 : 8;
+            // ±25 px radial jitter, alternating, so line lengths vary
+            // within the same ring too.
+            const jitter = j % 2 === 0 ? -25 : 25;
             clusterPos.push({
               angle: midAngle - spreadRad / 2 + spreadRad * t2,
               radius: ringR + jitter,
@@ -187,6 +186,18 @@ export function GraphView() {
         }
         placed += slots;
         ring++;
+      }
+      // If we ran out of rings (rare — only when a single type has many
+      // neighbors), stack overflow nodes on the inner-most ring at
+      // midAngle, slightly offset by index so they don't perfectly overlap.
+      while (placed < nodes.length) {
+        const overflowIdx = placed - maxRings;
+        const angleJitter = (overflowIdx % 2 === 0 ? -1 : 1) * (8 * Math.ceil((overflowIdx + 1) / 2));
+        clusterPos.push({
+          angle: midAngle + (angleJitter * Math.PI) / 180,
+          radius: R_INNER + 10,
+        });
+        placed++;
       }
 
       nodes.forEach((n, i) => {
