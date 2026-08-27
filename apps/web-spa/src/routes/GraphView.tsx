@@ -12,6 +12,7 @@ const R_OUTER = 230;
 const NODE_R = 28;
 const CENTER_R = 44;
 const SECTOR_GAP_DEG = 2;
+const ringSpacing = 80;
 
 // Stable, semantic ordering of entity types around the canvas.
 // Starts at 12-o'clock (top) and proceeds clockwise.
@@ -137,6 +138,23 @@ export function GraphView() {
 
     const gapRad = (SECTOR_GAP_DEG * Math.PI) / 180;
     let cursor = -Math.PI / 2; // start at 12 o'clock, clockwise
+
+    // Per-sector variable radius: wide canvas (W=900, H=600) means
+    // horizontal sectors can reach further than vertical ones. Each sector
+    // computes its own sectorR based on midAngle, then scales inner/ring
+    // constants proportionally so the relative layout is preserved while
+    // line lengths from the centre grow on the diagonals.
+    const MARGIN = 30; // px padding from canvas edge for label clearance
+    const HALF_W = (W - 2 * MARGIN) / 2; // 420
+    const HALF_H = (H - 2 * MARGIN) / 2; // 270
+    const maxRForAngle = (angle: number): number => {
+      const cosA = Math.abs(Math.cos(angle));
+      const sinA = Math.abs(Math.sin(angle));
+      if (sinA < 0.01) return HALF_W;
+      if (cosA < 0.01) return HALF_H;
+      return Math.min(HALF_W / cosA, HALF_H / sinA);
+    };
+
     for (const t of orderedTypes) {
       const nodes = byType.get(t)!;
       const sweep = (nodes.length / others.length) * 2 * Math.PI;
@@ -144,40 +162,39 @@ export function GraphView() {
       const endAngle = cursor + sweep - gapRad / 2;
       const midAngle = (startAngle + endAngle) / 2;
 
-      // Multi-ring cluster (preserved algorithm) with bigger parameters:
-// ring spacing 50 → 70 px so center→node line lengths visibly differ more;
-// radial jitter ±8 → ±25 px so line lengths vary within the same ring too;
-// angular spread capped at 95% of the sector arc (was 80%) so the cluster
-// uses the wedge's full width.
+      // Scale the per-sector radius and ring geometry by sectorR / R_OUTER
+      // so each sector uses its full available wedge depth.
+      const sectorR = Math.min(maxRForAngle(midAngle), R_OUTER);
+      const scale = sectorR / R_OUTER;
+      const sectorRInner = R_INNER * scale;
+      const sectorRingSpacing = ringSpacing * scale;
+      const sectorJitter = 40 * scale;
+
       const ringCapacity = (ring: number): number => {
         if (ring === 0) return 1;
         return Math.floor(ring / 2) + 2;
       };
-      const minSpacing = 140; // center-to-center — doubled from the original 70
-      const ringSpacing = 80;
-      const maxRings = Math.floor((R_OUTER - R_INNER) / ringSpacing) + 1;
+      const minSpacing = 140;
+      const maxRings = Math.floor((sectorR - sectorRInner) / sectorRingSpacing) + 1;
       const clusterPos: Array<{ angle: number; radius: number }> = [];
       let placed = 0;
       let ring = 0;
       while (placed < nodes.length && ring < maxRings) {
         const cap = ringCapacity(ring);
         const slots = Math.min(cap, nodes.length - placed);
-        const ringR = R_OUTER - ring * ringSpacing;
+        const ringR = sectorR - ring * sectorRingSpacing;
         if (slots === 1) {
           clusterPos.push({ angle: midAngle, radius: ringR });
         } else {
-          // Spread = (slots-1) * minSpacing / ringR ensures neighbour gaps
-          // stay above minSpacing. Capped at 95% of the sector arc so the
-          // cluster fills the wedge width without touching sector edges.
           const spreadRad = Math.min(
             ((slots - 1) * minSpacing) / ringR,
             sweep * 0.95
           );
           for (let j = 0; j < slots; j++) {
             const t2 = j / (slots - 1);
-            // ±40 px radial jitter, alternating, so line lengths vary
-            // within the same ring too.
-            const jitter = j % 2 === 0 ? -40 : 40;
+            // Alternating radial jitter (scaled with sectorR) so line
+            // lengths vary within the same ring too.
+            const jitter = j % 2 === 0 ? -sectorJitter : sectorJitter;
             clusterPos.push({
               angle: midAngle - spreadRad / 2 + spreadRad * t2,
               radius: ringR + jitter,
@@ -195,7 +212,7 @@ export function GraphView() {
         const angleJitter = (overflowIdx % 2 === 0 ? -1 : 1) * (8 * Math.ceil((overflowIdx + 1) / 2));
         clusterPos.push({
           angle: midAngle + (angleJitter * Math.PI) / 180,
-          radius: R_INNER + 10,
+          radius: sectorRInner + 10,
         });
         placed++;
       }
