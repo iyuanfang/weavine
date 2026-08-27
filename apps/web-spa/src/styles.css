@@ -2432,8 +2432,18 @@ textarea.input-base {
   padding: 14px 18px;
   min-height: 320px;
   background: var(--surface-1, #ffffff);
-  max-height: 60vh;
-  overflow: auto;
+}
+
+/* Let CodeMirror grow to fit content — both panes share the page-level
+   scroll instead of each having their own internal scrollbar. */
+.note-edit__editor .cm-editor {
+  height: auto !important;
+  min-height: 320px;
+}
+.note-edit__editor .cm-scroller {
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 320px;
 }
 .md-editor-toolbar {
   display: flex;
