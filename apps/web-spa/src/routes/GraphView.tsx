@@ -6,7 +6,7 @@ import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
 
 const W = 900;
-const H = 820;
+const H = 760;
 const R_INNER = 110;
 const R_OUTER = 320;
 const NODE_R = 32;
