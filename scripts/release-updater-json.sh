@@ -79,12 +79,13 @@ APP_VERSION="$(jq -r .version apps/web-spa/package.json 2>/dev/null \
   || jq -r .version package.json 2>/dev/null \
   || echo "${RELEASE_TAG#v}")"
 
-# Write directly under $ARTIFACTS_DIR/ so softprops/action-gh-release can
-# upload it in the same step as the platform binaries. The previous version
-# of this script wrote to a mktemp tempfile and tried to `gh release upload`
-# after softprops — that upload silently no-op'd for several runs.
-LATEST_JSON="${ARTIFACTS_DIR}/latest.json"
+# Write under $ARTIFACTS_DIR/updater/ — softprops' `artifacts/**/*.sig`
+# glob does NOT match files directly under artifacts/ (root-level), only
+# files at depth ≥ 1. latest.json at the root worked by accident (caught
+# by `*.json`) but latest.json.sig at the root was silently dropped.
+LATEST_JSON="${ARTIFACTS_DIR}/updater/latest.json"
 LATEST_SIG="${LATEST_JSON}.sig"
+mkdir -p "${ARTIFACTS_DIR}/updater"
 
 TMP_KEY="$(mktemp -t weavine-key-XXXXXX.key)"
 # Clean up the keyfile on exit; latest.json + .sig must persist for the
