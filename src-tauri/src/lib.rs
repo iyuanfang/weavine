@@ -269,12 +269,10 @@ pub fn run() {
             app.handle().plugin(tauri_plugin_notification::init())?;
             // opener works on desktop + mobile (used for Android APK sideload)
             app.handle().plugin(tauri_plugin_opener::init())?;
-            // .md file editor plugins + updater are desktop-only
-            // (tauri-plugin-updater fails to compile on aarch64-linux-android
-            //  because its signing/download impl assumes a desktop file system).
+            // .md file editor plugins are desktop-only (mobile WebView already
+            //  has its own pickers via the system intent bridge).
             #[cfg(desktop)]
             {
-                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
                 app.handle().plugin(tauri_plugin_dialog::init())?;
                 app.handle().plugin(tauri_plugin_fs::init())?;
             }

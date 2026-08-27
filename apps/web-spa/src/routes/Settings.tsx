@@ -575,39 +575,19 @@ function CloudSyncPanel() {
         </div>
       )}
 
-      <UpdaterPanel />
+      <AndroidSideloadHint />
     </div>
   );
 }
 
-interface UpdaterPanelState {
-  checking: boolean;
-  downloading: boolean;
-  status: 'idle' | 'up-to-date' | 'available' | 'downloaded' | 'error';
-  currentVersion: string | null;
-  latestVersion: string | null;
-  message: string;
-  downloadProgress: number;
-}
-
-function UpdaterPanel() {
-  const [state, setState] = useState<UpdaterPanelState>({
-    checking: false,
-    downloading: false,
-    status: 'idle',
-    currentVersion: null,
-    latestVersion: null,
-    message: '',
-    downloadProgress: 0,
-  });
-
-  // Detect Android sideload fallback (tauri-plugin-updater doesn't link on Android).
+// Android-only: link to GitHub releases page so users can grab the latest
+// APK manually. Desktop users get their installers from the same page
+// outside the app, so no in-app UI is needed.
+function AndroidSideloadHint() {
   const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
-
   const openReleasesPage = useCallback(async () => {
     const url = 'https://github.com/iyuanfang/weavine/releases/latest';
     try {
-      // Tauri path: use opener plugin (works on Android + desktop).
       if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
         const { openUrl } = await import('@tauri-apps/plugin-opener');
         await openUrl(url, 'browser');
@@ -616,142 +596,24 @@ function UpdaterPanel() {
     } catch {}
     window.open(url, '_blank', 'noopener');
   }, []);
-
-  const checkUpdate = useCallback(async () => {
-    setState((s) => ({ ...s, checking: true, status: 'idle', message: '正在检查更新…' }));
-    try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
-      if (!update) {
-        setState((s) => ({
-          ...s,
-          checking: false,
-          status: 'up-to-date',
-          message: '已是最新版本',
-        }));
-        return;
-      }
-      setState((s) => ({
-        ...s,
-        checking: false,
-        status: 'available',
-        currentVersion: update.currentVersion,
-        latestVersion: update.version,
-        message: `发现新版本 v${update.version}`,
-      }));
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        checking: false,
-        status: 'error',
-        message: `检查失败: ${String(e)}`,
-      }));
-    }
-  }, []);
-
-  const downloadAndInstall = useCallback(async () => {
-    setState((s) => ({ ...s, downloading: true, message: '下载中…' }));
-    try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
-      if (!update) return;
-      let totalBytes = 0;
-      let downloadedBytes = 0;
-      await update.downloadAndInstall((event) => {
-        switch (event.event) {
-          case 'Started':
-            totalBytes = event.data.contentLength ?? 0;
-            setState((s) => ({ ...s, message: '下载中… 0%', downloadProgress: 0 }));
-            break;
-          case 'Progress':
-            downloadedBytes += event.data.chunkLength;
-            const pct = totalBytes ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
-            setState((s) => ({ ...s, downloadProgress: pct, message: `下载中… ${pct}%` }));
-            break;
-          case 'Finished':
-            setState((s) => ({ ...s, downloadProgress: 100, message: '下载完成，关闭应用后安装' }));
-            break;
-        }
-      });
-      setState((s) => ({
-        ...s,
-        downloading: false,
-        status: 'downloaded',
-        message: '✓ 更新已下载，关闭应用后安装',
-      }));
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        downloading: false,
-        status: 'error',
-        message: `下载失败: ${String(e)}`,
-      }));
-    }
-  }, []);
-
-  const buttonLabel = state.downloading
-    ? '下载中…'
-    : state.status === 'available'
-      ? `下载 v${state.latestVersion}`
-      : '检查更新';
-
+  if (!isAndroid) return null;
   return (
     <div style={{ marginTop: 16 }}>
       <h3 style={{ margin: '0 0 8px', fontSize: 'var(--text-base)', fontWeight: 600 }}>
-        🔄 软件更新
+        📥 获取最新 APK
       </h3>
-      <div
-        className="card"
-        style={{
-          padding: 12,
-          fontSize: 'var(--text-sm)',
-          background: state.status === 'error' ? 'var(--error-soft, #fee2e2)' : undefined,
-        }}
-      >
+      <div className="card" style={{ padding: 12, fontSize: 'var(--text-sm)' }}>
         <div style={{ marginBottom: 8 }}>
-          {state.message || '点击检查更新以查询 GitHub Releases 上是否有新版本。'}
+          Android 端无内置更新器，请前往 GitHub Releases 下载最新 APK 并手动安装。
         </div>
-        {state.status === 'available' && (
-          <div style={{ marginBottom: 8, color: 'var(--accent, #059669)' }}>
-            当前: v{state.currentVersion} → 最新: v{state.latestVersion}
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={checkUpdate}
-            disabled={state.checking || state.downloading || isAndroid}
-            style={{ opacity: state.checking ? 0.6 : 1 }}
-          >
-            {state.checking ? '检查中…' : '🔍 检查更新'}
-          </button>
-          {state.status === 'available' && !isAndroid && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={downloadAndInstall}
-              disabled={state.downloading}
-            >
-              {buttonLabel}
-            </button>
-          )}
-          {isAndroid && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={openReleasesPage}
-            >
-              📥 下载最新 APK
-            </button>
-          )}
-        </div>
+        <button type="button" className="btn btn-primary" onClick={openReleasesPage}>
+          打开 Releases 页面
+        </button>
       </div>
     </div>
   );
 }
 
-// ──────────────────────────────────────────────
 // Backup / Restore — full-data JSON export and import.
 //
 // File shape matches the legacy Next.js export endpoint (see

@@ -647,62 +647,8 @@ jobs:
       - name: List downloaded artifacts
         run: find artifacts/ -type f
 
-      - name: Install minisign (for signing latest.json)
-        # minisign produces signatures bit-identical to `cargo tauri signer sign`
-        # (both wrap minisign ed25519). Installing it via apt takes ~2 sec on
-        # a fresh runner; cargo-installing tauri-cli takes ~5 min and adds no
-        # additional functionality for this step.
-        run: sudo apt-get install -y -qq minisign
 
-      - name: Generate + sign updater manifest (latest.json + .sig)
-        # Tauri updater fetches $endpoint/latest.json on every check, verifies
-        # the signature with the pubkey embedded in the binary, then offers
-        # the matching platform artifact for download. Without latest.json the
-        # updater button in Settings returns "no update" forever.
-        #
-        # Runs BEFORE softprops so the generated latest.json + latest.json.sig
-        # are written under artifacts/ and the softprops step's files: glob
-        # uploads them in the same atomic release-creation call. The previous
-        # version of this step ran AFTER softprops and tried to `gh release
-        # upload` separately — that upload silently no-op'd for several
-        # releases (gh CLI's exit 0 masked the failure), leaving the manifest
-        # off the release.
-        #
-        # `tauri-action` no longer ships a standalone Rust CLI on crates.io
-        # (404 as of 2026-06). v1 is a Node-based GitHub Action only.
-        # scripts/release-updater-json.sh reproduces the subset we need:
-        # walk artifacts/, write latest.json with GitHub release CDN URLs
-        # (matching tauri-action v1.0.0 PR #1315), sign with `minisign -s`
-        # (ed25519, same keypair as tauri.conf.json pubkey, output format
-        # bit-identical to cargo tauri signer sign).
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          RELEASE_TAG: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: bash scripts/release-updater-json.sh artifacts 2>&1 | tee release-debug.log
-
-      - name: List artifacts again (manifest should now be visible)
-        run: find artifacts/ -type f
-
-      - name: Create Release + upload all artifacts (binaries + latest.json + .sig)
-        # softprops/action-gh-release@v2 handles idempotency (existing tag),
-        # draft mode, auto-generated notes, and most importantly creates the
-        # release with full GITHUB_TOKEN permissions even when previous
-        # custom bash-based gh release create calls silently no-opped under
-        # restrictive default token scopes.
-        #
-        # files: glob covers all six asset types in one atomic upload call:
-        #   - platform binaries (.exe / .dmg / .deb / .AppImage / .apk)
-        #   - updater manifest (artifacts/updater/latest.json)
-        #   - ed25519 signature (artifacts/updater/latest.json.sig)
-        # The previous design split manifest upload into a separate
-        # `gh release upload` step that silently failed (gh CLI returns
-        # exit 0 on some upload errors), leaving the release with 4 binaries
-        # but no latest.json / .sig. The in-app Tauri updater then refused
-        # to verify signatures and "检查更新" returned "no update" forever.
-        # fail_on_unmatched_files: false guards against a missing optional
-        # APK (e.g. if the Android job is skipped).
+      - name: Create Release + upload binaries
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -714,67 +660,6 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.AppImage
             artifacts/**/*.apk
-            artifacts/**/latest.json
-            artifacts/**/latest.json.sig
-
-      # Bypass for latest.json.sig. softprops' @actions/glob v2.11 matches
-      # artifacts/**/latest.json.sig (verified by Python glob) but then drops
-      # the .sig silently at upload time — the sibling latest.json at the
-      # same path uploads fine, only .sig is missing. Since v1.3.0 this has
-      # been the sole thing between a usable Tauri manual-update and a broken
-      # "检查更新 returns no update forever" (the runtime updater verifies the
-      # sig against the embedded pubkey before showing any new version).
-      #
-      # Use the GitHub REST API directly with curl instead of `gh release
-      # upload`. The gh CLI is NOT preinstalled on ubuntu-latest runners
-      # (it's only added by some community actions); curl + jq are always
-      # there. POST to uploads.github.com with the release-id looked up by
-      # tag. --clobber semantics aren't needed: if the .sig was already
-      # uploaded (e.g. retry of a partially failed run) the API returns
-      # 422 and we ignore it, since identical bytes are functionally
-      # equivalent.
-      - name: Upload latest.json.sig via GitHub REST API (softprops drops .sig)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          SIG="artifacts/updater/latest.json.sig"
-          if [ ! -f "$SIG" ]; then
-            echo "FATAL: $SIG missing — release-updater-json.sh did not produce it"
-            exit 1
-          fi
-          echo "Looking up release id for tag=$RELEASE_TAG repo=$GH_REPO..."
-          RELEASE_ID=$(curl -fsSL \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GH_REPO}/releases/tags/${RELEASE_TAG}" \
-            | jq -r .id)
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "FATAL: cannot resolve release id for tag=$RELEASE_TAG"
-            exit 1
-          fi
-          echo "Release id: $RELEASE_ID — uploading $SIG..."
-          HTTP_CODE=$(curl -sS -o /tmp/upload.out -w "%{http_code}" -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary @"$SIG" \
-            "https://uploads.github.com/repos/${GH_REPO}/releases/${RELEASE_ID}/assets?name=latest.json.sig")
-          if [ "$HTTP_CODE" = "422" ]; then
-            # Already uploaded by a previous run; .sig bytes are idempotent.
-            echo "WARN: 422 (asset already exists) — treating as success"
-          elif [ "$HTTP_CODE" != "201" ]; then
-            echo "FATAL: upload failed HTTP=$HTTP_CODE body:"
-            cat /tmp/upload.out
-            exit 1
-          fi
-          echo "=== Final release asset list ==="
-          curl -fsSL \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${GH_REPO}/releases/${RELEASE_ID}/assets" \
-            | jq -r '.[] | "\(.name) (\(.size) bytes)"'
 
       - name: Upload release-debug.log on failure
         if: failure()

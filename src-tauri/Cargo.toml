@@ -17,7 +17,7 @@ path = "src/main.rs"
 # `tauri` enables the Tauri 2 desktop / Android runtime. Required for any
 # GUI build. Mobile targets (`cargo tauri android build`) use this.
 default = ["tauri"]
-tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-global-shortcut", "dep:tauri-plugin-notification", "dep:tauri-plugin-dialog", "dep:tauri-plugin-fs", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-updater", "dep:tauri-plugin-opener"]
+tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-global-shortcut", "dep:tauri-plugin-notification", "dep:tauri-plugin-dialog", "dep:tauri-plugin-fs", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-opener"]
 
 # Android voice-recognition flavor split. Exactly one of these must be set
 # when building an Android APK; the cloud flavor is the default because the
@@ -46,7 +46,6 @@ tauri-plugin-notification = { version = "2", optional = true }
 tauri-plugin-dialog = { version = "2", optional = true }
 tauri-plugin-fs = { version = "2", optional = true }
 tauri-plugin-single-instance = { version = "2", optional = true }
-tauri-plugin-updater = { version = "2", optional = true }
 tauri-plugin-opener = { version = "2", optional = true }
 chardetng = "0.1"
 encoding_rs = "0.8"
