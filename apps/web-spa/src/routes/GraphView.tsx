@@ -6,10 +6,10 @@ import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
 
 const W = 900;
-const H = 760;
-const R_INNER = 110;
-const R_OUTER = 320;
-const NODE_R = 32;
+const H = 600;
+const R_INNER = 70;
+const R_OUTER = 230;
+const NODE_R = 28;
 const CENTER_R = 44;
 const SECTOR_GAP_DEG = 2;
 
@@ -153,8 +153,8 @@ export function GraphView() {
         if (ring === 0) return 1;
         return Math.floor(ring / 2) + 2;
       };
-      const minSpacing = (NODE_R * 2 + 6) * 2; // 140 px center-to-center — double the per-node clearance
-      const ringSpacing = 90;
+      const minSpacing = 140; // center-to-center — doubled from the original 70
+      const ringSpacing = 80;
       const maxRings = Math.floor((R_OUTER - R_INNER) / ringSpacing) + 1;
       const clusterPos: Array<{ angle: number; radius: number }> = [];
       let placed = 0;
