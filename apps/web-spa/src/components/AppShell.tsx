@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 
 import { isTauri } from '../lib/adapter';
@@ -29,10 +29,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { open: openQuickCapture } = useQuickCapture();
   const { open: openSearch } = useGlobalSearch();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof localStorage === 'undefined') return false;
+    return localStorage.getItem('weavine:sidebar-collapsed') === '1';
+  });
   const [showReleaseTip, setShowReleaseTip] = useState(() => {
     if (typeof localStorage === 'undefined') return false;
     return localStorage.getItem('v108-tip-dismissed') !== '1';
   });
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem('weavine:sidebar-collapsed', next ? '1' : '0');
+      } catch {}
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -79,6 +93,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
+      <button
+        type="button"
+        className="app-shell__collapse"
+        onClick={toggleCollapsed}
+        aria-label={collapsed ? '展开菜单' : '收起菜单'}
+        title={collapsed ? '展开菜单' : '收起菜单'}
+      >
+        {collapsed ? '»' : '«'}
+      </button>
+
       <nav className="app-shell__menu">
         <button
           type="button"
@@ -92,19 +116,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span>快速记录</span>
           <kbd className="app-shell__menu-kbd">{shortcutLabel()}</kbd>
         </button>
-
-        <NavLink
-          to="/md-editor"
-          onClick={() => setDrawerOpen(false)}
-          className={({ isActive }) =>
-            isActive
-              ? 'app-shell__menu-item app-shell__menu-item--active'
-              : 'app-shell__menu-item'
-          }
-        >
-          <span className="app-shell__menu-icon">📝</span>
-          <span>编辑 .md</span>
-        </NavLink>
 
         {navItems.map((item) => (
           <NavLink
@@ -148,7 +159,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell">
-      <aside className="app-shell__nav app-shell__nav--desktop">{nav}</aside>
+      <aside
+        className={`app-shell__nav app-shell__nav--desktop ${
+          collapsed ? 'app-shell__nav--collapsed' : ''
+        }`}
+      >
+        {nav}
+      </aside>
 
       <button
         type="button"

@@ -147,6 +147,55 @@ button:focus-visible {
   box-shadow: var(--shadow-xs);
 }
 
+.app-shell__collapse {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.app-shell__collapse:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.app-shell:has(.app-shell__nav--collapsed) {
+  grid-template-columns: 64px 1fr;
+}
+
+.app-shell__nav--collapsed .app-shell__brand-tagline,
+.app-shell__nav--collapsed .app-shell__brand-text,
+.app-shell__nav--collapsed .app-shell__menu-kbd,
+.app-shell__nav--collapsed .app-shell__menu-item span:not(.app-shell__menu-icon),
+.app-shell__nav--collapsed .app-shell__user-name,
+.app-shell__nav--collapsed .app-shell__user-logout {
+  display: none;
+}
+
+.app-shell__nav--collapsed .app-shell__brand {
+  padding: 22px 12px 18px;
+  justify-content: center;
+}
+
+.app-shell__nav--collapsed .app-shell__menu-item {
+  justify-content: center;
+  padding: 9px 8px;
+}
+
+.app-shell__nav--collapsed .app-shell__user {
+  justify-content: center;
+  padding: 14px 8px;
+}
+
 .app-shell__brand {
   padding: 22px 18px 18px;
   font-size: var(--text-lg);

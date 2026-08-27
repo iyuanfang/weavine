@@ -9,11 +9,12 @@
  * `open-md-from-argv` events from Tauri and pushes this route.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { renderMarkdown } from '../lib/markdown';
+import { parseTocHeadings } from '../lib/markdown-toc';
 
 export function MdEditor() {
   const adapter = useAdapter();
@@ -25,6 +26,7 @@ export function MdEditor() {
   const [sizeBytes, setSizeBytes] = useState(0);
   const [encoding, setEncoding] = useState('');
   const [view, setView] = useState<'edit' | 'preview' | 'split'>('split');
+  const [tocOpen, setTocOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -128,6 +130,10 @@ export function MdEditor() {
 
   const importToLibrary = useCallback(async () => {
     if (!path || !userId) return;
+    const finish = (noteId: string, action: string) => {
+      setInfo(`✓ 已转存为笔记（${action}）`);
+      navigate(`/notes/${noteId}`);
+    };
     try {
       const status = await adapter.md.checkImportStatus(userId, path);
       if (!status.already_imported) {
@@ -139,7 +145,7 @@ export function MdEditor() {
           mode: 'create',
           existing_note_id: null,
         });
-        setInfo(`✓ 已导入库 (${r.action})`);
+        finish(r.note_id, r.action);
         return;
       }
       if (!status.reimport_needed) {
@@ -170,11 +176,30 @@ export function MdEditor() {
         mode: mode as 'update' | 'as-new' | 'skip',
         existing_note_id: status.note_id,
       });
-      setInfo(`✓ ${r.action} (${r.note_id.slice(0, 8)}…)`);
+      finish(r.note_id, r.action);
     } catch (e) {
       setError(`导入失败: ${String(e)}`);
     }
-  }, [adapter, content, path, userId]);
+  }, [adapter, content, navigate, path, userId]);
+
+  // Parse headings for the TOC sidebar via the shared helper.
+  const tocHeadings = useMemo(() => parseTocHeadings(content), [content]);
+
+  // Scroll the textarea so that line N is near the top. The editor is a
+  // plain <textarea>, so per-line scroll is approximated by
+  // scrollTop ≈ line * lineHeight. The 22px figure matches the
+  // monospace line-height in the JSX (14 * 1.6 ≈ 22.4).
+  const LINE_HEIGHT = 22;
+  const scrollToLine = useCallback(
+    (line: number) => {
+      const ta = taRef.current;
+      if (!ta) return;
+      const target = Math.max(0, line * LINE_HEIGHT - 16);
+      ta.scrollTop = target;
+      ta.focus();
+    },
+    [],
+  );
 
   const largeFile = sizeBytes > 1_048_576;
   const banner = largeFile
@@ -211,23 +236,35 @@ export function MdEditor() {
           {path ? `${path} · ${(sizeBytes / 1024).toFixed(1)} KB · ${encoding}` : '未打开文件'}
           {dirty ? ' · ●未保存' : ''}
         </span>
-        <select
-          value={view}
-          onChange={(e) => setView(e.target.value as 'edit' | 'preview' | 'split')}
-          style={{ padding: '4px 6px', borderRadius: 4 }}
-        >
-          <option value="split">分屏</option>
-          <option value="edit">仅编辑</option>
-          <option value="preview">仅预览</option>
-        </select>
+        <div role="tablist" style={{ display: 'inline-flex', border: '1px solid var(--border, #e5e7eb)', borderRadius: 4, overflow: 'hidden' }}>
+          {(['edit', 'preview', 'split'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
+              style={{
+                padding: '4px 12px',
+                border: 'none',
+                background: view === v ? 'var(--accent, #059669)' : 'transparent',
+                color: view === v ? '#fff' : 'var(--text, #111)',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              {v === 'edit' ? '编辑' : v === 'preview' ? '预览' : '分屏'}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           className="btn btn-primary"
           onClick={importToLibrary}
           disabled={!path || !userId || largeFile}
-          title={!userId ? '需要本地用户' : largeFile ? '文件 > 1 MB 不可入库' : '复制内容到笔记库'}
+          title={!userId ? '需要本地用户' : largeFile ? '文件 > 1 MB 不可入库' : '将当前内容复制到笔记库'}
         >
-          📥 导入库
+          📥 转存为笔记
         </button>
         <button
           type="button"
@@ -290,6 +327,32 @@ export function MdEditor() {
       )}
 
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {tocOpen && (
+          <TocPanel headings={tocHeadings} onSelect={scrollToLine} onToggle={() => setTocOpen(false)} />
+        )}
+        {!tocOpen && (
+          <button
+            type="button"
+            onClick={() => setTocOpen(true)}
+            title="展开目录"
+            aria-label="展开目录"
+            style={{
+              alignSelf: 'flex-start',
+              marginTop: 4,
+              padding: '4px 6px',
+              border: '1px solid var(--border, #e5e7eb)',
+              background: 'var(--surface-alt, #f9fafb)',
+              cursor: 'pointer',
+              fontSize: 12,
+              borderRadius: 4,
+              color: 'var(--text-muted)',
+              writingMode: 'vertical-rl',
+              letterSpacing: 0.4,
+            }}
+          >
+            ▶ 目录
+          </button>
+        )}
         {(view === 'edit' || view === 'split') && (
           <textarea
             ref={taRef}
@@ -358,5 +421,104 @@ export function MdEditor() {
         <span>编辑器态 · 不会同步到云端</span>
       </div>
     </div>
+  );
+}
+
+interface TocPanelProps {
+  headings: { level: 1 | 2 | 3; text: string; line: number }[];
+  onSelect: (line: number) => void;
+  onToggle: () => void;
+}
+
+function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
+  return (
+    <nav
+      className="md-toc"
+      aria-label="文档目录"
+      style={{
+        width: 220,
+        minWidth: 220,
+        maxWidth: 220,
+        padding: '8px 8px 8px 12px',
+        overflowY: 'auto',
+        borderRight: '1px solid var(--border, #e5e7eb)',
+        background: 'var(--surface-alt, #f9fafb)',
+        fontSize: 13,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            fontWeight: 600,
+            color: 'var(--text-muted)',
+            fontSize: 11,
+            letterSpacing: 0.4,
+            textTransform: 'uppercase',
+          }}
+        >
+          目录 ({headings.length})
+        </span>
+        <button
+          type="button"
+          onClick={onToggle}
+          title="收起目录"
+          aria-label="收起目录"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--text-muted)',
+            fontSize: 12,
+            padding: '0 4px',
+          }}
+        >
+          ◀
+        </button>
+      </div>
+      {headings.length === 0 && (
+        <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>暂无标题</div>
+      )}
+      {headings.map((h, idx) => (
+        <button
+          key={idx}
+          type="button"
+          onClick={() => onSelect(h.line)}
+          title={`跳到第 ${h.line + 1} 行`}
+          style={{
+            display: 'block',
+            width: '100%',
+            textAlign: 'left',
+            border: 'none',
+            background: 'transparent',
+            padding: '3px 6px',
+            paddingLeft: 6 + (h.level - 1) * 12,
+            borderRadius: 3,
+            cursor: 'pointer',
+            color: 'var(--text, #111)',
+            fontSize: h.level === 1 ? 13 : 12,
+            fontWeight: h.level === 1 ? 600 : 400,
+            lineHeight: 1.5,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'var(--hover, #e5e7eb)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+          }}
+        >
+          {h.text}
+        </button>
+      ))}
+    </nav>
   );
 }

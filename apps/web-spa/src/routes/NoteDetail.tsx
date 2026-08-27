@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { EditorView } from '@codemirror/view';
+
+import { parseTocHeadings } from '../lib/markdown-toc';
+import type { MarkdownEditorHandle } from '../components/MarkdownEditor';
 
 const NOTE_TEMPLATES: { id: string; icon: string; title: string; body: string }[] = [
   {
@@ -375,7 +379,8 @@ export function NoteNew() {
   const cloneFrom = searchParams.get('clone_from');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
+  const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('split');
+  const [tocOpen, setTocOpen] = useState(false);
   const [links, setLinks] = useState<NoteEntityLink[]>(() => {
     const init: NoteEntityLink[] = [];
     if (preContact) init.push({ entity_type: 'contact', entity_id: preContact });
@@ -387,6 +392,21 @@ export function NoteNew() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const newEditorRef = useRef<MarkdownEditorHandle>(null);
+  const newTocHeadings = useMemo(() => parseTocHeadings(body), [body]);
+  const scrollNewToLine = (line: number) => {
+    const view = newEditorRef.current?.getView();
+    if (!view) return;
+    try {
+      const ln = view.state.doc.line(Math.min(line + 1, view.state.doc.lines));
+      view.dispatch({
+        effects: EditorView.scrollIntoView(ln.from, { y: 'start', yMargin: 16 }),
+      });
+      view.focus();
+    } catch {
+      // line out of range (e.g. after a delete) — silently no-op
+    }
+  };
 
   // Clone from an existing note — fetch its body + links (without the title prefix).
   useEffect(() => {
@@ -470,6 +490,15 @@ export function NoteNew() {
           <button
             type="button"
             role="tab"
+            aria-selected={mode === 'split'}
+            className={`note-edit__tab ${mode === 'split' ? 'is-active' : ''}`}
+            onClick={() => setMode('split')}
+          >
+            分屏
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={mode === 'preview'}
             className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
             onClick={() => setMode('preview')}
@@ -477,42 +506,85 @@ export function NoteNew() {
             预览
           </button>
         </div>
-        {mode === 'edit' ? (
-          <div className="note-edit__editor">
-            {body.trim() === '' && (
-              <div className="note-edit__templates">
-                <span className="note-edit__templates-label">快速开始：</span>
-                {NOTE_TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className="note-edit__template"
-                    onClick={() => {
-                      setBody(t.body);
-                      setTitle(t.title);
-                    }}
-                  >
-                    {t.icon} {t.title}
-                  </button>
-                ))}
+        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+          {tocOpen && (
+            <TocPanel
+              headings={newTocHeadings}
+              onSelect={scrollNewToLine}
+              onToggle={() => setTocOpen(false)}
+            />
+          )}
+          {!tocOpen && (
+            <button
+              type="button"
+              onClick={() => setTocOpen(true)}
+              title="展开目录"
+              aria-label="展开目录"
+              style={{
+                alignSelf: 'flex-start',
+                marginTop: 4,
+                padding: '4px 6px',
+                border: '1px solid var(--border, #e5e7eb)',
+                background: 'var(--surface-alt, #f9fafb)',
+                cursor: 'pointer',
+                fontSize: 12,
+                borderRadius: 4,
+                color: 'var(--text-muted)',
+                writingMode: 'vertical-rl',
+                letterSpacing: 0.4,
+              }}
+            >
+              ▶ 目录
+            </button>
+          )}
+          <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+            {(mode === 'edit' || mode === 'split') && (
+              <div className="note-edit__editor" style={{ flex: 1, minWidth: 0 }}>
+                {body.trim() === '' && mode === 'edit' && (
+                  <div className="note-edit__templates">
+                    <span className="note-edit__templates-label">快速开始：</span>
+                    {NOTE_TEMPLATES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className="note-edit__template"
+                        onClick={() => {
+                          setBody(t.body);
+                          setTitle(t.title);
+                        }}
+                      >
+                        {t.icon} {t.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <MarkdownEditor
+                  ref={newEditorRef}
+                  value={body}
+                  onChange={(next) => {
+                    if (!title.trim()) {
+                      const heading = next.match(/^\s*#\s+(.+?)\s*$/m);
+                      if (heading) setTitle(heading[1].slice(0, 120));
+                    }
+                    setBody(next);
+                  }}
+                />
               </div>
             )}
-            <MarkdownEditor
-              value={body}
-              onChange={(next) => {
-                if (!title.trim()) {
-                  const heading = next.match(/^\s*#\s+(.+?)\s*$/m);
-                  if (heading) setTitle(heading[1].slice(0, 120));
-                }
-                setBody(next);
-              }}
-            />
+            {(mode === 'preview' || mode === 'split') && (
+              <div
+                className="note-edit__preview"
+                style={{
+                  flex: 1,
+                  borderLeft: mode === 'split' ? '1px solid var(--border, #e5e7eb)' : 'none',
+                  minWidth: 0,
+                }}
+              >
+                <MarkdownView body={body} />
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="note-edit__preview">
-            <MarkdownView body={body} />
-          </div>
-        )}
+        </div>
         <div className="note-edit__section">
           <label className="note-edit__label">关联实体</label>
           <EntityPicker rosters={rosters} value={links} onChange={setLinks} />
@@ -538,7 +610,8 @@ export function NoteDetail() {
   const navigate = useNavigate();
   const rosters = useEntityRosters();
   const [note, setNote] = useState<Note | null | undefined>(undefined);
-  const [mode, setMode] = useState<'edit' | 'preview'>('preview');
+  const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('split');
+  const [tocOpen, setTocOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');
   const [draftLinks, setDraftLinks] = useState<NoteEntityLink[]>([]);
@@ -548,6 +621,21 @@ export function NoteDetail() {
   const dirtyRef = useRef(false);
   const saveTokenRef = useRef(0);
   const debounceHandleRef = useRef<number | null>(null);
+  const editEditorRef = useRef<MarkdownEditorHandle>(null);
+  const editTocHeadings = useMemo(() => parseTocHeadings(draftBody), [draftBody]);
+  const scrollEditToLine = (line: number) => {
+    const view = editEditorRef.current?.getView();
+    if (!view) return;
+    try {
+      const ln = view.state.doc.line(Math.min(line + 1, view.state.doc.lines));
+      view.dispatch({
+        effects: EditorView.scrollIntoView(ln.from, { y: 'start', yMargin: 16 }),
+      });
+      view.focus();
+    } catch {
+      // line out of range (e.g. after a delete) — silently no-op
+    }
+  };
 
   const persist = async (opts?: { force?: boolean }) => {
     if (!userId || !id || !note) return;
@@ -791,6 +879,15 @@ export function NoteDetail() {
           <button
             type="button"
             role="tab"
+            aria-selected={mode === 'split'}
+            className={`note-edit__tab ${mode === 'split' ? 'is-active' : ''}`}
+            onClick={() => setMode('split')}
+          >
+            分屏
+          </button>
+          <button
+            type="button"
+            role="tab"
             aria-selected={mode === 'preview'}
             className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
             onClick={() => setMode('preview')}
@@ -798,15 +895,57 @@ export function NoteDetail() {
             预览
           </button>
         </div>
-        {mode === 'edit' ? (
-          <div className="note-edit__editor">
-            <MarkdownEditor value={draftBody} onChange={setDraftBody} />
+        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+          {tocOpen && (
+            <TocPanel
+              headings={editTocHeadings}
+              onSelect={scrollEditToLine}
+              onToggle={() => setTocOpen(false)}
+            />
+          )}
+          {!tocOpen && (
+            <button
+              type="button"
+              onClick={() => setTocOpen(true)}
+              title="展开目录"
+              aria-label="展开目录"
+              style={{
+                alignSelf: 'flex-start',
+                marginTop: 4,
+                padding: '4px 6px',
+                border: '1px solid var(--border, #e5e7eb)',
+                background: 'var(--surface-alt, #f9fafb)',
+                cursor: 'pointer',
+                fontSize: 12,
+                borderRadius: 4,
+                color: 'var(--text-muted)',
+                writingMode: 'vertical-rl',
+                letterSpacing: 0.4,
+              }}
+            >
+              ▶ 目录
+            </button>
+          )}
+          <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+            {(mode === 'edit' || mode === 'split') && (
+              <div className="note-edit__editor" style={{ flex: 1, minWidth: 0 }}>
+                <MarkdownEditor ref={editEditorRef} value={draftBody} onChange={setDraftBody} />
+              </div>
+            )}
+            {(mode === 'preview' || mode === 'split') && (
+              <div
+                className="note-edit__preview"
+                style={{
+                  flex: 1,
+                  borderLeft: mode === 'split' ? '1px solid var(--border, #e5e7eb)' : 'none',
+                  minWidth: 0,
+                }}
+              >
+                <MarkdownView body={draftBody} />
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="note-edit__preview">
-            <MarkdownView body={draftBody} />
-          </div>
-        )}
+        </div>
         <div className="note-edit__section">
           <label className="note-edit__label">关联实体</label>
           <EntityPicker rosters={rosters} value={draftLinks} onChange={setDraftLinks} />
@@ -814,5 +953,103 @@ export function NoteDetail() {
       </div>
       {error && <p className="danger">{error}</p>}
     </div>
+  );
+}
+interface TocPanelProps {
+  headings: { level: 1 | 2 | 3; text: string; line: number }[];
+  onSelect: (line: number) => void;
+  onToggle: () => void;
+}
+
+function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
+  return (
+    <nav
+      className="md-toc"
+      aria-label="笔记目录"
+      style={{
+        width: 220,
+        minWidth: 220,
+        maxWidth: 220,
+        padding: '8px 8px 8px 12px',
+        overflowY: 'auto',
+        borderRight: '1px solid var(--border, #e5e7eb)',
+        background: 'var(--surface-alt, #f9fafb)',
+        fontSize: 13,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            fontWeight: 600,
+            color: 'var(--text-muted)',
+            fontSize: 11,
+            letterSpacing: 0.4,
+            textTransform: 'uppercase',
+          }}
+        >
+          目录 ({headings.length})
+        </span>
+        <button
+          type="button"
+          onClick={onToggle}
+          title="收起目录"
+          aria-label="收起目录"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--text-muted)',
+            fontSize: 12,
+            padding: '0 4px',
+          }}
+        >
+          ◀
+        </button>
+      </div>
+      {headings.length === 0 && (
+        <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>暂无标题</div>
+      )}
+      {headings.map((h, idx) => (
+        <button
+          key={idx}
+          type="button"
+          onClick={() => onSelect(h.line)}
+          title={`跳到第 ${h.line + 1} 行`}
+          style={{
+            display: 'block',
+            width: '100%',
+            textAlign: 'left',
+            border: 'none',
+            background: 'transparent',
+            padding: '3px 6px',
+            paddingLeft: 6 + (h.level - 1) * 12,
+            borderRadius: 3,
+            cursor: 'pointer',
+            color: 'var(--text, #111)',
+            fontSize: h.level === 1 ? 13 : 12,
+            fontWeight: h.level === 1 ? 600 : 400,
+            lineHeight: 1.5,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'var(--hover, #e5e7eb)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+          }}
+        >
+          {h.text}
+        </button>
+      ))}
+    </nav>
   );
 }

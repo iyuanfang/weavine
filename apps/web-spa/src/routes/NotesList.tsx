@@ -44,6 +44,16 @@ export function NotesList() {
         <h1>笔记</h1>
         <button
           type="button"
+          className="btn btn-secondary"
+          onClick={async () => {
+            const path = await adapter.md.openDialog();
+            if (path) navigate(`/md-editor?path=${encodeURIComponent(path)}`);
+          }}
+        >
+          📂 打开本地 .md
+        </button>
+        <button
+          type="button"
           className="btn btn-primary"
           onClick={() => navigate('/notes/new')}
         >
