@@ -204,7 +204,7 @@ export function ContactsList() {
         <div>
           <h1 className="page-title">联系人</h1>
           <p className="page-subtitle">
-            (contacts ?? []).length 个人 ·{' '}
+            {(contacts ?? []).length} 个人 ·{' '}
             {hasActiveFilter ? (
               <button
                 type="button"
