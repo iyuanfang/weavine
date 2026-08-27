@@ -100,6 +100,10 @@ export function EventEdit() {
       }
       navigate(fromParam || '/calendar');
     },
+    onError: (err: Error) => {
+      console.error('[event] update failed:', err);
+      alert(`保存日程失败：${err?.message ?? '未知错误'}`);
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {

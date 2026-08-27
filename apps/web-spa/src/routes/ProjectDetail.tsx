@@ -180,6 +180,12 @@ export function ProjectDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-contacts', id] });
     },
+    onError: (err: Error) => {
+      // Surface silent errors so user can report them. Previously the mutation
+      // would reject with no UI feedback, leading to "clicked add, nothing happened".
+      console.error('[project] add contact failed:', err);
+      alert(`添加联系人失败：${err?.message ?? '未知错误'}`);
+    },
   });
 
   const updateRoleMutation = useMutation({
@@ -187,6 +193,10 @@ export function ProjectDetail() {
       adapter.projectContacts.add(id, vars.contact_id, vars.role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-contacts', id] });
+    },
+    onError: (err: Error) => {
+      console.error('[project] update role failed:', err);
+      alert(`更新角色失败：${err?.message ?? '未知错误'}`);
     },
   });
 

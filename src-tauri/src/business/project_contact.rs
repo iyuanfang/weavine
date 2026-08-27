@@ -1,5 +1,5 @@
 use crate::models::*;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 fn row_to_project_contact(row: &rusqlite::Row) -> rusqlite::Result<ProjectContact> {
     Ok(ProjectContact {
@@ -17,6 +17,9 @@ pub fn add(
     contact_id: &str,
     role: Option<&str>,
 ) -> rusqlite::Result<ProjectContact> {
+    // Look up the project's owner so the ProjectContact row gets the same
+    // user_id (sync v0.2.0b requires this — `sync_log_change` reads from
+    // NEW.user_id). Returns InvalidParameterName if the project is missing.
     let user_id: String = conn
         .query_row(
             "SELECT user_id FROM Project WHERE id = ?1",
@@ -29,25 +32,29 @@ pub fn add(
             ))
         })?;
 
-    let contact_owner: Option<String> = conn
+    // Confirm the contact exists. We previously required `Contact.user_id == project.user_id`,
+    // but for a single-user desktop install that's redundant — and if sync ever
+    // pulls a foreign-user_id row in (or the local user_id rotated), the strict
+    // check silently rejected the add with no error surfaced to the UI. Now we
+    // just verify the contact row is present and let the link proceed under the
+    // project's user_id.
+    let contact_exists: bool = conn
         .query_row(
-            "SELECT user_id FROM Contact WHERE id = ?1",
+            "SELECT 1 FROM Contact WHERE id = ?1",
             params![contact_id],
-            |r| r.get(0),
+            |_| Ok(true),
         )
-        .ok();
-    match contact_owner {
-        Some(c) if c == user_id => {}
-        Some(_) => {
-            return Err(rusqlite::Error::InvalidParameterName(format!(
-                "contact {contact_id} owner mismatch"
-            )));
-        }
-        None => {
-            return Err(rusqlite::Error::InvalidParameterName(format!(
-                "contact {contact_id} not found"
-            )));
-        }
+        .optional()
+        .map_err(|e| {
+            rusqlite::Error::InvalidParameterName(format!(
+                "contact lookup failed: {e}"
+            ))
+        })?
+        .unwrap_or(false);
+    if !contact_exists {
+        return Err(rusqlite::Error::InvalidParameterName(format!(
+            "contact {contact_id} not found"
+        )));
     }
 
     conn.execute(

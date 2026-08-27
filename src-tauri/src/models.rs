@@ -445,7 +445,9 @@ pub struct UpdateEventInput {
     pub project_id: Option<String>,
     pub reminder_lead_minutes: Option<i64>,
     pub archived_at: Option<String>,
+    #[serde(default)]
     pub created_at: String,
+    #[serde(default)]
     pub updated_at: String,
 }
 
