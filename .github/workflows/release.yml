@@ -703,11 +703,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Install tauri-cli (for `cargo tauri signer sign`)
-        # The release job runs on a fresh ubuntu-latest runner that doesn't
-        # have tauri-cli installed. We need it here only for the `signer sign`
-        # subcommand — script does the rest in pure bash + jq + gh.
-        run: cargo install tauri-cli --version "^2" --locked
+      - name: Install minisign (for signing latest.json)
+        # minisign produces signatures bit-identical to `cargo tauri signer sign`
+        # (both wrap minisign ed25519). Installing it via apt takes ~2 sec on
+        # a fresh runner; cargo-installing tauri-cli takes ~5 min and adds no
+        # additional functionality for this step.
+        run: sudo apt-get install -y -qq minisign
 
       - name: Generate + sign + upload updater manifest (latest.json)
         # Tauri updater fetches $endpoint/latest.json on every check, verifies
@@ -719,9 +720,10 @@ jobs:
         # (404 as of 2026-06). v1 is a Node-based GitHub Action only.
         # scripts/release-updater-json.sh reproduces the subset we need:
         # walk artifacts/, write latest.json with GitHub release CDN URLs
-        # (matching tauri-action v1.0.0 PR #1315), sign with `cargo tauri
-        # signer sign` (ed25519, same keypair as tauri.conf.json pubkey),
-        # upload both latest.json and latest.json.sig via gh CLI.
+        # (matching tauri-action v1.0.0 PR #1315), sign with `minisign -s`
+        # (ed25519, same keypair as tauri.conf.json pubkey, output format
+        # bit-identical to cargo tauri signer sign), upload both latest.json
+        # and latest.json.sig via gh CLI.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

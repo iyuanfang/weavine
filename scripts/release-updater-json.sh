@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Generate latest.json for the Tauri updater, sign it with ed25519, and upload it
-# alongside the release assets on GitHub Releases.
+# Generate latest.json for the Tauri updater, sign it with minisign (ed25519),
+# and upload both alongside the release assets on GitHub Releases.
 #
 # Replaces the now-removed `tauri-action gh release create-or-update` CLI call.
 # tauri-action v1 ships only as a Node-based GitHub Action; the standalone Rust
@@ -10,19 +10,21 @@
 #   3. Write latest.json with the GitHub release CDN URLs (NOT the
 #      browser_download_url — that's what tauri-action v1.0.0 changed in 2026,
 #      see https://github.com/tauri-apps/tauri-action/releases/tag/action-v1.0.0).
-#   4. `tauri signer sign` signs both the bundle AND latest.json with ed25519.
-#      The signature file uses the same base name + .sig, uploaded to the
-#      same release so the in-app updater can fetch them.
+#   4. Sign latest.json with minisign — the signature format is bit-identical
+#      to what `cargo tauri signer sign` produces (both wrap minisign), so the
+#      in-app Tauri updater verifies without any change. We use minisign instead
+#      of tauri-cli to avoid a 5+ min `cargo install tauri-cli` compile on the
+#      release job's fresh runner.
 #
 # The pubkey embedded in tauri.conf.json (bundle.updater.pubkey) is used by the
 # in-app updater to verify the signature before downloading the bundle.
 #
 # Usage: env TAURI_SIGNING_PRIVATE_KEY=... \
-#            TAURI_SIGNING_PRIVATE_KEY_PASSWORD=... \
+#            [TAURI_SIGNING_PRIVATE_KEY_PASSWORD=...] \
 #            [RELEASE_TAG=v1.3.0] [REPO=iyuanfang/weavine] \
 #       ./scripts/release-updater-json.sh /path/to/artifacts
 #
-# Requires: cargo-tauri on PATH (already installed in CI), jq, gh CLI, curl.
+# Requires: minisign (apt), jq, gh CLI.
 
 set -euo pipefail
 
@@ -35,8 +37,13 @@ if [[ -z "$RELEASE_TAG" ]]; then
   exit 1
 fi
 
-if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
-  echo "ERROR: TAURI_SIGNING_PRIVATE_KEY env var is required" >&2
+if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -z "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]]; then
+  echo "ERROR: TAURI_SIGNING_PRIVATE_KEY or TAURI_SIGNING_PRIVATE_KEY_PATH is required" >&2
+  exit 1
+fi
+
+if ! command -v minisign >/dev/null 2>&1; then
+  echo "ERROR: minisign not installed (apt-get install -y minisign)" >&2
   exit 1
 fi
 
@@ -44,15 +51,6 @@ fi
 # Format: https://github.com/<owner>/<repo>/releases/download/<tag>/<filename>
 DOWNLOAD_BASE="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
 
-# Map Tauri bundler output filename suffix → updater platform key.
-# Filename pattern (Tauri 2): weavine_<ext>_<version>_<arch>.<ext>
-#   - weavine_1.3.0_x64-setup.exe        → windows-x86_64-msvc
-#   - weavine_1.3.0_aarch64-setup.exe    → windows-aarch64-msvc
-#   - weavine_1.3.0_x64.dmg              → darwin-x86_64
-#   - weavine_1.3.0_aarch64.dmg          → darwin-aarch64
-#   - weavine_1.3.0_amd64.AppImage       → linux-x86_64
-#   - weavine_1.3.0_amd64.deb            → linux-x86_64 (deb is second pick)
-# We resolve each artifact by suffix.
 platform_key_for() {
   local f="$1"
   case "$f" in
@@ -71,15 +69,13 @@ platform_key_for() {
   esac
 }
 
-# App version: read from package.json (we use the `version` field set by `pnpm tauri build`).
 APP_VERSION="$(jq -r .version apps/web-spa/package.json 2>/dev/null \
   || jq -r .version package.json 2>/dev/null \
   || echo "${RELEASE_TAG#v}")"
 
-# Build the latest.json in memory.
 TMP_JSON="$(mktemp -t latest-XXXXXX.json)"
-TMP_SIG="${TMP_JSON}.sig"
-trap 'rm -f "$TMP_JSON" "$TMP_SIG"' EXIT
+TMP_KEY="$(mktemp -t weavine-key-XXXXXX.key)"
+trap 'rm -f "$TMP_JSON" "${TMP_JSON}.sig" "$TMP_KEY"' EXIT
 
 declare -A PLATFORMS
 declare -a PLATFORM_KEYS
@@ -89,20 +85,16 @@ while IFS= read -r f; do
   fname="$(basename "$f")"
   pkey="$(platform_key_for "$fname")"
   [[ -z "$pkey" ]] && continue
-  # Deb takes precedence over AppImage for linux (Deb is the primary linux
-  # distribution format), but tauri-action uploads both. We pick .deb when
-  # available, fall back to .AppImage.
   if [[ -n "${PLATFORMS[$pkey]+set}" ]]; then
     case "$fname" in
-      *.deb) ;;  # overwrite — deb preferred
-      *) continue ;;  # keep the existing one (assume deb was first)
+      *.deb) ;;
+      *) continue ;;
     esac
   fi
   PLATFORMS[$pkey]="$DOWNLOAD_BASE/$fname"
   PLATFORM_KEYS+=("$pkey")
 done < <(find "$ARTIFACTS_DIR" -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) 2>/dev/null)
 
-# Build the JSON via jq so quoting/escaping is correct.
 JSON_PLATFORMS="$(
   for k in "${PLATFORM_KEYS[@]}"; do
     jq -n --arg k "$k" --arg u "${PLATFORMS[$k]}" \
@@ -125,20 +117,26 @@ echo "=== latest.json ==="
 cat "$TMP_JSON"
 echo
 
-# Sign latest.json → latest.json.sig
-# `cargo tauri signer sign` has no --output flag; it writes <input>.sig
-# automatically (see tauri-cli-2.11.4/src/helpers/updater_signature.rs:124).
-# We just point it at $TMP_JSON and it produces $TMP_SIG next to it.
-cargo tauri signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
-  --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
-  "$TMP_JSON" >/dev/null
-echo "Wrote $TMP_SIG"
+if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]]; then
+  cp "$TAURI_SIGNING_PRIVATE_KEY_PATH" "$TMP_KEY"
+else
+  echo "$TAURI_SIGNING_PRIVATE_KEY" | base64 -d > "$TMP_KEY"
+fi
 
-# Upload both as release assets (overwrite if present).
+# minisign prompts for password on stdin when key is encrypted and no TTY.
+# `MINISIGN_KEY_PASSWD` is the documented non-interactive variable that
+# minisign's pinentry fallback consults.
+if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]]; then
+  export MINISIGN_KEY_PASSWD="$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+fi
+
+minisign -s "$TMP_KEY" -m "$TMP_JSON" -W -t "${TMP_JSON}.sig" >/dev/null
+echo "Wrote ${TMP_JSON}.sig"
+
 if command -v gh >/dev/null 2>&1; then
   GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
   if [[ -n "$GH_TOKEN" ]]; then
-    for asset in "$TMP_JSON" "$TMP_SIG"; do
+    for asset in "$TMP_JSON" "${TMP_JSON}.sig"; do
       gh release upload "$RELEASE_TAG" "$asset" \
         --repo "$REPO" --clobber
     done
