@@ -39,7 +39,7 @@ const TYPE_META: Record<EntityGraphNodeType, { icon: string; color: string; labe
   interaction: { icon: '💬', color: '#0ea5e9', label: '互动' },
 };
 
-const SUPPORTED_CENTERS: EntityGraphNodeType[] = ['contact', 'project', 'event', 'action', 'note'];
+const SUPPORTED_CENTERS: EntityGraphNodeType[] = ['contact', 'project', 'event', 'action', 'note', 'interaction'];
 
 function detailHref(type: EntityGraphNodeType, id: string): string {
   switch (type) {
@@ -121,7 +121,7 @@ export function GraphView() {
   const cx = W / 2;
   const cy = H / 2;
   const placedAt: Record<string, { x: number; y: number }> = {};
-  const sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number }> = [];
+  const sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number; sectorR: number }> = [];
 
   if (others.length > 0) {
     // Group by entity_type using TYPE_ORDER priority, then any unknown types last.
@@ -224,7 +224,7 @@ export function GraphView() {
           y: cy + pos.radius * Math.sin(pos.angle),
         };
       });
-      sectors.push({ type: t, midAngle, count: nodes.length });
+      sectors.push({ type: t, midAngle, count: nodes.length, sectorR });
       cursor += sweep;
     }
   }
@@ -350,7 +350,7 @@ export function GraphView() {
 
           {sectors.map((s) => {
             const meta = TYPE_META[s.type];
-            const lr = R_OUTER + 30;
+            const lr = s.sectorR + 30;
             const lx = cx + lr * Math.cos(s.midAngle);
             const ly = cy + lr * Math.sin(s.midAngle);
             const cosA = Math.cos(s.midAngle);

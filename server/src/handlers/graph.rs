@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use super::auth::extract_auth;
 
-pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note", "tag"];
+pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note", "interaction", "tag"];
 
 #[derive(Debug, Serialize)]
 pub struct EntityGraphNode {
@@ -75,6 +75,7 @@ pub async fn entity_graph(
         "event" => expand_event(&pool, &auth, &entity_id, &mut response).await?,
         "action" => expand_action(&pool, &auth, &entity_id, &mut response).await?,
         "note" => expand_note(&pool, &auth, &entity_id, &mut response).await?,
+        "interaction" => expand_interaction(&pool, &auth, &entity_id, &mut response).await?,
         "tag" => expand_tag(&pool, &auth, &entity_id, &mut response).await?,
         _ => unreachable!("validated above"),
     }
@@ -129,6 +130,14 @@ async fn load_center_node(
         .fetch_optional(pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+        "interaction" => sqlx::query_as(
+            "SELECT id, summary FROM interaction WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+        )
+        .bind(entity_id)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
         "tag" => sqlx::query_as(
             "SELECT id, name FROM tag WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
         )
@@ -150,6 +159,7 @@ async fn load_center_node(
         "event" => "event",
         "action" => "action",
         "note" => "note",
+        "interaction" => "interaction",
         "tag" => "tag",
         _ => unreachable!(),
     };
@@ -507,6 +517,122 @@ async fn expand_action(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     for (id, title) in notes {
         push_neighbor(response, "note", id, title, None, "action", action_id, "note_mentions");
+    }
+
+    Ok(())
+}
+
+async fn expand_interaction(
+    pool: &PgPool,
+    user_id: &str,
+    interaction_id: &str,
+    response: &mut EntityGraphResponse,
+) -> Result<(), (StatusCode, String)> {
+    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT contact_id, action_id, event_id FROM interaction \
+         WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(interaction_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (contact_id, action_id, event_id) = row.unwrap_or((None, None, None));
+
+    if let Some(cid) = contact_id {
+        let nickname: Option<String> = sqlx::query_scalar(
+            "SELECT nickname FROM contact WHERE id = $1 AND user_id = $2 \
+             AND deleted_at IS NULL AND archived_at IS NULL",
+        )
+        .bind(&cid)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if let Some(label) = nickname {
+            push_neighbor(
+                response,
+                "contact",
+                cid,
+                label,
+                None,
+                "interaction",
+                interaction_id,
+                "interaction_with_contact",
+            );
+        }
+    }
+
+    if let Some(aid) = action_id {
+        let title: Option<String> = sqlx::query_scalar(
+            "SELECT title FROM action WHERE id = $1 AND user_id = $2 \
+             AND deleted_at IS NULL AND archived_at IS NULL",
+        )
+        .bind(&aid)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if let Some(label) = title {
+            push_neighbor(
+                response,
+                "action",
+                aid,
+                label,
+                None,
+                "interaction",
+                interaction_id,
+                "interaction_via_action",
+            );
+        }
+    }
+
+    if let Some(eid) = event_id {
+        let title: Option<String> = sqlx::query_scalar(
+            "SELECT title FROM event WHERE id = $1 AND user_id = $2 \
+             AND deleted_at IS NULL AND archived_at IS NULL",
+        )
+        .bind(&eid)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if let Some(label) = title {
+            push_neighbor(
+                response,
+                "event",
+                eid,
+                label,
+                None,
+                "interaction",
+                interaction_id,
+                "interaction_in_event",
+            );
+        }
+    }
+
+    let notes: Vec<(String, String)> = sqlx::query_as(
+        "SELECT n.id, n.title FROM note_entity ne \
+         JOIN note n ON n.id = ne.note_id \
+         WHERE ne.entity_type = 'interaction' AND ne.entity_id = $1 AND ne.user_id = $2 \
+           AND ne.deleted_at IS NULL AND n.deleted_at IS NULL AND n.archived_at IS NULL",
+    )
+    .bind(interaction_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    for (id, title) in notes {
+        push_neighbor(
+            response,
+            "note",
+            id,
+            title,
+            None,
+            "interaction",
+            interaction_id,
+            "note_mentions",
+        );
     }
 
     Ok(())
