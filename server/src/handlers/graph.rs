@@ -264,20 +264,10 @@ async fn expand_contact(
         push_neighbor(response, "note", id, title, None, "contact", contact_id, "note_mentions");
     }
 
-    let tags: Vec<(String, String)> = sqlx::query_as(
-        "SELECT t.id, t.name FROM contact_tag ct \
-         JOIN tag t ON t.id = ct.tag_id \
-         WHERE ct.contact_id = $1 AND ct.user_id = $2 \
-           AND ct.deleted_at IS NULL AND t.deleted_at IS NULL",
-    )
-    .bind(contact_id)
-    .bind(user_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    for (id, name) in tags {
-        push_neighbor(response, "tag", id, name, None, "contact", contact_id, "contact_tagged");
-    }
+    // Tag neighbors intentionally omitted: GraphView UI redesign (2e7bbe4) dropped
+    // tag nodes from the client. Keeping the server emit would only crash the SPA
+    // (entity_type="tag" not in TYPE_META). The contact ↔ tag relationship
+    // remains queryable via /api/contacts/:id/tags.
 
     Ok(())
 }
@@ -608,25 +598,16 @@ async fn expand_note(
 }
 
 async fn expand_tag(
-    pool: &PgPool,
-    user_id: &str,
-    tag_id: &str,
+    _pool: &PgPool,
+    _user_id: &str,
+    _tag_id: &str,
     response: &mut EntityGraphResponse,
 ) -> Result<(), (StatusCode, String)> {
-    let contacts: Vec<(String, String)> = sqlx::query_as(
-        "SELECT c.id, c.nickname FROM contact_tag ct \
-         JOIN contact c ON c.id = ct.contact_id \
-WHERE ct.tag_id = $1 AND ct.user_id = $2 \
-            AND ct.deleted_at IS NULL AND c.deleted_at IS NULL AND c.archived_at IS NULL",
-    )
-    .bind(tag_id)
-    .bind(user_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    for (id, nickname) in contacts {
-        push_neighbor(response, "contact", id, nickname, None, "tag", tag_id, "tag_member");
-    }
+    // Symmetric to expand_contact: tag → contact push intentionally omitted
+    // because the GraphView UI dropped tag nodes (2e7bbe4). The center node
+    // (the tag itself) is still loaded by load_center_node above; neighbors
+    // are kept empty. Contact membership for a tag remains queryable via
+    // /api/tags/:id/contacts.
 
     Ok(())
 }

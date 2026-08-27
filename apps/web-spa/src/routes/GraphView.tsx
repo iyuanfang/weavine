@@ -106,7 +106,13 @@ export function GraphView() {
 
   const graph = graphQuery.data!;
   const center = graph.nodes.find((n) => n.is_center);
-  const others = graph.nodes.filter((n) => !n.is_center);
+  // Drop nodes whose entity_type isn't in TYPE_META. The server can return
+  // "tag" (server SUPPORTED_ENTITY_TYPES includes it) but the UI redesign
+  // intentionally drops tag nodes — see commit 2e7bbe4. Without this filter,
+  // TYPE_META[n.entity_type] is undefined and `meta.color` crashes the page.
+  const others = graph.nodes.filter(
+    (n) => !n.is_center && TYPE_META[n.entity_type] !== undefined
+  );
 
   const placedAt: Record<string, { x: number; y: number }> = {};
   const cx = W / 2;
@@ -277,6 +283,7 @@ export function GraphView() {
             const p = placedAt[key];
             if (!p) return null;
             const meta = TYPE_META[n.entity_type];
+            if (!meta) return null;
             const isSupported = SUPPORTED_CENTERS.includes(n.entity_type);
             const openHandler = () => onNeighborOpen(n);
             return (
