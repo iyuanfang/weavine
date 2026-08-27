@@ -88,7 +88,7 @@ export interface ParticipantRow {
   nickname?: string | null;
 }
 
-export type EntityGraphNodeType = 'contact' | 'project' | 'event' | 'action' | 'note' | 'tag' | 'interaction';
+export type EntityGraphNodeType = 'contact' | 'project' | 'event' | 'action' | 'note' | 'interaction';
 
 export interface EntityGraphNode {
   id: string;
