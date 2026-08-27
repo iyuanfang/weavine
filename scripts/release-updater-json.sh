@@ -28,6 +28,10 @@
 
 set -euo pipefail
 
+# Echo every command for debugging. Run log is archived on failure.
+PS4='+ [${LINENO}] '
+set -x
+
 ARTIFACTS_DIR="${1:-artifacts}"
 RELEASE_TAG="${RELEASE_TAG:-${GITHUB_REF_NAME:-}}"
 REPO="${REPO:-${GITHUB_REPOSITORY:-iyuanfang/weavine}}"
@@ -131,7 +135,7 @@ if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]]; then
 fi
 
 minisign -S -s "$TMP_KEY" -m "$TMP_JSON" -x "${TMP_JSON}.sig" \
-  -t "weavine updater manifest ${RELEASE_TAG}" >/dev/null
+  -t "weavine updater manifest ${RELEASE_TAG}"
 echo "Wrote ${TMP_JSON}.sig"
 
 if command -v gh >/dev/null 2>&1; then

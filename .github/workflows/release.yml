@@ -730,4 +730,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           RELEASE_TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
-        run: bash scripts/release-updater-json.sh artifacts
+        run: bash scripts/release-updater-json.sh artifacts 2>&1 | tee release-debug.log
+
+      - name: Upload release-debug.log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-debug-log
+          path: release-debug.log
