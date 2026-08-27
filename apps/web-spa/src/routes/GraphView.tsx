@@ -154,7 +154,7 @@ export function GraphView() {
         return Math.floor(ring / 2) + 2;
       };
       const minSpacing = NODE_R * 2 + 6; // 70 px center-to-center
-      const ringSpacing = 70;
+      const ringSpacing = 90;
       const maxRings = Math.floor((R_OUTER - R_INNER) / ringSpacing) + 1;
       const clusterPos: Array<{ angle: number; radius: number }> = [];
       let placed = 0;
@@ -292,39 +292,6 @@ export function GraphView() {
           data-testid="graph-svg"
         >
           <circle cx={cx} cy={cy} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
-
-          {sectors.map((s) => {
-            const meta = TYPE_META[s.type];
-            // Re-derive startAngle by walking back through the ordered list of sectors.
-            let cursor = -Math.PI / 2;
-            for (const t of sectors.map((x) => x.type)) {
-              if (t === s.type) break;
-              cursor += (sectors.find((x) => x.type === t)!.count / others.length) * 2 * Math.PI;
-            }
-            const gapRad = (SECTOR_GAP_DEG * Math.PI) / 180;
-            const sweep = (s.count / others.length) * 2 * Math.PI;
-            const startA = cursor + gapRad / 2;
-            const endA = cursor + sweep - gapRad / 2;
-            const x1 = cx + R_OUTER * Math.cos(startA);
-            const y1 = cy + R_OUTER * Math.sin(startA);
-            const x2 = cx + R_OUTER * Math.cos(endA);
-            const y2 = cy + R_OUTER * Math.sin(endA);
-            const xi1 = cx + R_INNER * Math.cos(startA);
-            const yi1 = cy + R_INNER * Math.sin(startA);
-            const xi2 = cx + R_INNER * Math.cos(endA);
-            const yi2 = cy + R_INNER * Math.sin(endA);
-            const largeArc = endA - startA > Math.PI ? 1 : 0;
-            return (
-              <path
-                key={`wedge-${s.type}`}
-                d={`M ${xi1} ${yi1} L ${x1} ${y1} A ${R_OUTER} ${R_OUTER} 0 ${largeArc} 1 ${x2} ${y2} L ${xi2} ${yi2} A ${R_INNER} ${R_INNER} 0 ${largeArc} 0 ${xi1} ${yi1} Z`}
-                fill={meta.color}
-                fillOpacity={0.05}
-                stroke="none"
-                pointerEvents="none"
-              />
-            );
-          })}
 
           {graph.edges.map((e, i) => {
             const fromKey = `${e.from_type}:${e.from_id}`;
