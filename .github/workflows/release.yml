@@ -6,6 +6,12 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# gh release create / upload require contents: write on GITHUB_TOKEN.
+# Without this, the release job exits 0 with no release created (token has
+# read-only default since 2022).
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
