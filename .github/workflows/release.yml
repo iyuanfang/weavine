@@ -717,6 +717,31 @@ jobs:
             artifacts/**/latest.json
             artifacts/**/latest.json.sig
 
+      # Bypass for latest.json.sig. softprops' @actions/glob v2.11 matches
+      # artifacts/**/latest.json.sig (verified by Python glob) but then drops
+      # the .sig silently at upload time — the sibling latest.json at the
+      # same path uploads fine, only .sig is missing. Since v1.3.0 this has
+      # been the sole thing between a usable Tauri auto-update and a broken
+      # "检查更新 returns no update forever". Run a direct `gh release upload
+      # --clobber` for the .sig after softprops to guarantee it lands.
+      - name: Upload latest.json.sig via gh CLI (softprops drops .sig)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SIG="artifacts/updater/latest.json.sig"
+          if [ ! -f "$SIG" ]; then
+            echo "FATAL: $SIG missing — release-updater-json.sh did not produce it"
+            exit 1
+          fi
+          echo "Uploading $SIG..."
+          gh release upload "$RELEASE_TAG" "$SIG" --repo "$REPO" --clobber
+          echo "=== Final release asset list ==="
+          gh release view "$RELEASE_TAG" --repo "$REPO" --json assets \
+            --jq '.assets[] | "\(.name) (\(.size) bytes)"'
+
       - name: Upload release-debug.log on failure
         if: failure()
         uses: actions/upload-artifact@v4
