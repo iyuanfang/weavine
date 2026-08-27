@@ -147,29 +147,41 @@ export function GraphView() {
       // Cluster layout: same-type nodes form a tight multi-ring cluster so the
       // outermost node always sits at the sector midAngle (not at the sector
       // boundary), preventing overlap with the adjacent sector's outermost
-      // node. Rings spiral inward — outer ring = 1 node at midAngle, then
-      // 2 / 2 / 3 / 3 / 4 / 4 ... capacity per ring, each ring 35 px closer
-      // to center, with up to a 40° angular spread (capped by the sector arc).
+      // node. Rings spiral inward with 50 px spacing (so center→node line
+      // lengths differ noticeably). Angular spread is computed from slot count
+      // and ring radius so neighbouring nodes never collide (min 70 px
+      // center-to-center). Within a ring with 2+ nodes, alternating radial
+      // jitter of ±8 px breaks visual monotony.
       const ringCapacity = (ring: number): number => {
         if (ring === 0) return 1;
         return Math.floor(ring / 2) + 2;
       };
-      const arcSpreadMax = Math.min(sweep * 0.55, (40 * Math.PI) / 180);
+      const minSpacing = NODE_R * 2 + 6; // 70 px center-to-center
       const clusterPos: Array<{ angle: number; radius: number }> = [];
       let placed = 0;
       let ring = 0;
       while (placed < nodes.length) {
         const cap = ringCapacity(ring);
         const slots = Math.min(cap, nodes.length - placed);
-        const radius = R_OUTER - ring * 35;
+        const ringR = R_OUTER - ring * 50;
         if (slots === 1) {
-          clusterPos.push({ angle: midAngle, radius });
+          clusterPos.push({ angle: midAngle, radius: ringR });
         } else {
+          // Spread = (slots-1) * minSpacing / ringR; ensures every gap ≥
+          // minSpacing. Capped at 80% of the sector arc so the cluster stays
+          // inside its wedge even when the sector is narrow.
+          const spreadRad = Math.min(
+            ((slots - 1) * minSpacing) / ringR,
+            sweep * 0.8
+          );
           for (let j = 0; j < slots; j++) {
             const t2 = j / (slots - 1);
+            // Alternating ±8 px radial jitter so line lengths vary within the
+            // same ring too.
+            const jitter = j % 2 === 0 ? -8 : 8;
             clusterPos.push({
-              angle: midAngle - arcSpreadMax / 2 + arcSpreadMax * t2,
-              radius,
+              angle: midAngle - spreadRad / 2 + spreadRad * t2,
+              radius: ringR + jitter,
             });
           }
         }
