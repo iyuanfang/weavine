@@ -1,6 +1,6 @@
 import MarkdownIt from 'markdown-it';
 
-export type WikilinkTarget = 'contact' | 'project' | 'action' | 'event';
+export type WikilinkTarget = 'contact' | 'project' | 'action' | 'event' | 'interaction';
 
 const md = new MarkdownIt({
   html: false,
@@ -21,16 +21,21 @@ md.inline.ruler.after('emphasis', 'wikilink', (state, silent) => {
   const colon = inner.indexOf(':');
   if (colon < 1) return false;
   const kind = inner.slice(0, colon).toLowerCase();
-  if (!['contact', 'project', 'action', 'event'].includes(kind)) return false;
+  if (!['contact', 'project', 'action', 'event', 'interaction'].includes(kind)) return false;
   const title = inner.slice(colon + 1).trim();
   if (!title) return false;
   if (!silent) {
     const token = state.push('wikilink_open', 'a', 1);
+    const href = kind === 'contact' ? 'contacts'
+      : kind === 'project' ? 'projects'
+      : kind === 'action' ? 'actions'
+      : kind === 'event' ? 'events'
+      : 'interactions';
     token.attrs = [
       ['class', 'wikilink'],
       ['data-wikilink-kind', kind],
       ['data-wikilink-title', title],
-      ['href', `#/${kind === 'contact' ? 'contacts' : kind === 'project' ? 'projects' : kind === 'action' ? 'actions' : 'events'}`],
+      ['href', `#/${href}`],
     ];
     const text = state.push('text', '', 0);
     text.content = `${kind}:${title}`;
@@ -46,7 +51,7 @@ export function renderMarkdown(body: string): string {
 
 export function extractWikilinks(body: string): Array<{ kind: WikilinkTarget; title: string }> {
   const out: Array<{ kind: WikilinkTarget; title: string }> = [];
-  const re = /\[\[(contact|project|action|event):([^\]]+?)\]\]/gi;
+  const re = /\[\[(contact|project|action|event|interaction):([^\]]+?)\]\]/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(body))) {
     const kind = m[1].toLowerCase() as WikilinkTarget;

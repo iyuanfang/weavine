@@ -21,13 +21,20 @@ pub fn list(conn: &Connection, user_id: &str, cursor: Option<&str>) -> rusqlite:
     let sql = if let Some(cursor_str) = cursor {
         if let Some((cursor_at, cursor_id)) = cursor_str.split_once(',') {
             format!(
-                "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at                  FROM Note WHERE user_id = ?1                  AND (updated_at < ?2 OR (updated_at = ?2 AND id > ?3))                  ORDER BY updated_at DESC, id ASC LIMIT ?4",
+                "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
+                 FROM Note WHERE user_id = ?1 AND archived_at IS NULL \
+                  AND (updated_at < ?2 OR (updated_at = ?2 AND id > ?3)) \
+                 ORDER BY updated_at DESC, id ASC LIMIT ?4",
             )
         } else {
-            "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at              FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2".to_string()
+            "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
+             FROM Note WHERE user_id = ?1 AND archived_at IS NULL \
+             ORDER BY updated_at DESC LIMIT ?2".to_string()
         }
     } else {
-        "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at          FROM Note WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT ?2".to_string()
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
+         FROM Note WHERE user_id = ?1 AND archived_at IS NULL \
+         ORDER BY updated_at DESC LIMIT ?2".to_string()
     };
     let rows: Vec<Note> = if let Some(cursor_str) = cursor {
         if let Some((cursor_at, cursor_id)) = cursor_str.split_once(',') {
@@ -55,7 +62,7 @@ pub fn list(conn: &Connection, user_id: &str, cursor: Option<&str>) -> rusqlite:
 pub fn get(conn: &Connection, user_id: &str, id: &str) -> rusqlite::Result<Option<Note>> {
     let mut stmt = conn.prepare(
         "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
-         FROM Note WHERE id = ?1 AND user_id = ?2",
+         FROM Note WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
     )?;
     stmt.query_row(params![id, user_id], row_to_note).optional()
 }
@@ -154,7 +161,8 @@ pub fn list_backlinks(
         "SELECT n.id, n.title, substr(n.body, 1, 200), n.updated_at \
          FROM Note n INNER JOIN NoteEntity ne ON ne.note_id = n.id \
          WHERE ne.user_id = ?1 AND ne.entity_type = ?2 AND ne.entity_id = ?3 \
-          ORDER BY n.updated_at DESC",
+           AND n.archived_at IS NULL \
+         ORDER BY n.updated_at DESC",
     )?;
     let rows = stmt
         .query_map(params![user_id, entity_type, entity_id], |row| {

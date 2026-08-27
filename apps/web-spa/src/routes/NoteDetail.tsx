@@ -582,6 +582,12 @@ export function NoteDetail() {
     }
   };
 
+  // Skip the next debounce cycle — set true when the load effect populates
+  // drafts, consumed by the debounce effect when it next fires for those
+  // state changes. Without this, opening a note triggers a 3 s timer that
+  // persist()s identical content (bug #2: opening rewrites the row).
+  const skipNextDebounceRef = useRef(true);
+
   useEffect(() => {
     if (!userId || !id) return;
     let cancelled = false;
@@ -597,6 +603,10 @@ export function NoteDetail() {
         setDraftTitle(n.title);
         setDraftBody(n.body);
         setDraftLinks(ls);
+        // The setState calls above batch into a single render → debounce
+        // effect runs once with the loaded drafts. Tell it to skip that
+        // single run since the change came from the server, not the user.
+        skipNextDebounceRef.current = true;
       }
     });
     return () => {
@@ -605,6 +615,10 @@ export function NoteDetail() {
   }, [adapter, userId, id]);
 
   useEffect(() => {
+    if (skipNextDebounceRef.current) {
+      skipNextDebounceRef.current = false;
+      return;
+    }
     dirtyRef.current = true;
     const handle = window.setTimeout(() => {
       debounceHandleRef.current = null;
@@ -613,7 +627,14 @@ export function NoteDetail() {
     debounceHandleRef.current = handle;
     return () => {
       window.clearTimeout(handle);
-      if (debounceHandleRef.current === handle) debounceHandleRef.current = null;
+      // Flush on unmount / SPA navigation: if we still own the timer and
+      // there are pending edits, persist immediately rather than dropping
+      // them (bug #3: beforeunload doesn't catch react-router nav, so
+      // without an explicit flush the 3 s window would lose the edits).
+      if (handle === debounceHandleRef.current && dirtyRef.current) {
+        debounceHandleRef.current = null;
+        void persist();
+      }
     };
   }, [draftTitle, draftBody, draftLinks]);
 

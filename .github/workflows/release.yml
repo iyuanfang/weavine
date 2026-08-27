@@ -685,19 +685,24 @@ jobs:
       - name: List artifacts again (manifest should now be visible)
         run: find artifacts/ -type f
 
-      - name: Create Release + upload platform artifacts
+      - name: Create Release + upload all artifacts (binaries + latest.json + .sig)
         # softprops/action-gh-release@v2 handles idempotency (existing tag),
         # draft mode, auto-generated notes, and most importantly creates the
         # release with full GITHUB_TOKEN permissions even when previous
         # custom bash-based gh release create calls silently no-opped under
         # restrictive default token scopes.
         #
-        # files: glob pulls every artifact path under artifacts/*/ — covers
-        # .exe / .dmg / .deb / .AppImage / .apk. The updater manifest
-        # (latest.json + latest.json.sig) is uploaded in the next step via
-        # gh CLI directly because softprops' @actions/glob v2.11 has been
-        # observed to silently drop .sig files (latest.json at the same
-        # path uploads fine, but its sibling .sig never makes it).
+        # files: glob covers all six asset types in one atomic upload call:
+        #   - platform binaries (.exe / .dmg / .deb / .AppImage / .apk)
+        #   - updater manifest (artifacts/updater/latest.json)
+        #   - ed25519 signature (artifacts/updater/latest.json.sig)
+        # The previous design split manifest upload into a separate
+        # `gh release upload` step that silently failed (gh CLI returns
+        # exit 0 on some upload errors), leaving the release with 4 binaries
+        # but no latest.json / .sig. The in-app Tauri updater then refused
+        # to verify signatures and "检查更新" returned "no update" forever.
+        # fail_on_unmatched_files: false guards against a missing optional
+        # APK (e.g. if the Android job is skipped).
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -709,27 +714,8 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.AppImage
             artifacts/**/*.apk
-
-      - name: Upload updater manifest (latest.json + .sig)
-        # Direct gh release upload — sidesteps softprops' glob bug. The
-        # .sig file is critical: the in-app Tauri updater fetches
-        # latest.json, verifies the .sig with the pubkey embedded in
-        # tauri.conf.json, and refuses to install without a valid signature.
-        # Without .sig the Settings "检查更新" button returns "no update"
-        # forever — even when latest.json says a new version is available.
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -e
-          for f in artifacts/updater/latest.json artifacts/updater/latest.json.sig; do
-            echo "Uploading $f..."
-            gh release upload "$RELEASE_TAG" "$f" --repo "$REPO" --clobber
-          done
-          echo "=== Final release asset list ==="
-          gh release view "$RELEASE_TAG" --repo "$REPO" --json assets \
-            --jq '.assets[] | "\(.name) (\(.size) bytes)"'
+            artifacts/**/latest.json
+            artifacts/**/latest.json.sig
 
       - name: Upload release-debug.log on failure
         if: failure()

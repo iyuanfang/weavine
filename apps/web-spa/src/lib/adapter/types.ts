@@ -413,6 +413,8 @@ export interface Note {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  imported_from?: string | null;
+  imported_at?: string | null;
 }
 
 export interface NoteEntityLink {
