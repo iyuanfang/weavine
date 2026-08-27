@@ -130,14 +130,14 @@ export function ContactsList() {
 
   const countsByImportance = IMPORTANCE_VALUES.reduce<Record<string, number>>(
     (acc, v) => {
-      acc[v] = contacts.filter((c) => c.importance === v).length;
+      acc[v] = (contacts ?? []).filter((c) => c.importance === v).length;
       return acc;
     },
     {},
   );
 
   const countsByTag = tags.reduce<Record<string, number>>((acc, tag) => {
-    acc[tag.id] = contacts.filter((c) => c.tags.some((t) => t.id === tag.id)).length;
+      acc[tag.id] = (contacts ?? []).filter((c) => c.tags.some((t) => t.id === tag.id)).length;
     return acc;
   }, {});
 
@@ -204,7 +204,7 @@ export function ContactsList() {
         <div>
           <h1 className="page-title">联系人</h1>
           <p className="page-subtitle">
-            {contacts.length} 个人 ·{' '}
+            (contacts ?? []).length 个人 ·{' '}
             {hasActiveFilter ? (
               <button
                 type="button"
@@ -311,7 +311,7 @@ export function ContactsList() {
                 <span style={{ fontSize: 'var(--text-base)' }}>●</span>
                 <span>全部</span>
               </span>
-              <span className="filter-panel__count">{contacts.length}</span>
+              <span className="filter-panel__count">{(contacts ?? []).length}</span>
             </button>
             {IMPORTANCE_VALUES
               .filter((v) => (countsByImportance[v] ?? 0) > 0 || selectedImportance === v)
@@ -358,7 +358,7 @@ export function ContactsList() {
                     <span style={{ fontSize: 'var(--text-base)' }}>●</span>
                     <span>全部</span>
                   </span>
-                  <span className="filter-panel__count">{contacts.length}</span>
+                  <span className="filter-panel__count">{(contacts ?? []).length}</span>
                 </button>
                 {tags
                   .filter((tag) => (countsByTag[tag.id] ?? 0) > 0 || selectedTagId === tag.id)
@@ -411,9 +411,9 @@ export function ContactsList() {
         </aside>
 
         <div className="layout-split__main">
-          {contacts.length === 0 && isLoading ? (
+          {(contacts ?? []).length === 0 && isLoading ? (
             <div className="loading">加载联系人…</div>
-          ) : contacts.length === 0 ? (
+          ) : (contacts ?? []).length === 0 ? (
             <div className="empty-state">
               <h3 className="empty-state__title">
                 {hasActiveFilter ? '没有匹配的联系人' : '还没有联系人'}
@@ -430,7 +430,7 @@ export function ContactsList() {
           ) : (
             <div>
               <div style={{ display: 'grid', gap: 6 }}>
-                {contacts.map((c) => (
+                {(contacts ?? []).map((c) => (
                   <ContactRow
                     key={c.id}
                     contact={c}
