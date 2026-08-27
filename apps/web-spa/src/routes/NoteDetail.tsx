@@ -537,9 +537,9 @@ export function NoteNew() {
               ▶ 目录
             </button>
           )}
-          <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+          <div style={{ flex: 1, display: 'flex', minWidth: 0, alignItems: 'stretch' }}>
             {(mode === 'edit' || mode === 'split') && (
-              <div className="note-edit__editor" style={{ flex: 1, minWidth: 0, height: "100%", minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div className="note-edit__editor" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
                 {body.trim() === '' && mode === 'edit' && (
                   <div className="note-edit__templates">
                     <span className="note-edit__templates-label">快速开始：</span>
@@ -576,11 +576,9 @@ export function NoteNew() {
                 className="note-edit__preview"
                 style={{
                   flex: 1,
-                  height: '100%',
-                  minHeight: 0,
+
                   borderLeft: mode === 'split' ? '1px solid var(--border, #e5e7eb)' : 'none',
                   minWidth: 0,
-                  overflow: 'auto',
                 }}
               >
                 <MarkdownView body={body} />
@@ -929,9 +927,9 @@ export function NoteDetail() {
               ▶ 目录
             </button>
           )}
-          <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+          <div style={{ flex: 1, display: 'flex', minWidth: 0, alignItems: 'stretch' }}>
             {(mode === 'edit' || mode === 'split') && (
-              <div className="note-edit__editor" style={{ flex: 1, minWidth: 0, height: "100%", minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div className="note-edit__editor" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
                 <MarkdownEditor ref={editEditorRef} value={draftBody} onChange={setDraftBody} />
               </div>
             )}
@@ -940,11 +938,9 @@ export function NoteDetail() {
                 className="note-edit__preview"
                 style={{
                   flex: 1,
-                  height: '100%',
-                  minHeight: 0,
+
                   borderLeft: mode === 'split' ? '1px solid var(--border, #e5e7eb)' : 'none',
                   minWidth: 0,
-                  overflow: 'auto',
                 }}
               >
                 <MarkdownView body={draftBody} />

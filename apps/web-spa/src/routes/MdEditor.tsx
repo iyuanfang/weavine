@@ -207,7 +207,7 @@ export function MdEditor() {
     : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div
         style={{
           display: 'flex',
@@ -326,7 +326,7 @@ export function MdEditor() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, alignItems: 'stretch' }}>
         {tocOpen && (
           <TocPanel headings={tocHeadings} onSelect={scrollToLine} onToggle={() => setTocOpen(false)} />
         )}
@@ -354,7 +354,7 @@ export function MdEditor() {
           </button>
         )}
         {(view === 'edit' || view === 'split') && (
-          <div style={{ flex: 1, minWidth: 0, height: '100%', overflow: 'hidden', display: 'flex' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <textarea
               ref={taRef}
               value={content}
@@ -371,18 +371,17 @@ export function MdEditor() {
               spellCheck={false}
               style={{
                 flex: 1,
-                height: '100%',
                 padding: '12px',
                 border: 'none',
                 outline: 'none',
                 resize: 'none',
-                overflow: 'auto',
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontSize: 14,
                 lineHeight: 1.6,
                 background: 'var(--surface, #fff)',
                 color: 'var(--text, #111)',
                 minWidth: 0,
+                minHeight: 0,
               }}
               placeholder={path ? '' : '点「📂 打开 .md」选择本地 Markdown 文件…'}
             />
@@ -392,9 +391,7 @@ export function MdEditor() {
           <div
             style={{
               flex: 1,
-              height: '100%',
               padding: '12px 20px',
-              overflow: 'auto',
               borderLeft: view === 'split' ? '1px solid var(--border, #e5e7eb)' : 'none',
               background: 'var(--surface-alt, #f9fafb)',
               minWidth: 0,
