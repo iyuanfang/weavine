@@ -1,5 +1,4 @@
 use rusqlite::{params, Connection};
-use uuid::Uuid;
 
 const SEVEN_DAYS_SECS: i64 = 7 * 86_400;
 
@@ -10,18 +9,23 @@ struct EndedEvent {
     end_at: String,
 }
 
-/// Idempotent: re-running does not duplicate rows because of
-/// `idx_interaction_source_ref_contact`.
+/// After 2026-08-27's archive-hook refactor (interaction.action +
+/// business.event::update → create an Interaction on archived_at None → Some
+/// transition), Interaction rows are NOT auto-written here anymore. This pass
+/// survives only to bump Contact.last_interaction_at for ended-but-not-yet-
+/// archived events so the keep-in-touch cadence keeps ticking; the Interaction
+/// that ties the contact to the event is now created when the user archives the
+/// event.
 pub fn run(conn: &Connection, window_secs: i64) -> rusqlite::Result<usize> {
-    let candidates = fetch_promptable_events(conn, window_secs)?;
-    let mut written = 0usize;
+    let candidates = fetch_recently_ended_events(conn, window_secs)?;
+    let mut touched = 0usize;
     for ev in &candidates {
-        written += write_interactions_for_event(conn, ev)?;
+        touched += touch_contacts_for_event(conn, ev)?;
     }
-    Ok(written)
+    Ok(touched)
 }
 
-fn fetch_promptable_events(conn: &Connection, window_secs: i64) -> rusqlite::Result<Vec<EndedEvent>> {
+fn fetch_recently_ended_events(conn: &Connection, window_secs: i64) -> rusqlite::Result<Vec<EndedEvent>> {
     let mut stmt = conn.prepare(
         "SELECT e.id, e.user_id, e.title, e.end_at \
          FROM \"Event\" e \
@@ -49,7 +53,7 @@ fn fetch_promptable_events(conn: &Connection, window_secs: i64) -> rusqlite::Res
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
-fn write_interactions_for_event(conn: &Connection, ev: &EndedEvent) -> rusqlite::Result<usize> {
+fn touch_contacts_for_event(conn: &Connection, ev: &EndedEvent) -> rusqlite::Result<usize> {
     let participants: Vec<String> = {
         let mut stmt = conn.prepare(
             "SELECT el.to_id FROM EntityLink el \
@@ -62,37 +66,26 @@ fn write_interactions_for_event(conn: &Connection, ev: &EndedEvent) -> rusqlite:
         rows.filter_map(|r| r.ok()).collect()
     };
 
-    let mut written = 0usize;
+    let mut touched = 0usize;
     let tx = conn.unchecked_transaction()?;
     for contact_id in &participants {
-        let id = Uuid::new_v4().to_string();
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-            .to_string();
-        let inserted = tx.execute(
-            "INSERT INTO Interaction \
-                (id, user_id, contact_id, event_id, occurred_at, summary, source, source_ref, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'event', ?4, ?7) \
-             ON CONFLICT DO NOTHING",
-            params![&id, &ev.user_id, contact_id, &ev.id, &ev.end_at, &ev.title, &now],
-        )?;
-        if inserted == 0 {
-            continue;
-        }
-        written += 1;
-        tx.execute(
+        let updated = tx.execute(
             "UPDATE Contact SET last_interaction_at = ?1 \
-             WHERE id = ?2 AND user_id = ?3 AND (last_interaction_at IS NULL OR last_interaction_at < ?1)",
+             WHERE id = ?2 AND user_id = ?3 \
+               AND (last_interaction_at IS NULL OR last_interaction_at < ?1)",
             params![&ev.end_at, contact_id, &ev.user_id],
         )?;
+        if updated > 0 {
+            touched += 1;
+        }
         if let Err(e) = crate::business::keep_in_touch::schedule_for_contact_tx(&tx, contact_id) {
             eprintln!(
-                "[auto_log::write_interactions] keep_in_touch re-schedule for {contact_id} failed: {e}"
+                "[auto_log::touch_contacts] keep_in_touch re-schedule for {contact_id} failed: {e}"
             );
         }
     }
     tx.commit()?;
-    Ok(written)
+    Ok(touched)
 }
 
 pub fn run_with_default_window(conn: &Connection) -> rusqlite::Result<usize> {
@@ -102,6 +95,7 @@ pub fn run_with_default_window(conn: &Connection) -> rusqlite::Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::Connection;
 
     fn fresh_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
@@ -141,13 +135,13 @@ mod tests {
             "INSERT INTO EntityLink \
                 (id, user_id, from_type, from_id, to_type, to_id, relation_type, role) \
              VALUES (?1, ?2, 'event', ?3, 'contact', ?4, 'participated', 'participant')",
-            params![Uuid::new_v4().to_string(), user_id, event_id, contact_id],
+            params![uuid::Uuid::new_v4().to_string(), user_id, event_id, contact_id],
         )
         .unwrap();
     }
 
     #[test]
-    fn writes_one_interaction_per_participant() {
+    fn does_not_write_interactions() {
         let conn = fresh_db();
         make_user(&conn, "u1");
         make_contact(&conn, "c1", "u1");
@@ -156,17 +150,12 @@ mod tests {
         add_participant(&conn, "e1", "u1", "c1");
         add_participant(&conn, "e1", "u1", "c2");
 
-        let n = run(&conn, 7 * 86_400).unwrap();
-        assert_eq!(n, 2);
+        run(&conn, 7 * 86_400).unwrap();
 
         let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM Interaction WHERE source = 'event'",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM Interaction", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(count, 2);
+        assert_eq!(count, 0, "auto_log must not auto-create Interactions anymore");
     }
 
     #[test]

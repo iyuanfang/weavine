@@ -18,7 +18,6 @@ const RING_LEVEL: Record<EntityGraphNodeType, 0 | 1 | 2> = {
   action: 1,
   project: 2,
   note: 2,
-  tag: 2,
 };
 
 interface Crumb {
@@ -30,14 +29,13 @@ interface Crumb {
 const TYPE_META: Record<EntityGraphNodeType, { icon: string; color: string; label: string }> = {
   contact: { icon: '👤', color: '#2563eb', label: '联系人' },
   project: { icon: '📁', color: '#7c3aed', label: '项目' },
-  event: { icon: '📅', color: '#10b981', label: '事件' },
-  action: { icon: '✅', color: '#f59e0b', label: '动作' },
+  event: { icon: '📅', color: '#10b981', label: '日程' },
+  action: { icon: '✅', color: '#f59e0b', label: '待办' },
   note: { icon: '📝', color: '#ec4899', label: '笔记' },
-  tag: { icon: '🏷️', color: '#64748b', label: '标签' },
   interaction: { icon: '💬', color: '#0ea5e9', label: '互动' },
 };
 
-const SUPPORTED_CENTERS: EntityGraphNodeType[] = ['contact', 'project', 'event', 'action', 'note', 'tag'];
+const SUPPORTED_CENTERS: EntityGraphNodeType[] = ['contact', 'project', 'event', 'action', 'note'];
 
 function detailHref(type: EntityGraphNodeType, id: string): string {
   switch (type) {
@@ -46,7 +44,6 @@ function detailHref(type: EntityGraphNodeType, id: string): string {
     case 'event': return `/events/${id}`;
     case 'action': return `/actions/${id}`;
     case 'note': return `/notes/${id}`;
-    case 'tag': return `/tags/${id}`;
     case 'interaction': return `/interactions/${id}`;
     default: return '/';
   }
@@ -341,7 +338,7 @@ export function GraphView() {
                       textAnchor="middle"
                       pointerEvents="none"
                     >
-                      ⊕
+                      ↗
                     </text>
                   </g>
                 )}
@@ -352,8 +349,8 @@ export function GraphView() {
       </div>
 
       <div className="card" style={{ padding: 12, marginTop: 12, fontSize: 12, color: '#64748b' }}>
-        <strong>提示：</strong>单击节点 = 打开详情页；节点右上角 ⊕ = 以此节点为中心重新画图（钻取）；
-        顶部面包屑可跳回任意层级；标签节点（🏷️）不可钻取。
+        <strong>提示：</strong>单击节点 = 打开详情页；节点右上角 ↗ = 以此节点为中心重新画图（钻取）；
+        顶部面包屑可跳回任意层级。
       </div>
     </div>
   );

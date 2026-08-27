@@ -1614,3 +1614,65 @@ extract_endpoint_auth() -> EndpointAuth
 - **Q16 #39 仪表盘是否单独做，还是合并到 §12 #33 Phase 3.5？** → 用户拍板
 - **Q17 #47 README 刷新是否一起做？** → 用户拍板
 - **Q18 iOS 路线是否继续（#45）？** → 用户拍板
+
+---
+
+## 14. v1.3 关联图 + 归档→互动 改写（2026-08-27）
+
+### 14.1 动机
+
+v1.2 的关联图把"动作"和"事件"自动展开为互动，导致同一工作流（待办完成 / 日程结束）被记成两份记录：一份原始实体 + 一份互动。归档后才时把它们折叠为一条互动，避免重复；UI 也从动作中心改为待办中心，统一术语。
+
+### 14.2 UI 改写（`GraphView.tsx`）
+
+| 项 | 之前 | 之后 |
+| --- | --- | --- |
+| `action` label | 动作 | **待办** |
+| `event` label | 事件 | **日程** |
+| `tag` 节点 | 显示在 graph，可钻取 | **从 graph 移除**（`RING_LEVEL` / `SUPPORTED_CENTERS` / `detailHref` 三处同步删掉） |
+| 钻取按钮 | `⊕`（"加号"语义） | **`↗`**（指向，节点为中心视图） |
+| 提示文案 | "标签节点不可钻取" | 删除（无 tag 节点后该提示已过时） |
+
+`entity_type` 字符串值不变（仍为 `action` / `event`），仅 UI 文案与可视节点集合变化。`/tags/:id` 详情页保留，标签功能本身不受影响。
+
+### 14.3 后端归档→互动钩子
+
+#### 14.3.1 Action (`business/action.rs::update`)
+
+- **之前**：当 `status` 从非 `done` 变为 `done` 时自动创建 `source='action'` 的 Interaction。
+- **之后**：删除 done-INSERT。**改为**：当 `archived_at` 从 `NULL`/`""` 变为非空时（None → Some 转移）：
+  - 新建 `Interaction`：
+    - `source = 'archive'`
+    - `source_ref = action.id`
+    - `occurred_at = action.completed_at`（若存在），否则 `archived_at` 时间戳
+    - `summary = action.title`
+    - `contact_id = action.contact_id`（继承）
+    - `action_id = action.id`
+  - 复制 `NoteEntity` 行：`entity_type='action' AND entity_id=action.id` 的所有行 → 新增 `entity_type='interaction' AND entity_id=<新 interaction id>` 的对应行。`UNIQUE(note_id, entity_type, entity_id)` 约束保证幂等。
+
+#### 14.3.2 Event (`business/event.rs::update`)
+
+- **之前**：无内联钩子，由 `business/auto_log.rs::run` 在启动时扫描 7 天内已结束的 Event，按参与者写入 `source='event'` 的 Interaction + 提升 `Contact.last_interaction_at`。
+- **之后**：保留 auto_log 的 contact-bump 副作用（移除 Interaction INSERT 逻辑），新增归档转移钩子（同 Action 模式）：
+  - `occurred_at = event.end_at`（若存在），否则 `archived_at` 时间戳
+  - `source = 'archive'`, `source_ref = event.id`
+  - 复制 `NoteEntity` 行。
+
+### 14.4 Migration: Interaction.source CHECK 扩列
+
+- 现有约束：`CHECK("source" IN ('manual','event','action'))`。
+- 新增 `'archive'`：通过 `Migration::run` 内的一段 guard 重建表（SQLite 不支持 ALTER CHECK）。guard 检查 `sqlite_master.sql` 是否含 `'archive'`，已含则跳过（幂等）。所有 FK / UNIQUE 约束在 `Interaction__new` 中完整复刻；外层索引（`Interaction_user_id_contact_id_occurred_at_idx` 等）由迁移顶部独立 `CREATE INDEX IF NOT EXISTS` 重建。
+
+### 14.5 auto_log.rs 退化为 ` contact bump only`
+
+- 启动时仍扫描 7 天内已结束但未归档的 Event + 至少一个 `participated` EntityLink 的 contact，提升 `last_interaction_at`（仅在原值为空或更早时）+ 重排 `keep_in_touch` reminder。
+- 不再写 Interaction 行。测试套件新增 `does_not_write_interactions` 不变量测试，旧 `writes_one_interaction_per_participant` / `idempotent_when_rerun` 改 测 `touched` 返回值（contact bump 次数）。
+
+### 14.6 跨栈一致性
+
+- Server 侧 (`server/src/handlers/action.rs` / `event.rs` 的 `update` handler) 暂不改动 —— 用户仅在 Desktop 客户端归档；Server 走 sync 接收 `archived_at` 字段后由 `sync/translate.rs` 落库，Interaction 写入逻辑未来要后 port。当前 Desktop-first 是 v1.3 范围内的 scope。
+
+### 14.7 拍板记录（本节增项）
+
+- **Q19 v1.3.1 是否要补 Server 侧 archive 钩子**（保证 cloud 用户归档后云端也有 Interaction）？→ 用户拍板。
+- **Q20 `auto_log.rs` 是保留（仅 bump contact）还是彻底删掉**？当前保留，用户可能想彻底关掉。→ 用户拍板。

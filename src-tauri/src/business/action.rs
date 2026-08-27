@@ -128,14 +128,14 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
-    let prev: Option<(Option<String>, String, String, String)> = conn
+    let prev: Option<(Option<String>, Option<String>, String)> = conn
         .query_row(
-            "SELECT contact_id, status, user_id, title FROM Action WHERE id = ?1",
+            "SELECT contact_id, archived_at, user_id FROM Action WHERE id = ?1",
             rusqlite::params![&input.id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .ok();
-    let (prev_contact_id, prev_status, action_user_id, prev_title) = match prev {
+    let (prev_contact_id, prev_archived_at, action_user_id) = match prev {
         Some(r) => r,
         None => return Err(rusqlite::Error::QueryReturnedNoRows),
     };
@@ -205,28 +205,53 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         conn.execute(&sql, params_refs.as_slice())?;
     }
 
-    let new_status = input.status.as_deref().unwrap_or(&prev_status);
-    let new_contact_id = input.contact_id.as_deref()
-        .map(|s| s.to_string())
-        .or(prev_contact_id.clone());
-    if new_status == "done" {
-        if let Some(ref contact_id) = new_contact_id {
-            let iid = Uuid::new_v4().to_string();
-            let summary = input.title.clone().unwrap_or(prev_title);
-            conn.execute(
-                "INSERT INTO Interaction \
-                 (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
-                 VALUES (?1, ?2, ?3, ?4, NULL, ?5, NULL, ?6, 'action', ?4, ?5)",
-                rusqlite::params![
-                    &iid,
-                    &action_user_id,
-                    contact_id,
-                    &input.id,
-                    &now,
-                    &summary,
-                ],
-            )?;
-        }
+    // Archive hook: synthesize an Interaction when archived_at transitions
+    // None → Some. occurred_at = action.completed_at when set, else the
+    // archived_at timestamp. NoteEntity rows pointing at the action are
+    // duplicated to point at the new interaction as well — the bidirectional
+    // note↔action and note↔interaction traversals remain intact.
+    let new_archived_at = input.archived_at.as_deref().filter(|s| !s.is_empty());
+    let was_unarchived = prev_archived_at.is_none() || prev_archived_at.as_deref() == Some("");
+    if was_unarchived && new_archived_at.is_some() {
+        let action = conn.query_row(
+            &format!("SELECT {ACTION_COLS}{ACTION_REL_COLS} FROM Action{ACTION_JOINS} WHERE Action.id = ?1"),
+            rusqlite::params![&input.id],
+            row_to_action,
+        )?;
+        let new_contact_id = input.contact_id.as_deref()
+            .map(|s| s.to_string())
+            .or_else(|| prev_contact_id.clone())
+            .filter(|s| !s.is_empty());
+        let occurred_at = action
+            .completed_at
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or_else(|| new_archived_at.map(|s| s.to_string()))
+            .unwrap_or_else(|| now.clone());
+        let iid = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO Interaction \
+             (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
+             VALUES (?1, ?2, ?3, ?4, NULL, ?5, NULL, ?6, 'archive', ?4, ?7)",
+            rusqlite::params![
+                &iid,
+                &action_user_id,
+                new_contact_id.as_deref(),
+                &input.id,
+                &occurred_at,
+                &action.title,
+                &now,
+            ],
+        )?;
+        // UNIQUE(note_id, entity_type, entity_id) on NoteEntity makes this
+        // idempotent: re-archiving the same action is a no-op.
+        conn.execute(
+            "INSERT OR IGNORE INTO NoteEntity (id, note_id, user_id, entity_type, entity_id, created_at) \
+             SELECT lower(hex(randomblob(16))), ne.note_id, ne.user_id, 'interaction', ?1, ?2 \
+             FROM NoteEntity ne \
+             WHERE ne.user_id = ?3 AND ne.entity_type = 'action' AND ne.entity_id = ?4",
+            rusqlite::params![&iid, &now, &action_user_id, &input.id],
+        )?;
     }
 
     conn.query_row(

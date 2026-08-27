@@ -138,6 +138,15 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
+    let prev_archived_at: Option<String> = conn
+        .query_row(
+            "SELECT archived_at FROM Event WHERE id = ?1",
+            rusqlite::params![&input.id],
+            |row| row.get(0),
+        )
+        .ok()
+        .flatten();
+
     let mut sql = String::from("UPDATE Event SET ");
     let mut set_clauses: Vec<String> = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -208,6 +217,46 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
         rusqlite::params![&input.id],
         row_to_event,
     )?;
+
+    // Archive hook: synthesize an Interaction when archived_at transitions
+    // None → Some. occurred_at = event.end_at when set, else the archived_at
+    // timestamp. NoteEntity rows pointing at the event are duplicated to
+    // point at the new interaction so note↔event and note↔interaction
+    // traversals remain intact.
+    let new_archived_at = event.archived_at.clone().filter(|s| !s.is_empty());
+    let was_unarchived = prev_archived_at.is_none() || prev_archived_at.as_deref() == Some("");
+    if was_unarchived && new_archived_at.is_some() {
+        let event_user_id = event.user_id.clone();
+        let occurred_at = event
+            .end_at
+            .clone()
+            .filter(|s| !s.is_empty())
+            .or_else(|| new_archived_at.clone())
+            .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string());
+        let iid = Uuid::new_v4().to_string();
+        let created_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        conn.execute(
+            "INSERT INTO Interaction \
+             (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
+             VALUES (?1, ?2, ?3, NULL, ?4, ?5, NULL, ?6, 'archive', ?4, ?7)",
+            rusqlite::params![
+                &iid,
+                &event_user_id,
+                event.contact_id.as_deref().filter(|s| !s.is_empty()),
+                &input.id,
+                &occurred_at,
+                &event.title,
+                &created_at,
+            ],
+        )?;
+        conn.execute(
+            "INSERT OR IGNORE INTO NoteEntity (id, note_id, user_id, entity_type, entity_id, created_at) \
+             SELECT lower(hex(randomblob(16))), ne.note_id, ne.user_id, 'interaction', ?1, ?2 \
+             FROM NoteEntity ne \
+             WHERE ne.user_id = ?3 AND ne.entity_type = 'event' AND ne.entity_id = ?4",
+            rusqlite::params![&iid, &created_at, &event_user_id, &input.id],
+        )?;
+    }
 
     if let Err(e) = reminder_biz::sync_event_reminder(conn, &event) {
         eprintln!("[event] reminder sync failed: {e}");

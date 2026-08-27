@@ -766,6 +766,55 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
            AND contact_id IS NOT NULL",
     )?;
 
+    // ── Phase archive-hook: extend Interaction.source CHECK to allow 'archive' ──
+    // 2026-08-27: business/action.rs::update() and business/event.rs::update()
+    // now create an Interaction on the None → Some(archived_at) transition
+    // (see archive hooks there). 'archive' joins the existing set
+    // ('manual','event','action') which originally came from auto_log.rs.
+    // SQLite has no ALTER … DROP/ADD CONSTRAINT, so we detect the new value
+    // by inspecting the CHECK text and skip if already present.
+    let interaction_check_sql: Option<String> = conn
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='Interaction'",
+            [],
+            |r| r.get(0),
+        )
+        .ok();
+    if let Some(sql) = interaction_check_sql {
+        if !sql.contains("'archive'") {
+            // Recreate the table with the extended CHECK constraint.
+            // All FK references are preserved by NOT NULL / REFERENCES clauses
+            // mirrored below. Indices are recreated via their own IF NOT EXISTS
+            // guards at the top of this function — they survive the recreation
+            // because we use the same names.
+            conn.execute_batch(
+                r#"
+                PRAGMA foreign_keys=OFF;
+                CREATE TABLE "Interaction__new" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+                    "contact_id" TEXT REFERENCES "Contact"("id") ON DELETE SET NULL,
+                    "action_id" TEXT REFERENCES "Action"("id") ON DELETE SET NULL,
+                    "event_id" TEXT REFERENCES "Event"("id") ON DELETE SET NULL,
+                    "occurred_at" DATETIME NOT NULL,
+                    "channel" TEXT,
+                    "summary" TEXT NOT NULL,
+                    "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','action','archive')),
+                    "source_ref" TEXT,
+                    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO "Interaction__new"
+                    (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at)
+                SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at
+                FROM "Interaction";
+                DROP TABLE "Interaction";
+                ALTER TABLE "Interaction__new" RENAME TO "Interaction";
+                PRAGMA foreign_keys=ON;
+                "#,
+            )?;
+        }
+    }
+
     Ok(())
 }
 
