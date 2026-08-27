@@ -56,8 +56,14 @@ DOWNLOAD_BASE="https://github.com/${REPO}/releases/download/${RELEASE_TAG}"
 platform_key_for() {
   local f="$1"
   case "$f" in
-    *.exe)  echo "windows-x86_64-msvc" ;;  # NSIS installer; Tauri doesn't ship aarch64 NSIS for our matrix
-    *.dmg)  echo "darwin-x86_64" ;;        # ditto — we build x64_64 DMG for Intel + aarch64 DMG separately
+    *aarch64*.exe|*arm64*.exe)
+      echo "windows-aarch64-msvc" ;;
+    *x64*.exe|*x86_64*.exe|*.exe)
+      echo "windows-x86_64-msvc" ;;
+    *aarch64*.dmg|*arm64*.dmg)
+      echo "darwin-aarch64" ;;
+    *x64*.dmg|*x86_64*.dmg|*.dmg)
+      echo "darwin-x86_64" ;;
     *.AppImage|*.deb)
       echo "linux-x86_64" ;;
     *)
@@ -72,13 +78,13 @@ APP_VERSION="$(jq -r .version apps/web-spa/package.json 2>/dev/null \
 
 # Build the latest.json in memory.
 TMP_JSON="$(mktemp -t latest-XXXXXX.json)"
-trap 'rm -f "$TMP_JSON"' EXIT
+TMP_SIG="${TMP_JSON}.sig"
+trap 'rm -f "$TMP_JSON" "$TMP_SIG"' EXIT
 
 declare -A PLATFORMS
 declare -a PLATFORM_KEYS
 
-for f in "$ARTIFACTS_DIR"/*/*.{exe,dmg,AppImage,deb} \
-         "$ARTIFACTS_DIR"/*.{exe,dmg,AppImage,deb}; do
+while IFS= read -r f; do
   [[ -f "$f" ]] || continue
   fname="$(basename "$f")"
   pkey="$(platform_key_for "$fname")"
@@ -94,7 +100,7 @@ for f in "$ARTIFACTS_DIR"/*/*.{exe,dmg,AppImage,deb} \
   fi
   PLATFORMS[$pkey]="$DOWNLOAD_BASE/$fname"
   PLATFORM_KEYS+=("$pkey")
-done
+done < <(find "$ARTIFACTS_DIR" -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) 2>/dev/null)
 
 # Build the JSON via jq so quoting/escaping is correct.
 JSON_PLATFORMS="$(
@@ -120,16 +126,19 @@ cat "$TMP_JSON"
 echo
 
 # Sign latest.json → latest.json.sig
+# `cargo tauri signer sign` has no --output flag; it writes <input>.sig
+# automatically (see tauri-cli-2.11.4/src/helpers/updater_signature.rs:124).
+# We just point it at $TMP_JSON and it produces $TMP_SIG next to it.
 cargo tauri signer sign --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
   --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" \
-  --output "$TMP_JSON.sig" "$TMP_JSON" >/dev/null
-echo "Wrote $TMP_JSON.sig"
+  "$TMP_JSON" >/dev/null
+echo "Wrote $TMP_SIG"
 
 # Upload both as release assets (overwrite if present).
 if command -v gh >/dev/null 2>&1; then
   GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
   if [[ -n "$GH_TOKEN" ]]; then
-    for asset in "$TMP_JSON" "$TMP_JSON.sig"; do
+    for asset in "$TMP_JSON" "$TMP_SIG"; do
       gh release upload "$RELEASE_TAG" "$asset" \
         --repo "$REPO" --clobber
     done
