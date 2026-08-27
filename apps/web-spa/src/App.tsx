@@ -17,7 +17,7 @@ import { ReminderToastContainer, type ReminderToastItem } from './components/Rem
 import { useGlobalShortcut } from './hooks/useGlobalShortcut';
 import { RegisterSW } from './lib/register-sw';
 import { useReminderPoller } from './lib/use-reminder-poller';
-import { useNavigate } from 'react-router-dom';
+
 import {
   AdapterProvider,
   createDefaultAdapter,
@@ -74,11 +74,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
 export function AppInner({ children }: { children?: ReactNode }) {
   const adapter = useAdapter();
-  const navigate = useNavigate();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickInitial, setQuickInitial] = useState('');
   const [pendingReminders, setPendingReminders] = useState<ReminderToastItem[]>([]);
-  const [updateAvailable, setUpdateAvailable] = useState<{ version: string; notes?: string } | null>(null);
   const seenReminderIds = useRef<Set<string>>(new Set());
   useGlobalShortcut('k', () => setQuickOpen((o) => !o));
   const [searchOpen, setSearchOpen] = useState(false);
@@ -161,39 +159,6 @@ export function AppInner({ children }: { children?: ReactNode }) {
     };
   }, []);
 
-  // §11.7+ Phase F: auto-check fires Tauri event 30 s after launch.
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    (async () => {
-      try {
-        const mod = await import('@tauri-apps/api/event').catch(() => null);
-        if (!mod) return;
-        const off = await mod.listen<{ version: string; notes?: string }>(
-          'weavine:update-available',
-          (ev) => {
-            if (!ev.payload?.version) return;
-            setUpdateAvailable({
-              version: ev.payload.version,
-              notes: ev.payload.notes,
-            });
-          },
-        );
-        if (cancelled) {
-          off();
-        } else {
-          unlisten = off;
-        }
-      } catch {
-        // Web fallback: silent
-      }
-    })();
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-
   const dismissReminder = useCallback(
     (id: string) => {
       setPendingReminders((prev) => prev.filter((r) => r.id !== id));
@@ -206,52 +171,6 @@ export function AppInner({ children }: { children?: ReactNode }) {
     <QuickCaptureContext.Provider value={quickApi}>
       <SearchContext.Provider value={searchApi}>
         {children}
-        {updateAvailable && (
-          <div
-            role="status"
-            style={{
-              position: 'fixed',
-              top: 12,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 9999,
-              background: 'var(--accent-soft, #d1fae5)',
-              color: 'var(--accent, #065f46)',
-              padding: '10px 14px',
-              borderRadius: 8,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              fontSize: 14,
-              maxWidth: 'calc(100vw - 24px)',
-            }}
-          >
-            <span>
-              🆕 v{updateAvailable.version} 已发布
-              {updateAvailable.notes ? ` — ${updateAvailable.notes.split('\n')[0]}` : ''}
-            </span>
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ padding: '4px 10px', fontSize: 13 }}
-              onClick={() => {
-                setUpdateAvailable(null);
-                navigate('/settings');
-              }}
-            >
-              查看并更新
-            </button>
-            <button
-              type="button"
-              style={{ background: 'transparent', border: 'none', fontSize: 16 }}
-              onClick={() => setUpdateAvailable(null)}
-              aria-label="关闭"
-            >
-              ×
-            </button>
-          </div>
-        )}
         <QuickFab onOpen={openQuick} />
         <ReminderToastContainer reminders={pendingReminders} onDismiss={dismissReminder} />
         {quickOpen && (

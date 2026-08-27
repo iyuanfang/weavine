@@ -721,14 +721,23 @@ jobs:
       # artifacts/**/latest.json.sig (verified by Python glob) but then drops
       # the .sig silently at upload time — the sibling latest.json at the
       # same path uploads fine, only .sig is missing. Since v1.3.0 this has
-      # been the sole thing between a usable Tauri auto-update and a broken
-      # "检查更新 returns no update forever". Run a direct `gh release upload
-      # --clobber` for the .sig after softprops to guarantee it lands.
-      - name: Upload latest.json.sig via gh CLI (softprops drops .sig)
+      # been the sole thing between a usable Tauri manual-update and a broken
+      # "检查更新 returns no update forever" (the runtime updater verifies the
+      # sig against the embedded pubkey before showing any new version).
+      #
+      # Use the GitHub REST API directly with curl instead of `gh release
+      # upload`. The gh CLI is NOT preinstalled on ubuntu-latest runners
+      # (it's only added by some community actions); curl + jq are always
+      # there. POST to uploads.github.com with the release-id looked up by
+      # tag. --clobber semantics aren't needed: if the .sig was already
+      # uploaded (e.g. retry of a partially failed run) the API returns
+      # 422 and we ignore it, since identical bytes are functionally
+      # equivalent.
+      - name: Upload latest.json.sig via GitHub REST API (softprops drops .sig)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           SIG="artifacts/updater/latest.json.sig"
@@ -736,11 +745,36 @@ jobs:
             echo "FATAL: $SIG missing — release-updater-json.sh did not produce it"
             exit 1
           fi
-          echo "Uploading $SIG..."
-          gh release upload "$RELEASE_TAG" "$SIG" --repo "$REPO" --clobber
+          echo "Looking up release id for tag=$RELEASE_TAG repo=$GH_REPO..."
+          RELEASE_ID=$(curl -fsSL \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GH_REPO}/releases/tags/${RELEASE_TAG}" \
+            | jq -r .id)
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "FATAL: cannot resolve release id for tag=$RELEASE_TAG"
+            exit 1
+          fi
+          echo "Release id: $RELEASE_ID — uploading $SIG..."
+          HTTP_CODE=$(curl -sS -o /tmp/upload.out -w "%{http_code}" -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$SIG" \
+            "https://uploads.github.com/repos/${GH_REPO}/releases/${RELEASE_ID}/assets?name=latest.json.sig")
+          if [ "$HTTP_CODE" = "422" ]; then
+            # Already uploaded by a previous run; .sig bytes are idempotent.
+            echo "WARN: 422 (asset already exists) — treating as success"
+          elif [ "$HTTP_CODE" != "201" ]; then
+            echo "FATAL: upload failed HTTP=$HTTP_CODE body:"
+            cat /tmp/upload.out
+            exit 1
+          fi
           echo "=== Final release asset list ==="
-          gh release view "$RELEASE_TAG" --repo "$REPO" --json assets \
-            --jq '.assets[] | "\(.name) (\(.size) bytes)"'
+          curl -fsSL \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GH_REPO}/releases/${RELEASE_ID}/assets" \
+            | jq -r '.[] | "\(.name) (\(.size) bytes)"'
 
       - name: Upload release-debug.log on failure
         if: failure()

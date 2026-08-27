@@ -253,33 +253,6 @@ pub fn run() {
                 });
             }
             install_id::spawn_first_launch_ping(app.handle().clone());
-            // Phase F: background update check 30 s after launch.
-            // Failure is silent (offline first launch, no releases yet, etc.).
-            #[cfg(desktop)]
-            {
-                use tauri_plugin_updater::UpdaterExt;
-                let handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                    match handle.updater() {
-                        Ok(updater) => match updater.check().await {
-                            Ok(Some(update)) => {
-                                let payload = serde_json::json!({
-                                    "version": update.version,
-                                    "notes": update.body,
-                                });
-                                let _ = tauri::Emitter::emit(
-                                    &handle,
-                                    "weavine:update-available",
-                                    payload,
-                                );
-                            }
-                            _ => {}
-                        },
-                        Err(_) => {}
-                    }
-                });
-            }
             #[cfg(desktop)]
             {
                 app.handle().plugin(

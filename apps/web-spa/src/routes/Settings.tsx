@@ -669,7 +669,7 @@ function UpdaterPanel() {
             setState((s) => ({ ...s, downloadProgress: pct, message: `下载中… ${pct}%` }));
             break;
           case 'Finished':
-            setState((s) => ({ ...s, downloadProgress: 100, message: '下载完成，关闭应用后自动安装' }));
+            setState((s) => ({ ...s, downloadProgress: 100, message: '下载完成，关闭应用后安装' }));
             break;
         }
       });
@@ -677,7 +677,7 @@ function UpdaterPanel() {
         ...s,
         downloading: false,
         status: 'downloaded',
-        message: '✓ 更新已下载，关闭应用后自动安装（Trae 模式）',
+        message: '✓ 更新已下载，关闭应用后安装',
       }));
     } catch (e) {
       setState((s) => ({
