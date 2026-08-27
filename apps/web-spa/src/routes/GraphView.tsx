@@ -143,14 +143,45 @@ export function GraphView() {
       const startAngle = cursor + gapRad / 2;
       const endAngle = cursor + sweep - gapRad / 2;
       const midAngle = (startAngle + endAngle) / 2;
+
+      // Cluster layout: same-type nodes form a tight multi-ring cluster so the
+      // outermost node always sits at the sector midAngle (not at the sector
+      // boundary), preventing overlap with the adjacent sector's outermost
+      // node. Rings spiral inward — outer ring = 1 node at midAngle, then
+      // 2 / 2 / 3 / 3 / 4 / 4 ... capacity per ring, each ring 35 px closer
+      // to center, with up to a 40° angular spread (capped by the sector arc).
+      const ringCapacity = (ring: number): number => {
+        if (ring === 0) return 1;
+        return Math.floor(ring / 2) + 2;
+      };
+      const arcSpreadMax = Math.min(sweep * 0.55, (40 * Math.PI) / 180);
+      const clusterPos: Array<{ angle: number; radius: number }> = [];
+      let placed = 0;
+      let ring = 0;
+      while (placed < nodes.length) {
+        const cap = ringCapacity(ring);
+        const slots = Math.min(cap, nodes.length - placed);
+        const radius = R_OUTER - ring * 35;
+        if (slots === 1) {
+          clusterPos.push({ angle: midAngle, radius });
+        } else {
+          for (let j = 0; j < slots; j++) {
+            const t2 = j / (slots - 1);
+            clusterPos.push({
+              angle: midAngle - arcSpreadMax / 2 + arcSpreadMax * t2,
+              radius,
+            });
+          }
+        }
+        placed += slots;
+        ring++;
+      }
+
       nodes.forEach((n, i) => {
-        const a =
-          nodes.length === 1
-            ? midAngle
-            : startAngle + ((endAngle - startAngle) * i) / (nodes.length - 1);
+        const pos = clusterPos[i];
         placedAt[`${n.entity_type}:${n.id}`] = {
-          x: cx + R_OUTER * Math.cos(a),
-          y: cy + R_OUTER * Math.sin(a),
+          x: cx + pos.radius * Math.cos(pos.angle),
+          y: cy + pos.radius * Math.sin(pos.angle),
         };
       });
       sectors.push({ type: t, midAngle, count: nodes.length });
