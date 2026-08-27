@@ -172,6 +172,11 @@ button:focus-visible {
   grid-template-columns: 64px 1fr;
 }
 
+.app-shell:has(.app-shell__nav--collapsed) .page {
+  max-width: none;
+  padding: 0 16px;
+}
+
 .app-shell__nav--collapsed .app-shell__brand-tagline,
 .app-shell__nav--collapsed .app-shell__brand-text,
 .app-shell__nav--collapsed .app-shell__menu-kbd,

@@ -111,6 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             openQuickCapture('');
             setDrawerOpen(false);
           }}
+          title="快速记录"
         >
           <span className="app-shell__menu-icon">⚡</span>
           <span>快速记录</span>
@@ -128,6 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 ? 'app-shell__menu-item app-shell__menu-item--active'
                 : 'app-shell__menu-item'
             }
+            title={item.label}
           >
             <span className="app-shell__menu-icon">{item.icon}</span>
             <span>{item.label}</span>

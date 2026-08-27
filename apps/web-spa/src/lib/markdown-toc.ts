@@ -14,6 +14,7 @@ export interface TocHeading {
 }
 
 export function parseTocHeadings(content: string): TocHeading[] {
+  if (!content) return [];
   const lines = content.split('\n');
   const out: TocHeading[] = [];
   let inFence = false;
