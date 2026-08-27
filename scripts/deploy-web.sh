@@ -36,7 +36,14 @@ fi
 
 # Sanity check that the dist is actually populated.
 test -s "$DIST_DIR/index.html"
-test -s "$DIST_DIR/spa/index-"*.js
+# Vite emits multiple index-<hash>.js chunks in modern builds; `test -s "$DIST_DIR/spa/index-"*.js`
+# (unquoted glob) used to break with "test: too many arguments". Use compgen to confirm at
+# least one chunk exists and is non-empty.
+first_chunk=$(compgen -G "$DIST_DIR/spa/index-*.js" | head -1 || true)
+if [ -z "$first_chunk" ] || [ ! -s "$first_chunk" ]; then
+    echo "→ dist is incomplete (no non-empty $DIST_DIR/spa/index-*.js)" >&2
+    exit 1
+fi
 
 # Pick a backup name using unix seconds so multiple deploys don't collide.
 TS=$(date +%s)
