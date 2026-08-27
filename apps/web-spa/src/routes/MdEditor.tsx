@@ -354,40 +354,45 @@ export function MdEditor() {
           </button>
         )}
         {(view === 'edit' || view === 'split') && (
-          <textarea
-            ref={taRef}
-            value={content}
-            onChange={(e) => {
-              setContent(e.target.value);
-              setDirty(true);
-            }}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-                e.preventDefault();
-                saveFile(false);
-              }
-            }}
-            spellCheck={false}
-            style={{
-              flex: 1,
-              padding: '12px',
-              border: 'none',
-              outline: 'none',
-              resize: 'none',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: 14,
-              lineHeight: 1.6,
-              background: 'var(--surface, #fff)',
-              color: 'var(--text, #111)',
-              minWidth: 0,
-            }}
-            placeholder={path ? '' : '点「📂 打开 .md」选择本地 Markdown 文件…'}
-          />
+          <div style={{ flex: 1, minWidth: 0, height: '100%', overflow: 'hidden', display: 'flex' }}>
+            <textarea
+              ref={taRef}
+              value={content}
+              onChange={(e) => {
+                setContent(e.target.value);
+                setDirty(true);
+              }}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                  e.preventDefault();
+                  saveFile(false);
+                }
+              }}
+              spellCheck={false}
+              style={{
+                flex: 1,
+                height: '100%',
+                padding: '12px',
+                border: 'none',
+                outline: 'none',
+                resize: 'none',
+                overflow: 'auto',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: 14,
+                lineHeight: 1.6,
+                background: 'var(--surface, #fff)',
+                color: 'var(--text, #111)',
+                minWidth: 0,
+              }}
+              placeholder={path ? '' : '点「📂 打开 .md」选择本地 Markdown 文件…'}
+            />
+          </div>
         )}
         {(view === 'preview' || view === 'split') && (
           <div
             style={{
               flex: 1,
+              height: '100%',
               padding: '12px 20px',
               overflow: 'auto',
               borderLeft: view === 'split' ? '1px solid var(--border, #e5e7eb)' : 'none',
