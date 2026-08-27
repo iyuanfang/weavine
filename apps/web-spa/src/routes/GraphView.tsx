@@ -5,20 +5,23 @@ import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
 
-const RING_RADII = [150, 240, 330] as const;
+const W = 900;
+const H = 820;
+const R_INNER = 110;
+const R_OUTER = 320;
 const NODE_R = 32;
 const CENTER_R = 44;
-const W = 800;
-const H = 760;
+const SECTOR_GAP_DEG = 2;
 
-const RING_LEVEL: Record<EntityGraphNodeType, 0 | 1 | 2> = {
-  interaction: 0,
-  contact: 1,
-  event: 1,
-  action: 1,
-  project: 2,
-  note: 2,
-};
+// Stable, semantic ordering of entity types around the canvas.
+// Starts at 12-o'clock (top) and proceeds clockwise.
+const TYPE_ORDER: EntityGraphNodeType[] = [
+  'interaction',
+  'event',
+  'action',
+  'note',
+  'project',
+];
 
 interface Crumb {
   type: EntityGraphNodeType;
@@ -114,26 +117,46 @@ export function GraphView() {
     (n) => !n.is_center && TYPE_META[n.entity_type] !== undefined
   );
 
-  const placedAt: Record<string, { x: number; y: number }> = {};
   const cx = W / 2;
   const cy = H / 2;
-  const byRing: EntityGraphNode[][] = [[], [], []];
-  others.forEach((n) => {
-    const lvl = RING_LEVEL[n.entity_type] ?? 1;
-    byRing[lvl].push(n);
-  });
-  byRing.forEach((nodes, ringIdx) => {
-    if (nodes.length === 0) return;
-    const R = RING_RADII[ringIdx];
-    const offset = ringIdx * (Math.PI / Math.max(nodes.length, 1));
-    nodes.forEach((n, i) => {
-      const a = (2 * Math.PI * i) / nodes.length + offset;
-      placedAt[`${n.entity_type}:${n.id}`] = {
-        x: cx + R * Math.cos(a),
-        y: cy + R * Math.sin(a),
-      };
-    });
-  });
+  const placedAt: Record<string, { x: number; y: number }> = {};
+  const sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number }> = [];
+
+  if (others.length > 0) {
+    // Group by entity_type using TYPE_ORDER priority, then any unknown types last.
+    const byType = new Map<EntityGraphNodeType, EntityGraphNode[]>();
+    for (const n of others) {
+      const arr = byType.get(n.entity_type) ?? [];
+      arr.push(n);
+      byType.set(n.entity_type, arr);
+    }
+    const orderedTypes: EntityGraphNodeType[] = [
+      ...TYPE_ORDER.filter((t) => byType.has(t)),
+      ...[...byType.keys()].filter((t) => !TYPE_ORDER.includes(t)),
+    ];
+
+    const gapRad = (SECTOR_GAP_DEG * Math.PI) / 180;
+    let cursor = -Math.PI / 2; // start at 12 o'clock, clockwise
+    for (const t of orderedTypes) {
+      const nodes = byType.get(t)!;
+      const sweep = (nodes.length / others.length) * 2 * Math.PI;
+      const startAngle = cursor + gapRad / 2;
+      const endAngle = cursor + sweep - gapRad / 2;
+      const midAngle = (startAngle + endAngle) / 2;
+      nodes.forEach((n, i) => {
+        const a =
+          nodes.length === 1
+            ? midAngle
+            : startAngle + ((endAngle - startAngle) * i) / (nodes.length - 1);
+        placedAt[`${n.entity_type}:${n.id}`] = {
+          x: cx + R_OUTER * Math.cos(a),
+          y: cy + R_OUTER * Math.sin(a),
+        };
+      });
+      sectors.push({ type: t, midAngle, count: nodes.length });
+      cursor += sweep;
+    }
+  }
 
   function onNeighborOpen(n: EntityGraphNode) {
     navigate(detailHref(n.entity_type, n.id));
@@ -214,19 +237,40 @@ export function GraphView() {
           style={{ display: 'block', background: 'linear-gradient(180deg,#fafbff,#f3f4f8)' }}
           data-testid="graph-svg"
         >
-          <circle cx={cx} cy={cy} r={RING_RADII[2] + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" />
-          {RING_RADII.map((R, i) => (
-            <circle
-              key={`ring-${i}`}
-              cx={cx}
-              cy={cy}
-              r={R}
-              fill="none"
-              stroke="#e5e7eb"
-              strokeDasharray={i === 2 ? '2 4' : '1 6'}
-              opacity={0.6}
-            />
-          ))}
+          <circle cx={cx} cy={cy} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
+
+          {sectors.map((s) => {
+            const meta = TYPE_META[s.type];
+            // Re-derive startAngle by walking back through the ordered list of sectors.
+            let cursor = -Math.PI / 2;
+            for (const t of sectors.map((x) => x.type)) {
+              if (t === s.type) break;
+              cursor += (sectors.find((x) => x.type === t)!.count / others.length) * 2 * Math.PI;
+            }
+            const gapRad = (SECTOR_GAP_DEG * Math.PI) / 180;
+            const sweep = (s.count / others.length) * 2 * Math.PI;
+            const startA = cursor + gapRad / 2;
+            const endA = cursor + sweep - gapRad / 2;
+            const x1 = cx + R_OUTER * Math.cos(startA);
+            const y1 = cy + R_OUTER * Math.sin(startA);
+            const x2 = cx + R_OUTER * Math.cos(endA);
+            const y2 = cy + R_OUTER * Math.sin(endA);
+            const xi1 = cx + R_INNER * Math.cos(startA);
+            const yi1 = cy + R_INNER * Math.sin(startA);
+            const xi2 = cx + R_INNER * Math.cos(endA);
+            const yi2 = cy + R_INNER * Math.sin(endA);
+            const largeArc = endA - startA > Math.PI ? 1 : 0;
+            return (
+              <path
+                key={`wedge-${s.type}`}
+                d={`M ${xi1} ${yi1} L ${x1} ${y1} A ${R_OUTER} ${R_OUTER} 0 ${largeArc} 1 ${x2} ${y2} L ${xi2} ${yi2} A ${R_INNER} ${R_INNER} 0 ${largeArc} 0 ${xi1} ${yi1} Z`}
+                fill={meta.color}
+                fillOpacity={0.05}
+                stroke="none"
+                pointerEvents="none"
+              />
+            );
+          })}
 
           {graph.edges.map((e, i) => {
             const fromKey = `${e.from_type}:${e.from_id}`;
@@ -239,23 +283,17 @@ export function GraphView() {
               ? cx : placedAt[toKey]?.x ?? cx;
             const by = e.to_id === params.entityId && e.to_type === centerType
               ? cy : placedAt[toKey]?.y ?? cy;
-            const dx = bx - ax;
-            const dy = by - ay;
-            const len = Math.sqrt(dx * dx + dy * dy) || 1;
-            const nx = -dy / len;
-            const ny = dx / len;
-            const bow = ((i * 7) % 11) - 5;
-            const mx = (ax + bx) / 2 + nx * bow;
-            const my = (ay + by) / 2 + ny * bow;
             const stroke = TYPE_META[e.to_type]?.color ?? '#94a3b8';
             return (
-              <path
+              <line
                 key={i}
-                d={`M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`}
+                x1={ax}
+                y1={ay}
+                x2={bx}
+                y2={by}
                 stroke={stroke}
                 strokeWidth={1.5}
-                fill="none"
-                opacity={0.55}
+                opacity={0.5}
               />
             );
           })}
@@ -272,8 +310,34 @@ export function GraphView() {
             </g>
           )}
 
+          {sectors.map((s) => {
+            const meta = TYPE_META[s.type];
+            const lr = R_OUTER + 30;
+            const lx = cx + lr * Math.cos(s.midAngle);
+            const ly = cy + lr * Math.sin(s.midAngle);
+            const cosA = Math.cos(s.midAngle);
+            const sinA = Math.sin(s.midAngle);
+            const anchor = Math.abs(cosA) < 0.3 ? 'middle' : cosA > 0 ? 'start' : 'end';
+            const dy = sinA > 0.5 ? 14 : sinA < -0.5 ? -6 : 4;
+            return (
+              <text
+                key={`label-${s.type}`}
+                x={lx}
+                y={ly + dy}
+                fontSize="12"
+                fontWeight={600}
+                fill="#1e293b"
+                textAnchor={anchor}
+                pointerEvents="none"
+                style={{ paintOrder: 'stroke', stroke: '#fafbff', strokeWidth: 3 }}
+              >
+                {meta.icon} {meta.label} · {s.count}
+              </text>
+            );
+          })}
+
           {others.length === 0 && (
-            <text x={cx} y={cy + RING_RADII[2] + 70} fontSize="13" fill="#94a3b8" textAnchor="middle">
+            <text x={cx} y={cy + R_OUTER + 40} fontSize="13" fill="#94a3b8" textAnchor="middle">
               暂无关联
             </text>
           )}
