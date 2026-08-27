@@ -5,10 +5,10 @@ import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
 
-const W = 1000;
-const H = 900;
+const W = 900;
+const H = 820;
 const R_INNER = 110;
-const R_OUTER = 380;
+const R_OUTER = 320;
 const NODE_R = 32;
 const CENTER_R = 44;
 const SECTOR_GAP_DEG = 2;
@@ -153,7 +153,7 @@ export function GraphView() {
         if (ring === 0) return 1;
         return Math.floor(ring / 2) + 2;
       };
-      const minSpacing = NODE_R * 2 + 6; // 70 px center-to-center
+      const minSpacing = (NODE_R * 2 + 6) * 2; // 140 px center-to-center — double the per-node clearance
       const ringSpacing = 90;
       const maxRings = Math.floor((R_OUTER - R_INNER) / ringSpacing) + 1;
       const clusterPos: Array<{ angle: number; radius: number }> = [];
@@ -175,9 +175,9 @@ export function GraphView() {
           );
           for (let j = 0; j < slots; j++) {
             const t2 = j / (slots - 1);
-            // ±25 px radial jitter, alternating, so line lengths vary
+            // ±40 px radial jitter, alternating, so line lengths vary
             // within the same ring too.
-            const jitter = j % 2 === 0 ? -25 : 25;
+            const jitter = j % 2 === 0 ? -40 : 40;
             clusterPos.push({
               angle: midAngle - spreadRad / 2 + spreadRad * t2,
               radius: ringR + jitter,
