@@ -130,7 +130,8 @@ if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]]; then
   export MINISIGN_KEY_PASSWD="$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
 fi
 
-minisign -s "$TMP_KEY" -m "$TMP_JSON" -W -t "${TMP_JSON}.sig" >/dev/null
+minisign -S -s "$TMP_KEY" -m "$TMP_JSON" -x "${TMP_JSON}.sig" \
+  -t "weavine updater manifest ${RELEASE_TAG}" >/dev/null
 echo "Wrote ${TMP_JSON}.sig"
 
 if command -v gh >/dev/null 2>&1; then
