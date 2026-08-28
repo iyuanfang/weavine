@@ -240,16 +240,26 @@ export function Tags() {
             <div style={{ display: 'grid', gap: 6 }}>
               {tags.map((tag) => (
                 <div key={tag.id} className="row-card" style={{ padding: '12px 16px' }}>
-                  <span className="dot dot--xl" style={{ background: tagColor(tag) }} />
-                  <span className="row-card__title" style={{ flex: 1, minWidth: 0 }}>
-                    {tag.name}
-                  </span>
-                  <Link to={`/tags/${tag.id}`} className="btn btn-sm btn-ghost">
-                    查看
+                  <Link
+                    to={`/tags/${tag.id}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <span className="dot dot--xl" style={{ background: tagColor(tag) }} />
+                    <span className="row-card__title" style={{ minWidth: 0 }}>
+                      {tag.name}
+                    </span>
+                  </Link>
+                  <Link
+                    to={`/tags/${tag.id}`}
+                    style={{ fontSize: 'var(--text-base)', color: 'var(--muted)', textDecoration: 'none' }}
+                    aria-label={`查看标签 ${tag.name}`}
+                  >
+                    →
                   </Link>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       if (confirm(`确定要删除标签「${tag.name}」吗？`)) {
                         deleteMutation.mutate(tag.id);
                       }
