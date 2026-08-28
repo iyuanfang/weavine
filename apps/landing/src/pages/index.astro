@@ -1,7 +1,7 @@
 ---
 import '../styles/global.css';
 
-const release = 'v1.1.2';
+const release = 'v1.3.11';
 const repo = 'iyuanfang/weavine';
 const releaseUrl = `https://github.com/${repo}/releases/tag/${release}`;
 
@@ -20,11 +20,6 @@ const features = [
     body: 'Ctrl+K 随时唤起，打字或说话都行。一句话自动归档到对应的联系人和项目。',
   },
   {
-    icon: '🧠',
-    title: '智能关系管理',
-    body: '不只是通讯录。自动关联联系人、项目、待办和日程，帮你理清每个人背后的故事。',
-  },
-  {
     icon: '📷',
     title: '名片扫描 & 导入',
     body: '扫描名片自动识别姓名、公司、职位。也支持 CSV / vCard 批量导入，迁移零成本。',
@@ -35,9 +30,29 @@ const features = [
     body: '会议、待办、重要日期，永远不会忘。跨设备同步提醒，手机桌面都能收到。',
   },
   {
+    icon: '📝',
+    title: '自由笔记 & 关联',
+    body: '为每个人、每件事写笔记，自动关联联系人和日程。按时间线回溯，不遗漏任何细节。',
+  },
+  {
+    icon: '🕸️',
+    title: '关系图谱',
+    body: '可视化查看联系人、项目、事件之间的关联网络。点击任意节点快速跳转，一眼看清人脉全貌。',
+  },
+  {
+    icon: '🔍',
+    title: '全局搜索',
+    body: '全文搜索联系人、笔记、项目、日程，一键直达。支持模糊匹配和标签筛选，再久远的信息也能秒级找到。',
+  },
+  {
+    icon: '🧠',
+    title: '智能关系管理',
+    body: '不只是通讯录。自动关联联系人、项目、待办和日程，帮你理清每个人背后的故事。',
+  },
+  {
     icon: '🔄',
     title: '多端同步',
-    body: '桌面、手机、网页，编辑即时同步。自建服务或官方云，你自己选。',
+    body: '桌面、手机、网页，编辑即时同步。可以电脑上操作，手机上查看。',
   },
   {
     icon: '🔒',
@@ -87,7 +102,7 @@ const downloads = [
       <section class="max-w-5xl mx-auto px-6 py-20 sm:py-28 text-center">
         <h1 class="text-4xl sm:text-6xl font-bold tracking-tight">记住每一个重要的人</h1>
         <p class="mt-6 text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-          语音、文字、名片——想到就记。自动关联联系人、项目和日程，帮你管好人和事。
+          语音、文字、名片——想到就记。自动关联联系人、项目和日程，帮你管好人和事。各种文档格式转换 md，方便存储和检索。
         </p>
         <div class="mt-10 flex flex-wrap gap-3 justify-center">
           {platforms.map((p) => (
