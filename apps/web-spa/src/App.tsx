@@ -130,7 +130,33 @@ export function AppInner({ children }: { children?: ReactNode }) {
     return () => window.removeEventListener('weavine:reminder', handler);
   }, []);
 
-  // §11.7 cold-start argv: single-instance plugin emits when OS forwards a file.
+  // §11.7 cold-start argv: drain the .md path captured by setup() before the
+  // single-instance plugin had a chance to forward it. Single-instance only
+  // fires on the SECOND instance, so a fresh launch with .md argv never
+  // emits — instead the Rust side parked the path in app state.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const mod = await import('@tauri-apps/api/core').catch(() => null);
+        if (!mod) return;
+        const path = await mod.invoke<string | null>('take_pending_md_path');
+        if (cancelled) return;
+        if (typeof path === 'string' && path) {
+          const url = `/md-editor?path=${encodeURIComponent(path)}`;
+          window.history.pushState({}, '', url);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      } catch {
+        // Web fallback: silent
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // §11.7 warm-start argv: single-instance plugin emits when OS forwards a file.
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | undefined;

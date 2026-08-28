@@ -512,3 +512,16 @@ fn filetime_touch(path: &Path, t: SystemTime) -> std::io::Result<()> {
     let f = std::fs::OpenOptions::new().write(true).open(path)?;
     f.set_modified(t)
 }
+
+/// Returns the .md path captured from argv at cold-start, then clears it.
+///
+/// Setup() parks any .md argv in a `Mutex<Option<String>>` (see lib.rs §11.7
+/// cold-start note). The web-spa calls this once on mount to drain it; after
+/// that the value is `None` so subsequent mounts won't re-navigate.
+#[cfg(desktop)]
+#[tauri::command(rename_all = "snake_case")]
+pub fn take_pending_md_path(
+    state: State<'_, std::sync::Mutex<Option<String>>>,
+) -> Option<String> {
+    state.lock().ok().and_then(|mut g| g.take())
+}

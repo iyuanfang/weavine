@@ -253,6 +253,20 @@ pub fn run() {
                 });
             }
             install_id::spawn_first_launch_ping(app.handle().clone());
+
+            // Cold-start capture: single-instance only fires on second
+            // instance, so a fresh launch with .md argv never reaches the
+            // listener. Park it in app state for the React listener to drain.
+            #[cfg(desktop)]
+            {
+                let pending = std::env::args()
+                    .skip(1)
+                    .find(|a| a.to_lowercase().ends_with(".md"));
+                if let Some(ref p) = pending {
+                    boot_log::log(&format!("[cold-start] pending md argv: {p}"));
+                }
+                app.manage(std::sync::Mutex::new(pending));
+            }
             #[cfg(desktop)]
             {
                 app.handle().plugin(
@@ -399,6 +413,8 @@ pub fn run() {
             md_editor::md_check_import_status,
             md_editor::md_import_to_library,
             md_editor::md_export_note_as_md,
+            #[cfg(desktop)]
+            md_editor::take_pending_md_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
