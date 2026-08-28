@@ -62,7 +62,7 @@ export function TagDetail() {
       <div className="page">
         <div className="empty-state">
           <h3 className="empty-state__title">标签不存在</h3>
-          <Link to="/tags" className="btn btn-primary" style={{ marginTop: 8 }} title="返回 (Alt+←)">
+          <Link to="/tags" className="btn btn-primary" style={{ marginTop: 8 }}>
             ← 返回标签列表
           </Link>
         </div>
@@ -85,7 +85,7 @@ export function TagDetail() {
         }
         subtitle={`${contacts.length} 个联系人`}
         back={
-          <Link to="/tags" className="btn btn-ghost" title="返回 (Alt+←)">
+          <Link to="/tags" className="btn btn-ghost">
             ← 返回
           </Link>
         }

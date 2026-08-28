@@ -89,7 +89,7 @@ export function ResetPasswordPage() {
           </form>
         )}
         <p className="login-switch">
-          <Link to="/login" className="login-switch-btn" title="返回 (Alt+←)">
+          <Link to="/login" className="login-switch-btn">
             ← 返回登录
           </Link>
         </p>

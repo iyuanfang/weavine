@@ -263,7 +263,7 @@ export function GraphView() {
             {center && (
               <>
                 {' · '}
-                <Link to={detailHref(centerType, params.entityId)} title="返回 (Alt+←)">
+                <Link to={detailHref(centerType, params.entityId)}>
                   ← 返回 {TYPE_META[centerType].label}详情
                 </Link>
               </>

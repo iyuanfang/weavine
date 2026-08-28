@@ -463,7 +463,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
   return (
     <div className="page note-edit">
       <header className="page-header">
-        <button type="button" className="btn" onClick={() => navigate('/notes')} title="返回 (Alt+←)">
+        <button type="button" className="btn" onClick={() => navigate('/notes')}>
           ← 返回
         </button>
         <h1>新建笔记</h1>
@@ -821,7 +821,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
   return (
     <div className="page note-detail">
       <header className="page-header">
-        <button type="button" className="btn" onClick={() => navigate('/notes')} title="返回 (Alt+←)">
+        <button type="button" className="btn" onClick={() => navigate('/notes')}>
           ← 返回
         </button>
         <div className="note-detail__actions">
