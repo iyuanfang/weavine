@@ -10,7 +10,7 @@ use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
 use weavine_lib::models::Reminder;
 
-const REMINDER_SELECT: &str = "SELECT r.id, r.user_id, r.contact_id, r.event_id, r.trigger_at, r.kind, r.dispatched, r.dismissed, r.invitation_token, r.created_at, \
+const REMINDER_SELECT: &str = "SELECT r.id, r.user_id, r.contact_id, r.event_id, r.trigger_at, r.kind, r.dispatched, r.dismissed, r.invitation_token, r.created_at, r.deleted_at, \
      c.nickname AS contact_nickname \
      FROM reminder r \
      LEFT JOIN contact c ON c.id = r.contact_id AND c.user_id = r.user_id";
@@ -35,6 +35,7 @@ pub async fn list(
          AND ($2::text IS NULL OR r.contact_id = $2) \
          AND ($3::text IS NULL OR r.event_id = $3) \
          AND ($4::bool IS NULL OR $4 = false OR r.dismissed = $4) \
+         AND r.deleted_at IS NULL \
          ORDER BY r.trigger_at LIMIT $5",
     ))
     .bind(&auth).bind(&p.contact_id).bind(&p.event_id)
@@ -99,7 +100,7 @@ pub async fn get(
 ) -> Result<Json<Reminder>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let reminder = sqlx::query_as::<_, Reminder>(&format!(
-        "{REMINDER_SELECT} WHERE r.id = $1 AND r.user_id = $2",
+        "{REMINDER_SELECT} WHERE r.id = $1 AND r.user_id = $2 AND r.deleted_at IS NULL",
     ))
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
