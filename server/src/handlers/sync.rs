@@ -284,10 +284,14 @@ pub async fn push(
                     .filter(|s| !s.is_empty());
 
                 let op_result = if let Some(da) = deleted_at {
+                    let set_clause = if has_updated_at {
+                        "deleted_at = $3, updated_at = $3"
+                    } else {
+                        "deleted_at = $3"
+                    };
                     sqlx::query(&format!(
-                        "UPDATE {} SET deleted_at = $3, updated_at = $3 \
-                         WHERE id = $1 AND user_id = $2",
-                        table
+                        "UPDATE {} SET {} WHERE id = $1 AND user_id = $2",
+                        table, set_clause
                     ))
                     .bind(&row_id)
                     .bind(&user_id)
