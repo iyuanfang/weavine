@@ -101,10 +101,12 @@ These features exist on desktop but have no mobile implementation:
 
 | Feature | Desktop Status | Mobile Status | Notes |
 |---------|---------------|---------------|-------|
-| Local push notifications | ✅ Via system notifications | ❌ Not implemented | Tauri `notification` plugin needed |
+| Local push notifications | ✅ Via system notifications | ✅ via `POST_NOTIFICATIONS` (Android 13+) | Tauri `notification` plugin |
 | File exports (CSV) | ✅ Via download | ❌ File picker / share sheet needed | |
 | Autostart | ✅ Tauri config | ❌ Not applicable | |
 | System tray | ✅ Tauri feature | ❌ Not applicable | |
+| `.md` file editor | ✅ native open/save + encoding-preserving round-trip (UTF-8 / UTF-8 BOM / GBK / GB18030) + external-change reimport | ❌ Desktop-only since v1.3.7 | `markitdown` crate can't cross-compile for `aarch64-linux-android` (pulls `openssl-sys`); see `docs/superpowers/specs/2026-08-28-md-editor-non-md-conversion-design.md` |
+| Non-`.md` conversion (`.docx` / `.pdf` / `.html` / `.xlsx` / `.pptx` / `.txt` → `.md` sibling) | ✅ via `markitdown` (Phase 1) | ❌ Desktop-only (same reason) | sibling `<name>.md` written next to original; binary source untouched |
 
 ---
 
