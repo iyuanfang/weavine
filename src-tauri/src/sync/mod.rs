@@ -483,23 +483,142 @@ fn apply_change(
             stmt.execute(param_refs.as_slice())?;
         }
         "DELETE" => {
-            let now = chrono::Utc::now()
-                .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-                .to_string();
-            conn.execute(
-                &format!(
-                    "UPDATE \"{}\" SET \"deleted_at\" = ?1, \"updated_at\" = ?1 \
-                     WHERE \"id\" = ?2 AND \"user_id\" = ?3 AND \"deleted_at\" IS NULL",
-                    table
-                ),
-                rusqlite::params![now, change.row_id, local_user_id],
-            )?;
+            // Junction tables (contact_tag, project_contact, entity_link,
+            // note_entity) have no `deleted_at` column on SQLite (only the 8
+            // user-data tables do — see soft_delete_cols in migration.rs).
+            // Running the soft-delete UPDATE below against a junction table
+            // would crash with "no such column: deleted_at" and abort the
+            // entire pull transaction.
+            //
+            // Two of the four junction tables (contact_tag, project_contact)
+            // also lack an `id` column — they use a composite PK. The server
+            // sync trigger currently sets `v_data := NULL` on DELETE
+            // (server/migrations/20260705000003_sync_engine.sql), so a
+            // composite-PK DELETE doesn't carry the lookup columns. We
+            // hard-delete by composite key when data is present and log a
+            // warning otherwise (until the server trigger grows OLD.*
+            // capture for junction tables).
+            if JUNCTION_TABLES.contains(&kind) {
+                delete_junction_row(conn, kind, table, change, local_user_id)?;
+            } else {
+                let now = chrono::Utc::now()
+                    .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+                    .to_string();
+                conn.execute(
+                    &format!(
+                        "UPDATE \"{}\" SET \"deleted_at\" = ?1, \"updated_at\" = ?1 \
+                         WHERE \"id\" = ?2 AND \"user_id\" = ?3 AND \"deleted_at\" IS NULL",
+                        table
+                    ),
+                    rusqlite::params![now, change.row_id, local_user_id],
+                )?;
+            }
         }
         _ => {
             return Err(anyhow::anyhow!("unknown op: {}", change.op));
         }
     }
 
+    Ok(())
+}
+
+/// Hard-delete a row from a junction table on a pulled DELETE op.
+///
+/// `entity_link` and `note_entity` have an `id` PK that matches
+/// `change.row_id`, so a plain DELETE by id works.
+///
+/// `contact_tag` and `project_contact` have no `id` column on SQLite (they
+/// use a composite PK `(user_id, contact_id, tag_id)` and `(user_id,
+/// project_id, contact_id)` respectively). The server sync trigger currently
+/// stores `v_data := NULL` on DELETE
+/// (server/migrations/20260705000003_sync_engine.sql), so the composite
+/// lookup columns are not in the change payload. We hard-delete by composite
+/// key when the payload carries them; otherwise we log and skip — the server
+/// trigger needs to grow OLD.* capture on DELETE before we can resolve
+/// these from the pull stream alone.
+fn delete_junction_row(
+    conn: &Connection,
+    kind: &str,
+    table: &str,
+    change: &ChangeRow,
+    local_user_id: &str,
+) -> anyhow::Result<()> {
+    match kind {
+        "entity_link" | "note_entity" => {
+            conn.execute(
+                &format!(
+                    "DELETE FROM \"{}\" WHERE \"id\" = ?1 AND \"user_id\" = ?2",
+                    table
+                ),
+                rusqlite::params![change.row_id, local_user_id],
+            )?;
+        }
+        "contact_tag" => {
+            delete_junction_composite(
+                conn,
+                table,
+                change,
+                local_user_id,
+                "contact_id",
+                "tag_id",
+            )?;
+        }
+        "project_contact" => {
+            delete_junction_composite(
+                conn,
+                table,
+                change,
+                local_user_id,
+                "project_id",
+                "contact_id",
+            )?;
+        }
+        other => {
+            return Err(anyhow::anyhow!(
+                "junction kind '{}' not handled by delete_junction_row (JUNCTION_TABLES drift?)",
+                other
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn delete_junction_composite(
+    conn: &Connection,
+    table: &str,
+    change: &ChangeRow,
+    local_user_id: &str,
+    c1: &str,
+    c2: &str,
+) -> anyhow::Result<()> {
+    let obj = match &change.data {
+        Some(Value::Object(o)) => o,
+        _ => {
+            eprintln!(
+                "[sync] {} DELETE without data (row_id={}); \
+                 server trigger must capture OLD on DELETE for this to resolve",
+                table, change.row_id
+            );
+            return Ok(());
+        }
+    };
+    let v1 = obj.get(c1).and_then(|v| v.as_str()).unwrap_or("");
+    let v2 = obj.get(c2).and_then(|v| v.as_str()).unwrap_or("");
+    if v1.is_empty() || v2.is_empty() {
+        eprintln!(
+            "[sync] {} DELETE missing composite key (row_id={}, missing {} or {}); skipping",
+            table, change.row_id, c1, c2
+        );
+        return Ok(());
+    }
+    let sql = format!(
+        "DELETE FROM \"{}\" WHERE \"user_id\" = ?1 AND \"{}\" = ?2 AND \"{}\" = ?3",
+        table, c1, c2
+    );
+    conn.execute(
+        &sql,
+        rusqlite::params![local_user_id, v1, v2],
+    )?;
     Ok(())
 }
 
@@ -765,5 +884,155 @@ mod tests {
         assert_eq!(width, Some(100));
         assert_eq!(height, Some(100));
         assert_eq!(size, 1234);
+    }
+
+    // Regression: a pulled DELETE on a junction table used to crash with
+    // "no such column: deleted_at" because the soft-delete UPDATE assumed
+    // every table has deleted_at. The fix branches on JUNCTION_TABLES and
+    // hard-deletes with a composite-key or id-based WHERE clause.
+    #[test]
+    fn pull_delete_entity_link_uses_id_pk() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE EntityLink (
+                id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                from_type TEXT NOT NULL,
+                from_id TEXT NOT NULL,
+                to_type TEXT NOT NULL,
+                to_id TEXT NOT NULL,
+                relation_type TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'participant',
+                created_at TEXT NOT NULL,
+                UNIQUE (user_id, from_type, from_id, to_type, to_id, relation_type)
+            );
+            INSERT INTO EntityLink(id, user_id, from_type, from_id, to_type, to_id, relation_type, created_at)
+            VALUES ('el1', 'u1', 'contact', 'c1', 'event', 'e1', 'attendee', '2026-08-01T00:00:00Z');",
+        )
+        .unwrap();
+        apply_change(
+            &conn,
+            &ChangeRow {
+                kind: "entity_link".into(),
+                op: "DELETE".into(),
+                row_id: "el1".into(),
+                data: None,
+                revision: 2,
+            },
+            "u1",
+        )
+        .expect("delete entity_link");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM EntityLink", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0, "entity_link must be hard-deleted by id");
+    }
+
+    #[test]
+    fn pull_delete_contact_tag_uses_composite_pk_with_data() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE ContactTag (
+                user_id TEXT NOT NULL,
+                contact_id TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                PRIMARY KEY (contact_id, tag_id)
+            );
+            INSERT INTO ContactTag(user_id, contact_id, tag_id) VALUES ('u1', 'c1', 't1');
+            INSERT INTO ContactTag(user_id, contact_id, tag_id) VALUES ('u1', 'c1', 't2');",
+        )
+        .unwrap();
+        apply_change(
+            &conn,
+            &ChangeRow {
+                kind: "contact_tag".into(),
+                op: "DELETE".into(),
+                row_id: "server-side-pg-id".into(),
+                data: Some(json!({"user_id": "u1", "contact_id": "c1", "tag_id": "t1"})),
+                revision: 2,
+            },
+            "u1",
+        )
+        .expect("delete contact_tag");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM ContactTag", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "only t1 must be deleted; t2 survives");
+        let remaining: String = conn
+            .query_row("SELECT tag_id FROM ContactTag", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remaining, "t2");
+    }
+
+    #[test]
+    fn pull_delete_contact_tag_without_data_is_no_op_not_crash() {
+        // Server's sync trigger currently sets v_data := NULL on DELETE.
+        // Until that grows OLD.* capture, we can't resolve the composite
+        // PK. Must log-and-skip rather than crash the pull tx.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE ContactTag (
+                user_id TEXT NOT NULL,
+                contact_id TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                PRIMARY KEY (contact_id, tag_id)
+            );
+            INSERT INTO ContactTag(user_id, contact_id, tag_id) VALUES ('u1', 'c1', 't1');",
+        )
+        .unwrap();
+        apply_change(
+            &conn,
+            &ChangeRow {
+                kind: "contact_tag".into(),
+                op: "DELETE".into(),
+                row_id: "server-side-pg-id".into(),
+                data: None,
+                revision: 2,
+            },
+            "u1",
+        )
+        .expect("missing-data contact_tag DELETE must not crash");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM ContactTag", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "row preserved (server trigger bug, not ours)");
+    }
+
+    #[test]
+    fn pull_delete_project_contact_uses_composite_pk_with_data() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE ProjectContact (
+                user_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                contact_id TEXT NOT NULL,
+                role TEXT,
+                added_at TEXT NOT NULL DEFAULT '2026-08-01T00:00:00Z',
+                PRIMARY KEY (project_id, contact_id)
+            );
+            INSERT INTO ProjectContact(user_id, project_id, contact_id) VALUES ('u1', 'p1', 'c1');
+            INSERT INTO ProjectContact(user_id, project_id, contact_id) VALUES ('u1', 'p1', 'c2');",
+        )
+        .unwrap();
+        apply_change(
+            &conn,
+            &ChangeRow {
+                kind: "project_contact".into(),
+                op: "DELETE".into(),
+                row_id: "server-side-pg-id".into(),
+                data: Some(json!({"user_id": "u1", "project_id": "p1", "contact_id": "c1"})),
+                revision: 2,
+            },
+            "u1",
+        )
+        .expect("delete project_contact");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM ProjectContact", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+        let remaining: String = conn
+            .query_row("SELECT contact_id FROM ProjectContact", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remaining, "c2");
     }
 }
