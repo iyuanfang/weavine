@@ -523,7 +523,9 @@ pub async fn delete(
         .bind(&id).bind(&auth)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sqlx::query("UPDATE reminder SET deleted_at = now(), updated_at = now() WHERE event_id = $1 AND deleted_at IS NULL")
+    // reminder table has no updated_at column (only created_at + server_revision);
+    // the trigger already bumps server_revision on UPDATE, so no extra timestamp needed.
+    sqlx::query("UPDATE reminder SET deleted_at = now() WHERE event_id = $1 AND deleted_at IS NULL")
         .bind(&id)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
