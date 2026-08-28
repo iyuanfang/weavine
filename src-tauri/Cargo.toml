@@ -99,7 +99,7 @@ markitdown = "0.1"
 # Windows-only: lets the converter sidecar silence the WER crash dialog so an
 # aborted markitdown conversion is silent (the parent reports the error).
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.52", features = ["Win32_Foundation"] }
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug"] }
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

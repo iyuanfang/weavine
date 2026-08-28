@@ -21,8 +21,8 @@ fn main() {
                     // child so an aborted converter is silent — the parent
                     // process reports the failure to the UI.
                     unsafe {
-                        windows_sys::Win32::Foundation::SetErrorMode(
-                            windows_sys::Win32::Foundation::SEM_NOGPFAULTERRORBOX,
+                        windows_sys::Win32::System::Diagnostics::Debug::SetErrorMode(
+                            windows_sys::Win32::System::Diagnostics::Debug::SEM_NOGPFAULTERRORBOX,
                         );
                     }
                 }
