@@ -12,7 +12,10 @@ use std::sync::Arc;
 use super::auth::extract_auth;
 use super::now_str;
 
-const UPDATED_AT_TABLES: &[&str] = &["contact", "project", "event", "action", "setting", "media"];
+// `note` participates in LWW via `updated_at` (matches the client's
+// `UPDATED_AT_TABLES` in src-tauri/src/sync/translate.rs). `note_entity` is a
+// junction row (push-all, no updated_at) so it is deliberately absent here.
+const UPDATED_AT_TABLES: &[&str] = &["contact", "project", "event", "action", "setting", "media", "note"];
 
 /// Postgres errors that should become 200 + `conflicts` instead of 500.
 fn is_data_conflict_error(msg: &str) -> bool {
@@ -157,6 +160,11 @@ pub async fn push(
             "project_contact" => "project_contact",
             "entity_link" => "entity_links",
             "media" => "media",
+            // §11.7 notes. The client pushes these kinds (see
+            // src-tauri/src/sync/translate.rs ENTITY_KINDS); omitting them here
+            // made every note upload fail with "unknown entity kind".
+            "note" => "note",
+            "note_entity" => "note_entity",
             _ => {
                 conflicts.push(Conflict {
                     kind: entity.kind.clone(),
@@ -243,13 +251,15 @@ pub async fn push(
                     .and_then(|v| v.as_str())
                     .filter(|s| !s.is_empty());
 
-                let op_result = if deleted_at.is_some() {
+                let op_result = if let Some(da) = deleted_at {
                     sqlx::query(&format!(
-                        "DELETE FROM {} WHERE id = $1 AND user_id = $2",
+                        "UPDATE {} SET deleted_at = $3::TIMESTAMPTZ, updated_at = $3::TIMESTAMPTZ \
+                         WHERE id = $1 AND user_id = $2",
                         table
                     ))
                     .bind(&row_id)
                     .bind(&user_id)
+                    .bind(da)
                     .execute(&mut *tx)
                     .await
                 } else {

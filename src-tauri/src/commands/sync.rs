@@ -68,6 +68,24 @@ pub async fn cloud_sync_now() -> Result<sync::SyncResult, String> {
     .map_err(|e| format!("sync thread panicked: {e}"))?
 }
 
+/// Clear the push watermark so the next sync re-pushes every local row.
+///
+/// One-off repair for rows stranded by a rejected entity kind: push only
+/// selects `updated_at > watermark`, so rows the server refused (e.g. `note`
+/// before the server's push whitelist knew the kind) had already been passed
+/// by the watermark and would never be retried. Resetting it makes the next
+/// `cloud_sync_now` re-push everything — the upserts are idempotent, so
+/// already-synced data is simply rewritten unchanged.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cloud_sync_repair_repush() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let conn = open_db().map_err(|e| e.to_string())?;
+        sync::config::set(&conn, sync::config::KEY_LAST_PUSHED_AT, "").map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("sync thread panicked: {e}"))?
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub fn cloud_status(db: State<'_, Database>) -> Result<CloudStatus, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;

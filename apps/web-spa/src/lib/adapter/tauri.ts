@@ -481,6 +481,7 @@ export class TauriAdapter implements PRMAdapter {
     logout: (): Promise<void> => invoke<void>('cloud_logout'),
     syncNow: (): Promise<CloudSyncResult> =>
       invoke<CloudSyncResult>('cloud_sync_now'),
+    repairRepush: (): Promise<void> => invoke<void>('cloud_sync_repair_repush'),
   };
 
   md = TauriAdapter.isAndroidTauri

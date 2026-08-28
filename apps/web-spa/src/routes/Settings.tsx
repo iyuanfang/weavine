@@ -241,6 +241,24 @@ function CloudSyncPanel() {
     },
   });
 
+  // Repair path: clear the push watermark, then sync. Recovers rows that a
+  // previous sync skipped because the server rejected their entity kind —
+  // the watermark had already moved past them, so they were never retried.
+  const repairMutation = useMutation({
+    mutationFn: async () => {
+      await adapter.cloud.repairRepush();
+      return adapter.cloud.syncNow();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['cloud-status'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['actions'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      console.log('[cloud sync] full re-push result:', result);
+    },
+  });
+
   const [serverUrl, setServerUrl] = useState('https://weavine.financialagent.cc');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -318,6 +336,24 @@ function CloudSyncPanel() {
               style={{ opacity: syncMutation.isPending ? 0.6 : 1 }}
             >
               {syncMutation.isPending ? '同步中…' : '🔄 立即同步'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                if (
+                  confirm(
+                    '将重置本地推送游标，本次同步会重新上传全部本地数据（幂等覆盖，不会重复创建）。确定继续？',
+                  )
+                ) {
+                  repairMutation.mutate();
+                }
+              }}
+              disabled={repairMutation.isPending || syncMutation.isPending}
+              style={{ opacity: repairMutation.isPending ? 0.6 : 1 }}
+              title="修复因服务端曾拒收某类数据（如笔记）而被跳过、不再重传的记录"
+            >
+              {repairMutation.isPending ? '重传中…' : '♻️ 全量重传'}
             </button>
             <button
               type="button"

@@ -478,6 +478,7 @@ pub fn run() {
             commands::sync::cloud_login,
             commands::sync::cloud_logout,
             commands::sync::cloud_sync_now,
+            commands::sync::cloud_sync_repair_repush,
             commands::sync::cloud_status,
             commands::archive::archive_sweep,
             quick::quick_parse,

@@ -537,6 +537,7 @@ export class HttpAdapter implements PRMAdapter {
     login: () => Promise.reject(new Error('cloud sync is desktop-only')),
     logout: () => Promise.reject(new Error('cloud sync is desktop-only')),
     syncNow: () => Promise.reject(new Error('cloud sync is desktop-only')),
+    repairRepush: () => Promise.reject(new Error('cloud sync is desktop-only')),
   };
 
   md = {

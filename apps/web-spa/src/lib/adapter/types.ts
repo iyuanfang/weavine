@@ -708,6 +708,8 @@ export interface PRMAdapter {
     login(input: CloudLoginInput): Promise<CloudStatus>;
     logout(): Promise<void>;
     syncNow(): Promise<CloudSyncResult>;
+    /** Clear the push watermark so the next sync re-pushes every local row. */
+    repairRepush(): Promise<void>;
   };
 
   apiKeys: {
