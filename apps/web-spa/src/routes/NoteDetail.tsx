@@ -972,8 +972,8 @@ function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
         width: 220,
         minWidth: 220,
         maxWidth: 220,
-        padding: '8px 8px 8px 12px',
-        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
         borderRight: '1px solid var(--border, #e5e7eb)',
         background: 'var(--surface-alt, #f9fafb)',
         fontSize: 13,
@@ -984,7 +984,10 @@ function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 6,
+          padding: '8px 8px 6px 12px',
+          flexShrink: 0,
+          borderBottom: '1px solid var(--border, #e5e7eb)',
+          background: 'var(--surface-alt, #f9fafb)',
         }}
       >
         <span
@@ -1015,23 +1018,24 @@ function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
           ◀
         </button>
       </div>
-      {headings.length === 0 && (
-        <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>暂无标题</div>
-      )}
-      {headings.map((h, idx) => (
-        <button
-          key={idx}
-          type="button"
-          onClick={() => onSelect(h.line)}
-          title={`跳到第 ${h.line + 1} 行`}
-          style={{
-            display: 'block',
-            width: '100%',
-            textAlign: 'left',
-            border: 'none',
-            background: 'transparent',
-            padding: '3px 6px',
-            paddingLeft: 6 + (h.level - 1) * 12,
+      <div style={{ overflowY: 'auto', flex: 1, padding: '6px 8px 8px 12px' }}>
+        {headings.length === 0 && (
+          <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>暂无标题</div>
+        )}
+        {headings.map((h, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => onSelect(h.line)}
+            title={`跳到第 ${h.line + 1} 行`}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              border: 'none',
+              background: 'transparent',
+              padding: '3px 6px',
+              paddingLeft: 6 + (h.level - 1) * 12,
             borderRadius: 3,
             cursor: 'pointer',
             color: 'var(--text, #111)',
@@ -1052,6 +1056,7 @@ function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
           {h.text}
         </button>
       ))}
+      </div>
     </nav>
   );
 }

@@ -2931,3 +2931,17 @@ textarea.input-base {
 .note-list-item--row:last-child {
   border-bottom: none;
 }
+
+/* ── Md editor panes ─────────────────────────────── */
+.md-edit-pane textarea {
+  overflow: auto;
+}
+/* Split mode: hide the textarea's native scrollbar so the edit pane
+   doesn't compete with the preview pane's scroll. Use Ctrl+End / PageUp
+   / PageDown / arrow keys (or the TOC) to navigate long files. */
+.md-edit-pane--split textarea {
+  scrollbar-width: none;
+}
+.md-edit-pane--split textarea::-webkit-scrollbar {
+  display: none;
+}

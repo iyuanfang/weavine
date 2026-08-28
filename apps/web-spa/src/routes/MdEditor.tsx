@@ -15,11 +15,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAdapter } from '../lib/adapter';
 import { renderMarkdown } from '../lib/markdown';
 import { parseTocHeadings } from '../lib/markdown-toc';
+import { usePageScrollLock } from '../lib/use-page-scroll-lock';
 
 export function MdEditor() {
   const adapter = useAdapter();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  usePageScrollLock();
   const path = params.get('path');
   const [content, setContent] = useState('');
   const [, setOriginalMtime] = useState<number | null>(null);
@@ -207,7 +209,7 @@ export function MdEditor() {
     : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <div
         style={{
           display: 'flex',
@@ -354,7 +356,10 @@ export function MdEditor() {
           </button>
         )}
         {(view === 'edit' || view === 'split') && (
-          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+          <div
+            className={view === 'split' ? 'md-edit-pane md-edit-pane--split' : 'md-edit-pane md-edit-pane--solo'}
+            style={{ flex: 1, minWidth: 0, display: 'flex' }}
+          >
             <textarea
               ref={taRef}
               value={content}
@@ -441,8 +446,8 @@ function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
         width: 220,
         minWidth: 220,
         maxWidth: 220,
-        padding: '8px 8px 8px 12px',
-        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
         borderRight: '1px solid var(--border, #e5e7eb)',
         background: 'var(--surface-alt, #f9fafb)',
         fontSize: 13,
@@ -453,7 +458,10 @@ function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 6,
+          padding: '8px 8px 6px 12px',
+          flexShrink: 0,
+          borderBottom: '1px solid var(--border, #e5e7eb)',
+          background: 'var(--surface-alt, #f9fafb)',
         }}
       >
         <span
@@ -484,43 +492,46 @@ function TocPanel({ headings, onSelect, onToggle }: TocPanelProps) {
           ◀
         </button>
       </div>
-      {headings.length === 0 && (
-        <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>暂无标题</div>
-      )}
-      {headings.map((h, idx) => (
-        <button
-          key={idx}
-          type="button"
-          onClick={() => onSelect(h.line)}
-          title={`跳到第 ${h.line + 1} 行`}
-          style={{
-            display: 'block',
-            width: '100%',
-            textAlign: 'left',
-            border: 'none',
-            background: 'transparent',
-            padding: '3px 6px',
-            paddingLeft: 6 + (h.level - 1) * 12,
-            borderRadius: 3,
-            cursor: 'pointer',
-            color: 'var(--text, #111)',
-            fontSize: h.level === 1 ? 13 : 12,
-            fontWeight: h.level === 1 ? 600 : 400,
-            lineHeight: 1.5,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'var(--hover, #e5e7eb)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-          }}
-        >
-          {h.text}
-        </button>
-      ))}
+      <div style={{ overflowY: 'auto', flex: 1, padding: '6px 8px 8px 12px' }}>
+        {headings.length === 0 && (
+          <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>暂无标题</div>
+        )}
+
+        {headings.map((h, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => onSelect(h.line)}
+            title={`跳到第 ${h.line + 1} 行`}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              border: 'none',
+              background: 'transparent',
+              padding: '3px 6px',
+              paddingLeft: 6 + (h.level - 1) * 12,
+              borderRadius: 3,
+              cursor: 'pointer',
+              color: 'var(--text, #111)',
+              fontSize: h.level === 1 ? 13 : 12,
+              fontWeight: h.level === 1 ? 600 : 400,
+              lineHeight: 1.5,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--hover, #e5e7eb)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            }}
+          >
+            {h.text}
+          </button>
+        ))}
+      </div>
     </nav>
   );
 }
