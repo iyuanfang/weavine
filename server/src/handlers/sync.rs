@@ -249,7 +249,7 @@ pub async fn push(
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let existing: Option<(Option<String>,)> = sqlx::query_as(&format!(
-                    "SELECT updated_at FROM {} WHERE id = $1 AND user_id = $2",
+                    "SELECT updated_at::TEXT FROM {} WHERE id = $1 AND user_id = $2",
                     table
                 ))
                 .bind(&row_id)
