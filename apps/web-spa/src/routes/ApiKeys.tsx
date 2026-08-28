@@ -66,6 +66,15 @@ export function ApiKeysPage() {
     return <div style={{ padding: 24 }}>请先登录</div>;
   }
 
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    return (
+      <div style={{ padding: 24, maxWidth: 900 }}>
+        <PageHeader title="API 密钥" />
+        <p style={{ color: '#666' }}>API 密钥仅在 Web 版管理 — 桌面端直接使用登录会话。</p>
+      </div>
+    );
+  }
+
   const rows: ApiKeySummary[] = list.data ?? [];
 
   return (

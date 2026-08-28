@@ -7,7 +7,6 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import type {
   ArchiveSummary,
-  Setting,
   CreateContactInput,
   CreateEventInput,
   CreateActionInput,
@@ -21,247 +20,32 @@ import type {
   Reminder,
 } from '../lib/adapter/types';
 
+const isWebRuntime =
+  typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window);
+
 export function SettingsPage() {
-  const adapter = useAdapter();
   const userId = useUserId();
-  const queryClient = useQueryClient();
-
-  const settingsQuery = useQuery({
-    queryKey: ['settings', userId],
-    queryFn: () => adapter.settings.list(userId!),
-    enabled: !!userId,
-  });
-
-  const upsertMutation = useMutation({
-    mutationFn: (input: { key: string; value: string }) =>
-      adapter.settings.upsert(userId!, input.key, input.value),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings', userId] });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (key: string) => adapter.settings.delete(userId!, key),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings', userId] });
-    },
-  });
-
-  const [showAdd, setShowAdd] = useState(false);
-  const [newKey, setNewKey] = useState('');
-  const [newValue, setNewValue] = useState('');
-
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
 
   if (!userId) {
     return <div className="loading">正在加载用户…</div>;
-  }
-
-  if (settingsQuery.isError) {
-    return (
-      <div className="page">
-        <div className="error-banner">加载失败: {String(settingsQuery.error)}</div>
-      </div>
-    );
-  }
-
-  const settings = settingsQuery.data ?? [];
-
-  function handleAdd() {
-    if (!newKey.trim()) return;
-    upsertMutation.mutate({ key: newKey.trim(), value: newValue.trim() });
-    setNewKey('');
-    setNewValue('');
-    setShowAdd(false);
-  }
-
-  function startEdit(key: string, value: string) {
-    setEditingKey(key);
-    setEditValue(value);
-  }
-
-  function saveEdit() {
-    if (editingKey) {
-      upsertMutation.mutate({ key: editingKey, value: editValue.trim() });
-    }
-    setEditingKey(null);
-    setEditValue('');
   }
 
   return (
     <div className="page">
       <PageHeader
         title="设置"
-        subtitle={`${settings.length} 项 · 键值对存储`}
         actions={
-          <>
+          isWebRuntime ? (
             <Link to="/settings/api-keys" className="btn">
               API 密钥
             </Link>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setShowAdd(!showAdd)}
-            >
-              {showAdd ? '取消' : '+ 新建设置'}
-            </button>
-          </>
+          ) : null
         }
       />
 
       <CloudSyncPanel />
       <ArchivePanel />
       <BackupRestorePanel />
-
-      <ReminderSoundCard />
-
-      {showAdd && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'grid', gap: 14 }}>
-            <div>
-              <label className="input-label">键名 *</label>
-              <input
-                className="input-base"
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                placeholder="例如 reminder_offsets"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="input-label">值</label>
-              <input
-                className="input-base"
-                value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                placeholder="例如 30,1440"
-              />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleAdd}
-                disabled={upsertMutation.isPending || !newKey.trim()}
-              >
-                {upsertMutation.isPending ? '保存中…' : '保存'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {settingsQuery.isLoading ? (
-        <div className="loading">加载中</div>
-      ) : settings.length === 0 ? (
-        <div className="empty-state">
-          <h3 className="empty-state__title">还没有设置项</h3>
-          <p className="empty-state__hint">键值对配置，应用启动时读取</p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowAdd(true)}
-          >
-            + 新建设置
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 6 }}>
-          {settings.map((s) => (
-            <SettingRow
-              key={s.id}
-              setting={s}
-              editingKey={editingKey}
-              editValue={editValue}
-              setEditValue={setEditValue}
-              onStartEdit={() => startEdit(s.key, s.value)}
-              onSaveEdit={saveEdit}
-              onCancelEdit={() => setEditingKey(null)}
-              onDelete={() => {
-                if (confirm(`确定要删除「${s.key}」吗？`)) {
-                  deleteMutation.mutate(s.key);
-                }
-              }}
-              isDeleting={deleteMutation.isPending}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SettingRow({
-  setting,
-  editingKey,
-  editValue,
-  setEditValue,
-  onStartEdit,
-  onSaveEdit,
-  onCancelEdit,
-  onDelete,
-  isDeleting,
-}: {
-  setting: Setting;
-  editingKey: string | null;
-  editValue: string;
-  setEditValue: (v: string) => void;
-  onStartEdit: () => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  onDelete: () => void;
-  isDeleting: boolean;
-}) {
-  const isEditing = editingKey === setting.key;
-
-  return (
-    <div className="row-card" style={{ padding: '12px 16px' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="row-card__title" style={{ fontFamily: 'monospace', fontSize: 'var(--text-base)' }}>
-          {setting.key}
-        </div>
-        {isEditing ? (
-          <input
-            type="text"
-            className="input-base"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            style={{ marginTop: 6 }}
-            autoFocus
-          />
-        ) : (
-          <div className="row-card__meta" style={{ marginTop: 2 }}>
-            {setting.value}
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-        {isEditing ? (
-          <>
-            <button type="button" onClick={onSaveEdit} className="btn btn-sm btn-primary">
-              保存
-            </button>
-            <button type="button" onClick={onCancelEdit} className="btn btn-sm btn-secondary">
-              取消
-            </button>
-          </>
-        ) : (
-          <button type="button" onClick={onStartEdit} className="btn btn-sm btn-secondary">
-            编辑
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={isDeleting}
-          className="btn btn-sm btn-danger"
-          style={{ opacity: isDeleting ? 0.6 : 1 }}
-        >
-          删除
-        </button>
-      </div>
     </div>
   );
 }
@@ -1029,66 +813,6 @@ function BackupRestorePanel() {
           e.target.value = '';
         }}
       />
-    </div>
-  );
-}
-
-function ReminderSoundCard() {
-  const adapter = useAdapter();
-  const userId = useUserId();
-  const queryClient = useQueryClient();
-
-  const settingsQuery = useQuery({
-    queryKey: ['settings', userId],
-    queryFn: () => adapter.settings.list(userId!),
-    enabled: !!userId,
-  });
-
-  const upsert = useMutation({
-    mutationFn: (value: string) => adapter.settings.upsert(userId!, 'reminder_sound', value),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings', userId] });
-    },
-  });
-
-  const current = settingsQuery.data?.find((s) => s.key === 'reminder_sound')?.value ?? 'default';
-
-  const preview = (value: string) => {
-    if (typeof window === 'undefined') return;
-    void import('../lib/notifications').then(({ fire }) => {
-      fire('Weavine · 试听', `声音样本: ${value}`, 'weavine-sound-preview', value as never);
-    });
-  };
-
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
-        🔔 提醒声音
-      </h3>
-      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 12px', lineHeight: 1.6 }}>
-        选择触发提醒时播放的声音。系统通知权限必须已授予。
-      </p>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {[
-          { value: 'default', label: '系统默认' },
-          { value: 'chime', label: '清脆提示' },
-          { value: 'bell', label: '柔和铃声' },
-          { value: 'silent', label: '静音' },
-        ].map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            className={current === opt.value ? 'btn btn-primary' : 'btn'}
-            onClick={() => {
-              upsert.mutate(opt.value);
-              preview(opt.value);
-            }}
-            disabled={upsert.isPending}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
