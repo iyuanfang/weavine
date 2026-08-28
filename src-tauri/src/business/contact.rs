@@ -19,6 +19,7 @@ pub(crate) fn row_to_contact(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
         keep_in_touch_cadence_days: row.get(12)?,
         created_at: row.get(13)?,
         updated_at: row.get(14)?,
+        deleted_at: row.get(15).ok(),
         avatar_storage_key: row.get(16).ok(),
         avatar_mime: row.get(17).ok(),
         avatar_width: row.get(18).ok(),
@@ -47,6 +48,7 @@ pub(crate) fn load_tags_for_contact(
                 name: row.get(2)?,
                 color: row.get(3)?,
                 created_at: row.get(4)?,
+                deleted_at: None,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -64,7 +66,7 @@ pub(crate) fn hydrate_tags(
 }
 
 pub fn list(conn: &Connection, p: &ListContactsParams) -> rusqlite::Result<(Vec<Contact>, bool)> {
-    let mut sql = String::from("SELECT * FROM Contact WHERE user_id = ?1");
+    let mut sql = String::from("SELECT * FROM Contact WHERE user_id = ?1 AND deleted_at IS NULL");
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
         vec![Box::new(p.user_id.clone())];
     let mut idx = 2;
@@ -316,13 +318,21 @@ pub fn update(conn: &Connection, input: &UpdateContactInput) -> rusqlite::Result
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM Contact WHERE id = ?1", rusqlite::params![id])?;
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    conn.execute(
+        "UPDATE Contact SET deleted_at = ?1, updated_at = ?1 \
+         WHERE id = ?2 AND deleted_at IS NULL",
+        rusqlite::params![&now, id],
+    )?;
+    conn.execute("DELETE FROM ContactTag WHERE contact_id = ?1", rusqlite::params![id])?;
     Ok(())
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Contact> {
     let contact = conn.query_row(
-        "SELECT * FROM Contact WHERE id = ?1",
+        "SELECT * FROM Contact WHERE id = ?1 AND deleted_at IS NULL",
         rusqlite::params![id],
         row_to_contact,
     )?;

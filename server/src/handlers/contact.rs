@@ -59,7 +59,7 @@ pub async fn list(
          importance, last_interaction_at, keep_in_touch_cadence_days, \
          created_at, updated_at, avatar_storage_key, avatar_mime, avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
          FROM contact \
-         WHERE user_id = $1 \
+         WHERE user_id = $1 AND deleted_at IS NULL \
          AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%' OR company ILIKE '%' || $2 || '%') \
          AND ($3::text IS NULL OR importance = $3) \
          AND ($4::text IS NULL OR EXISTS (SELECT 1 FROM contact_tag ct WHERE ct.contact_id = contact.id AND ct.tag_id = $4)) \
@@ -325,12 +325,15 @@ pub async fn delete(
         .bind(&id)
         .execute(&mut *tx)
         .await;
-    sqlx::query("DELETE FROM contact WHERE id = $1 AND user_id = $2")
-        .bind(&id)
-        .bind(&auth)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query(
+        "UPDATE contact SET deleted_at = now(), updated_at = now() \
+         WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(&id)
+    .bind(&auth)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tx.commit()
         .await

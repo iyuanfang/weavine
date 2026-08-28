@@ -42,6 +42,9 @@ pub struct Contact {
     pub keep_in_touch_cadence_days: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
     #[cfg_attr(feature = "sqlx", sqlx(skip))]
     pub tags: Vec<Tag>,
     pub avatar_storage_key: Option<String>,
@@ -59,6 +62,9 @@ pub struct Tag {
     pub name: String,
     pub color: Option<String>,
     pub created_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +84,9 @@ pub struct Event {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub contact_nickname: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -100,6 +109,9 @@ pub struct Interaction {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub source_ref: Option<String>,
     pub created_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub contact_nickname: Option<String>,
 }
@@ -122,6 +134,9 @@ pub struct Project {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,6 +155,9 @@ pub struct Action {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub contact_nickname: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -281,6 +299,9 @@ pub struct Reminder {
     pub dismissed: bool,
     pub invitation_token: Option<String>,
     pub created_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub contact_nickname: Option<String>,
 }
@@ -582,6 +603,9 @@ pub struct Note {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "sqlx", sqlx(default))]
+    pub deleted_at: Option<String>,
     #[serde(default)]
     #[cfg_attr(feature = "sqlx", sqlx(default))]
     pub imported_from: Option<String>,

@@ -53,30 +53,32 @@ CREATE TABLE IF NOT EXISTS "VerificationToken" (
 );
 
 CREATE TABLE IF NOT EXISTS "Contact" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-    "nickname" TEXT NOT NULL,
-    "name" TEXT,
-    "company" TEXT,
-    "title" TEXT,
-    "address" TEXT,
-    "email" TEXT,
-    "phone" TEXT,
-    "wechat" TEXT,
-    "importance" TEXT NOT NULL DEFAULT 'low' CHECK("importance" IN ('low', 'medium', 'high')),
-"last_interaction_at" DATETIME NOT NULL,
-    "keep_in_touch_cadence_days" INTEGER,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL,
-    "archived_at" TEXT
-);
+        "id" TEXT PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "nickname" TEXT,
+        "name" TEXT,
+        "company" TEXT,
+        "title" TEXT,
+        "address" TEXT,
+        "email" TEXT,
+        "phone" TEXT,
+        "wechat" TEXT,
+        "importance" INTEGER NOT NULL DEFAULT 1,
+        "last_interaction_at" TEXT,
+        "keep_in_touch_cadence_days" INTEGER,
+        "created_at" TEXT NOT NULL,
+        "updated_at" TEXT NOT NULL,
+        "archived_at" TEXT,
+        "deleted_at" TEXT
+    );
 
 CREATE TABLE IF NOT EXISTS "Tag" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
     "name" TEXT NOT NULL,
     "color" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deleted_at" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "ContactTag" (
@@ -87,22 +89,23 @@ CREATE TABLE IF NOT EXISTS "ContactTag" (
 );
 
 CREATE TABLE IF NOT EXISTS "Event" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-    "title" TEXT NOT NULL,
-    "event_type" TEXT NOT NULL DEFAULT 'event',
-    "start_at" DATETIME NOT NULL,
-    "end_at" DATETIME,
-    "location" TEXT,
-    "reminder_enabled" INTEGER NOT NULL DEFAULT 1,
-    "reminder_at" DATETIME,
-    "reminder_lead_minutes" INTEGER,
-    "contact_id" TEXT REFERENCES "Contact"("id") ON DELETE SET NULL,
-    "project_id" TEXT REFERENCES "Project"("id") ON DELETE SET NULL,
-    "archived_at" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL
-);
+        "id" TEXT PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "event_type" TEXT NOT NULL,
+        "start_at" TEXT,
+        "end_at" TEXT,
+        "location" TEXT,
+        "reminder_enabled" INTEGER NOT NULL DEFAULT 1,
+        "reminder_at" TEXT,
+        "reminder_lead_minutes" INTEGER,
+        "contact_id" TEXT,
+        "project_id" TEXT,
+        "archived_at" TEXT,
+        "created_at" TEXT NOT NULL,
+        "updated_at" TEXT NOT NULL,
+        "deleted_at" TEXT
+    );
 
 CREATE TABLE IF NOT EXISTS "Action" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -117,7 +120,8 @@ CREATE TABLE IF NOT EXISTS "Action" (
     "project_id" TEXT REFERENCES "Project"("id") ON DELETE SET NULL,
     "archived_at" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL
+    "updated_at" DATETIME NOT NULL,
+    "deleted_at" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "Interaction" (
@@ -131,7 +135,8 @@ CREATE TABLE IF NOT EXISTS "Interaction" (
     "summary" TEXT NOT NULL,
     "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','action')),
     "source_ref" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deleted_at" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "Reminder" (
@@ -144,7 +149,8 @@ CREATE TABLE IF NOT EXISTS "Reminder" (
     "dispatched" INTEGER NOT NULL DEFAULT 0,
     "dismissed" INTEGER NOT NULL DEFAULT 0,
     "invitation_token" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deleted_at" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "Setting" (
@@ -175,7 +181,8 @@ CREATE TABLE IF NOT EXISTS "Project" (
     "completed_at" DATETIME,
     "archived_at" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL
+    "updated_at" DATETIME NOT NULL,
+    "deleted_at" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "ProjectContact" (
@@ -215,16 +222,17 @@ CREATE TABLE IF NOT EXISTS "Media" (
 );
 
 CREATE TABLE IF NOT EXISTS "Note" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "user_id" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-    "title" TEXT NOT NULL,
-    "body" TEXT NOT NULL DEFAULT '',
-    "archived_at" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "imported_from" TEXT,
-    "imported_at" TEXT
-);
+        "id" TEXT PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "body" TEXT NOT NULL DEFAULT '',
+        "archived_at" TEXT,
+        "created_at" TEXT NOT NULL,
+        "updated_at" TEXT NOT NULL,
+        "imported_from" TEXT,
+        "imported_at" TEXT,
+        "deleted_at" TEXT
+    );
 
 CREATE TABLE IF NOT EXISTS "NoteEntity" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -458,6 +466,40 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
          CREATE INDEX IF NOT EXISTS \"Action_archived_at_idx\" ON \"Action\"(\"archived_at\");
          CREATE INDEX IF NOT EXISTS \"Event_archived_at_idx\" ON \"Event\"(\"archived_at\");
          CREATE INDEX IF NOT EXISTS \"Project_archived_at_idx\" ON \"Project\"(\"archived_at\");",
+    )?;
+
+    // Soft-delete (deleted_at) for 8 user-data tables. Idempotent ALTER.
+    // All list queries filter `deleted_at IS NULL`. Hard deletes only apply to
+    // join tables (NoteEntity / ContactTag / ProjectContact / EntityLink).
+    let soft_delete_cols = [
+        ("Note", "deleted_at", "TEXT"),
+        ("Contact", "deleted_at", "TEXT"),
+        ("Project", "deleted_at", "TEXT"),
+        ("Event", "deleted_at", "TEXT"),
+        ("Action", "deleted_at", "TEXT"),
+        ("Interaction", "deleted_at", "TEXT"),
+        ("Tag", "deleted_at", "TEXT"),
+        ("Reminder", "deleted_at", "TEXT"),
+    ];
+    for (table, col, decl) in soft_delete_cols {
+        let present: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
+            rusqlite::params![table, col],
+            |r| r.get(0),
+        )?;
+        if present == 0 {
+            conn.execute(&format!("ALTER TABLE \"{table}\" ADD COLUMN \"{col}\" {decl}"), [])?;
+        }
+    }
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS \"Note_deleted_at_idx\" ON \"Note\"(\"deleted_at\");
+         CREATE INDEX IF NOT EXISTS \"Contact_deleted_at_idx\" ON \"Contact\"(\"deleted_at\");
+         CREATE INDEX IF NOT EXISTS \"Project_deleted_at_idx\" ON \"Project\"(\"deleted_at\");
+         CREATE INDEX IF NOT EXISTS \"Event_deleted_at_idx\" ON \"Event\"(\"deleted_at\");
+         CREATE INDEX IF NOT EXISTS \"Action_deleted_at_idx\" ON \"Action\"(\"deleted_at\");
+         CREATE INDEX IF NOT EXISTS \"Interaction_deleted_at_idx\" ON \"Interaction\"(\"deleted_at\");
+         CREATE INDEX IF NOT EXISTS \"Tag_deleted_at_idx\" ON \"Tag\"(\"deleted_at\");
+         CREATE INDEX IF NOT EXISTS \"Reminder_deleted_at_idx\" ON \"Reminder\"(\"deleted_at\");",
     )?;
 
     // Idempotent migration: allow 'interaction' in NoteEntity.entity_type CHECK.
@@ -801,11 +843,12 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
                     "summary" TEXT NOT NULL,
                     "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','action','archive')),
                     "source_ref" TEXT,
-                    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "deleted_at" TEXT
                 );
                 INSERT INTO "Interaction__new"
-                    (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at)
-                SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at
+                    (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, deleted_at)
+                SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, deleted_at
                 FROM "Interaction";
                 DROP TABLE "Interaction";
                 ALTER TABLE "Interaction__new" RENAME TO "Interaction";

@@ -307,6 +307,10 @@ async fn push_all(
     // per-request payload bounded; server-side savepoint batching remains
     // unchanged, but per-row trigger overhead amortizes over fewer round-trips.
     let mut last_server_rev = 0;
+    // Conflicts raised by *this* push only. `result.conflicts` may already
+    // carry counts from earlier stages, so it cannot be used as the retry
+    // signal here.
+    let mut push_conflicts = 0usize;
     for entity in entities.iter() {
         for chunk_rows in entity.rows.chunks(PUSH_CHUNK_SIZE) {
             let chunk = EntityPush {
@@ -322,10 +326,16 @@ async fn push_all(
             .await?;
             result.pushed += push_resp.accepted.len();
             result.conflicts += push_resp.conflicts.len();
+            push_conflicts += push_resp.conflicts.len();
             last_server_rev = push_resp.server_revision;
         }
     }
-    if !max_pushed_at.is_empty() && max_pushed_at != last_pushed_at {
+    // Only advance the watermark when every row was accepted. The next push
+    // selects `updated_at > watermark`, so advancing past rows the server
+    // rejected would strand them forever — they would never be retried.
+    // Holding the watermark still is safe: re-pushing accepted rows is an
+    // idempotent upsert.
+    if push_conflicts == 0 && !max_pushed_at.is_empty() && max_pushed_at != last_pushed_at {
         config::set(conn, KEY_LAST_PUSHED_AT, &max_pushed_at)?;
     }
     Ok(last_server_rev)
@@ -473,12 +483,16 @@ fn apply_change(
             stmt.execute(param_refs.as_slice())?;
         }
         "DELETE" => {
+            let now = chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+                .to_string();
             conn.execute(
                 &format!(
-                    "DELETE FROM \"{}\" WHERE \"id\" = ?1 AND \"user_id\" = ?2",
+                    "UPDATE \"{}\" SET \"deleted_at\" = ?1, \"updated_at\" = ?1 \
+                     WHERE \"id\" = ?2 AND \"user_id\" = ?3 AND \"deleted_at\" IS NULL",
                     table
                 ),
-                rusqlite::params![change.row_id, local_user_id],
+                rusqlite::params![now, change.row_id, local_user_id],
             )?;
         }
         _ => {

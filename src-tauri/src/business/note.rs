@@ -13,6 +13,7 @@ pub(crate) fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {
         updated_at: row.get(6)?,
         imported_from: row.get(7).ok(),
         imported_at: row.get(8).ok(),
+        deleted_at: row.get(9).ok(),
     })
 }
 
@@ -21,19 +22,19 @@ pub fn list(conn: &Connection, user_id: &str, cursor: Option<&str>) -> rusqlite:
     let sql = if let Some(cursor_str) = cursor {
         if let Some((cursor_at, cursor_id)) = cursor_str.split_once(',') {
             format!(
-                "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
-                 FROM Note WHERE user_id = ?1 AND archived_at IS NULL \
+                "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at, deleted_at \
+                 FROM Note WHERE user_id = ?1 AND archived_at IS NULL AND deleted_at IS NULL \
                   AND (updated_at < ?2 OR (updated_at = ?2 AND id > ?3)) \
                  ORDER BY updated_at DESC, id ASC LIMIT ?4",
             )
         } else {
-            "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
-             FROM Note WHERE user_id = ?1 AND archived_at IS NULL \
+            "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at, deleted_at \
+             FROM Note WHERE user_id = ?1 AND archived_at IS NULL AND deleted_at IS NULL \
              ORDER BY updated_at DESC LIMIT ?2".to_string()
         }
     } else {
-        "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
-         FROM Note WHERE user_id = ?1 AND archived_at IS NULL \
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at, deleted_at \
+         FROM Note WHERE user_id = ?1 AND archived_at IS NULL AND deleted_at IS NULL \
          ORDER BY updated_at DESC LIMIT ?2".to_string()
     };
     let rows: Vec<Note> = if let Some(cursor_str) = cursor {
@@ -61,8 +62,8 @@ pub fn list(conn: &Connection, user_id: &str, cursor: Option<&str>) -> rusqlite:
 
 pub fn get(conn: &Connection, user_id: &str, id: &str) -> rusqlite::Result<Option<Note>> {
     let mut stmt = conn.prepare(
-        "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at \
-         FROM Note WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at, deleted_at \
+         FROM Note WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
     )?;
     stmt.query_row(params![id, user_id], row_to_note).optional()
 }
@@ -144,10 +145,15 @@ pub fn update(conn: &Connection, user_id: &str, id: &str, input: &UpdateNoteInpu
 }
 
 pub fn delete(conn: &Connection, user_id: &str, id: &str) -> rusqlite::Result<bool> {
+    let now = now_str();
     let n = conn.execute(
-        "DELETE FROM Note WHERE id = ?1 AND user_id = ?2",
-        params![id, user_id],
+        "UPDATE Note SET deleted_at = ?1, updated_at = ?1 \
+         WHERE id = ?2 AND user_id = ?3 AND deleted_at IS NULL",
+        params![now, id, user_id],
     )?;
+    if n > 0 {
+        conn.execute("DELETE FROM NoteEntity WHERE note_id = ?1", params![id])?;
+    }
     Ok(n > 0)
 }
 
@@ -161,7 +167,7 @@ pub fn list_backlinks(
         "SELECT n.id, n.title, substr(n.body, 1, 200), n.updated_at \
          FROM Note n INNER JOIN NoteEntity ne ON ne.note_id = n.id \
          WHERE ne.user_id = ?1 AND ne.entity_type = ?2 AND ne.entity_id = ?3 \
-           AND n.archived_at IS NULL \
+           AND n.archived_at IS NULL AND n.deleted_at IS NULL \
          ORDER BY n.updated_at DESC",
     )?;
     let rows = stmt

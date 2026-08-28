@@ -1,8 +1,8 @@
 // ── Field name filtering for sync ──
 //
 // Both SQLite and PG now use snake_case, so no name conversion is
-// needed. We only strip PG-only columns (server_revision, deleted_at)
-// when applying pulled data locally.
+// needed. We only strip PG-only columns (server_revision) when applying
+// pulled data locally. deleted_at is preserved so soft-deletes propagate.
 
 use serde_json::Value;
 
@@ -11,14 +11,15 @@ pub fn obj_camel_to_snake(v: &Value) -> Value {
     v.clone()
 }
 
-/// Strip PG-only columns (server_revision, deleted_at) when pulling.
+/// Strip PG-only columns (server_revision) when pulling.
 /// Keys are already snake_case; no name mapping needed.
+/// `deleted_at` is preserved — soft-delete state must propagate.
 pub fn obj_snake_to_camel(v: &Value) -> Value {
     match v {
         Value::Object(map) => {
             let mut out = serde_json::Map::with_capacity(map.len());
             for (k, val) in map {
-                if k == "server_revision" || k == "deleted_at" { continue; }
+                if k == "server_revision" { continue; }
                 out.insert(k.clone(), obj_snake_to_camel(val));
             }
             Value::Object(out)
@@ -161,19 +162,19 @@ pub fn default_zero_integer_columns(kind: &str) -> &'static [&'static str] {
 
 pub fn push_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["id","user_id","nickname","name","company","title","address","email","phone","wechat","importance","last_interaction_at","created_at","updated_at"],
-        "tag" => &["id","user_id","name","color","created_at"],
-        "event" => &["id","user_id","title","event_type","start_at","end_at","location","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at"],
-        "action" => &["id","user_id","title","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at"],
-        "interaction" => &["id","user_id","contact_id","action_id","event_id","occurred_at","channel","summary","created_at"],
-        "project" => &["id","user_id","title","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at"],
-        "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","invitation_token","created_at"],
+        "contact" => &["id","user_id","nickname","name","company","title","address","email","phone","wechat","importance","last_interaction_at","created_at","updated_at","deleted_at"],
+        "tag" => &["id","user_id","name","color","created_at","deleted_at"],
+        "event" => &["id","user_id","title","event_type","start_at","end_at","location","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at","deleted_at"],
+        "action" => &["id","user_id","title","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at","deleted_at"],
+        "interaction" => &["id","user_id","contact_id","action_id","event_id","occurred_at","channel","summary","created_at","deleted_at"],
+        "project" => &["id","user_id","title","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at","deleted_at"],
+        "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","invitation_token","created_at","deleted_at"],
         "setting" => &["id","user_id","key","value","updated_at"],
         "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","storage_key","width","height","alt_text","created_at","updated_at"],
         "contact_tag" => &["user_id","contact_id","tag_id"],
         "project_contact" => &["user_id","project_id","contact_id","role","added_at"],
         "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","label","created_at"],
-        "note" => &["id","user_id","title","body","archived_at","created_at","updated_at"],
+        "note" => &["id","user_id","title","body","archived_at","created_at","updated_at","deleted_at"],
         "note_entity" => &["id","note_id","user_id","entity_type","entity_id","created_at"],
         _ => &[],
     }
@@ -219,13 +220,14 @@ mod tests {
     }
 
     #[test]
-    fn test_obj_snake_to_camel_skips_pg_only() {
-        let input = json!({"user_id": "test", "server_revision": 42, "deleted_at": null});
+    fn test_obj_snake_to_camel_strips_server_revision() {
+        let input = json!({"user_id": "test", "server_revision": 42, "deleted_at": "2026-08-28T10:00:00Z"});
         let out = obj_snake_to_camel(&input);
-        // Keys stay snake_case (no name conversion needed), PG-only fields stripped
+        // Keys stay snake_case (no name conversion needed), server_revision stripped,
+        // deleted_at preserved so soft-delete state propagates locally.
         assert_eq!(out["user_id"], "test");
         assert!(out.get("server_revision").is_none());
-        assert!(out.get("deleted_at").is_none());
+        assert_eq!(out["deleted_at"], "2026-08-28T10:00:00Z");
     }
 
     #[test]

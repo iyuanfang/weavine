@@ -71,6 +71,7 @@ pub async fn list(
             avatar_width: None,
             avatar_height: None,
             avatar_alt_text: None,
+            deleted_at: None,
             tags: Vec::new(),
         },
         role: r.role,
