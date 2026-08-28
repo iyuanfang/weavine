@@ -28,7 +28,7 @@ pub async fn query(
                 importance, last_interaction_at, keep_in_touch_cadence_days, \
                 created_at, updated_at, avatar_storage_key, avatar_mime, \
                 avatar_width::BIGINT AS avatar_width, avatar_height::BIGINT AS avatar_height, avatar_alt_text \
-         FROM contact WHERE user_id = $1 AND (nickname ILIKE $2 OR name ILIKE $2 OR company ILIKE $2)",
+         FROM contact WHERE user_id = $1 AND deleted_at IS NULL AND (nickname ILIKE $2 OR name ILIKE $2 OR company ILIKE $2)",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
@@ -37,8 +37,8 @@ pub async fn query(
         "SELECT i.id, i.user_id, i.contact_id, i.action_id, i.event_id, i.occurred_at, i.channel, i.summary, \
                 i.source, i.source_ref, i.created_at, c.nickname AS contact_nickname \
          FROM interaction i \
-         LEFT JOIN contact c ON c.id = i.contact_id AND c.user_id = i.user_id \
-         WHERE i.user_id = $1 AND (i.summary ILIKE $2 OR i.channel ILIKE $2)",
+         LEFT JOIN contact c ON c.id = i.contact_id AND c.user_id = i.user_id AND c.deleted_at IS NULL \
+         WHERE i.user_id = $1 AND i.deleted_at IS NULL AND (i.summary ILIKE $2 OR i.channel ILIKE $2)",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
@@ -49,9 +49,9 @@ pub async fn query(
                 e.archived_at, e.created_at, e.updated_at, \
                 c.nickname AS contact_nickname, p.title AS project_title \
          FROM event e \
-         LEFT JOIN contact c ON c.id = e.contact_id AND c.user_id = e.user_id \
-         LEFT JOIN project p ON p.id = e.project_id AND p.user_id = e.user_id \
-         WHERE e.user_id = $1 AND (e.title ILIKE $2)",
+         LEFT JOIN contact c ON c.id = e.contact_id AND c.user_id = e.user_id AND c.deleted_at IS NULL \
+         LEFT JOIN project p ON p.id = e.project_id AND p.user_id = e.user_id AND p.deleted_at IS NULL \
+         WHERE e.user_id = $1 AND e.deleted_at IS NULL AND (e.title ILIKE $2)",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
@@ -62,9 +62,9 @@ pub async fn query(
                 a.created_at, a.updated_at, \
                 c.nickname AS contact_nickname, p.title AS project_title \
          FROM action a \
-         LEFT JOIN contact c ON c.id = a.contact_id AND c.user_id = a.user_id \
-         LEFT JOIN project p ON p.id = a.project_id AND p.user_id = a.user_id \
-         WHERE a.user_id = $1 AND (a.title ILIKE $2)",
+         LEFT JOIN contact c ON c.id = a.contact_id AND c.user_id = a.user_id AND c.deleted_at IS NULL \
+         LEFT JOIN project p ON p.id = a.project_id AND p.user_id = a.user_id AND p.deleted_at IS NULL \
+         WHERE a.user_id = $1 AND a.deleted_at IS NULL AND (a.title ILIKE $2)",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
@@ -72,7 +72,7 @@ pub async fn query(
     let projects = sqlx::query_as::<_, Project>(
         "SELECT id, user_id, title, template, stage, \
                 start_at, due_at, completed_at, archived_at, created_at, updated_at \
-         FROM project WHERE user_id = $1 AND (title ILIKE $2)",
+         FROM project WHERE user_id = $1 AND deleted_at IS NULL AND (title ILIKE $2)",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
@@ -80,9 +80,9 @@ pub async fn query(
     let notes = sqlx::query_as::<_, Note>(
         "SELECT id, user_id, title, substr(body, 1, 200) AS body, archived_at, \
                 created_at::text AS created_at, updated_at::text AS updated_at \
-         FROM note WHERE user_id = $1 AND archived_at IS NULL \
+FROM note WHERE user_id = $1 AND deleted_at IS NULL AND archived_at IS NULL \
            AND (title ILIKE $2 OR body ILIKE $2) \
-         ORDER BY updated_at DESC LIMIT 50",
+           ORDER BY updated_at DESC LIMIT 50",
     )
     .bind(&auth).bind(&pattern)
     .fetch_all(&*pool).await.unwrap_or_default();
