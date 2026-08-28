@@ -310,7 +310,40 @@ pub fn run() {
                         eprintln!("[startup] keep_in_touch::schedule_all failed: {e}");
                     }
                 }
-                match business::auto_log::run_with_default_window(&conn) {
+                // §Tray setup: build a tray icon with Show / Quit menu. Tray is desktop-only
+            // (Android has no system tray concept). The X close button is
+            // intercepted by `.on_window_event()` below to hide() instead of
+            // quitting, so background work keeps running.
+            #[cfg(desktop)]
+            {
+                use tauri::menu::{MenuBuilder, MenuItemBuilder};
+                use tauri::tray::TrayIconBuilder;
+                let handle = app.handle();
+                let show_item = MenuItemBuilder::with_id("show", "显示 Weavine").build(handle)?;
+                let quit_item = MenuItemBuilder::with_id("quit", "退出").build(handle)?;
+                let menu = MenuBuilder::new(handle)
+                    .items(&[&show_item, &quit_item])
+                    .build()?;
+                let _ = TrayIconBuilder::with_id("main")
+                    .menu(&menu)
+                    .menu_on_left_click(false)
+                    .tooltip("Weavine")
+                    .on_menu_event(|app, ev| match ev.id().as_ref() {
+                        "show" => {
+                            if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
+                                let _ = win.show();
+                                let _ = win.unminimize();
+                                let _ = win.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .build(handle)?;
+            }
+            match business::auto_log::run_with_default_window(&conn) {
                     Ok(n) if n > 0 => {
                         eprintln!("[startup] auto_log: wrote {n} interactions");
                     }
@@ -321,6 +354,17 @@ pub fn run() {
                 }
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // §Tray close-to-hide: the X button hides instead of quits so the
+            // background scheduler (reminders, sync, OCR) keeps running. The
+            // tray menu has a Quit entry that exits cleanly.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             contact::list_contacts,

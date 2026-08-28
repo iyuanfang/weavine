@@ -40,7 +40,7 @@ voice-local = ["dep:sherpa-onnx"]
 tauri-build = { version = "2", optional = true, features = [] }
 
 [dependencies]
-tauri = { version = "2", optional = true, features = ["protocol-asset"] }
+tauri = { version = "2", optional = true, features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-global-shortcut = { version = "2", optional = true }
 tauri-plugin-notification = { version = "2", optional = true }
 tauri-plugin-dialog = { version = "2", optional = true }
