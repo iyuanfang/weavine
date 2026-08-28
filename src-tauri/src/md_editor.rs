@@ -280,7 +280,7 @@ fn find_note_by_imported_from(conn: &Connection, user_id: &str, path: &str) -> r
     }
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn md_check_import_status(
     db: State<Database>,
     user_id: String,
@@ -455,7 +455,7 @@ fn fetch_note_json(conn: &Connection, user_id: &str, id: &str) -> rusqlite::Resu
     }
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn md_export_note_as_md(
     db: State<Database>,
     user_id: String,
