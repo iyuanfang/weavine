@@ -25,9 +25,9 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use markitdown::MarkItDown;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum SourceFormat {
     Md,
@@ -68,7 +68,7 @@ impl SourceFormat {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConvertResult {
     pub markdown: String,
     pub source_format: SourceFormat,
@@ -244,26 +244,104 @@ fn plain_text_fallback(
     }
 }
 
+/// CLI entry for the converter sidecar (`weavine --md-convert-sidecar <path>`).
+///
+/// Runs `read_as_markdown`, prints the JSON result to stdout, and exits with a
+/// status code. The signature is `!` because this is the whole purpose of the
+/// spawned child — it must `exit`, never return into `main`'s Tauri path.
+///
+/// Why a separate process: markitdown 0.1.x's docx/pdf converters can
+/// stack-overflow or double-panic on real-world files. `catch_unwind` cannot
+/// catch those (stack overflow aborts; double panic aborts). Running the
+/// converter in its own process means an abort only kills the child — the
+/// parent `convert_external_file` sees a non-zero exit and reports a friendly
+/// error. See `convert_external_file` below.
+#[cfg(desktop)]
+pub fn run_cli_convert(path: &str) -> ! {
+    let p = PathBuf::from(path);
+    match read_as_markdown(&p) {
+        Ok(r) => match serde_json::to_string(&r) {
+            Ok(json) => {
+                // The parent parses this exact line. Keep stdout clean — only
+                // the JSON, nothing else.
+                println!("{json}");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("conversion-result-serialize-failed: {e}");
+                std::process::exit(2);
+            }
+        },
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    }
+}
+
 #[cfg(feature = "tauri")]
 #[tauri::command(rename_all = "snake_case")]
 pub async fn convert_external_file(path: String) -> Result<ConvertResult, String> {
-    let p = PathBuf::from(&path);
-    // Required isolation: a dedicated 32 MiB-stack thread + catch_unwind. The
-    // big stack is the key — `spawn_blocking` uses a 1 MiB default on Windows,
-    // which pdf-extract/lopdf and docx-rust can overflow on real files. Stack
-    // overflow aborts the process; catch_unwind cannot catch it. Requirement
-    // (v1.3.10): "就算解析不了，也不要直接crash，而是报错".
-    let handle = std::thread::Builder::new()
-        .name("weavine-docx-pdf-convert".into())
-        .stack_size(32 * 1024 * 1024)
-        .spawn(move || {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read_as_markdown(&p)))
-                .unwrap_or_else(|_| Err("转换器内部错误（无法解析该文件）".to_string()))
-        })
-        .map_err(|e| format!("无法启动转换线程: {e}"))?;
-    handle
-        .join()
-        .map_err(|_| "转换线程异常终止（已隔离，主进程未受影响）".to_string())?
+    convert_external_file_via_sidecar(path).await
+}
+
+/// Spawn the converter as a *separate process* (the same `weavine` binary, run
+/// with `--md-convert-sidecar`) and read its JSON result. This is the crash
+/// isolation boundary: if the converter aborts (stack overflow / double panic),
+/// only the child dies; we get a non-zero exit / no valid JSON and report a
+/// friendly error instead of crashing the app.
+#[cfg(feature = "tauri")]
+async fn convert_external_file_via_sidecar(path: String) -> Result<ConvertResult, String> {
+    use tokio::io::AsyncReadExt;
+    use tokio::process::Command;
+    use tokio::time::{timeout, Duration};
+
+    let exe = std::env::current_exe().map_err(|e| format!("无法定位主程序路径: {e}"))?;
+
+    let mut child = Command::new(&exe)
+        .arg("--md-convert-sidecar")
+        .arg(&path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| format!("无法启动转换子进程: {e}"))?;
+
+    let wait_fut = timeout(Duration::from_secs(120), async {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        if let Some(mut so) = child.stdout.take() {
+            so.read_to_end(&mut out).await?;
+        }
+        if let Some(mut se) = child.stderr.take() {
+            se.read_to_end(&mut err).await?;
+        }
+        let status = child.wait().await?;
+        Ok::<_, std::io::Error>((status, out, err))
+    });
+
+    let (status, out, err) = match wait_fut.await {
+        Ok(Ok(ok)) => ok,
+        Ok(Err(e)) => return Err(format!("读取转换子进程输出失败: {e}")),
+        Err(_) => {
+            // `kill_on_drop(true)` cleans up the child if timeout fires.
+            return Err("转换超时（>120s），已终止子进程".to_string());
+        }
+    };
+
+    if !status.success() {
+        let stderr = String::from_utf8_lossy(&err).trim().to_string();
+        return Err(if stderr.is_empty() {
+            "转换器无法解析该文件（子进程异常退出）".to_string()
+        } else {
+            format!("转换器无法解析该文件: {stderr}")
+        });
+    }
+
+    let stdout = String::from_utf8_lossy(&out);
+    serde_json::from_str::<ConvertResult>(&stdout)
+        .map_err(|e| format!("转换结果解析失败: {e}（子进程输出: {}）", stdout.trim()))
 }
 
 #[cfg(feature = "tauri")]

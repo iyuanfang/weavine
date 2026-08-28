@@ -96,5 +96,10 @@ ndk-context = "0.1"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 markitdown = "0.1"
 
+# Windows-only: lets the converter sidecar silence the WER crash dialog so an
+# aborted markitdown conversion is silent (the parent reports the error).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Foundation"] }
+
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

@@ -72,6 +72,25 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 }
 
+// §11.7 Build the md-editor route for a file opened via OS "Open With" /
+// command-line argv. For `.md` we just pass `path`. For any other supported
+// format (docx/pdf/html/xlsx/pptx/txt) the edit target is the sibling
+// `<name>.md`, and the original path is passed as `external_path` so
+// MdEditor calls `convert_external_file` — otherwise the binary would be read
+// as a UTF-8 `.md` and show garbage.
+const MD_EXTS = new Set(['md', 'markdown']);
+function mdEditorUrlFor(originalPath: string): string {
+  const lower = originalPath.toLowerCase();
+  const ext = lower.includes('.') ? lower.split('.').pop()! : '';
+  if (MD_EXTS.has(ext)) {
+    return `/md-editor?path=${encodeURIComponent(originalPath)}`;
+  }
+  const dot = originalPath.lastIndexOf('.');
+  const slash = Math.max(originalPath.lastIndexOf('/'), originalPath.lastIndexOf('\\'));
+  const sibling = dot > slash ? originalPath.slice(0, dot) + '.md' : originalPath + '.md';
+  return `/md-editor?path=${encodeURIComponent(sibling)}&external_path=${encodeURIComponent(originalPath)}`;
+}
+
 export function AppInner({ children }: { children?: ReactNode }) {
   const adapter = useAdapter();
   const [quickOpen, setQuickOpen] = useState(false);
@@ -158,7 +177,7 @@ export function AppInner({ children }: { children?: ReactNode }) {
         const path = await mod.invoke<string | null>('take_pending_md_path');
         if (cancelled) return;
         if (typeof path === 'string' && path) {
-          const url = `/md-editor?path=${encodeURIComponent(path)}`;
+          const url = mdEditorUrlFor(path);
           window.history.pushState({}, '', url);
           window.dispatchEvent(new PopStateEvent('popstate'));
         }
@@ -181,7 +200,7 @@ export function AppInner({ children }: { children?: ReactNode }) {
         if (!mod) return;
         const off = await mod.listen<string>('open-md-from-argv', (ev) => {
           if (typeof ev.payload !== 'string' || !ev.payload) return;
-          const url = `/md-editor?path=${encodeURIComponent(ev.payload)}`;
+          const url = mdEditorUrlFor(ev.payload);
           window.history.pushState({}, '', url);
           window.dispatchEvent(new PopStateEvent('popstate'));
         });
