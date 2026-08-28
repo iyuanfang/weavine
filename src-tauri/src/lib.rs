@@ -20,6 +20,19 @@ pub mod android_assets;
 #[cfg(feature = "voice-local")]
 pub mod voice_local;
 
+/// OS file-association argv scope (v1.3.10). Keeps `tauri.conf.json`
+/// `fileAssociations` and the single-instance/cold-start argv matchers in
+/// lockstep — adding/removing an entry here requires updating both, so a
+/// "Open With" Weavine option exists in Explorer for that extension.
+#[cfg(desktop)]
+fn is_supported_argv(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    const SUPPORTED: &[&str] = &[
+        ".md", ".markdown", ".txt", ".docx", ".pdf", ".html", ".htm", ".xlsx", ".pptx",
+    ];
+    SUPPORTED.iter().any(|ext| lower.ends_with(ext))
+}
+
 #[cfg(feature = "tauri")]
 use std::sync::OnceLock;
 
@@ -166,10 +179,10 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = tauri::Builder::default().plugin(tauri_plugin_single_instance::init(
         |app, argv, _cwd| {
-            let path = argv
-                .iter()
-                .skip(1)
-                .find(|a| a.to_lowercase().ends_with(".md"));
+            // v1.3.10: OS file association now covers docx/pdf/txt/html/xlsx/pptx
+            // (not just .md), so forward any supported path through to the
+            // frontend; MdEditor will call `convert_external_file` for non-md.
+            let path = argv.iter().skip(1).find(|a| is_supported_argv(a));
             if let Some(p) = path {
                 let _ = tauri::Emitter::emit(app, "open-md-from-argv", p.clone());
             }
@@ -260,11 +273,10 @@ pub fn run() {
             // Cold-start capture: single-instance only fires on second
             // instance, so a fresh launch with .md argv never reaches the
             // listener. Park it in app state for the React listener to drain.
+            // v1.3.10: also park non-md supported formats (docx/pdf/txt/...).
             #[cfg(desktop)]
             {
-                let pending = std::env::args()
-                    .skip(1)
-                    .find(|a| a.to_lowercase().ends_with(".md"));
+                let pending = std::env::args().skip(1).find(|a| is_supported_argv(a));
                 if let Some(ref p) = pending {
                     boot_log::log(&format!("[cold-start] pending md argv: {p}"));
                 }
@@ -329,12 +341,30 @@ pub fn run() {
                     .build()?;
                 let mut tray = TrayIconBuilder::with_id("main")
                     .menu(&menu)
-                    .menu_on_left_click(false)
+                    .show_menu_on_left_click(false)
                     .tooltip("Weavine");
                 if let Some(icon) = app.default_window_icon() {
                     tray = tray.icon(icon.clone());
                 }
                 let _ = tray
+                    .on_tray_icon_event(|_tray, event| {
+                        // Left-click on the tray icon restores the window. Without
+                        // this handler, `menu_on_left_click(false)` would drop the
+                        // event silently and the user would have to right-click
+                        // → "显示 Weavine" every time (v1.3.10).
+                        if let tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            if let Some(app) = _tray.app_handle().get_webview_window("main") {
+                                let _ = app.show();
+                                let _ = app.unminimize();
+                                let _ = app.set_focus();
+                            }
+                        }
+                    })
                     .on_menu_event(|app, ev| match ev.id().as_ref() {
                         "show" => {
                             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {

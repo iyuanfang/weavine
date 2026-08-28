@@ -248,16 +248,22 @@ fn plain_text_fallback(
 #[tauri::command(rename_all = "snake_case")]
 pub async fn convert_external_file(path: String) -> Result<ConvertResult, String> {
     let p = PathBuf::from(&path);
-    // Run off the main thread and swallow panics: markitdown 0.1.11 panics on
-    // some docx/pdf inputs (e.g. docx tables with no rows, pdf_extract on
-    // malformed files). A panic inside a main-thread sync command hard-crashes
-    // the whole app on Windows; here it becomes a normal Err → UI fallback.
-    tauri::async_runtime::spawn_blocking(move || {
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read_as_markdown(&p)))
-            .unwrap_or_else(|_| Err("转换器内部错误（无法解析该文件）".to_string()))
-    })
-    .await
-    .map_err(|e| format!("转换任务失败: {e}"))?
+    // Required isolation: a dedicated 32 MiB-stack thread + catch_unwind. The
+    // big stack is the key — `spawn_blocking` uses a 1 MiB default on Windows,
+    // which pdf-extract/lopdf and docx-rust can overflow on real files. Stack
+    // overflow aborts the process; catch_unwind cannot catch it. Requirement
+    // (v1.3.10): "就算解析不了，也不要直接crash，而是报错".
+    let handle = std::thread::Builder::new()
+        .name("weavine-docx-pdf-convert".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read_as_markdown(&p)))
+                .unwrap_or_else(|_| Err("转换器内部错误（无法解析该文件）".to_string()))
+        })
+        .map_err(|e| format!("无法启动转换线程: {e}"))?;
+    handle
+        .join()
+        .map_err(|_| "转换线程异常终止（已隔离，主进程未受影响）".to_string())?
 }
 
 #[cfg(feature = "tauri")]
