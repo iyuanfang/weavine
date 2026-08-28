@@ -63,23 +63,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const nav = (
     <>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '6px 18px 8px',
-          fontSize: 11,
-          color: 'var(--text-muted)',
-          opacity: 0.55,
-          lineHeight: 1.5,
-        }}
-        title="快捷键提示"
-      >
-        <span>Alt+← 返回 · Alt+→ 前进</span>
-        <span><kbd style={{ fontSize: 10 }}>/</kbd> 搜索 · <kbd style={{ fontSize: 10 }}>Ctrl+K</kbd> 速记</span>
-      </div>
-
       <button
         type="button"
         className="app-shell__search"
