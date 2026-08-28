@@ -3,6 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
@@ -23,6 +24,36 @@ fn is_data_conflict_error(msg: &str) -> bool {
         || msg.contains("duplicate key")
         || msg.contains("foreign key")
         || msg.contains("violates")
+}
+
+/// Convert the server's stored `updated_at` text into the ISO 8601 shape the
+/// client uses, so lexicographic LWW comparison matches chronological order.
+///
+/// Server storage varies by table (TEXT for 6 tables, TIMESTAMPTZ for note),
+/// and both PG stringifications use a space separator + no milliseconds:
+/// `"2026-08-24 10:00:00+00"`. The client always sends RFC3339 with a `T`
+/// separator and 3-digit milliseconds: `"2026-08-24T10:00:00.000Z"`. Without
+/// normalization, byte `'T'` (0x54) > `' '` (0x20) makes the client always
+/// win regardless of chronology. We try several and fall back to the raw
+/// string if none parse — the cmp() still gives a deterministic, if
+/// format-mixed, order rather than panicking.
+fn normalize_lww_timestamp(raw: &str) -> String {
+    // Forms to try, in order of how each table type serializes:
+    //  1. PG TIMESTAMPTZ default: "2026-08-24 10:00:00+00"
+    //  2. PG TIMESTAMPTZ with sub-second: "2026-08-24 10:00:00.123456+00"
+    //  3. PG TEXT (manually inserted) ISO with offset: "2026-08-24T10:00:00+00:00"
+    //  4. RFC3339 (client normal form): "2026-08-24T10:00:00.000Z"
+    let candidates = [
+        DateTime::parse_from_str(raw, "%Y-%m-%d %H:%M:%S%.f%z"),
+        DateTime::parse_from_str(raw, "%Y-%m-%d %H:%M:%S%z"),
+        DateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%S%.f%z"),
+        DateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%S%z"),
+        DateTime::parse_from_rfc3339(raw),
+    ];
+    for c in candidates.into_iter().flatten() {
+        return c.with_timezone(&Utc).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    }
+    raw.to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -218,8 +249,7 @@ pub async fn push(
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let existing: Option<(Option<String>,)> = sqlx::query_as(&format!(
-                    "SELECT to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') \
-                     FROM {} WHERE id = $1 AND user_id = $2",
+                    "SELECT updated_at FROM {} WHERE id = $1 AND user_id = $2",
                     table
                 ))
                 .bind(&row_id)
@@ -236,7 +266,8 @@ pub async fn push(
                 match existing {
                     None => true,
                     Some((Some(existing_ua),)) => {
-                        let ord = updated_at.cmp(existing_ua.as_str());
+                        let existing_norm = normalize_lww_timestamp(&existing_ua);
+                        let ord = updated_at.cmp(&existing_norm);
                         cmp_result = Some(ord);
                         ord == Ordering::Greater
                     }
