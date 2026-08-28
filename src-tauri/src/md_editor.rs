@@ -221,8 +221,18 @@ pub async fn open_md_dialog(
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
+        .add_filter(
+            "可编辑格式",
+            &["md", "markdown", "txt", "docx", "pdf", "html", "htm", "xlsx", "pptx"],
+        )
         .add_filter("Markdown", &["md", "markdown"])
-        .set_title("打开 .md 文件")
+        .add_filter("纯文本", &["txt"])
+        .add_filter("Word 文档", &["docx"])
+        .add_filter("PDF", &["pdf"])
+        .add_filter("HTML", &["html", "htm"])
+        .add_filter("Excel", &["xlsx"])
+        .add_filter("PowerPoint", &["pptx"])
+        .set_title("打开文件 (.docx / .pdf / .html 会自动转换为 markdown)")
         .pick_file(move |path| {
             let _ = tx.send(path);
         });

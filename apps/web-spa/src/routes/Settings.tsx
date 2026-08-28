@@ -46,6 +46,55 @@ export function SettingsPage() {
       <CloudSyncPanel />
       <ArchivePanel />
       <BackupRestorePanel />
+      <ConvertFormatsPanel />
+    </div>
+  );
+}
+
+function ConvertFormatsPanel() {
+  const adapter = useAdapter();
+  const isTauriRuntime = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const formatsQuery = useQuery({
+    queryKey: ['convert-supported-formats'],
+    queryFn: () => adapter.md.convertSupportedFormats(),
+    enabled: isTauriRuntime,
+  });
+  if (!isTauriRuntime) return null;
+  const formats = formatsQuery.data ?? [];
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+        📄 支持的非 .md 格式
+      </h3>
+      <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 12px', lineHeight: 1.6 }}>
+        .md 编辑器可打开并转换下列格式。打开时自动转成 markdown，保存到同目录的 <code>&lt;name&gt;.md</code>，原文件不会修改。
+      </p>
+      {formatsQuery.isPending ? (
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>加载中…</div>
+      ) : formatsQuery.isError ? (
+        <div className="error-banner" style={{ fontSize: 'var(--text-sm)' }}>
+          查询失败: {String(formatsQuery.error)}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {formats.map((f) => (
+            <span
+              key={f.extension}
+              className="badge"
+              title={f.via_markitdown ? '通过 markitdown 转换' : '直接读取'}
+              style={{
+                background: 'var(--accent-soft, #e0f2fe)',
+                color: 'var(--accent, #075985)',
+                fontSize: 'var(--text-xs)',
+                padding: '2px 8px',
+                borderRadius: 4,
+              }}
+            >
+              .{f.extension} · {f.label}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

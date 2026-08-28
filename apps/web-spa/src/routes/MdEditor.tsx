@@ -5,6 +5,12 @@
  * saves back via `adapter.md.writeFile()`. Optional "导入库" button that
  * pushes current content into the note library (with re-import mtime check).
  *
+ * Non-.md sources (docx / pdf / html / xlsx / pptx / txt) are converted to
+ * markdown via markitdown (Rust `convert_external_file`); the URL carries
+ * `path=<sibling>.md` (edit target) plus `external_path=<original>` so we
+ * can show a banner, refresh the conversion on demand, and refuse to
+ * overwrite an existing sibling without confirmation.
+ *
  * Mounted at `/md-editor` and `/md-editor?path=...`. App.tsx listens for
  * `open-md-from-argv` events from Tauri and pushes this route.
  */
@@ -23,6 +29,7 @@ export function MdEditor() {
   const navigate = useNavigate();
   usePageScrollLock();
   const path = params.get('path');
+  const externalPath = params.get('external_path');
   const [content, setContent] = useState('');
   const [sizeBytes, setSizeBytes] = useState(0);
   const [encoding, setEncoding] = useState('');
@@ -33,6 +40,13 @@ export function MdEditor() {
   const [info, setInfo] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [externalEdit, setExternalEdit] = useState<{ noteTitle: string; noteId: string } | null>(null);
+  const [convertMeta, setConvertMeta] = useState<{
+    sourceFormat: string;
+    fallbackUsed: boolean;
+    fallbackReason: string | null;
+    sourceSha1: string;
+    sourceMtimeUnixMs: number;
+  } | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const closeGuard = useCallback(
@@ -67,9 +81,28 @@ export function MdEditor() {
     if (!path) return;
     let mounted = true;
     setExternalEdit(null);
+    setConvertMeta(null);
     (async () => {
       try {
         setError(null);
+        if (externalPath) {
+          const r = await adapter.md.convertExternalFile(externalPath);
+          if (!mounted) return;
+          setContent(r.markdown);
+          setSizeBytes(new Blob([r.markdown]).size);
+          setEncoding('utf-8');
+          setDirty(false);
+          setConvertMeta({
+            sourceFormat: r.source_format,
+            fallbackUsed: r.fallback_used,
+            fallbackReason: r.fallback_reason,
+            sourceSha1: r.source_sha1,
+            sourceMtimeUnixMs: r.source_mtime_unix_ms,
+          });
+          await adapter.md.addRecentFile(path);
+          return;
+        }
+
         const r = await adapter.md.readFile(path);
         if (!mounted) return;
         setContent(r.content);
@@ -97,16 +130,47 @@ export function MdEditor() {
     return () => {
       mounted = false;
     };
-  }, [path, adapter, userId]);
+  }, [path, externalPath, adapter, userId]);
 
   const openFile = useCallback(async () => {
     try {
       const selected = await adapter.md.openDialog();
-      if (selected) setParams({ path: selected });
+      if (!selected) return;
+      const ext = selected.split('.').pop()?.toLowerCase() ?? '';
+      if (ext === 'md' || ext === 'markdown') {
+        setParams({ path: selected });
+        return;
+      }
+      try {
+        const sibling = await adapter.md.convertSiblingMdPath(selected);
+        setParams({ path: sibling, external_path: selected });
+      } catch (convErr) {
+        setParams({ path: selected });
+        setInfo(`无法为 .${ext} 自动生成 .md 兄弟文件: ${String(convErr)}`);
+      }
     } catch (e) {
       setError(String(e));
     }
   }, [adapter, setParams]);
+
+  const reconvertFromSource = useCallback(async () => {
+    if (!externalPath) return;
+    try {
+      const r = await adapter.md.convertExternalFile(externalPath);
+      setContent(r.markdown);
+      setDirty(false);
+      setConvertMeta({
+        sourceFormat: r.source_format,
+        fallbackUsed: r.fallback_used,
+        fallbackReason: r.fallback_reason,
+        sourceSha1: r.source_sha1,
+        sourceMtimeUnixMs: r.source_mtime_unix_ms,
+      });
+      setInfo('已从原文件重新转换（未保存到磁盘）');
+    } catch (e) {
+      setError(`重新转换失败: ${String(e)}`);
+    }
+  }, [adapter, externalPath]);
 
   const saveFile = useCallback(
     async (silent = false) => {
@@ -332,6 +396,34 @@ export function MdEditor() {
             style={{ marginLeft: 8, background: 'transparent', border: 'none' }}
           >
             ×
+          </button>
+        </div>
+      )}
+      {convertMeta && externalPath && (
+        <div
+          data-testid="convert-banner"
+          style={{
+            background: 'var(--info-soft, #e0f2fe)',
+            color: 'var(--info, #075985)',
+            padding: '8px 12px',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <span>
+            📄 已从 <code>{externalPath}</code> 转换为 .md（{convertMeta.sourceFormat}
+            {convertMeta.fallbackUsed ? ` · 降级: ${convertMeta.fallbackReason ?? 'plain-text'}` : ''}）。
+            保存会写入 <code>{path}</code>，不会改原文件。
+          </span>
+          <button
+            type="button"
+            onClick={reconvertFromSource}
+            title="丢弃当前未保存修改并重新从原文件转换"
+            style={{ background: 'transparent', border: '1px solid currentColor', color: 'inherit', borderRadius: 4, padding: '2px 8px' }}
+          >
+            重新转换
           </button>
         </div>
       )}

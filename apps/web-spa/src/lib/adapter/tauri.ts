@@ -55,6 +55,8 @@ import type {
   MdRecentFile,
   MdWriteResult,
   MediaItem,
+  ConvertResult,
+  ConvertFormatInfo,
   Note,
   NoteBacklink,
   NoteEntityLink,
@@ -462,6 +464,12 @@ export class TauriAdapter implements PRMAdapter {
     openDialog: () => invoke<string | null>('open_md_dialog'),
     saveDialog: (defaultName?: string | null) =>
       invoke<string | null>('save_md_dialog', { default_name: defaultName ?? null }),
+    convertExternalFile: (path: string) =>
+      invoke<ConvertResult>('convert_external_file', { path }),
+    convertSupportedFormats: () =>
+      invoke<ConvertFormatInfo[]>('convert_supported_formats'),
+    convertSiblingMdPath: (path: string) =>
+      invoke<string>('convert_sibling_md_path', { path }),
     getRecentFiles: () => invoke<MdRecentFile[]>('md_get_recent_files'),
     addRecentFile: (path: string) =>
       invoke<MdRecentFile[]>('md_add_recent_file', { path }),

@@ -1,5 +1,6 @@
 pub mod boot_log;
 pub mod business;
+pub mod convert;
 
 #[cfg(feature = "tauri")]
 pub mod commands;
@@ -451,6 +452,9 @@ pub fn run() {
             md_editor::md_get_file_info,
             md_editor::open_md_dialog,
             md_editor::save_md_dialog,
+            convert::convert_external_file,
+            convert::convert_supported_formats,
+            convert::convert_sibling_md_path,
             md_editor::md_get_recent_files,
             md_editor::md_add_recent_file,
             md_editor::md_clear_recent_files,

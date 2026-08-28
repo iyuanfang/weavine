@@ -471,6 +471,31 @@ export interface MdImportStatus {
   reimport_needed: boolean;
 }
 
+export type ConvertSourceFormat =
+  | 'md'
+  | 'txt'
+  | 'docx'
+  | 'pdf'
+  | 'html'
+  | 'xlsx'
+  | 'pptx'
+  | 'other';
+
+export interface ConvertResult {
+  markdown: string;
+  source_format: ConvertSourceFormat;
+  source_sha1: string;
+  source_mtime_unix_ms: number;
+  fallback_used: boolean;
+  fallback_reason: string | null;
+}
+
+export interface ConvertFormatInfo {
+  extension: string;
+  label: string;
+  via_markitdown: boolean;
+}
+
 export interface MdImportInput {
   user_id: string;
   path: string;
@@ -643,6 +668,9 @@ export interface PRMAdapter {
     getFileInfo(path: string): Promise<MdReadResult>;
     openDialog(): Promise<string | null>;
     saveDialog(defaultName?: string | null): Promise<string | null>;
+    convertExternalFile(path: string): Promise<ConvertResult>;
+    convertSupportedFormats(): Promise<ConvertFormatInfo[]>;
+    convertSiblingMdPath(path: string): Promise<string>;
     getRecentFiles(): Promise<MdRecentFile[]>;
     addRecentFile(path: string): Promise<MdRecentFile[]>;
     clearRecentFiles(): Promise<void>;
