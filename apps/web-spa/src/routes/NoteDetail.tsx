@@ -508,9 +508,17 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
           >
             预览
           </button>
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-          提示: Ctrl+E 切换 编辑 / 分屏 / 预览
+          <span
+            style={{
+              marginLeft: 'auto',
+              alignSelf: 'center',
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              paddingRight: 4,
+            }}
+          >
+            Ctrl+E 切换
+          </span>
         </div>
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           {tocOpen && (
@@ -904,9 +912,17 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
           >
             预览
           </button>
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-          提示: Ctrl+E 切换 编辑 / 分屏 / 预览 · Ctrl+S 保存
+          <span
+            style={{
+              marginLeft: 'auto',
+              alignSelf: 'center',
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              paddingRight: 4,
+            }}
+          >
+            Ctrl+E 切换 · 自动保存
+          </span>
         </div>
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           {tocOpen && (
