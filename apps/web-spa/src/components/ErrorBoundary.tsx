@@ -103,7 +103,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </button>
           <button
             type="button"
-            onClick={() => window.location.assign('/')}
+            onClick={() => {
+              // SPA nav, not a full reload. See SearchPalette.tsx for the
+              // full explanation of why `window.location.assign()` blanks
+              // the Tauri production webview (no SPA history fallback).
+              window.history.pushState({}, '', '/');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
             style={{
               padding: '4px 12px',
               border: '1px solid #7f1d1d',

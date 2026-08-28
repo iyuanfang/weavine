@@ -146,7 +146,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="app-shell__user-logout"
             onClick={() => {
               clearSession();
-              window.location.href = '/login';
+              // SPA nav, not a full reload. See SearchPalette.tsx for the
+              // full explanation of why `window.location.href` blanks the
+              // Tauri production webview (no SPA history fallback).
+              window.history.pushState({}, '', '/login');
+              window.dispatchEvent(new PopStateEvent('popstate'));
             }}
             aria-label="退出登录"
             title="退出登录"

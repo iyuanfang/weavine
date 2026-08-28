@@ -91,7 +91,11 @@ export function LoginPage() {
           name: trimmedEmail,
           email: trimmedEmail,
         });
-        window.location.href = nextPath(location.search);
+        // SPA nav, not a full reload. See SearchPalette.tsx for the
+        // full explanation of why `window.location.href` blanks the
+        // Tauri production webview (no SPA history fallback).
+        window.history.pushState({}, '', nextPath(location.search));
+        window.dispatchEvent(new PopStateEvent('popstate'));
         return;
       }
       const base = viteApiBase();
@@ -105,7 +109,11 @@ export function LoginPage() {
         name: null,
         email: sess.email ?? null,
       });
-      window.location.href = nextPath(location.search);
+      // SPA nav, not a full reload. See SearchPalette.tsx for the
+      // full explanation of why `window.location.href` blanks the
+      // Tauri production webview (no SPA history fallback).
+      window.history.pushState({}, '', nextPath(location.search));
+      window.dispatchEvent(new PopStateEvent('popstate'));
     } catch (err) {
       setError(err instanceof Error ? err.message : '请求失败');
     } finally {

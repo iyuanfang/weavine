@@ -254,7 +254,19 @@ export function SearchPalette({ open, initialQuery = '', onClose }: Props) {
 
   const go = (href: string) => {
     onClose();
-    window.location.assign(href);
+    // SPA navigation only. `window.location.assign()` forced a real page
+    // load: the webview then asks the bundled assets for e.g.
+    // `/contacts/<id>`, which does not exist in the packaged app (there is no
+    // SPA history fallback — see main.tsx, which only rewrites `/` → `/today`
+    // at boot), so the window went blank. Dev mode hid this because the Vite
+    // dev server *does* serve index.html for unknown paths.
+    //
+    // pushState + popstate is what App.tsx already uses for argv-intent
+    // navigation; it updates the router without a document load. This
+    // component renders outside <RouterProvider>, so useNavigate() is not
+    // available here.
+    window.history.pushState({}, '', href);
+    window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {

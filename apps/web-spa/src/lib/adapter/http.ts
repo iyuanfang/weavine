@@ -149,7 +149,11 @@ async function request<R>(
         // bounces them straight back to /login.
         if (!isPublicPathname(window.location.pathname)) {
           const next = encodeURIComponent(window.location.pathname + window.location.search);
-          window.location.assign(`/login?next=${next}`);
+          // SPA nav, not a full reload. See SearchPalette.tsx for the
+          // full explanation of why `window.location.assign()` blanks
+          // the Tauri production webview (no SPA history fallback).
+          window.history.pushState({}, '', `/login?next=${next}`);
+          window.dispatchEvent(new PopStateEvent('popstate'));
         }
       }
     let msg: string;
