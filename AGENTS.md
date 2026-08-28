@@ -44,6 +44,12 @@ extract_endpoint_auth() -> EndpointAuth
 ```
 Order: `X-Device-Key` → `Authorization: Bearer ...` / `X-Api-Key` → `X-Service-Key`.
 
+## Tauri command naming (since v1.3.5)
+
+In `#[tauri::command]` blocks that take multiple scalar arguments (e.g. `user_id: String`, `note_id: String`), you **must** add `rename_all = "snake_case"`. Without it, Tauri 2's default expects camelCase JS arg keys (`{ userId, noteId }`) but the JS client uses snake_case (`{ user_id, note_id }`), and the user gets a confusing `missing required key userId` error from the bridge.
+
+Commands that already had it (correct): `md_save_draft`, `md_finalize_import`. Commands fixed in v1.3.5: `md_check_import_status`, `md_export_note_as_md`. Rule of thumb: any new `#[tauri::command]` with >1 scalar param **must** include `rename_all = "snake_case"` — adding it later is a runtime-only failure with no compile-time warning.
+
 **Client persistence**:
 - Tauri: `<data_dir>/install_id` and `<data_dir>/device_key`, both read+written by `src-tauri/src/install_id.rs`. `setup()` spawns `spawn_first_launch_ping` 5 s after launch.
 - Web SPA: `localStorage[weavine:install_id]` and `localStorage[weavine:device_key]`, managed by `apps/web-spa/src/lib/install-id.ts`. `fireFirstLaunchPing()` runs once after first render.
