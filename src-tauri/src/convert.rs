@@ -1,6 +1,12 @@
 //! src-tauri/src/convert.rs — convert non-`.md` files (docx, pdf, html, …)
 //! to markdown so the existing md editor pipeline can edit them.
 //!
+//! Desktop only — excluded on Android via the module-level cfg below, since
+//! the markitdown dep can't cross-compile for aarch64-linux-android (see
+//! src-tauri/Cargo.toml for the full reason).
+#![cfg(not(target_os = "android"))]
+
+//!
 //! The editor always sees a markdown string; the original binary / rich-text
 //! file is preserved untouched. On save, the editor writes a sibling
 //! `<name>.md` next to the original. Re-opening the original recomputes a

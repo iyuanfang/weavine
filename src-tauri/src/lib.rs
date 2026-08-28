@@ -1,12 +1,13 @@
 pub mod boot_log;
 pub mod business;
+#[cfg(not(target_os = "android"))]
 pub mod convert;
 
 #[cfg(feature = "tauri")]
 pub mod commands;
 pub mod db;
 pub mod install_id;
-#[cfg(feature = "tauri")]
+#[cfg(all(feature = "tauri", not(target_os = "android")))]
 pub mod md_editor;
 pub mod migration;
 pub mod models;
@@ -447,21 +448,35 @@ pub fn run() {
             quick::quick_parse,
             commands::notification::fire_notification,
             commands::notification::schedule_notification,
+            #[cfg(not(target_os = "android"))]
             md_editor::read_md_file,
+            #[cfg(not(target_os = "android"))]
             md_editor::write_md_file,
+            #[cfg(not(target_os = "android"))]
             md_editor::md_get_file_info,
+            #[cfg(not(target_os = "android"))]
             md_editor::open_md_dialog,
+            #[cfg(not(target_os = "android"))]
             md_editor::save_md_dialog,
+            #[cfg(not(target_os = "android"))]
             convert::convert_external_file,
+            #[cfg(not(target_os = "android"))]
             convert::convert_supported_formats,
+            #[cfg(not(target_os = "android"))]
             convert::convert_sibling_md_path,
+            #[cfg(not(target_os = "android"))]
             md_editor::md_get_recent_files,
+            #[cfg(not(target_os = "android"))]
             md_editor::md_add_recent_file,
+            #[cfg(not(target_os = "android"))]
             md_editor::md_clear_recent_files,
+            #[cfg(not(target_os = "android"))]
             md_editor::md_check_import_status,
+            #[cfg(not(target_os = "android"))]
             md_editor::md_import_to_library,
+            #[cfg(not(target_os = "android"))]
             md_editor::md_export_note_as_md,
-            #[cfg(desktop)]
+            #[cfg(all(desktop, not(target_os = "android")))]
             md_editor::take_pending_md_path,
         ])
         .run(tauri::generate_context!())

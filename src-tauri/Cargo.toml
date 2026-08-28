@@ -69,8 +69,11 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 anyhow = "1"
 regex = "1"
 fuzzy-matcher = "0.3"
-markitdown = "0.1"
-
+# markitdown is non-Android only — see [target.'cfg(not(target_os = "android"))'.dependencies] below.
+# It transitively pulls rig-core → reqwest 0.11 → native-tls → openssl-sys, which cannot
+# cross-compile for aarch64-linux-android without libssl. Since Android users don't need
+# to open .md files at all, we drop both the markitdown dep and the md_editor/convert
+# modules on Android (cfg-gated in lib.rs).
 # sqlx: optional — only activated when server crate depends with features= ["sqlx"]
 # Provides FromRow derive for models without pulling in runtime deps.
 sqlx = { version = "0.8", optional = true, default-features = false, features = ["macros", "derive", "postgres", "uuid", "chrono"] }
@@ -89,6 +92,9 @@ sherpa-onnx = { version = "1.13", optional = true, default-features = false, fea
 # JNI + Android context access for android_assets.rs (AssetManager extraction).
 jni = "0.21"
 ndk-context = "0.1"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+markitdown = "0.1"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }

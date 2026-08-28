@@ -86,6 +86,26 @@ type UserIdPayload = { user_id?: string | null; [k: string]: unknown };
 //   Windows (WebView2) & Android (WebView): http://files.localhost/<path>
 // The Rust handler is registered in src-tauri/src/lib.rs (register_uri_scheme_protocol("files"))
 // and expects the "/files/<key>" path prefix on every platform.
+const ANDROID_MD_UNSUPPORTED = 'Android 暂不支持 .md 编辑器';
+
+const androidMdStub = {
+  readFile: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  writeFile: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  getFileInfo: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  openDialog: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  saveDialog: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  convertExternalFile: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  convertSupportedFormats: () => Promise.resolve([]),
+  convertSiblingMdPath: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  getRecentFiles: () => Promise.resolve([]),
+  addRecentFile: () => Promise.resolve([]),
+  clearRecentFiles: () => Promise.resolve(),
+  checkImportStatus: () =>
+    Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  importToLibrary: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+  exportNoteAsMd: () => Promise.reject(new Error(ANDROID_MD_UNSUPPORTED)),
+};
+
 function filesBaseUrl(): string {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   if (/Android|Windows/i.test(ua)) return 'http://files.localhost';
@@ -95,6 +115,13 @@ function filesBaseUrl(): string {
 export class TauriAdapter implements PRMAdapter {
   baseUrl = filesBaseUrl();
   private userIdReady: Promise<string>;
+
+  // Android builds ship without md_editor / convert (those Rust commands
+  // are cfg-gated out of src-tauri/src/lib.rs). Calling invoke('read_md_file')
+  // on Android would surface as an opaque "command not found" from the Tauri
+  // IPC, so we short-circuit the whole md.* surface with a friendly error.
+  private static readonly isAndroidTauri =
+    typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
 
   constructor() {
     this.userIdReady = invoke<LocalUser>('get_local_user')
@@ -456,31 +483,33 @@ export class TauriAdapter implements PRMAdapter {
       invoke<CloudSyncResult>('cloud_sync_now'),
   };
 
-  md = {
-    readFile: (path: string) => invoke<MdReadResult>('read_md_file', { path }),
-    writeFile: (path: string, content: string, encoding?: string) =>
-      invoke<MdWriteResult>('write_md_file', { path, content, encoding: encoding ?? null }),
-    getFileInfo: (path: string) => invoke<MdReadResult>('md_get_file_info', { path }),
-    openDialog: () => invoke<string | null>('open_md_dialog'),
-    saveDialog: (defaultName?: string | null) =>
-      invoke<string | null>('save_md_dialog', { default_name: defaultName ?? null }),
-    convertExternalFile: (path: string) =>
-      invoke<ConvertResult>('convert_external_file', { path }),
-    convertSupportedFormats: () =>
-      invoke<ConvertFormatInfo[]>('convert_supported_formats'),
-    convertSiblingMdPath: (path: string) =>
-      invoke<string>('convert_sibling_md_path', { path }),
-    getRecentFiles: () => invoke<MdRecentFile[]>('md_get_recent_files'),
-    addRecentFile: (path: string) =>
-      invoke<MdRecentFile[]>('md_add_recent_file', { path }),
-    clearRecentFiles: () => invoke<void>('md_clear_recent_files'),
-    checkImportStatus: (user_id: string, path: string) =>
-      invoke<MdImportStatus>('md_check_import_status', { user_id, path }),
-    importToLibrary: (input: MdImportInput) =>
-      invoke<MdImportResult>('md_import_to_library', { input }),
-    exportNoteAsMd: (user_id: string, note_id: string, path: string) =>
-      invoke<MdWriteResult>('md_export_note_as_md', { user_id, note_id, path }),
-  };
+  md = TauriAdapter.isAndroidTauri
+    ? androidMdStub
+    : {
+        readFile: (path: string) => invoke<MdReadResult>('read_md_file', { path }),
+        writeFile: (path: string, content: string, encoding?: string) =>
+          invoke<MdWriteResult>('write_md_file', { path, content, encoding: encoding ?? null }),
+        getFileInfo: (path: string) => invoke<MdReadResult>('md_get_file_info', { path }),
+        openDialog: () => invoke<string | null>('open_md_dialog'),
+        saveDialog: (defaultName?: string | null) =>
+          invoke<string | null>('save_md_dialog', { default_name: defaultName ?? null }),
+        convertExternalFile: (path: string) =>
+          invoke<ConvertResult>('convert_external_file', { path }),
+        convertSupportedFormats: () =>
+          invoke<ConvertFormatInfo[]>('convert_supported_formats'),
+        convertSiblingMdPath: (path: string) =>
+          invoke<string>('convert_sibling_md_path', { path }),
+        getRecentFiles: () => invoke<MdRecentFile[]>('md_get_recent_files'),
+        addRecentFile: (path: string) =>
+          invoke<MdRecentFile[]>('md_add_recent_file', { path }),
+        clearRecentFiles: () => invoke<void>('md_clear_recent_files'),
+        checkImportStatus: (user_id: string, path: string) =>
+          invoke<MdImportStatus>('md_check_import_status', { user_id, path }),
+        importToLibrary: (input: MdImportInput) =>
+          invoke<MdImportResult>('md_import_to_library', { input }),
+        exportNoteAsMd: (user_id: string, note_id: string, path: string) =>
+          invoke<MdWriteResult>('md_export_note_as_md', { user_id, note_id, path }),
+      };
 
   apiKeys = {
     list: (): Promise<ApiKeySummary[]> =>

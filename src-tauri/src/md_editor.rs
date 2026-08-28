@@ -1,5 +1,10 @@
 //! §11.7 md file editor — Rust side.
 //!
+//! Desktop only — excluded on Android via the module-level cfg below since
+//! Android users don't open .md files (the JS side stubs adapter.md.* with a
+//! friendly "Android 暂不支持 .md 编辑器" rejection — see apps/web-spa/src/lib/adapter/tauri.ts).
+#![cfg(not(target_os = "android"))]
+//!
 //! Commands exposed to web-spa:
 //!   - read_md_file           : read .md from disk with encoding detect (UTF-8/BOM/GBK/GB18030)
 //!   - write_md_file          : write .md in the requested encoding (utf-8 / utf-8-bom / gbk / gb18030)
