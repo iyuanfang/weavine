@@ -29,10 +29,8 @@ SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new $PROD"
 SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=accept-new"
 REMOTE_PATH="${REMOTE_PATH:-/www/weavine/spa/}"
 
-if [ ! -f "$DIST_DIR/index.html" ]; then
-    echo "→ Building web-spa..."
-    (cd "$REPO_ROOT" && pnpm --dir "$WEB_DIR" run build)
-fi
+echo "→ Building web-spa..."
+(cd "$REPO_ROOT" && pnpm --dir "$WEB_DIR" run build)
 
 # Sanity check that the dist is actually populated.
 test -s "$DIST_DIR/index.html"
