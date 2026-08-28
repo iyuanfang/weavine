@@ -68,7 +68,7 @@ export function ForgotPasswordPage() {
           </form>
         )}
         <p className="login-switch">
-          <Link to="/login" className="login-switch-btn">
+          <Link to="/login" className="login-switch-btn" title="返回 (Alt+←)">
             ← 返回登录
           </Link>
         </p>

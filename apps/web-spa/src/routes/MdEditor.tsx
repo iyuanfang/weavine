@@ -272,6 +272,7 @@ export function MdEditor() {
           type="button"
           className="btn btn-secondary"
           onClick={() => navigate(-1)}
+          title="返回 (Alt+←)"
         >
           返回
         </button>

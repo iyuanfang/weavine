@@ -451,9 +451,9 @@ export function NoteNew() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
         e.preventDefault();
-        setMode((m) => (m === 'edit' ? 'preview' : 'edit'));
+        setMode((m) => (m === 'edit' ? 'split' : m === 'split' ? 'preview' : 'edit'));
       }
     };
     window.addEventListener('keydown', onKey);
@@ -463,7 +463,7 @@ export function NoteNew() {
   return (
     <div className="page note-edit">
       <header className="page-header">
-        <button type="button" className="btn" onClick={() => navigate('/notes')}>
+        <button type="button" className="btn" onClick={() => navigate('/notes')} title="返回 (Alt+←)">
           ← 返回
         </button>
         <h1>新建笔记</h1>
@@ -478,33 +478,39 @@ export function NoteNew() {
           autoFocus
         />
         <div className="note-edit__tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'edit'}
-            className={`note-edit__tab ${mode === 'edit' ? 'is-active' : ''}`}
-            onClick={() => setMode('edit')}
-          >
-            编辑
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'split'}
-            className={`note-edit__tab ${mode === 'split' ? 'is-active' : ''}`}
-            onClick={() => setMode('split')}
-          >
-            分屏
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'preview'}
-            className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
-            onClick={() => setMode('preview')}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'edit'}
+              className={`note-edit__tab ${mode === 'edit' ? 'is-active' : ''}`}
+              onClick={() => setMode('edit')}
+              title="编辑 (Ctrl+E)"
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'split'}
+              className={`note-edit__tab ${mode === 'split' ? 'is-active' : ''}`}
+              onClick={() => setMode('split')}
+              title="分屏 (Ctrl+E)"
+            >
+              分屏
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'preview'}
+              className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
+              onClick={() => setMode('preview')}
+              title="预览 (Ctrl+E)"
           >
             预览
           </button>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+          提示: Ctrl+E 切换 编辑 / 分屏 / 预览
         </div>
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           {tocOpen && (
@@ -733,9 +739,9 @@ export function NoteDetail() {
         e.preventDefault();
         void persist({ force: true });
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
         e.preventDefault();
-        setMode((m) => (m === 'edit' ? 'preview' : 'edit'));
+        setMode((m) => (m === 'edit' ? 'split' : m === 'split' ? 'preview' : 'edit'));
       }
     };
     window.addEventListener('keydown', onKey);
@@ -815,7 +821,7 @@ export function NoteDetail() {
   return (
     <div className="page note-detail">
       <header className="page-header">
-        <button type="button" className="btn" onClick={() => navigate('/notes')}>
+        <button type="button" className="btn" onClick={() => navigate('/notes')} title="返回 (Alt+←)">
           ← 返回
         </button>
         <div className="note-detail__actions">
@@ -868,33 +874,39 @@ export function NoteDetail() {
           placeholder="标题"
         />
         <div className="note-edit__tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'edit'}
-            className={`note-edit__tab ${mode === 'edit' ? 'is-active' : ''}`}
-            onClick={() => setMode('edit')}
-          >
-            编辑
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'split'}
-            className={`note-edit__tab ${mode === 'split' ? 'is-active' : ''}`}
-            onClick={() => setMode('split')}
-          >
-            分屏
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'preview'}
-            className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
-            onClick={() => setMode('preview')}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'edit'}
+              className={`note-edit__tab ${mode === 'edit' ? 'is-active' : ''}`}
+              onClick={() => setMode('edit')}
+              title="编辑 (Ctrl+E)"
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'split'}
+              className={`note-edit__tab ${mode === 'split' ? 'is-active' : ''}`}
+              onClick={() => setMode('split')}
+              title="分屏 (Ctrl+E)"
+            >
+              分屏
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'preview'}
+              className={`note-edit__tab ${mode === 'preview' ? 'is-active' : ''}`}
+              onClick={() => setMode('preview')}
+              title="预览 (Ctrl+E)"
           >
             预览
           </button>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+          提示: Ctrl+E 切换 编辑 / 分屏 / 预览 · Ctrl+S 保存
         </div>
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           {tocOpen && (
