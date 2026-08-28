@@ -78,7 +78,7 @@ export function AppInner({ children }: { children?: ReactNode }) {
   const [quickInitial, setQuickInitial] = useState('');
   const [pendingReminders, setPendingReminders] = useState<ReminderToastItem[]>([]);
   const seenReminderIds = useRef<Set<string>>(new Set());
-  useGlobalShortcut('k', () => setQuickOpen((o) => !o));
+  useGlobalShortcut('\\', () => setQuickOpen((o) => !o));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitial, setSearchInitial] = useState('');
   useEffect(() => {

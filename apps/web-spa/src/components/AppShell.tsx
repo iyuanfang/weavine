@@ -20,8 +20,7 @@ const navItems = [
 ];
 
 function shortcutLabel(): string {
-  if (typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)) return '⌘K';
-  return 'Ctrl K';
+  return '\\';
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

@@ -271,7 +271,7 @@ pub fn run() {
             {
                 app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
-                        .with_shortcuts(["CommandOrControl+K"])?
+                        .with_shortcuts(["Backslash"])?
                         .with_handler(|app, _shortcut, event| {
                             if event.state == ShortcutState::Pressed {
                                 let _ = app.emit("ctrl-k-pressed", ());
