@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const PROJECT_COLS: &str =
-    "id, user_id, title, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at";
+    "id, user_id, title, template, stage, start_at, due_at, completed_at, archived_at, created_at, updated_at, deleted_at";
 
 pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
     Ok(Project {
@@ -19,6 +19,7 @@ pub(crate) fn row_to_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
         archived_at: row.get(8)?,
         created_at: row.get(9)?,
         updated_at: row.get(10)?,
+        deleted_at: row.get(11).ok(),
     })
 }
 
@@ -58,6 +59,7 @@ pub fn list(
             sql.push_str(" AND archived_at IS NULL");
         }
     }
+    sql.push_str(" AND deleted_at IS NULL");
 
     sql.push_str(&format!(" ORDER BY updated_at DESC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
@@ -208,13 +210,23 @@ pub fn update(conn: &Connection, input: &UpdateProjectInput) -> rusqlite::Result
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM \"Project\" WHERE id = ?1", rusqlite::params![id])?;
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    conn.execute(
+        "UPDATE \"Project\" SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        rusqlite::params![&now, id],
+    )?;
+    conn.execute(
+        "DELETE FROM \"ProjectContact\" WHERE project_id = ?1",
+        rusqlite::params![id],
+    )?;
     Ok(())
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Project> {
     conn.query_row(
-        &format!("SELECT {PROJECT_COLS} FROM \"Project\" WHERE id = ?1"),
+        &format!("SELECT {PROJECT_COLS} FROM \"Project\" WHERE id = ?1 AND deleted_at IS NULL"),
         rusqlite::params![id],
         row_to_project,
     )

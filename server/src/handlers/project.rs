@@ -27,7 +27,7 @@ pub async fn list(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let mut sql = "SELECT id, user_id, title, template, stage, \
                     start_at, due_at, completed_at, archived_at, created_at, updated_at \
-                    FROM project WHERE user_id = $1".to_string();
+                    FROM project WHERE user_id = $1 AND deleted_at IS NULL".to_string();
     let mut idx = 2u32;
 
     if let Some(ref t) = p.template {
@@ -67,7 +67,7 @@ pub async fn get(
     let project: Project = sqlx::query_as(
         "SELECT id, user_id, title, template, stage, \
          start_at, due_at, completed_at, archived_at, created_at, updated_at \
-         FROM project WHERE id = $1 AND user_id = $2",
+         FROM project WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(&id)
     .bind(&auth)
@@ -203,9 +203,14 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("DELETE FROM project WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE project SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
         .bind(&id)
         .bind(&auth)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query("DELETE FROM project_contact WHERE project_id = $1")
+        .bind(&id)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

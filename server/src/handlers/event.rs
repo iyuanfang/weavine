@@ -168,6 +168,7 @@ pub async fn list(
          AND ($4::text IS NULL OR e.start_at >= $4) \
          AND ($5::text IS NULL OR e.start_at <= $5) \
          AND ($6::text IS NULL OR ($6::text = 'true' AND e.archived_at IS NOT NULL) OR ($6::text = 'false' AND e.archived_at IS NULL)) \
+         AND e.deleted_at IS NULL \
          ORDER BY e.start_at DESC LIMIT $7",
     ))
     .bind(&auth)
@@ -288,7 +289,7 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let event = sqlx::query_as::<_, Event>(&format!(
-        "{EVENT_SELECT} WHERE e.id = $1",
+        "{EVENT_SELECT} WHERE e.id = $1 AND e.deleted_at IS NULL",
     ))
     .bind(&id)
     .fetch_one(&*pool)
@@ -307,7 +308,7 @@ pub async fn get(
 ) -> Result<Json<EventWithParticipants>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let event = sqlx::query_as::<_, Event>(&format!(
-        "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2",
+        "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2 AND e.deleted_at IS NULL",
     ))
     .bind(&id)
     .bind(&auth)
@@ -486,7 +487,7 @@ pub async fn update(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let event = sqlx::query_as::<_, Event>(&format!(
-        "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2",
+        "{EVENT_SELECT} WHERE e.id = $1 AND e.user_id = $2 AND e.deleted_at IS NULL",
     ))
     .bind(&id)
     .bind(&auth)
@@ -518,8 +519,12 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("DELETE FROM event WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE event SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
         .bind(&id).bind(&auth)
+        .execute(&mut *tx).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query("UPDATE reminder SET deleted_at = now(), updated_at = now() WHERE event_id = $1 AND deleted_at IS NULL")
+        .bind(&id)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -538,7 +543,7 @@ pub async fn upcoming(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let now = super::now_str();
     let events = sqlx::query_as::<_, Event>(&format!(
-        "{EVENT_SELECT} WHERE e.user_id = $1 AND e.start_at >= $2 AND e.archived_at IS NULL \
+        "{EVENT_SELECT} WHERE e.user_id = $1 AND e.start_at >= $2 AND e.archived_at IS NULL AND e.deleted_at IS NULL \
          ORDER BY e.start_at LIMIT $3",
     ))
     .bind(&auth).bind(&now)
