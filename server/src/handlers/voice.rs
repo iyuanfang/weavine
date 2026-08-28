@@ -181,11 +181,28 @@ pub async fn recognize(
     }
 
     let t1 = std::time::Instant::now();
-    let pcm = decode_audio(&audio_bytes).await?;
+    let mut pcm = decode_audio(&audio_bytes).await?;
     let t_decode = t1.elapsed();
     if pcm.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "no decodable audio in upload".into()));
     }
+    // v1.3.8: reject sub-0.5 s audio at the boundary too. The JS-side VAD
+    // already enforces 1500 ms, but a direct API caller (or a future client
+    // build with the guard regressed) can still ship a 200 ms clip; feeding
+    // that to SenseVoice just produces "yeah" / "你好" hallucinations.
+    // 8000 samples @ 16 kHz = 0.5 s.
+    if pcm.len() < 8_000 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "audio too short, please re-record (need at least 0.5s)".into(),
+        ));
+    }
+    // v1.3.8: append 300 ms of trailing silence before the recognizer sees
+    // the buffer. Without this padding SenseVoice's LM treats the abrupt
+    // end-of-clip as a half-spoken filler word and hallucinates
+    // "thanks for watching" / "嗯" / "yeah" at the end of real transcripts.
+    // 16 kHz × 0.3 s = 4800 samples of f32::ZERO.
+    pcm.extend(std::iter::repeat(0.0f32).take(4_800));
 
     let t2 = std::time::Instant::now();
     let (text, lang) = transcribe(pcm).await?;

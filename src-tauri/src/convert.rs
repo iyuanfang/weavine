@@ -225,17 +225,20 @@ fn plain_text_fallback(
     }
 }
 
+#[cfg(feature = "tauri")]
 #[tauri::command(rename_all = "snake_case")]
 pub fn convert_external_file(path: String) -> Result<ConvertResult, String> {
     let p = Path::new(&path);
     read_as_markdown(p)
 }
 
+#[cfg(feature = "tauri")]
 #[tauri::command]
 pub fn convert_supported_formats() -> Vec<FormatInfo> {
     supported_formats()
 }
 
+#[cfg(feature = "tauri")]
 #[tauri::command(rename_all = "snake_case")]
 pub fn convert_sibling_md_path(path: String) -> Result<String, String> {
     let p = Path::new(&path);

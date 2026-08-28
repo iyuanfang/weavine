@@ -207,12 +207,29 @@ recorder.onstop = () => {
         let audioCtx: AudioContext | null = null;
         let analyser: AnalyserNode | null = null;
         let rafId = 0;
-        const silenceRms = 0.012;        // ~ -38 dBFS; tuned for quiet rooms
-        const silenceFramesNeeded = 36;  // 36 × ~16 ms ≈ 600 ms of silence
+        // v1.3.8: silenceRms tightened from 0.012 (-38 dBFS) → 0.008 (-42 dBFS)
+        // so HVAC/road noise doesn't keep the gate "open" and pad with junk.
+        // silenceFramesNeeded 36 → 60 (~576 ms → ~960 ms) so a natural mid-
+        // sentence pause doesn't cut the user off mid-thought.
+        const silenceRms = 0.008;
+        const silenceFramesNeeded = 60;
+        // v1.3.8: hard minimum recording duration. The VAD can fire as early
+        // as ~576 ms after tap; without this guard the recorder stops on
+        // ambient silence and ships a sub-second clip that SenseVoice
+        // hallucinates "yeah" / "你好" / "thanks for watching" on. We refuse
+        // to stop on `'silence'` until at least MIN_RECORDING_MS have passed;
+        // `'max'` and `'manual'` still cut early.
+        const MIN_RECORDING_MS = 1500;
+        const recordingStartMs = Date.now();
         let silenceFrames = 0;
         let stopped = false;
         const maybeStop = (reason: 'silence' | 'max' | 'manual') => {
           if (stopped) return;
+          if (reason === 'silence' && Date.now() - recordingStartMs < MIN_RECORDING_MS) {
+            // Pretend the silence didn't happen — keep the gate open.
+            silenceFrames = 0;
+            return;
+          }
           stopped = true;
           if (recorder.state !== 'inactive') {
             try { recorder.stop(); } catch { /* already stopping */ }
