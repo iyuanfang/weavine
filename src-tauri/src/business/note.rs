@@ -61,9 +61,13 @@ pub fn list(conn: &Connection, user_id: &str, cursor: Option<&str>) -> rusqlite:
 }
 
 pub fn get(conn: &Connection, user_id: &str, id: &str) -> rusqlite::Result<Option<Note>> {
+    // Detail view shows archived notes too — only filter soft-deleted. The
+    // search/get mismatch this used to cause: search.rs honored
+    // `include_archived` and surfaced archived notes, but get() hard-filtered
+    // them out → click result returned None → "笔记不存在或已被删除".
     let mut stmt = conn.prepare(
         "SELECT id, user_id, title, body, archived_at, created_at, updated_at, imported_from, imported_at, deleted_at \
-         FROM Note WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
+         FROM Note WHERE id = ?1 AND user_id = ?2 AND deleted_at IS NULL",
     )?;
     stmt.query_row(params![id, user_id], row_to_note).optional()
 }
