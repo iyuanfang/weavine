@@ -31,7 +31,7 @@ pub async fn list(
 ) -> Result<Json<Vec<Interaction>>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Interaction>(&format!(
-        "{INTERACTION_SELECT} WHERE i.user_id = $1 \
+        "{INTERACTION_SELECT} WHERE i.user_id = $1 AND i.deleted_at IS NULL \
          AND ($2::text IS NULL OR i.contact_id = $2) \
          AND ($3::text IS NULL OR i.action_id = $3) \
          AND ($4::text IS NULL OR i.event_id = $4) \
@@ -180,7 +180,7 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("DELETE FROM interaction WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE interaction SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
         .bind(&id).bind(&auth)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

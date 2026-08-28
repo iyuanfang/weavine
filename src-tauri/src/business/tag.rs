@@ -10,12 +10,13 @@ pub(crate) fn row_to_tag(row: &rusqlite::Row) -> rusqlite::Result<Tag> {
         name: row.get(2)?,
         color: row.get(3)?,
         created_at: row.get(4)?,
+        deleted_at: row.get(5).ok(),
     })
 }
 
 pub fn list(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<Tag>> {
     let mut stmt = conn.prepare(
-        "SELECT id, user_id, name, color, created_at FROM Tag WHERE user_id = ?1 ORDER BY name ASC",
+        "SELECT id, user_id, name, color, created_at, deleted_at FROM Tag WHERE user_id = ?1 AND deleted_at IS NULL ORDER BY name ASC",
     )?;
 
     let tags = stmt
@@ -36,7 +37,7 @@ pub fn create(conn: &Connection, input: &CreateTagInput) -> rusqlite::Result<Tag
     )?;
 
     conn.query_row(
-        "SELECT id, user_id, name, color, created_at FROM Tag WHERE id = ?1",
+        "SELECT id, user_id, name, color, created_at, deleted_at FROM Tag WHERE id = ?1",
         rusqlite::params![&id],
         row_to_tag,
     )
@@ -60,7 +61,7 @@ pub fn update(conn: &Connection, input: &UpdateTagInput) -> rusqlite::Result<Tag
 
     if set_clauses.is_empty() {
         return conn.query_row(
-            "SELECT id, user_id, name, color, created_at FROM Tag WHERE id = ?1",
+            "SELECT id, user_id, name, color, created_at, deleted_at FROM Tag WHERE id = ?1 AND deleted_at IS NULL",
             rusqlite::params![&input.id],
             row_to_tag,
         );
@@ -77,13 +78,19 @@ pub fn update(conn: &Connection, input: &UpdateTagInput) -> rusqlite::Result<Tag
     }
 
     conn.query_row(
-        "SELECT id, user_id, name, color, created_at FROM Tag WHERE id = ?1",
+        "SELECT id, user_id, name, color, created_at, deleted_at FROM Tag WHERE id = ?1 AND deleted_at IS NULL",
         rusqlite::params![&input.id],
         row_to_tag,
     )
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM Tag WHERE id = ?1", rusqlite::params![id])?;
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    conn.execute(
+        "UPDATE Tag SET deleted_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        rusqlite::params![&now, id],
+    )?;
     Ok(())
 }

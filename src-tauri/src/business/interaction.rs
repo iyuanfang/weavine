@@ -15,12 +15,13 @@ pub(crate) fn row_to_interaction(row: &rusqlite::Row) -> rusqlite::Result<Intera
         source: row.get(8)?,
         source_ref: row.get(9)?,
         created_at: row.get(10)?,
-        contact_nickname: row.get(11)?,
+        deleted_at: row.get(11).ok(),
+        contact_nickname: row.get(12)?,
     })
 }
 
 const INTERACTION_COLS: &str =
-    "Interaction.id, Interaction.user_id, Interaction.contact_id, Interaction.action_id, Interaction.event_id, Interaction.occurred_at, Interaction.channel, Interaction.summary, Interaction.source, Interaction.source_ref, Interaction.created_at, c.nickname AS contact_nickname";
+    "Interaction.id, Interaction.user_id, Interaction.contact_id, Interaction.action_id, Interaction.event_id, Interaction.occurred_at, Interaction.channel, Interaction.summary, Interaction.source, Interaction.source_ref, Interaction.created_at, Interaction.deleted_at, c.nickname AS contact_nickname";
 
 const INTERACTION_JOIN: &str =
     " LEFT JOIN \"Contact\" c ON c.id = Interaction.contact_id AND c.user_id = Interaction.user_id";
@@ -57,6 +58,7 @@ pub fn list(
         idx += 1;
     }
 
+    sql.push_str(" AND Interaction.deleted_at IS NULL");
     sql.push_str(&format!(" ORDER BY occurred_at DESC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
 
@@ -187,13 +189,19 @@ pub fn update(conn: &Connection, input: &UpdateInteractionInput) -> rusqlite::Re
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM Interaction WHERE id = ?1", rusqlite::params![id])?;
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    conn.execute(
+        "UPDATE Interaction SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        rusqlite::params![&now, id],
+    )?;
     Ok(())
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Interaction> {
     conn.query_row(
-        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1"),
+        &format!("SELECT {INTERACTION_COLS} FROM Interaction{INTERACTION_JOIN} WHERE Interaction.id = ?1 AND Interaction.deleted_at IS NULL"),
         rusqlite::params![id],
         row_to_interaction,
     )

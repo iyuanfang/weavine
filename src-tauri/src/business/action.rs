@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use uuid::Uuid;
 
 const ACTION_COLS: &str =
-    "Action.id, Action.user_id, Action.title, Action.status, Action.priority, Action.category, Action.due_at, Action.contact_id, Action.project_id, Action.completed_at, Action.archived_at, Action.created_at, Action.updated_at";
+    "Action.id, Action.user_id, Action.title, Action.status, Action.priority, Action.category, Action.due_at, Action.contact_id, Action.project_id, Action.completed_at, Action.archived_at, Action.created_at, Action.updated_at, Action.deleted_at";
 
 const ACTION_REL_COLS: &str = ", c.nickname AS contact_nickname, p.title AS project_title";
 
@@ -25,8 +25,9 @@ pub(crate) fn row_to_action(row: &rusqlite::Row) -> rusqlite::Result<Action> {
         archived_at: row.get(10)?,
         created_at: row.get(11)?,
         updated_at: row.get(12)?,
-        contact_nickname: row.get(13)?,
-        project_title: row.get(14)?,
+        deleted_at: row.get(13).ok(),
+        contact_nickname: row.get(14)?,
+        project_title: row.get(15)?,
     })
 }
 
@@ -71,6 +72,7 @@ pub fn list(
             sql.push_str(" AND Action.archived_at IS NULL");
         }
     }
+    sql.push_str(" AND Action.deleted_at IS NULL");
 
     sql.push_str(&format!(" ORDER BY Action.due_at ASC, Action.priority DESC LIMIT ?{}", idx));
     param_values.push(Box::new(limit));
@@ -262,13 +264,19 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM Action WHERE id = ?1", rusqlite::params![id])?;
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    conn.execute(
+        "UPDATE Action SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        rusqlite::params![&now, id],
+    )?;
     Ok(())
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Action> {
     conn.query_row(
-        &format!("SELECT {ACTION_COLS}{ACTION_REL_COLS} FROM Action{ACTION_JOINS} WHERE Action.id = ?1"),
+        &format!("SELECT {ACTION_COLS}{ACTION_REL_COLS} FROM Action{ACTION_JOINS} WHERE Action.id = ?1 AND Action.deleted_at IS NULL"),
         rusqlite::params![id],
         row_to_action,
     )

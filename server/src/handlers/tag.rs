@@ -21,7 +21,7 @@ pub async fn list(
 ) -> Result<Json<Vec<Tag>>, (StatusCode, String)> {
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Tag>(
-        "SELECT id, user_id, name, color, created_at FROM tag WHERE user_id = $1 ORDER BY name",
+        "SELECT id, user_id, name, color, created_at FROM tag WHERE user_id = $1 AND deleted_at IS NULL ORDER BY name",
     )
     .bind(&auth)
     .fetch_all(&*pool)
@@ -75,7 +75,7 @@ pub async fn create(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let tag = sqlx::query_as::<_, Tag>("SELECT id, user_id, name, color, created_at FROM tag WHERE id = $1")
+    let tag = sqlx::query_as::<_, Tag>("SELECT id, user_id, name, color, created_at FROM tag WHERE id = $1 AND deleted_at IS NULL")
         .bind(&id)
         .fetch_one(&*pool)
         .await
@@ -121,7 +121,7 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let tag = sqlx::query_as::<_, Tag>("SELECT id, user_id, name, color, created_at FROM tag WHERE id = $1")
+    let tag = sqlx::query_as::<_, Tag>("SELECT id, user_id, name, color, created_at FROM tag WHERE id = $1 AND deleted_at IS NULL")
         .bind(&id)
         .fetch_optional(&*pool)
         .await
@@ -148,7 +148,7 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("DELETE FROM tag WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE tag SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
         .bind(&id)
         .bind(&auth)
         .execute(&mut *tx)

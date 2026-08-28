@@ -125,7 +125,7 @@ pub async fn update(
     let now = super::now_str();
 
     let prev: Option<(Option<String>, String, String)> = sqlx::query_as(
-        "SELECT contact_id, status, title FROM action WHERE id = $1 AND user_id = $2",
+        "SELECT contact_id, status, title FROM action WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
@@ -233,7 +233,7 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("DELETE FROM action WHERE id = $1 AND user_id = $2")
+    sqlx::query("UPDATE action SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
         .bind(&id).bind(&auth)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
