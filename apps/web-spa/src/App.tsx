@@ -78,7 +78,6 @@ export function AppInner({ children }: { children?: ReactNode }) {
   const [quickInitial, setQuickInitial] = useState('');
   const [pendingReminders, setPendingReminders] = useState<ReminderToastItem[]>([]);
   const seenReminderIds = useRef<Set<string>>(new Set());
-  useGlobalShortcut('\\', () => setQuickOpen((o) => !o));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitial, setSearchInitial] = useState('');
   useEffect(() => {
@@ -93,6 +92,22 @@ export function AppInner({ children }: { children?: ReactNode }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '\\') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      setQuickOpen((o) => !o);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  // Desktop: also listen for the OS-level global-shortcut event in case the
+  // bare keydown listener doesn't receive it (depends on the platform's
+  // global-shortcut handling).
+  useGlobalShortcut('\\', () => setQuickOpen((o) => !o));
   const openSearch = (initialQuery: string = '') => {
     setSearchInitial(initialQuery);
     setSearchOpen(true);
