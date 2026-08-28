@@ -2,7 +2,7 @@
 //!
 //! Commands exposed to web-spa:
 //!   - read_md_file           : read .md from disk with encoding detect (UTF-8/BOM/GBK/GB18030)
-//!   - write_md_file          : write .md as UTF-8 no BOM
+//!   - write_md_file          : write .md in the requested encoding (utf-8 / utf-8-bom / gbk / gb18030)
 //!   - open_md_dialog         : native file picker, returns selected path or null
 //!   - save_md_dialog         : native save-as dialog, returns path or null
 //!   - md_get_recent_files    : LRU 10 list of recent .md paths
@@ -56,6 +56,10 @@ pub struct ImportStatus {
     pub note_title: Option<String>,
     pub imported_at: Option<String>,
     pub file_mtime_unix_ms: i64,
+    /// false when the path doesn't exist on disk (was previously 0, which
+    /// looked identical to a "file mtime = epoch" and gave misleading
+    /// 'already up to date' messages for files that were deleted).
+    pub file_exists: bool,
     pub reimport_needed: bool, // true when file mtime > imported_at
 }
 
@@ -150,16 +154,38 @@ pub fn read_md_file(path: String) -> Result<ReadResult, String> {
 }
 
 #[tauri::command]
-pub fn write_md_file(path: String, content: String) -> Result<WriteResult, String> {
+pub fn write_md_file(
+    path: String,
+    content: String,
+    encoding: Option<String>,
+) -> Result<WriteResult, String> {
     let p = PathBuf::from(&path);
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
     }
-    // Validate UTF-8 round-trip (we own content as String — guaranteed valid)
+    // Encode per the file's original encoding so we don't silently flip
+    // GBK/GB18030 files to UTF-8. Default = UTF-8 no BOM.
+    let (bytes, written_encoding) = match encoding.as_deref().unwrap_or("utf-8") {
+        "gbk" => {
+            let (cow, _enc, _had_unmappable) = encoding_rs::GBK.encode(&content);
+            (cow.into_owned(), "gbk".to_string())
+        }
+        "gb18030" => {
+            let (cow, _enc, _had_unmappable) = encoding_rs::GB18030.encode(&content);
+            (cow.into_owned(), "gb18030".to_string())
+        }
+        "utf-8-bom" => {
+            // Keep the BOM that was in the original on round-trip
+            let mut v = vec![0xEFu8, 0xBB, 0xBF];
+            v.extend_from_slice(content.as_bytes());
+            (v, "utf-8-bom".to_string())
+        }
+        _ => (content.as_bytes().to_vec(), "utf-8".to_string()),
+    };
     let mut f = fs::File::create(&p).map_err(|e| format!("创建文件失败: {e}"))?;
-    f.write_all(content.as_bytes()).map_err(|e| format!("写入失败: {e}"))?;
+    f.write_all(&bytes).map_err(|e| format!("写入失败: {e}"))?;
     f.sync_all().ok();
-    let size = content.as_bytes().len() as u64;
+    let size = bytes.len() as u64;
     let mtime = file_mtime_unix_ms(&p);
     Ok(WriteResult {
         mtime_unix_ms: mtime,
@@ -287,7 +313,9 @@ pub fn md_check_import_status(
     path: String,
 ) -> Result<ImportStatus, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let file_mtime = file_mtime_unix_ms(Path::new(&path));
+    let p = Path::new(&path);
+    let file_exists = p.is_file();
+    let file_mtime = file_mtime_unix_ms(p);
     match find_note_by_imported_from(&conn, &user_id, &path).map_err(|e| e.to_string())? {
         None => Ok(ImportStatus {
             already_imported: false,
@@ -295,6 +323,7 @@ pub fn md_check_import_status(
             note_title: None,
             imported_at: None,
             file_mtime_unix_ms: file_mtime,
+            file_exists,
             reimport_needed: false,
         }),
         Some((id, title, imported_at)) => {
@@ -304,13 +333,16 @@ pub fn md_check_import_status(
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                 .map(|d| d.timestamp_millis())
                 .unwrap_or(0);
-            let reimport_needed = file_mtime > imported_ms;
+            // If the file no longer exists, treat the existing note as a
+            // "stale orphan" — don't claim it's already up to date.
+            let reimport_needed = file_exists && file_mtime > imported_ms;
             Ok(ImportStatus {
                 already_imported: true,
                 note_id: Some(id),
                 note_title: Some(title),
                 imported_at,
                 file_mtime_unix_ms: file_mtime,
+                file_exists,
                 reimport_needed,
             })
         }

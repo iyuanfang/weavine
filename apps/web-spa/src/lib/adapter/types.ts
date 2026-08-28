@@ -467,6 +467,7 @@ export interface MdImportStatus {
   note_title: string | null;
   imported_at: string | null;
   file_mtime_unix_ms: number;
+  file_exists: boolean;
   reimport_needed: boolean;
 }
 
@@ -638,7 +639,7 @@ export interface PRMAdapter {
 
   md: {
     readFile(path: string): Promise<MdReadResult>;
-    writeFile(path: string, content: string): Promise<MdWriteResult>;
+    writeFile(path: string, content: string, encoding?: string): Promise<MdWriteResult>;
     getFileInfo(path: string): Promise<MdReadResult>;
     openDialog(): Promise<string | null>;
     saveDialog(defaultName?: string | null): Promise<string | null>;

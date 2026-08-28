@@ -5,7 +5,7 @@
  * saves back via `adapter.md.writeFile()`. Optional "导入库" button that
  * pushes current content into the note library (with re-import mtime check).
  *
- * Mounted at `/md-editor` and `/md-editor?path=...`. AppShell listens for
+ * Mounted at `/md-editor` and `/md-editor?path=...`. App.tsx listens for
  * `open-md-from-argv` events from Tauri and pushes this route.
  */
 
@@ -24,7 +24,6 @@ export function MdEditor() {
   usePageScrollLock();
   const path = params.get('path');
   const [content, setContent] = useState('');
-  const [, setOriginalMtime] = useState<number | null>(null);
   const [sizeBytes, setSizeBytes] = useState(0);
   const [encoding, setEncoding] = useState('');
   const [view, setView] = useState<'edit' | 'preview' | 'split'>('split');
@@ -33,6 +32,7 @@ export function MdEditor() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [externalEdit, setExternalEdit] = useState<{ noteTitle: string; noteId: string } | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const closeGuard = useCallback(
@@ -66,13 +66,13 @@ export function MdEditor() {
   useEffect(() => {
     if (!path) return;
     let mounted = true;
+    setExternalEdit(null);
     (async () => {
       try {
         setError(null);
         const r = await adapter.md.readFile(path);
         if (!mounted) return;
         setContent(r.content);
-        setOriginalMtime(r.mtime_unix_ms);
         setSizeBytes(r.size_bytes);
         setEncoding(r.encoding);
         setDirty(false);
@@ -80,6 +80,16 @@ export function MdEditor() {
           setError(`解码警告：检测到无法表示字符（U+FFFD），原文件可能是 GBK 编码`);
         }
         await adapter.md.addRecentFile(path);
+
+        if (userId) {
+          try {
+            const status = await adapter.md.checkImportStatus(userId, path);
+            if (!mounted) return;
+            if (status.reimport_needed && status.note_id && status.note_title) {
+              setExternalEdit({ noteId: status.note_id, noteTitle: status.note_title });
+            }
+          } catch {}
+        }
       } catch (e) {
         if (mounted) setError(`打开失败: ${String(e)}`);
       }
@@ -87,7 +97,7 @@ export function MdEditor() {
     return () => {
       mounted = false;
     };
-  }, [path, adapter]);
+  }, [path, adapter, userId]);
 
   const openFile = useCallback(async () => {
     try {
@@ -102,8 +112,7 @@ export function MdEditor() {
     async (silent = false) => {
       if (!path) return;
       try {
-        const r = await adapter.md.writeFile(path, content);
-        setOriginalMtime(r.mtime_unix_ms);
+        const r = await adapter.md.writeFile(path, content, encoding || undefined);
         setSizeBytes(r.size_bytes);
         setDirty(false);
         if (!silent) setInfo(`已保存 (${(r.size_bytes / 1024).toFixed(1)} KB)`);
@@ -111,16 +120,15 @@ export function MdEditor() {
         setError(`保存失败: ${String(e)}`);
       }
     },
-    [adapter, path, content],
+    [adapter, path, content, encoding],
   );
 
   const saveAs = useCallback(async () => {
     try {
       const newPath = await adapter.md.saveDialog(path ? path.split(/[\\/]/).pop() ?? null : null);
       if (!newPath) return;
-      const r = await adapter.md.writeFile(newPath, content);
+      const r = await adapter.md.writeFile(newPath, content, encoding || undefined);
       setParams({ path: newPath });
-      setOriginalMtime(r.mtime_unix_ms);
       setSizeBytes(r.size_bytes);
       setDirty(false);
       setInfo(`已另存为: ${newPath}`);
@@ -322,6 +330,57 @@ export function MdEditor() {
             type="button"
             onClick={() => setInfo(null)}
             style={{ marginLeft: 8, background: 'transparent', border: 'none' }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {externalEdit && (
+        <div
+          style={{
+            background: 'var(--warning-soft, #fef3c7)',
+            color: 'var(--warning, #92400e)',
+            padding: '8px 12px',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <span>⚠️ 文件已被外部修改，笔记「{externalEdit.noteTitle}」可能落后</span>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!path || !userId) return;
+              try {
+                await adapter.md.importToLibrary({
+                  user_id: userId,
+                  path,
+                  title: externalEdit.noteTitle,
+                  body: content,
+                  mode: 'update',
+                });
+                setExternalEdit(null);
+                setInfo('已重新导入到笔记库');
+              } catch (e) {
+                setError(`重新导入失败: ${String(e)}`);
+              }
+            }}
+            style={{
+              padding: '4px 10px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: 4,
+              cursor: 'pointer',
+            }}
+          >
+            重新导入
+          </button>
+          <button
+            type="button"
+            onClick={() => setExternalEdit(null)}
+            style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'inherit' }}
           >
             ×
           </button>

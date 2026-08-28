@@ -456,8 +456,8 @@ export class TauriAdapter implements PRMAdapter {
 
   md = {
     readFile: (path: string) => invoke<MdReadResult>('read_md_file', { path }),
-    writeFile: (path: string, content: string) =>
-      invoke<MdWriteResult>('write_md_file', { path, content }),
+    writeFile: (path: string, content: string, encoding?: string) =>
+      invoke<MdWriteResult>('write_md_file', { path, content, encoding: encoding ?? null }),
     getFileInfo: (path: string) => invoke<MdReadResult>('md_get_file_info', { path }),
     openDialog: () => invoke<string | null>('open_md_dialog'),
     saveDialog: (defaultName?: string | null) =>
