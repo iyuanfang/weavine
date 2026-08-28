@@ -10,6 +10,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use weavine_lib::models::{Note, NoteBacklink, NoteEntityLink};
 
 #[derive(Deserialize)]
@@ -57,10 +58,10 @@ pub async fn list(
     let user_id = extract_auth(&headers, pool.as_ref()).await?;
     let limit = q.limit.unwrap_or(30).clamp(1, 200) + 1;
     let (cursor_updated_at, cursor_id) = q.cursor.as_deref().and_then(parse_note_cursor).unzip();
-    let sql = "SELECT id, user_id, title, body, archived_at, created_at::text AS created_at, updated_at::text AS updated_at \
+    let sql = "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
                FROM note WHERE user_id = $1 AND archived_at IS NULL AND deleted_at IS NULL \
-               AND ($2::text IS NULL OR updated_at < $2::timestamptz \
-                    OR (updated_at = $2::timestamptz AND id > $3)) \
+               AND ($2::text IS NULL OR updated_at < $2 \
+                    OR (updated_at = $2 AND id > $3)) \
                ORDER BY updated_at DESC, id ASC \
                LIMIT $4";
     let rows = sqlx::query_as::<_, Note>(sql)
@@ -88,7 +89,7 @@ pub async fn get(
 ) -> Result<Json<Note>, (StatusCode, String)> {
     let user_id = extract_auth(&headers, pool.as_ref()).await?;
     let note = sqlx::query_as::<_, Note>(
-        "SELECT id, user_id, title, body, archived_at, created_at::text AS created_at, updated_at::text AS updated_at \
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
          FROM note WHERE id = $1 AND user_id = $2 AND archived_at IS NULL AND deleted_at IS NULL",
     )
     .bind(&id)
@@ -135,7 +136,7 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tx: {e}")))?;
     sqlx::query(
         "INSERT INTO note (id, user_id, title, body, created_at, updated_at) \
-         VALUES ($1, $2, $3, $4, $5::timestamptz, $5::timestamptz)",
+         VALUES ($1, $2, $3, $4, $5, $5)",
     )
     .bind(&id)
     .bind(&user_id)
@@ -163,7 +164,7 @@ pub async fn create(
     }
 
     let note = sqlx::query_as::<_, Note>(
-        "SELECT id, user_id, title, body, archived_at, created_at::text AS created_at, updated_at::text AS updated_at \
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
          FROM note WHERE id = $1",
     )
     .bind(&id)
@@ -197,7 +198,7 @@ pub async fn update(
         "UPDATE note SET \
             title      = COALESCE($3, title), \
             body       = COALESCE($4, body),  \
-            updated_at = $5::timestamptz \
+            updated_at = $5 \
           WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)
@@ -242,7 +243,7 @@ pub async fn update(
     }
 
     let note = sqlx::query_as::<_, Note>(
-        "SELECT id, user_id, title, body, archived_at, created_at::text AS created_at, updated_at::text AS updated_at \
+        "SELECT id, user_id, title, body, archived_at, created_at, updated_at \
          FROM note WHERE id = $1",
     )
     .bind(&id)
@@ -262,12 +263,14 @@ pub async fn delete(
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let (user_id, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
+    let now = now_str();
     let res = sqlx::query(
-        "UPDATE note SET deleted_at = now(), updated_at = now() \
+        "UPDATE note SET deleted_at = $3, updated_at = $3 \
          WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(&id)
     .bind(&user_id)
+    .bind(&now)
     .execute(&*pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("delete: {e}")))?;
@@ -284,7 +287,7 @@ pub async fn list_backlinks(
 ) -> Result<Json<Vec<NoteBacklink>>, (StatusCode, String)> {
     let user_id = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query(
-        "SELECT n.id, n.title, substr(n.body, 1, 200), n.updated_at::text AS updated_at \
+        "SELECT n.id, n.title, substr(n.body, 1, 200), n.updated_at \
          FROM note n INNER JOIN note_entity ne ON ne.note_id = n.id \
          WHERE ne.user_id = $1 AND ne.entity_type = $2 AND ne.entity_id = $3 \
            AND n.archived_at IS NULL AND n.deleted_at IS NULL \

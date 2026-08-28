@@ -79,7 +79,7 @@ pub async fn query(
 
     let notes = sqlx::query_as::<_, Note>(
         "SELECT id, user_id, title, substr(body, 1, 200) AS body, archived_at, \
-                created_at::text AS created_at, updated_at::text AS updated_at \
+                created_at, updated_at \
 FROM note WHERE user_id = $1 AND deleted_at IS NULL AND archived_at IS NULL \
            AND (title ILIKE $2 OR body ILIKE $2) \
            ORDER BY updated_at DESC LIMIT 50",
