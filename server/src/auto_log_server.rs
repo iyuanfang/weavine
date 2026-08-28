@@ -1,11 +1,9 @@
-//! Cloud-side auto-log: write one Interaction per ended-event participant.
-//!
-//! Mirrors the desktop `business::auto_log` against Postgres. Server
-//! schedules it hourly (alongside `keep_in_touch_server`) so signed-in
-//! desktop clients catch up via sync, and the cloud acts as the source
-//! of truth for offline-driven installs.
+//! Cloud-side auto-log: keep `contact.last_interaction_at` current for
+//! not-yet-archived ended events. Interaction writes happen in
+//! `event.rs::update` + `action.rs::update` archive hooks (cross-stack
+//! parity with desktop); see those for the unified contract.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use sqlx::PgPool;
 
 const SEVEN_DAYS: i64 = 7;
@@ -14,7 +12,6 @@ const SEVEN_DAYS: i64 = 7;
 struct EndedEvent {
     id: String,
     user_id: String,
-    title: String,
     end_at: String,
 }
 
@@ -25,7 +22,7 @@ pub async fn tick_auto_log(
     let cutoff_str = cutoff.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
 
     let rows: Vec<EndedEvent> = sqlx::query_as(
-        "SELECT e.id, e.user_id, e.title, e.end_at \
+        "SELECT e.id, e.user_id, e.end_at \
          FROM event e \
          WHERE e.deleted_at IS NULL \
            AND e.archived_at IS NULL \
@@ -45,14 +42,14 @@ pub async fn tick_auto_log(
     .fetch_all(pool)
     .await?;
 
-    let mut written = 0usize;
+    let mut bumped = 0usize;
     for ev in rows {
-        written += write_interactions_for_event(pool, ev).await?;
+        bumped += bump_last_interaction_for_event(pool, ev).await?;
     }
-    Ok(written)
+    Ok(bumped)
 }
 
-async fn write_interactions_for_event(
+async fn bump_last_interaction_for_event(
     pool: &PgPool,
     ev: EndedEvent,
 ) -> Result<usize, sqlx::Error> {
@@ -68,42 +65,14 @@ async fn write_interactions_for_event(
     .fetch_all(pool)
     .await?;
 
-    let mut written = 0usize;
-    let now = Utc::now();
-    let now_str = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    if participants.is_empty() {
+        return Ok(0);
+    }
 
-    // One transaction for all participants of this event. Previously this
-    // was one tx per participant, which meant a 50-person event opened and
-    // closed 50 PG transactions per tick. ON CONFLICT DO NOTHING is
-    // per-row, so a single duplicate does not poison the rest.
+    let mut bumped = 0usize;
     let mut tx = pool.begin().await?;
     for contact_id in participants {
-        let id = format!("auto-{}", uuid::Uuid::new_v4());
-
-        let inserted = sqlx::query(
-            "INSERT INTO interaction \
-                (id, user_id, contact_id, event_id, occurred_at, summary, source, source_ref, created_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, 'event', $4, $7) \
-             ON CONFLICT (source, source_ref, contact_id)
-                WHERE source IS NOT NULL
-                  AND source_ref IS NOT NULL
-                  AND contact_id IS NOT NULL
-                  AND deleted_at IS NULL
-                DO NOTHING",
-        )
-        .bind(&id)
-        .bind(&ev.user_id)
-        .bind(&contact_id)
-        .bind(&ev.id)
-        .bind(&ev.end_at)
-        .bind(&ev.title)
-        .bind(&now_str)
-        .execute(&mut *tx)
-        .await?;
-        if inserted.rows_affected() == 0 {
-            continue;
-        }
-        sqlx::query(
+        let res = sqlx::query(
             "UPDATE contact SET last_interaction_at = $1 \
              WHERE id = $2 AND user_id = $3 \
                AND (last_interaction_at IS NULL OR last_interaction_at < $1)",
@@ -113,8 +82,10 @@ async fn write_interactions_for_event(
         .bind(&ev.user_id)
         .execute(&mut *tx)
         .await?;
-        written += 1;
+        if res.rows_affected() > 0 {
+            bumped += 1;
+        }
     }
     tx.commit().await?;
-    Ok(written)
+    Ok(bumped)
 }

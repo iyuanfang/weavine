@@ -342,11 +342,11 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let old: Option<(Option<i64>, String)> = sqlx::query_as(
+    let old: Option<(Option<i64>, String, Option<String>)> = sqlx::query_as(
         // Cast reminder_lead_minutes to BIGINT so sqlx can decode it into
         // Option<i64>. The Rust Event struct uses i64 (matching EVENT_SELECT's
         // cast at the top of this file) but the underlying column is INT4.
-        "SELECT reminder_lead_minutes::BIGINT AS reminder_lead_minutes, start_at \
+        "SELECT reminder_lead_minutes::BIGINT AS reminder_lead_minutes, start_at, archived_at \
          FROM event WHERE id = $1 AND user_id = $2",
     )
     .bind(&id)
@@ -354,7 +354,7 @@ pub async fn update(
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let (old_lead, old_start_at) = old.unwrap_or((None, String::new()));
+    let (old_lead, old_start_at, prev_archived_at) = old.unwrap_or((None, String::new(), None));
 
     enum Bind<'a> {
         Text(&'a str),
@@ -478,6 +478,52 @@ pub async fn update(
                         .await
                         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
                 }
+            }
+        }
+    }
+
+    // Archive hook (cross-stack parity with action.rs::update + desktop business/event.rs).
+    let new_archived_at = body
+        .get("archived_at")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    let was_unarchived = prev_archived_at.as_deref().is_none_or(str::is_empty);
+    if was_unarchived {
+        if let Some(archived_at) = new_archived_at {
+            let post: (String, Option<String>, String) = sqlx::query_as(
+                "SELECT contact_id, end_at, title FROM event WHERE id = $1",
+            )
+            .bind(&id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            let (post_contact_id, post_end_at, post_title) = post;
+            if !post_contact_id.is_empty() && !post_title.is_empty() {
+                let occurred_at = post_end_at
+                    .as_deref()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or(archived_at);
+                let iid = uuid::Uuid::new_v4().to_string();
+                sqlx::query(
+                    "INSERT INTO interaction (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
+                     VALUES ($1,$2,$3,NULL,$4,$5,NULL,$6,'archive',$4,$7) \
+                     ON CONFLICT (source, source_ref, contact_id) \
+                        WHERE source IS NOT NULL \
+                          AND source_ref IS NOT NULL \
+                          AND contact_id IS NOT NULL \
+                          AND deleted_at IS NULL \
+                     DO NOTHING",
+                )
+                .bind(&iid)
+                .bind(&auth)
+                .bind(&post_contact_id)
+                .bind(&id)
+                .bind(occurred_at)
+                .bind(&post_title)
+                .bind(archived_at)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
         }
     }

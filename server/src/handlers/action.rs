@@ -124,13 +124,13 @@ pub async fn update(
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let now = super::now_str();
 
-    let prev: Option<(Option<String>, String, String)> = sqlx::query_as(
-        "SELECT contact_id, status, title FROM action WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    let prev: Option<(Option<String>, Option<String>, String, String)> = sqlx::query_as(
+        "SELECT contact_id, archived_at, status, title FROM action WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(&id).bind(&auth)
     .fetch_optional(&*pool).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let (prev_contact_id, prev_status, prev_title) = match prev {
+    let (prev_contact_id, prev_archived_at, _prev_status, prev_title) = match prev {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "行动不存在".to_string())),
     };
@@ -181,16 +181,18 @@ pub async fn update(
     q = q.bind(&id).bind(&auth);
     q.execute(&mut *tx).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let new_status = body.get("status").and_then(|v| v.as_str()).unwrap_or(&prev_status);
     let new_contact_id = body.get("contact_id").and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or(prev_contact_id.clone());
-    if new_status == "done" {
-        if let Some(ref contact_id) = new_contact_id {
+    let new_archived_at = body.get("archived_at").and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    let was_unarchived = prev_archived_at.as_deref().is_none_or(str::is_empty);
+    if was_unarchived {
+        if let (Some(archived_at), Some(contact_id)) = (new_archived_at, new_contact_id.as_deref()) {
             let iid = uuid::Uuid::new_v4().to_string();
-            // Guard against "" slipping past as_str().unwrap_or — an empty
-            // title from the body would otherwise become an empty interaction
-            // summary, silently destroying the auto-logged context.
+            // Guard against "" slipping past as_str() — an empty title
+            // would otherwise become an empty interaction summary, silently
+            // destroying the auto-logged context.
             let summary = body
                 .get("title")
                 .and_then(|v| v.as_str())
@@ -199,10 +201,16 @@ pub async fn update(
                 .to_string();
             sqlx::query(
                 "INSERT INTO interaction (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
-                 VALUES ($1,$2,$3,$4,NULL,$5,NULL,$6,'action',$4,$5)",
+                 VALUES ($1,$2,$3,$4,NULL,$5,NULL,$6,'archive',$4,$5) \
+                 ON CONFLICT (source, source_ref, contact_id) \
+                    WHERE source IS NOT NULL \
+                      AND source_ref IS NOT NULL \
+                      AND contact_id IS NOT NULL \
+                      AND deleted_at IS NULL \
+                 DO NOTHING",
             )
             .bind(&iid).bind(&auth).bind(contact_id)
-            .bind(&id).bind(&now).bind(&summary)
+            .bind(&id).bind(archived_at).bind(&summary)
             .execute(&mut *tx).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
