@@ -218,7 +218,8 @@ pub async fn push(
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let existing: Option<(Option<String>,)> = sqlx::query_as(&format!(
-                    "SELECT updated_at FROM {} WHERE id = $1 AND user_id = $2",
+                    "SELECT to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') \
+                     FROM {} WHERE id = $1 AND user_id = $2",
                     table
                 ))
                 .bind(&row_id)

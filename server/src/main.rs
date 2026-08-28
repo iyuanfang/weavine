@@ -120,7 +120,7 @@ async fn main() {
         .route("/api/interactions/:id", get(handlers::interaction::get).put(handlers::interaction::update).delete(handlers::interaction::delete))
         // Reminders
         .route("/api/reminders", get(handlers::reminder::list).post(handlers::reminder::create))
-        .route("/api/reminders/:id", put(handlers::reminder::update).delete(handlers::reminder::delete))
+        .route("/api/reminders/:id", get(handlers::reminder::get).put(handlers::reminder::update).delete(handlers::reminder::delete))
         .route("/api/reminders/:id/dismiss", post(handlers::reminder::dismiss))
         // Tags
         .route("/api/tags", get(handlers::tag::list).post(handlers::tag::create))
