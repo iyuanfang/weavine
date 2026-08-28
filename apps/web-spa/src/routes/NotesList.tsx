@@ -51,7 +51,7 @@ export function NotesList() {
               if (path) navigate(`/md-editor?path=${encodeURIComponent(path)}`);
             }}
           >
-            📂 打开本地 .md
+            📂 打开文件
           </button>
         )}
         <button

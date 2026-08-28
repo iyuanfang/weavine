@@ -174,6 +174,7 @@ pub fn run() {
                 let _ = tauri::Emitter::emit(app, "open-md-from-argv", p.clone());
             }
             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {
+                let _ = win.show();
                 let _ = win.set_focus();
                 let _ = win.unminimize();
             }
@@ -326,10 +327,14 @@ pub fn run() {
                 let menu = MenuBuilder::new(handle)
                     .items(&[&show_item, &quit_item])
                     .build()?;
-                let _ = TrayIconBuilder::with_id("main")
+                let mut tray = TrayIconBuilder::with_id("main")
                     .menu(&menu)
                     .menu_on_left_click(false)
-                    .tooltip("Weavine")
+                    .tooltip("Weavine");
+                if let Some(icon) = app.default_window_icon() {
+                    tray = tray.icon(icon.clone());
+                }
+                let _ = tray
                     .on_menu_event(|app, ev| match ev.id().as_ref() {
                         "show" => {
                             if let Some(win) = tauri::Manager::get_webview_window(app, "main") {

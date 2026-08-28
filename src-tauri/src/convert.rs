@@ -120,6 +120,13 @@ pub fn mtime_unix_ms(p: &Path) -> i64 {
     }
 }
 
+fn extension_of(path: &Path) -> String {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| format!(".{}", e.to_ascii_lowercase()))
+        .unwrap_or_default()
+}
+
 pub fn sha1_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
@@ -193,7 +200,19 @@ fn convert_with_markitdown(
     mtime: i64,
 ) -> Result<ConvertResult, String> {
     let md = MarkItDown::new();
-    match md.convert_bytes(bytes, None) {
+    // Pass the real extension explicitly. markitdown's convert_bytes(bytes, None)
+    // sniffs magic bytes via `infer`; a .docx is a ZIP container, so sniffing
+    // reports ".zip" and the converter never runs (markitdown would walk the
+    // raw archive instead). Forcing the extension routes .docx/.pdf to their
+    // real converters.
+    let ext = extension_of(path);
+    let opts = markitdown::model::ConversionOptions {
+        file_extension: Some(ext),
+        url: None,
+        llm_client: None,
+        llm_model: None,
+    };
+    match md.convert_bytes(bytes, Some(opts)) {
         Ok(Some(result)) => Ok(ConvertResult {
             markdown: result.text_content,
             source_format: format,
@@ -227,9 +246,18 @@ fn plain_text_fallback(
 
 #[cfg(feature = "tauri")]
 #[tauri::command(rename_all = "snake_case")]
-pub fn convert_external_file(path: String) -> Result<ConvertResult, String> {
-    let p = Path::new(&path);
-    read_as_markdown(p)
+pub async fn convert_external_file(path: String) -> Result<ConvertResult, String> {
+    let p = PathBuf::from(&path);
+    // Run off the main thread and swallow panics: markitdown 0.1.11 panics on
+    // some docx/pdf inputs (e.g. docx tables with no rows, pdf_extract on
+    // malformed files). A panic inside a main-thread sync command hard-crashes
+    // the whole app on Windows; here it becomes a normal Err → UI fallback.
+    tauri::async_runtime::spawn_blocking(move || {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read_as_markdown(&p)))
+            .unwrap_or_else(|_| Err("转换器内部错误（无法解析该文件）".to_string()))
+    })
+    .await
+    .map_err(|e| format!("转换任务失败: {e}"))?
 }
 
 #[cfg(feature = "tauri")]

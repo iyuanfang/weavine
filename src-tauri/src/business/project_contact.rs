@@ -102,10 +102,7 @@ pub fn list_contacts_for_project(
 ) -> rusqlite::Result<Vec<ProjectContactWithContact>> {
     use crate::business::contact::hydrate_tags;
     let mut stmt = conn.prepare(
-        "SELECT c.id, c.user_id, c.nickname, c.name, c.company, c.title, c.address, \
-                c.email, c.phone, c.wechat, c.importance, \
-                c.last_interaction_at, c.keep_in_touch_cadence_days, c.created_at, c.updated_at, \
-                pc.role, pc.added_at \
+        "SELECT c.*, pc.role, pc.added_at \
          FROM Contact c \
          INNER JOIN ProjectContact pc ON pc.contact_id = c.id \
          WHERE pc.project_id = ?1 \
@@ -114,8 +111,7 @@ pub fn list_contacts_for_project(
     let rows: Vec<(Contact, Option<String>, String)> = stmt
         .query_map(params![project_id], |row| {
             let c = crate::business::contact::row_to_contact(row)?;
-            // SELECT layout: idx 0-15 = Contact cols, 16 = pc.role, 17 = pc.added_at.
-            Ok((c, row.get(16)?, row.get(17)?))
+            Ok((c, row.get("role")?, row.get("added_at")?))
         })?
         .filter_map(|r| r.ok())
         .collect();

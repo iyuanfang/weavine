@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 
-pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note", "tag"];
+pub const SUPPORTED_ENTITY_TYPES: &[&str] = &["contact", "project", "event", "action", "note", "interaction", "tag"];
 
 #[derive(Debug, Serialize)]
 pub struct EntityGraphNode {
@@ -106,6 +106,11 @@ fn load_center_node(
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
+        "interaction" => conn.query_row(
+            "SELECT id, summary FROM \"Interaction\" WHERE id = ?1 AND user_id = ?2",
+            params![entity_id, user_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).optional()?,
         _ => return Ok(None),
     };
 
@@ -116,6 +121,7 @@ fn load_center_node(
         "action" => "action",
         "note" => "note",
         "tag" => "tag",
+        "interaction" => "interaction",
         _ => return Ok(None),
     };
 
@@ -413,6 +419,70 @@ fn expand_action(
     Ok(())
 }
 
+fn expand_interaction(
+    conn: &Connection,
+    user_id: &str,
+    interaction_id: &str,
+    response: &mut EntityGraphResponse,
+) -> rusqlite::Result<()> {
+    let (contact_id, action_id, event_id): (Option<String>, Option<String>, Option<String>) =
+        conn.query_row(
+            "SELECT contact_id, action_id, event_id FROM \"Interaction\" WHERE id = ?1 AND user_id = ?2",
+            params![interaction_id, user_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?
+        .unwrap_or((None, None, None));
+
+    if let Some(cid) = contact_id {
+        let nickname: Option<String> = conn.query_row(
+            "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            params![&cid, user_id],
+            |r| r.get(0),
+        ).optional()?;
+        if let Some(label) = nickname {
+            push_neighbor(response, "contact", cid, label, None, "interaction", interaction_id, "interaction_with_contact");
+        }
+    }
+
+    if let Some(aid) = action_id {
+        let title: Option<String> = conn.query_row(
+            "SELECT title FROM \"Action\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            params![&aid, user_id],
+            |r| r.get(0),
+        ).optional()?;
+        if let Some(label) = title {
+            push_neighbor(response, "action", aid, label, None, "interaction", interaction_id, "interaction_via_action");
+        }
+    }
+
+    if let Some(eid) = event_id {
+        let title: Option<String> = conn.query_row(
+            "SELECT title FROM \"Event\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            params![&eid, user_id],
+            |r| r.get(0),
+        ).optional()?;
+        if let Some(label) = title {
+            push_neighbor(response, "event", eid, label, None, "interaction", interaction_id, "interaction_in_event");
+        }
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT n.id, n.title FROM \"NoteEntity\" ne \
+         JOIN \"Note\" n ON n.id = ne.note_id \
+         WHERE ne.entity_type = 'interaction' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
+    )?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map(params![interaction_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    for (id, title) in rows {
+        push_neighbor(response, "note", id, title, None, "interaction", interaction_id, "note_mentions");
+    }
+
+    Ok(())
+}
+
 fn expand_note(
     conn: &Connection,
     user_id: &str,
@@ -509,6 +579,7 @@ pub fn entity_graph(
         "event" => expand_event(conn, user_id, entity_id, &mut response)?,
         "action" => expand_action(conn, user_id, entity_id, &mut response)?,
         "note" => expand_note(conn, user_id, entity_id, &mut response)?,
+        "interaction" => expand_interaction(conn, user_id, entity_id, &mut response)?,
         "tag" => expand_tag(conn, user_id, entity_id, &mut response)?,
         _ => {}
     }

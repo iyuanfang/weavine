@@ -20,11 +20,10 @@ pub fn search(
 
     let contacts: Vec<Contact> = {
         let mut stmt = conn.prepare(
-            "SELECT id, user_id, nickname, name, company, title, address, email, phone, wechat, importance, last_interaction_at, keep_in_touch_cadence_days, created_at, updated_at \
-             FROM Contact WHERE user_id = ?1 \
-             AND (nickname LIKE ?2 OR name LIKE ?2 OR company LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2) \
-             ORDER BY updated_at DESC LIMIT ?3",
-        )?;
+             "SELECT * FROM Contact WHERE user_id = ?1 \
+              AND (nickname LIKE ?2 OR name LIKE ?2 OR company LIKE ?2 OR email LIKE ?2 OR phone LIKE ?2) \
+              ORDER BY updated_at DESC LIMIT ?3",
+         )?;
         let results = stmt
             .query_map(rusqlite::params![user_id, &pattern, &limit], row_to_contact)?
             .filter_map(|r| r.ok())
