@@ -625,7 +625,7 @@ export function NoteDetail() {
   const navigate = useNavigate();
   const rosters = useEntityRosters();
   const [note, setNote] = useState<Note | null | undefined>(undefined);
-  const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('split');
+  const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('preview');
   const [tocOpen, setTocOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftBody, setDraftBody] = useState('');

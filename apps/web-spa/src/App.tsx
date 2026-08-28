@@ -13,6 +13,7 @@ import {
 import { QuickCapture } from './components/QuickCapture';
 import { QuickFab } from './components/QuickFab';
 import { SearchPalette } from './components/SearchPalette';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ReminderToastContainer, type ReminderToastItem } from './components/ReminderToast';
 import { useGlobalShortcut } from './hooks/useGlobalShortcut';
 import { RegisterSW } from './lib/register-sw';
@@ -230,7 +231,7 @@ export function AppInner({ children }: { children?: ReactNode }) {
   return (
     <QuickCaptureContext.Provider value={quickApi}>
       <SearchContext.Provider value={searchApi}>
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
         <QuickFab onOpen={openQuick} />
         <ReminderToastContainer reminders={pendingReminders} onDismiss={dismissReminder} />
         {quickOpen && (
