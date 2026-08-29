@@ -3,13 +3,15 @@ use sqlx::PgPool;
 
 // Server-side fallback; client's ReminderPoller normally owns dispatch.
 async fn dispatch_due_reminders(pool: &PgPool) -> Result<usize, sqlx::Error> {
+    let now_rfc3339 = chrono::Utc::now().to_rfc3339();
     let rows: Vec<(String,)> = sqlx::query_as(
         "UPDATE reminder SET dispatched = true \
          WHERE dispatched = false AND dismissed = false \
-           AND trigger_at::timestamptz <= NOW() \
+           AND trigger_at <= $1 \
            AND deleted_at IS NULL \
          RETURNING id",
     )
+    .bind(&now_rfc3339)
     .fetch_all(pool)
     .await?;
     Ok(rows.len())

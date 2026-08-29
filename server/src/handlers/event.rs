@@ -894,9 +894,8 @@ mod tests {
         .unwrap();
         tx.commit().await.unwrap();
 
-        let row: (String, String, Option<String>, String, i32) = sqlx::query_as(
-            "SELECT r.id, r.user_id, r.contact_id, r.invitation_token, \
-             CAST(EXTRACT(EPOCH FROM r.trigger_at::timestamptz) AS INTEGER) \
+        let row: (String, String, Option<String>, String, String) = sqlx::query_as(
+            "SELECT r.id, r.user_id, r.contact_id, r.invitation_token, r.trigger_at \
              FROM reminder r WHERE r.event_id = $1",
         )
         .bind(&event_id)
@@ -904,10 +903,16 @@ mod tests {
         .await
         .unwrap();
 
+        let trigger_epoch: i32 = chrono::DateTime::parse_from_rfc3339(&row.4)
+            .expect("valid rfc3339")
+            .timestamp()
+            .try_into()
+            .unwrap();
+
         assert_eq!(row.1, user_id);
         assert_eq!(row.2, Some(contact_id.clone()));
         assert_eq!(row.3, format!("event:{event_id}:15"));
-        assert_eq!(row.4, 1786787100);
+        assert_eq!(trigger_epoch, 1786787100);
     }
 
     #[sqlx::test]
