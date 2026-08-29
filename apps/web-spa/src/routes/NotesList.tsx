@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAdapter, isTauri } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { mdEditorUrl } from '../lib/md-path';
 import type { Note } from '../lib/adapter/types';
 import { NoteListItem } from '../components/NoteListItem';
 
@@ -48,7 +49,7 @@ export function NotesList() {
             className="btn btn-secondary"
             onClick={async () => {
               const path = await adapter.md.openDialog();
-              if (path) navigate(`/md-editor?path=${encodeURIComponent(path)}`);
+              if (path) navigate(mdEditorUrl(path));
             }}
           >
             📂 打开文件
