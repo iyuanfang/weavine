@@ -551,7 +551,13 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
               ▶ 目录
             </button>
           )}
-          <div style={{ flex: 1, display: 'flex', minWidth: 0, alignItems: 'stretch' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+            {mode === 'split' && (
+              <EditorToolbar
+                onAction={(action) => newEditorRef.current?.runAction(action)}
+              />
+            )}
+            <div style={{ flex: 1, display: 'flex', minWidth: 0, alignItems: 'stretch' }}>
             {(mode === 'edit' || mode === 'split') && (
               <div className="note-edit__editor" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
                 {body.trim() === '' && mode === 'edit' && (
@@ -575,6 +581,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
                 <MarkdownEditor
                   ref={newEditorRef}
                   value={body}
+                  hideToolbar={mode === 'split'}
                   onChange={(next) => {
                     if (!title.trim()) {
                       const heading = next.match(/^\s*#\s+(.+?)\s*$/m);
@@ -595,14 +602,10 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
                   minWidth: 0,
                 }}
               >
-                {mode === 'split' && (
-                  <EditorToolbar
-                    onAction={(action) => newEditorRef.current?.runAction(action)}
-                  />
-                )}
                 <MarkdownView body={body} />
               </div>
             )}
+            </div>
           </div>
         </div>
         <div className="note-edit__section">
@@ -960,10 +963,16 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
               ▶ 目录
             </button>
           )}
-          <div style={{ flex: 1, display: 'flex', minWidth: 0, alignItems: 'stretch' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+            {mode === 'split' && (
+              <EditorToolbar
+                onAction={(action) => editEditorRef.current?.runAction(action)}
+              />
+            )}
+            <div style={{ flex: 1, display: 'flex', minWidth: 0, alignItems: 'stretch' }}>
             {(mode === 'edit' || mode === 'split') && (
               <div className="note-edit__editor" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-                <MarkdownEditor ref={editEditorRef} value={draftBody} onChange={setDraftBody} />
+                <MarkdownEditor ref={editEditorRef} value={draftBody} hideToolbar={mode === 'split'} onChange={setDraftBody} />
               </div>
             )}
             {(mode === 'preview' || mode === 'split') && (
@@ -976,14 +985,10 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
                   minWidth: 0,
                 }}
               >
-                {mode === 'split' && (
-                  <EditorToolbar
-                    onAction={(action) => editEditorRef.current?.runAction(action)}
-                  />
-                )}
                 <MarkdownView body={draftBody} />
               </div>
             )}
+            </div>
           </div>
         </div>
         <div className="note-edit__section">

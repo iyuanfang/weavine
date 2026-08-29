@@ -69,9 +69,8 @@ const slashChoices: SlashChoice[] = [
   { key: 'h3', label: '三级标题', hint: '⌘3', insert: '### 标题\n', category: 'heading' },
   { key: 'b', label: '加粗', hint: '⌘B', insert: '**加粗**', category: 'inline' },
   { key: 'i', label: '斜体', hint: '⌘I', insert: '*斜体*', category: 'inline' },
-  { key: 'u', label: '下划线', hint: '⌘U', insert: '<u>下划线</u>', category: 'inline' },
   { key: 's', label: '删除线', hint: '⌘⇧S', insert: '~~删除线~~', category: 'inline' },
-  { key: 'mark', label: '高亮', hint: '⌘⇧H', insert: '<mark>高亮</mark>', category: 'inline' },
+  { key: 'mark', label: '高亮', hint: '⌘⇧H', insert: '==高亮==', category: 'inline' },
   { key: 'code', label: '行内代码', hint: '⇧⌘E', insert: '`代码`', category: 'inline' },
   { key: 'link', label: '链接', hint: '⌘K', insert: '[文字](https://)', category: 'inline' },
   { key: 'codeblock', label: '代码块', hint: '⌘⇧K', insert: '```\n\n```\n', category: 'block' },
@@ -241,8 +240,7 @@ function clearFormatting(view: EditorView): boolean {
     { open: '**', close: '**' },
     { open: '~~', close: '~~' },
     { open: '`', close: '`' },
-    { open: '<u>', close: '</u>' },
-    { open: '<mark>', close: '</mark>' },
+    { open: '==', close: '==' },
     { open: '*', close: '*' },
   ];
   for (const { open, close } of patterns) {
@@ -333,15 +331,13 @@ function buildState(doc: string, readOnly: boolean): EditorState {
         { key: 'Mod-B', run: toggleWrap('**') },
         { key: 'Mod-i', run: toggleWrap('*') },
         { key: 'Mod-I', run: toggleWrap('*') },
-        { key: 'Mod-u', run: toggleWrap('<u>', '</u>') },
-        { key: 'Mod-U', run: toggleWrap('<u>', '</u>') },
-        { key: 'Mod-k', run: toggleWrap('[', '](https://)') },
-        { key: 'Mod-Shift-e', run: toggleWrap('`') },
-        { key: 'Mod-Shift-E', run: toggleWrap('`') },
-        { key: 'Mod-Shift-s', run: toggleWrap('~~') },
-        { key: 'Mod-Shift-S', run: toggleWrap('~~') },
-        { key: 'Mod-Shift-h', run: toggleWrap('<mark>', '</mark>') },
-        { key: 'Mod-Shift-H', run: toggleWrap('<mark>', '</mark>') },
+{ key: 'Mod-k', run: toggleWrap('[', '](https://)') },
+  { key: 'Mod-Shift-e', run: toggleWrap('`') },
+  { key: 'Mod-Shift-E', run: toggleWrap('`') },
+  { key: 'Mod-Shift-s', run: toggleWrap('~~') },
+  { key: 'Mod-Shift-S', run: toggleWrap('~~') },
+  { key: 'Mod-Shift-h', run: toggleWrap('==') },
+  { key: 'Mod-Shift-H', run: toggleWrap('==') },
         { key: 'Mod-Shift-k', run: toggleCodeBlock() },
         { key: 'Mod-Shift-K', run: toggleCodeBlock() },
         { key: 'Mod-\\', run: clearFormatting },
@@ -620,9 +616,8 @@ export function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) 
       <ToolbarSep />
       <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
       <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
-      <ToolbarBtn label="U" title="下划线 ⌘U" onClick={() => onAction({ kind: 'wrap', before: '<u>', after: '</u>' })} />
       <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
-      <ToolbarBtn label="M" title="高亮 ⌘⇧H" onClick={() => onAction({ kind: 'wrap', before: '<mark>', after: '</mark>' })} />
+      <ToolbarBtn label="M" title="高亮 ⌘⇧H" onClick={() => onAction({ kind: 'wrap', before: '==', after: '==' })} />
       <ToolbarBtn label="</>" title="行内代码 ⇧⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
       <ToolbarBtn label="{}" title="代码块 ⌘⇧K" onClick={() => onAction({ kind: 'codeBlock' })} />
       <ToolbarSep />

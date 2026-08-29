@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it';
+import markdownItMark from 'markdown-it-mark';
 
 export type WikilinkTarget = 'contact' | 'project' | 'action' | 'event' | 'interaction';
 
@@ -7,7 +8,7 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: false,
   typographer: false,
-});
+}).use(markdownItMark);
 
 md.inline.ruler.after('emphasis', 'wikilink', (state, silent) => {
   const start = state.pos;
