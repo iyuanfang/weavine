@@ -66,7 +66,7 @@ const slashChoices: SlashChoice[] = [
   { key: 'b', label: '加粗', hint: '⌘B', insert: '**加粗**', category: 'inline' },
   { key: 'i', label: '斜体', hint: '⌘I', insert: '*斜体*', category: 'inline' },
   { key: 's', label: '删除线', hint: '⌘⇧S', insert: '~~删除线~~', category: 'inline' },
-  { key: 'code', label: '行内代码', hint: '⌘E', insert: '`代码`', category: 'inline' },
+  { key: 'code', label: '行内代码', hint: '⇧⌘E', insert: '`代码`', category: 'inline' },
   { key: 'link', label: '链接', hint: '⌘K', insert: '[文字](https://)', category: 'inline' },
   { key: 'quote', label: '引用', hint: '⌘⇧9', insert: '> 引用\n', category: 'block' },
   { key: 'ul', label: '无序列表', hint: '⌘⇧]', insert: '- 项目\n- 项目\n', category: 'block' },
@@ -203,7 +203,8 @@ function buildState(doc: string, readOnly: boolean): EditorState {
         { key: 'Mod-i', run: toggleWrap('*') },
         { key: 'Mod-I', run: toggleWrap('*') },
         { key: 'Mod-k', run: toggleWrap('[', '](https://)') },
-        { key: 'Mod-e', run: toggleWrap('`') },
+        { key: 'Mod-Shift-e', run: toggleWrap('`') },
+        { key: 'Mod-Shift-E', run: toggleWrap('`') },
         { key: 'Mod-Shift-s', run: toggleWrap('~~') },
         { key: 'Mod-Shift-S', run: toggleWrap('~~') },
         { key: 'Mod-1', run: toggleLinePrefix('# ') },
@@ -470,7 +471,7 @@ function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) => void
       <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
       <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
       <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
-      <ToolbarBtn label="</>" title="行内代码 ⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
+      <ToolbarBtn label="</>" title="行内代码 ⇧⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
       <ToolbarSep />
       <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
       <ToolbarBtn label="❝" title="引用 ⌘⇧9" onClick={() => onAction({ kind: 'lineApply', insert: '> ' })} />
@@ -512,7 +513,7 @@ function BubbleToolbar({ x, y, onAction }: { x: number; y: number; onAction: (a:
       <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
       <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
       <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
-      <ToolbarBtn label="</>" title="行内代码 ⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
+      <ToolbarBtn label="</>" title="行内代码 ⇧⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
       <ToolbarSep />
       <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
       <ToolbarBtn label="H2" title="二级标题 ⌘2" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
