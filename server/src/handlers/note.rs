@@ -3,7 +3,6 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::Value;
 use sqlx::PgPool;
@@ -128,8 +127,7 @@ pub async fn create(
         .unwrap_or_default();
     validate_entity_links(&entity_links)?;
     let id = uuid::Uuid::new_v4().to_string();
-    let now: DateTime<Utc> = Utc::now();
-    let now_str = now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let now = now_str();
     let mut tx = pool
         .begin()
         .await
@@ -142,7 +140,7 @@ pub async fn create(
     .bind(&user_id)
     .bind(&title)
     .bind(&note_body)
-    .bind(&now_str)
+    .bind(&now)
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("insert: {e}")))?;
@@ -185,8 +183,7 @@ pub async fn update(
     Json(body): Json<Value>,
 ) -> Result<Json<Note>, (StatusCode, String)> {
     let (user_id, _device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
-    let now: DateTime<Utc> = Utc::now();
-    let now_str = now.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let now = now_str();
     let mut tx = pool
         .begin()
         .await
@@ -205,7 +202,7 @@ pub async fn update(
     .bind(&user_id)
     .bind(new_title)
     .bind(new_body)
-    .bind(&now_str)
+    .bind(&now)
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("update: {e}")))?;
