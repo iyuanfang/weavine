@@ -40,6 +40,9 @@ src-tauri/gen/
 tauri-dist/
 .playwright-mcp/
 
+# Debug screenshots dropped at repo root during local dev
+split-toolbar.png
+
 # Local logo preview renders (scratch files for design review)
 .weavine-logo-*.png
 target/

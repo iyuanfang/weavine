@@ -485,7 +485,12 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     useEffect(() => {
       if (!hostRef.current) return;
       const view = new EditorView({
-        state: buildState(value, !!readOnly, onSave),
+        // Wrap in a stable closure that reads the ref. The EditorView is built
+        // once (`[]` deps), so passing `onSave` directly would freeze the first
+        // render's copy — and since MdEditor's saveFile closes over `content`,
+        // ⌘S would then write the *stale* content and silently discard every
+        // edit made since the file was opened.
+        state: buildState(value, !!readOnly, () => onSaveRef.current?.()),
         parent: hostRef.current,
       });
       viewRef.current = view;
