@@ -155,7 +155,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { MarkdownView } from '../components/MarkdownView';
-import { MarkdownEditor } from '../components/MarkdownEditor';
+import { MarkdownEditor, EditorToolbar } from '../components/MarkdownEditor';
 import { SearchablePicker } from '../components/SearchablePicker';
 import type {
   Action,
@@ -595,6 +595,11 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
                   minWidth: 0,
                 }}
               >
+                {mode === 'split' && (
+                  <EditorToolbar
+                    onAction={(action) => newEditorRef.current?.runAction(action)}
+                  />
+                )}
                 <MarkdownView body={body} />
               </div>
             )}
@@ -971,6 +976,11 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
                   minWidth: 0,
                 }}
               >
+                {mode === 'split' && (
+                  <EditorToolbar
+                    onAction={(action) => editEditorRef.current?.runAction(action)}
+                  />
+                )}
                 <MarkdownView body={draftBody} />
               </div>
             )}

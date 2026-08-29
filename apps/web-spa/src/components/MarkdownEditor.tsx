@@ -36,6 +36,7 @@ export interface MarkdownEditorHandle {
   replaceLine: (text: string) => void;
   focus: () => void;
   getView: () => EditorView | null;
+  runAction: (action: ToolbarAction) => void;
 }
 
 interface MarkdownEditorProps {
@@ -43,13 +44,16 @@ interface MarkdownEditorProps {
   onChange: (next: string) => void;
   readOnly?: boolean;
   minHeight?: number;
+  hideToolbar?: boolean;
 }
 
 type ToolbarAction =
   | { kind: 'wrap'; before: string; after: string }
   | { kind: 'line'; insert: string }
   | { kind: 'lineApply'; insert: string }
-  | { kind: 'link' };
+  | { kind: 'link' }
+  | { kind: 'codeBlock' }
+  | { kind: 'clearFormatting' };
 
 interface SlashChoice {
   key: string;
@@ -65,9 +69,12 @@ const slashChoices: SlashChoice[] = [
   { key: 'h3', label: '三级标题', hint: '⌘3', insert: '### 标题\n', category: 'heading' },
   { key: 'b', label: '加粗', hint: '⌘B', insert: '**加粗**', category: 'inline' },
   { key: 'i', label: '斜体', hint: '⌘I', insert: '*斜体*', category: 'inline' },
+  { key: 'u', label: '下划线', hint: '⌘U', insert: '<u>下划线</u>', category: 'inline' },
   { key: 's', label: '删除线', hint: '⌘⇧S', insert: '~~删除线~~', category: 'inline' },
+  { key: 'mark', label: '高亮', hint: '⌘⇧H', insert: '<mark>高亮</mark>', category: 'inline' },
   { key: 'code', label: '行内代码', hint: '⇧⌘E', insert: '`代码`', category: 'inline' },
   { key: 'link', label: '链接', hint: '⌘K', insert: '[文字](https://)', category: 'inline' },
+  { key: 'codeblock', label: '代码块', hint: '⌘⇧K', insert: '```\n\n```\n', category: 'block' },
   { key: 'quote', label: '引用', hint: '⌘⇧9', insert: '> 引用\n', category: 'block' },
   { key: 'ul', label: '无序列表', hint: '⌘⇧]', insert: '- 项目\n- 项目\n', category: 'block' },
   { key: 'ol', label: '有序列表', hint: '⌘⇧[', insert: '1. 项目\n2. 项目\n', category: 'block' },
@@ -182,6 +189,130 @@ function demoteHeading() {
   };
 }
 
+// Fenced status is detected by looking at the lines immediately above and below the
+// selection — not the selection itself — because Typora / Obsidian toggle behaviour
+// expects the user to select the inner text and re-press the shortcut to unwrap.
+function toggleCodeBlock() {
+  return (view: EditorView): boolean => {
+    if (view.state.readOnly) return false;
+    const sel = view.state.selection.main;
+    const startLine = view.state.doc.lineAt(sel.from);
+    const endLine = view.state.doc.lineAt(sel.to);
+    const above = startLine.number > 1 ? view.state.doc.line(startLine.number - 1) : null;
+    const below = endLine.number < view.state.doc.lines ? view.state.doc.line(endLine.number + 1) : null;
+    const fencedByLines =
+      !!above && !!below && above.text.startsWith('```') && below.text.startsWith('```');
+
+    if (fencedByLines && above && below) {
+      view.dispatch({
+        changes: { from: above.from, to: below.from, insert: '' },
+      });
+      return true;
+    }
+
+    if (sel.empty) {
+      const insert = '```\n\n```\n';
+      view.dispatch({
+        changes: { from: sel.from, insert },
+        selection: { anchor: sel.from + 4, head: sel.from + 4 },
+      });
+      return true;
+    }
+
+    const selected = view.state.sliceDoc(sel.from, sel.to);
+    const beforePad = startLine.from === sel.from ? '' : '\n';
+    const afterPad = endLine.to === sel.to ? '' : '\n';
+    const insert = `\`\`\`${beforePad}${selected}${afterPad}\`\`\`\n`;
+    const selStart = sel.from + 3 + (beforePad ? 1 : 0);
+    const selEnd = selStart + selected.length;
+    view.dispatch({
+      changes: { from: sel.from - (beforePad ? 1 : 0) - 3, to: sel.to + (afterPad ? 1 : 0) + 3, insert },
+      selection: { anchor: selStart, head: selEnd },
+    });
+    return true;
+  };
+}
+
+function clearFormatting(view: EditorView): boolean {
+  if (view.state.readOnly) return false;
+  const sel = view.state.selection.main;
+  if (sel.empty) return false;
+  const patterns: { open: string; close: string }[] = [
+    { open: '**', close: '**' },
+    { open: '~~', close: '~~' },
+    { open: '`', close: '`' },
+    { open: '<u>', close: '</u>' },
+    { open: '<mark>', close: '</mark>' },
+    { open: '*', close: '*' },
+  ];
+  for (const { open, close } of patterns) {
+    const beforeStart = sel.from - open.length;
+    const afterEnd = sel.to + close.length;
+    const beforeMatch =
+      beforeStart >= 0 && view.state.sliceDoc(beforeStart, sel.from) === open;
+    const afterMatch =
+      afterEnd <= view.state.doc.length && view.state.sliceDoc(sel.to, afterEnd) === close;
+    if (beforeMatch && afterMatch) {
+      view.dispatch({
+        changes: [
+          { from: sel.to, to: afterEnd, insert: '' },
+          { from: beforeStart, to: sel.from, insert: '' },
+        ],
+        selection: {
+          anchor: beforeStart,
+          head: beforeStart + (sel.to - sel.from),
+        },
+      });
+      return true;
+    }
+  }
+  return false;
+}
+
+function moveSelectedLines(dir: -1 | 1) {
+  return (view: EditorView): boolean => {
+    if (view.state.readOnly) return false;
+    const sel = view.state.selection.main;
+    const startLine = view.state.doc.lineAt(sel.from);
+    const endLine = view.state.doc.lineAt(sel.to);
+    const targetLineNo = dir === -1 ? startLine.number - 1 : endLine.number + 1;
+    if (targetLineNo < 1 || targetLineNo > view.state.doc.lines) return false;
+
+    const isFirstLine = startLine.number === 1;
+    const isLastLine = endLine.number === view.state.doc.lines;
+
+    let from: number;
+    let to: number;
+    if (dir === -1) {
+      const targetLine = view.state.doc.line(targetLineNo);
+      from = targetLine.from;
+      to = isLastLine ? endLine.to : endLine.to + 1;
+    } else {
+      const targetLine = view.state.doc.line(targetLineNo);
+      from = isFirstLine ? startLine.from : startLine.from - 1;
+      to = targetLine.to;
+    }
+
+    const headOffset = sel.head - startLine.from;
+    const anchorOffset = sel.anchor - startLine.from;
+
+    const blockText = view.state.sliceDoc(startLine.from, isLastLine ? endLine.to : endLine.to + 1);
+    const targetEnd = dir === -1
+      ? startLine.from
+      : endLine.number < view.state.doc.lines ? endLine.to + 1 : endLine.to;
+    const targetText = view.state.sliceDoc(from, targetEnd);
+    const insert = dir === -1 ? `${blockText}${targetText}` : `${targetText}${blockText}`;
+    const anchor = from + (dir === -1 ? blockText.length : 0) + anchorOffset;
+    const head = from + (dir === -1 ? blockText.length : 0) + headOffset;
+
+    view.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor, head },
+    });
+    return true;
+  };
+}
+
 function buildState(doc: string, readOnly: boolean): EditorState {
   return EditorState.create({
     doc,
@@ -202,11 +333,20 @@ function buildState(doc: string, readOnly: boolean): EditorState {
         { key: 'Mod-B', run: toggleWrap('**') },
         { key: 'Mod-i', run: toggleWrap('*') },
         { key: 'Mod-I', run: toggleWrap('*') },
+        { key: 'Mod-u', run: toggleWrap('<u>', '</u>') },
+        { key: 'Mod-U', run: toggleWrap('<u>', '</u>') },
         { key: 'Mod-k', run: toggleWrap('[', '](https://)') },
         { key: 'Mod-Shift-e', run: toggleWrap('`') },
         { key: 'Mod-Shift-E', run: toggleWrap('`') },
         { key: 'Mod-Shift-s', run: toggleWrap('~~') },
         { key: 'Mod-Shift-S', run: toggleWrap('~~') },
+        { key: 'Mod-Shift-h', run: toggleWrap('<mark>', '</mark>') },
+        { key: 'Mod-Shift-H', run: toggleWrap('<mark>', '</mark>') },
+        { key: 'Mod-Shift-k', run: toggleCodeBlock() },
+        { key: 'Mod-Shift-K', run: toggleCodeBlock() },
+        { key: 'Mod-\\', run: clearFormatting },
+        { key: 'Mod-Shift-ArrowUp', run: moveSelectedLines(-1) },
+        { key: 'Mod-Shift-ArrowDown', run: moveSelectedLines(1) },
         { key: 'Mod-1', run: toggleLinePrefix('# ') },
         { key: 'Mod-2', run: toggleLinePrefix('## ') },
         { key: 'Mod-3', run: toggleLinePrefix('### ') },
@@ -248,6 +388,16 @@ function runToolbarAction(view: EditorView, action: ToolbarAction): void {
       view.focus();
       return;
     }
+    case 'codeBlock': {
+      toggleCodeBlock()(view);
+      view.focus();
+      return;
+    }
+    case 'clearFormatting': {
+      clearFormatting(view);
+      view.focus();
+      return;
+    }
     case 'lineApply': {
       const line = view.state.doc.lineAt(sel.head);
       const hasPrefix = line.text.startsWith(action.insert);
@@ -270,16 +420,11 @@ function runToolbarAction(view: EditorView, action: ToolbarAction): void {
       view.focus();
       return;
     }
-    case 'link': {
-      toggleWrap('[', '](https://)')(view);
-      view.focus();
-      return;
-    }
   }
 }
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, onChange, readOnly, minHeight = 360 }, ref) {
+  function MarkdownEditor({ value, onChange, readOnly, minHeight = 360, hideToolbar = false }, ref) {
     const hostRef = useRef<HTMLDivElement | null>(null);
     const viewRef = useRef<EditorView | null>(null);
     const readOnlyComp = useRef(new Compartment());
@@ -401,6 +546,11 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         },
         focus: () => viewRef.current?.focus(),
         getView: () => viewRef.current,
+        runAction: (action) => {
+          const view = viewRef.current;
+          if (!view) return;
+          runToolbarAction(view, action);
+        },
       }),
       [],
     );
@@ -420,7 +570,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
     return (
       <div style={{ position: 'relative' }}>
-        {!readOnly && (
+        {!readOnly && !hideToolbar && (
           <EditorToolbar
             onAction={(action) => {
               const view = viewRef.current;
@@ -461,7 +611,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
   },
 );
 
-function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) => void }) {
+export function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) => void }) {
   return (
     <div className="md-editor-toolbar" data-testid="md-editor-toolbar">
       <ToolbarBtn label="H1" title="一级标题 ⌘1" onClick={() => onAction({ kind: 'lineApply', insert: '# ' })} />
@@ -470,8 +620,11 @@ function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) => void
       <ToolbarSep />
       <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
       <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
+      <ToolbarBtn label="U" title="下划线 ⌘U" onClick={() => onAction({ kind: 'wrap', before: '<u>', after: '</u>' })} />
       <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
+      <ToolbarBtn label="M" title="高亮 ⌘⇧H" onClick={() => onAction({ kind: 'wrap', before: '<mark>', after: '</mark>' })} />
       <ToolbarBtn label="</>" title="行内代码 ⇧⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
+      <ToolbarBtn label="{}" title="代码块 ⌘⇧K" onClick={() => onAction({ kind: 'codeBlock' })} />
       <ToolbarSep />
       <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
       <ToolbarBtn label="❝" title="引用 ⌘⇧9" onClick={() => onAction({ kind: 'lineApply', insert: '> ' })} />
@@ -480,6 +633,7 @@ function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) => void
       <ToolbarBtn label="☑" title="待办 ⌘⇧." onClick={() => onAction({ kind: 'lineApply', insert: '- [ ] ' })} />
       <ToolbarSep />
       <ToolbarBtn label="—" title="分隔线" onClick={() => onAction({ kind: 'line', insert: '\n---\n' })} />
+      <ToolbarBtn label="×" title="清除格式 ⌘\" onClick={() => onAction({ kind: 'clearFormatting' })} />
     </div>
   );
 }
