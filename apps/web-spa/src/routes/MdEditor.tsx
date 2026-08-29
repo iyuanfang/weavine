@@ -19,7 +19,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
-import { renderMarkdown } from '../lib/markdown';
+import { MarkdownEditor, type MarkdownEditorHandle } from '../components/MarkdownEditor';
+import { MarkdownView } from '../components/MarkdownView';
 import { parseTocHeadings } from '../lib/markdown-toc';
 import { usePageScrollLock } from '../lib/use-page-scroll-lock';
 
@@ -47,7 +48,8 @@ export function MdEditor() {
     sourceSha1: string;
     sourceMtimeUnixMs: number;
   } | null>(null);
-  const taRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<MarkdownEditorHandle>(null);
+  const previewScrollRef = useRef<HTMLDivElement>(null);
 
   const closeGuard = useCallback(
     (e: BeforeUnloadEvent) => {
@@ -259,21 +261,15 @@ export function MdEditor() {
   // Parse headings for the TOC sidebar via the shared helper.
   const tocHeadings = useMemo(() => parseTocHeadings(content), [content]);
 
-  // Scroll the textarea so that line N is near the top. The editor is a
-  // plain <textarea>, so per-line scroll is approximated by
-  // scrollTop ≈ line * lineHeight. The 22px figure matches the
-  // monospace line-height in the JSX (14 * 1.6 ≈ 22.4).
-  const LINE_HEIGHT = 22;
-  const scrollToLine = useCallback(
-    (line: number) => {
-      const ta = taRef.current;
-      if (!ta) return;
-      const target = Math.max(0, line * LINE_HEIGHT - 16);
-      ta.scrollTop = target;
-      ta.focus();
-    },
-    [],
-  );
+  const scrollToLine = useCallback((line: number) => {
+    editorRef.current?.scrollToLine(line);
+    const previewRoot = previewScrollRef.current;
+    if (!previewRoot) return;
+    const headings = previewRoot.querySelectorAll('h1, h2, h3');
+    if (!headings.length) return;
+    const target = headings[Math.min(line, headings.length - 1)];
+    target.scrollIntoView({ block: 'start' });
+  }, []);
 
   const largeFile = sizeBytes > 1_048_576;
   const banner = largeFile
@@ -509,56 +505,43 @@ export function MdEditor() {
         {(view === 'edit' || view === 'split') && (
           <div
             className={view === 'split' ? 'md-edit-pane md-edit-pane--split' : 'md-edit-pane md-edit-pane--solo'}
-            style={{ flex: 1, minWidth: 0, display: 'flex' }}
+            style={{ flex: 1, minWidth: 0, display: 'flex', minHeight: 0 }}
           >
-            <textarea
-              ref={taRef}
+            <MarkdownEditor
+              ref={editorRef}
               value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
+              hideToolbar={false}
+              showWordCount={false}
+              onChange={(next) => {
+                setContent(next);
                 setDirty(true);
               }}
-              onKeyDown={(e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-                  e.preventDefault();
-                  saveFile(false);
-                }
+              onSave={() => {
+                saveFile(false);
+                return true;
               }}
-              spellCheck={false}
-              style={{
-                flex: 1,
-                padding: '12px',
-                border: 'none',
-                outline: 'none',
-                resize: 'none',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                fontSize: 14,
-                lineHeight: 1.6,
-                background: 'var(--surface, #fff)',
-                color: 'var(--text, #111)',
-                minWidth: 0,
-                minHeight: 0,
-              }}
-              placeholder={path ? '' : '点「📂 打开 .md」选择本地 Markdown 文件…'}
             />
           </div>
         )}
         {(view === 'preview' || view === 'split') && (
           <div
+            ref={previewScrollRef}
             style={{
               flex: 1,
               padding: '12px 20px',
               borderLeft: view === 'split' ? '1px solid var(--border, #e5e7eb)' : 'none',
               background: 'var(--surface-alt, #f9fafb)',
               minWidth: 0,
+              overflowY: 'auto',
             }}
           >
-            <div
-            className="markdown-body"
-            dangerouslySetInnerHTML={{
-              __html: renderMarkdown(content) || (path ? '' : '<p><em>选择文件后预览将显示在此</em></p>'),
-            }}
-          />
+            {content.trim() ? (
+              <MarkdownView body={content} />
+            ) : (
+              <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                {path ? '空文件' : '选择文件后预览将显示在此'}
+              </p>
+            )}
           </div>
         )}
       </div>

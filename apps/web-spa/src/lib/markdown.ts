@@ -14,6 +14,17 @@ import markdownItTaskLists from 'markdown-it-task-lists';
 
 export type WikilinkTarget = 'contact' | 'project' | 'action' | 'event' | 'interaction';
 
+// Lowercase + replace whitespace with `-`, strip chars markdown-it can't render
+// in an id attribute. Used both by markdown-it's heading renderer (to set
+// `id` attrs on <h1>/<h2>/<h3>) and by the TOC parser (to look up the right
+// element when clicking a heading in the outline pane).
+export function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9一-鿿\u3400-\u4dbf_-]/g, '');
+}
+
 const md = new MarkdownIt({
   html: false,
   linkify: true,
@@ -28,6 +39,21 @@ const md = new MarkdownIt({
     headerless: false,
   })
   .use(markdownItTaskLists, { enabled: false });
+
+// Add id="<slug>" to heading tokens so the TOC outline can scrollIntoView
+// the matching element in the preview pane. markdown-it's built-in
+// slugify option only fires when there's a render override that reads it;
+// this is the supported way to add anchor ids.
+const origHeadingOpen = md.renderer.rules.heading_open ?? null;
+md.renderer.rules.heading_open = function (tokens, idx, options, env, slf) {
+  const token = tokens[idx];
+  const text = tokens[idx + 1]?.content ?? '';
+  const id = slugifyHeading(text);
+  if (id) token.attrSet('id', id);
+  return origHeadingOpen
+    ? origHeadingOpen(tokens, idx, options, env, slf)
+    : slf.renderToken(tokens, idx, options);
+};
 
 md.inline.ruler.after('emphasis', 'wikilink', (state, silent) => {
   const start = state.pos;

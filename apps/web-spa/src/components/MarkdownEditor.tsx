@@ -21,6 +21,7 @@ import {
   historyKeymap,
   indentWithTab,
 } from '@codemirror/commands';
+import { Prec } from '@codemirror/state';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import {
   bracketMatching,
@@ -37,6 +38,8 @@ export interface MarkdownEditorHandle {
   focus: () => void;
   getView: () => EditorView | null;
   runAction: (action: ToolbarAction) => void;
+  /** Scroll editor so the given 0-indexed source line is near the top. */
+  scrollToLine: (line: number) => void;
 }
 
 interface MarkdownEditorProps {
@@ -47,6 +50,8 @@ interface MarkdownEditorProps {
   hideToolbar?: boolean;
   /** When false, suppress the live word/char count footer. */
   showWordCount?: boolean;
+  /** Fires on ⌘S / Ctrl+S. Return `true` if handled to suppress the browser save dialog. */
+  onSave?: () => boolean | void;
 }
 
 interface EditorStats {
@@ -328,7 +333,11 @@ function insertImage() {
   };
 }
 
-function buildState(doc: string, readOnly: boolean): EditorState {
+function buildState(
+  doc: string,
+  readOnly: boolean,
+  onSave?: () => boolean | void,
+): EditorState {
   return EditorState.create({
     doc,
     extensions: [
@@ -359,6 +368,19 @@ function buildState(doc: string, readOnly: boolean): EditorState {
         { key: 'Mod-Shift-ArrowUp', run: moveSelectedLines(-1) },
         { key: 'Mod-Shift-ArrowDown', run: moveSelectedLines(1) },
       ]),
+      ...(onSave
+        ? [
+            Prec.highest(
+              keymap.of([
+                {
+                  key: 'Mod-s',
+                  preventDefault: true,
+                  run: () => onSave() !== false,
+                },
+              ]),
+            ),
+          ]
+        : []),
       markdown({ base: markdownLanguage, codeLanguages: () => null }),
       markdownPreview,
       EditorView.lineWrapping,
@@ -433,7 +455,15 @@ function runToolbarAction(view: EditorView, action: ToolbarAction): void {
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
   function MarkdownEditor(
-    { value, onChange, readOnly, minHeight = 360, hideToolbar = false, showWordCount = true },
+    {
+      value,
+      onChange,
+      readOnly,
+      minHeight = 360,
+      hideToolbar = false,
+      showWordCount = true,
+      onSave,
+    },
     ref,
   ) {
     const hostRef = useRef<HTMLDivElement | null>(null);
@@ -441,6 +471,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const readOnlyComp = useRef(new Compartment());
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
+    const onSaveRef = useRef(onSave);
+    onSaveRef.current = onSave;
     const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
     const [slashMenu, setSlashMenu] = useState<{
       x: number;
@@ -453,7 +485,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     useEffect(() => {
       if (!hostRef.current) return;
       const view = new EditorView({
-        state: buildState(value, !!readOnly),
+        state: buildState(value, !!readOnly, onSave),
         parent: hostRef.current,
       });
       viewRef.current = view;
@@ -567,6 +599,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           const view = viewRef.current;
           if (!view) return;
           runToolbarAction(view, action);
+        },
+        scrollToLine: (line) => {
+          const view = viewRef.current;
+          if (!view) return;
+          const total = view.state.doc.lines;
+          const oneBased = Math.max(1, Math.min(total, line + 1));
+          const lineInfo = view.state.doc.line(oneBased);
+          view.dispatch({
+            effects: EditorView.scrollIntoView(lineInfo.from, { y: 'start' }),
+          });
         },
       }),
       [],
