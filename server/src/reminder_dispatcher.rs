@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use sqlx::PgPool;
 
+use crate::handlers::now_str;
+
 // Server-side fallback; client's ReminderPoller normally owns dispatch.
 async fn dispatch_due_reminders(pool: &PgPool) -> Result<usize, sqlx::Error> {
-    let now_rfc3339 = chrono::Utc::now().to_rfc3339();
+    let now_rfc3339 = now_str();
     let rows: Vec<(String,)> = sqlx::query_as(
         "UPDATE reminder SET dispatched = true \
          WHERE dispatched = false AND dismissed = false \

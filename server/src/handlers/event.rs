@@ -25,7 +25,7 @@ fn compute_trigger_at(start_at: &str, lead_minutes: i64) -> Option<String> {
                 .ok()
                 .map(|n| n.and_utc())
         })?;
-    Some((dt - chrono::Duration::minutes(i64::from(lead_minutes))).to_rfc3339())
+    Some((dt - chrono::Duration::minutes(i64::from(lead_minutes))).to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
 }
 
 /// Derive (or update) the `kind='time'` reminder row for an event.
@@ -814,13 +814,13 @@ mod tests {
     #[test]
     fn test_compute_trigger_at_rfc3339() {
         let result = compute_trigger_at("2026-08-15T10:00:00+00:00", 15);
-        assert_eq!(result, Some("2026-08-15T09:45:00+00:00".to_string()));
+        assert_eq!(result, Some("2026-08-15T09:45:00.000Z".to_string()));
     }
 
     #[test]
     fn test_compute_trigger_at_space_format() {
         let result = compute_trigger_at("2026-08-15 10:00:00", 30);
-        assert_eq!(result, Some("2026-08-15T09:30:00+00:00".to_string()));
+        assert_eq!(result, Some("2026-08-15T09:30:00.000Z".to_string()));
     }
 
     #[test]
