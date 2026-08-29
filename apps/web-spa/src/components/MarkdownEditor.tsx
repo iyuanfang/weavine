@@ -73,6 +73,26 @@ const slashChoices: SlashChoice[] = [
   { key: 'divider', label: '分隔线', hint: '', insert: '\n---\n' },
 ];
 
+function wrapKeymap(before: string, after?: string) {
+  const afterStr = after ?? before;
+  return (view: EditorView): boolean => {
+    if (view.state.readOnly) return false;
+    const sel = view.state.selection.main;
+    const selected = view.state.sliceDoc(sel.from, sel.to);
+    const text = selected
+      ? `${before}${selected}${afterStr}`
+      : `${before}${afterStr}`;
+    view.dispatch({
+      changes: { from: sel.from, to: sel.to, insert: text },
+      selection: {
+        anchor: sel.from + before.length,
+        head: sel.from + before.length + selected.length,
+      },
+    });
+    return true;
+  };
+}
+
 function buildState(doc: string, readOnly: boolean): EditorState {
   return EditorState.create({
     doc,
@@ -85,7 +105,16 @@ function buildState(doc: string, readOnly: boolean): EditorState {
       indentOnInput(),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       highlightActiveLine(),
-      keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+      keymap.of([
+        ...defaultKeymap,
+        ...historyKeymap,
+        indentWithTab,
+        { key: 'Mod-b', run: wrapKeymap('**') },
+        { key: 'Mod-B', run: wrapKeymap('**') },
+        { key: 'Mod-i', run: wrapKeymap('*') },
+        { key: 'Mod-I', run: wrapKeymap('*') },
+        { key: 'Mod-k', run: wrapKeymap('[', '](https://)') },
+      ]),
       markdown({ base: markdownLanguage, codeLanguages: () => null }),
       markdownPreview,
       EditorView.lineWrapping,
