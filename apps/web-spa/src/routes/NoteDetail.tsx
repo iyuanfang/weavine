@@ -451,7 +451,7 @@ export function NoteNew() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey) {
+if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setMode((m) => (m === 'edit' ? 'split' : m === 'split' ? 'preview' : 'edit'));
       }
@@ -755,7 +755,7 @@ export function NoteDetail() {
         e.preventDefault();
         void persist({ force: true });
       }
-if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey) {
+if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setMode((m) => (m === 'edit' ? 'split' : m === 'split' ? 'preview' : 'edit'));
       }

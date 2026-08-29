@@ -66,22 +66,22 @@ interface SlashChoice {
 }
 
 const slashChoices: SlashChoice[] = [
-  { key: 'h1', label: '一级标题', hint: '⌘1', insert: '# 标题\n', category: 'heading' },
-  { key: 'h2', label: '二级标题', hint: '⌘2', insert: '## 标题\n', category: 'heading' },
-  { key: 'h3', label: '三级标题', hint: '⌘3', insert: '### 标题\n', category: 'heading' },
+  { key: 'h1', label: '一级标题', hint: '', insert: '# 标题\n', category: 'heading' },
+  { key: 'h2', label: '二级标题', hint: '', insert: '## 标题\n', category: 'heading' },
+  { key: 'h3', label: '三级标题', hint: '', insert: '### 标题\n', category: 'heading' },
   { key: 'b', label: '加粗', hint: '⌘B', insert: '**加粗**', category: 'inline' },
   { key: 'i', label: '斜体', hint: '⌘I', insert: '*斜体*', category: 'inline' },
-  { key: 's', label: '删除线', hint: '⌘⇧S', insert: '~~删除线~~', category: 'inline' },
+  { key: 's', label: '删除线', hint: '⌘⇧X', insert: '~~删除线~~', category: 'inline' },
   { key: 'mark', label: '高亮', hint: '⌘⇧H', insert: '==高亮==', category: 'inline' },
-  { key: 'code', label: '行内代码', hint: '⇧⌘E', insert: '`代码`', category: 'inline' },
+  { key: 'code', label: '行内代码', hint: '⌘⇧E', insert: '`代码`', category: 'inline' },
   { key: 'link', label: '链接', hint: '⌘K', insert: '[文字](https://)', category: 'inline' },
-  { key: 'image', label: '图片', hint: '⌘⇧I', insert: '![描述](https://)', category: 'inline' },
-  { key: 'codeblock', label: '代码块', hint: '⌘⇧K', insert: '```\n\n```\n', category: 'block' },
-  { key: 'quote', label: '引用', hint: '⌘⇧9', insert: '> 引用\n', category: 'block' },
-  { key: 'ul', label: '无序列表', hint: '⌘⇧]', insert: '- 项目\n- 项目\n', category: 'block' },
-  { key: 'ol', label: '有序列表', hint: '⌘⇧[', insert: '1. 项目\n2. 项目\n', category: 'block' },
-  { key: 'check', label: '待办', hint: '⌘⇧.', insert: '- [ ] 待办\n', category: 'block' },
-  { key: 'table', label: '表格', hint: '⌘⇧T', insert: '| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n', category: 'block' },
+  { key: 'image', label: '图片', hint: '', insert: '![描述](https://)', category: 'inline' },
+  { key: 'codeblock', label: '代码块', hint: '', insert: '```\n\n```\n', category: 'block' },
+  { key: 'quote', label: '引用', hint: '', insert: '> 引用\n', category: 'block' },
+  { key: 'ul', label: '无序列表', hint: '', insert: '- 项目\n- 项目\n', category: 'block' },
+  { key: 'ol', label: '有序列表', hint: '', insert: '1. 项目\n2. 项目\n', category: 'block' },
+  { key: 'check', label: '待办', hint: '', insert: '- [ ] 待办\n', category: 'block' },
+  { key: 'table', label: '表格', hint: '', insert: '| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n', category: 'block' },
   { key: 'divider', label: '分隔线', hint: '', insert: '\n---\n', category: 'block' },
 ];
 
@@ -135,58 +135,6 @@ function toggleWrap(before: string, after?: string) {
         anchor: sel.from + before.length,
         head: sel.from + before.length + selected.length,
       },
-    });
-    return true;
-  };
-}
-
-function toggleLinePrefix(prefix: string) {
-  return (view: EditorView): boolean => {
-    if (view.state.readOnly) return false;
-    const sel = view.state.selection.main;
-    const startLine = view.state.doc.lineAt(sel.from);
-    const endLine = view.state.doc.lineAt(sel.to);
-    const changes: { from: number; to: number; insert: string }[] = [];
-    let cursorShift = 0;
-    for (let n = startLine.number; n <= endLine.number; n++) {
-      const line = view.state.doc.line(n);
-      const headingMatch = /^(#{1,6}) /.exec(line.text);
-      const hasExactPrefix = line.text.startsWith(prefix);
-      const removeLen = headingMatch ? headingMatch[0].length : 0;
-      const insert = hasExactPrefix ? '' : prefix;
-      changes.push({ from: line.from, to: line.from + removeLen, insert });
-      if (line.from <= sel.head && sel.head <= line.to) {
-        cursorShift = insert.length - removeLen;
-      }
-    }
-    view.dispatch({
-      changes,
-      selection: { anchor: sel.anchor + cursorShift, head: sel.head + cursorShift },
-    });
-    return true;
-  };
-}
-
-function demoteHeading() {
-  return (view: EditorView): boolean => {
-    if (view.state.readOnly) return false;
-    const sel = view.state.selection.main;
-    const startLine = view.state.doc.lineAt(sel.from);
-    const endLine = view.state.doc.lineAt(sel.to);
-    const changes: { from: number; to: number; insert: string }[] = [];
-    let cursorShift = 0;
-    for (let n = startLine.number; n <= endLine.number; n++) {
-      const line = view.state.doc.line(n);
-      const m = /^(#{1,6}) /.exec(line.text);
-      const removeLen = m ? m[0].length : 0;
-      changes.push({ from: line.from, to: line.from + removeLen, insert: '' });
-      if (line.from <= sel.head && sel.head <= line.to) {
-        cursorShift = -removeLen;
-      }
-    }
-    view.dispatch({
-      changes,
-      selection: { anchor: sel.anchor + cursorShift, head: sel.head + cursorShift },
     });
     return true;
   };
@@ -377,37 +325,20 @@ function buildState(doc: string, readOnly: boolean): EditorState {
         ...defaultKeymap,
         ...historyKeymap,
         indentWithTab,
-        { key: 'Mod-b', run: toggleWrap('**') },
+{ key: 'Mod-b', run: toggleWrap('**') },
         { key: 'Mod-B', run: toggleWrap('**') },
         { key: 'Mod-i', run: toggleWrap('*') },
         { key: 'Mod-I', run: toggleWrap('*') },
-{ key: 'Mod-k', run: toggleWrap('[', '](https://)') },
-  { key: 'Mod-Shift-e', run: toggleWrap('`') },
-  { key: 'Mod-Shift-E', run: toggleWrap('`') },
-  { key: 'Mod-Shift-s', run: toggleWrap('~~') },
-  { key: 'Mod-Shift-S', run: toggleWrap('~~') },
-  { key: 'Mod-Shift-h', run: toggleWrap('==') },
-  { key: 'Mod-Shift-H', run: toggleWrap('==') },
-        { key: 'Mod-Shift-k', run: toggleCodeBlock() },
-        { key: 'Mod-Shift-K', run: toggleCodeBlock() },
-        { key: 'Mod-Shift-t', run: insertTable() },
-        { key: 'Mod-Shift-T', run: insertTable() },
-        { key: 'Mod-Shift-i', run: insertImage() },
-        { key: 'Mod-Shift-I', run: insertImage() },
+        { key: 'Mod-k', run: toggleWrap('[', '](https://)') },
+        { key: 'Mod-Shift-x', run: toggleWrap('~~') },
+        { key: 'Mod-Shift-X', run: toggleWrap('~~') },
+        { key: 'Mod-Shift-h', run: toggleWrap('==') },
+        { key: 'Mod-Shift-H', run: toggleWrap('==') },
+        { key: 'Mod-Shift-e', run: toggleWrap('`') },
+        { key: 'Mod-Shift-E', run: toggleWrap('`') },
         { key: 'Mod-\\', run: clearFormatting },
         { key: 'Mod-Shift-ArrowUp', run: moveSelectedLines(-1) },
         { key: 'Mod-Shift-ArrowDown', run: moveSelectedLines(1) },
-        { key: 'Mod-1', run: toggleLinePrefix('# ') },
-        { key: 'Mod-2', run: toggleLinePrefix('## ') },
-        { key: 'Mod-3', run: toggleLinePrefix('### ') },
-        { key: 'Mod-4', run: toggleLinePrefix('#### ') },
-        { key: 'Mod-5', run: toggleLinePrefix('##### ') },
-        { key: 'Mod-6', run: toggleLinePrefix('###### ') },
-        { key: 'Mod-0', run: demoteHeading() },
-        { key: 'Mod-Shift-]', run: toggleLinePrefix('- ') },
-        { key: 'Mod-Shift-[', run: toggleLinePrefix('1. ') },
-        { key: 'Mod-Shift-9', run: toggleLinePrefix('> ') },
-        { key: 'Mod-Shift-.', run: toggleLinePrefix('- [ ] ') },
       ]),
       markdown({ base: markdownLanguage, codeLanguages: () => null }),
       markdownPreview,
@@ -672,24 +603,24 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 export function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) => void }) {
   return (
     <div className="md-editor-toolbar" data-testid="md-editor-toolbar">
-      <ToolbarBtn label="H1" title="一级标题 ⌘1" onClick={() => onAction({ kind: 'lineApply', insert: '# ' })} />
-      <ToolbarBtn label="H2" title="二级标题 ⌘2" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
-      <ToolbarBtn label="H3" title="三级标题 ⌘3" onClick={() => onAction({ kind: 'lineApply', insert: '### ' })} />
+      <ToolbarBtn label="H1" title="一级标题" onClick={() => onAction({ kind: 'lineApply', insert: '# ' })} />
+      <ToolbarBtn label="H2" title="二级标题" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
+      <ToolbarBtn label="H3" title="三级标题" onClick={() => onAction({ kind: 'lineApply', insert: '### ' })} />
       <ToolbarSep />
       <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
       <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
-      <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
+      <ToolbarBtn label="S" title="删除线 ⌘⇧X" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
       <ToolbarBtn label="M" title="高亮 ⌘⇧H" onClick={() => onAction({ kind: 'wrap', before: '==', after: '==' })} />
-      <ToolbarBtn label="</>" title="行内代码 ⇧⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
-      <ToolbarBtn label="{}" title="代码块 ⌘⇧K" onClick={() => onAction({ kind: 'codeBlock' })} />
+      <ToolbarBtn label="</>" title="行内代码 ⌘⇧E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
+      <ToolbarBtn label="{}" title="代码块" onClick={() => onAction({ kind: 'codeBlock' })} />
       <ToolbarSep />
       <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
-      <ToolbarBtn label="🖼" title="图片 ⌘⇧I" onClick={() => onAction({ kind: 'image' })} />
-      <ToolbarBtn label="❝" title="引用 ⌘⇧9" onClick={() => onAction({ kind: 'lineApply', insert: '> ' })} />
-      <ToolbarBtn label="•" title="无序列表 ⌘⇧]" onClick={() => onAction({ kind: 'lineApply', insert: '- ' })} />
-      <ToolbarBtn label="1." title="有序列表 ⌘⇧[" onClick={() => onAction({ kind: 'lineApply', insert: '1. ' })} />
-      <ToolbarBtn label="☑" title="待办 ⌘⇧." onClick={() => onAction({ kind: 'lineApply', insert: '- [ ] ' })} />
-      <ToolbarBtn label="⊞" title="表格 ⌘⇧T" onClick={() => onAction({ kind: 'table' })} />
+      <ToolbarBtn label="🖼" title="图片" onClick={() => onAction({ kind: 'image' })} />
+      <ToolbarBtn label="❝" title="引用" onClick={() => onAction({ kind: 'lineApply', insert: '> ' })} />
+      <ToolbarBtn label="•" title="无序列表" onClick={() => onAction({ kind: 'lineApply', insert: '- ' })} />
+      <ToolbarBtn label="1." title="有序列表" onClick={() => onAction({ kind: 'lineApply', insert: '1. ' })} />
+      <ToolbarBtn label="☑" title="待办" onClick={() => onAction({ kind: 'lineApply', insert: '- [ ] ' })} />
+      <ToolbarBtn label="⊞" title="表格" onClick={() => onAction({ kind: 'table' })} />
       <ToolbarSep />
       <ToolbarBtn label="—" title="分隔线" onClick={() => onAction({ kind: 'line', insert: '\n---\n' })} />
       <ToolbarBtn label="×" title="清除格式 ⌘\" onClick={() => onAction({ kind: 'clearFormatting' })} />
@@ -725,11 +656,11 @@ function BubbleToolbar({ x, y, onAction }: { x: number; y: number; onAction: (a:
     >
       <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
       <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
-      <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
-      <ToolbarBtn label="</>" title="行内代码 ⇧⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
+      <ToolbarBtn label="S" title="删除线 ⌘⇧X" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
+      <ToolbarBtn label="</>" title="行内代码 ⌘⇧E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
       <ToolbarSep />
       <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
-      <ToolbarBtn label="H2" title="二级标题 ⌘2" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
+      <ToolbarBtn label="H2" title="二级标题" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
     </div>
   );
 }
