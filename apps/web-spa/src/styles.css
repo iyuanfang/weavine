@@ -2500,6 +2500,23 @@ textarea.input-base {
   padding: 0 4px;
 }
 
+.md-editor-footer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border, #e5e7eb);
+  background: var(--surface-muted, #f9fafb);
+  color: var(--fg-muted, #6b7280);
+  font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
+  font-size: 12px;
+  user-select: none;
+  border-radius: 0 0 6px 6px;
+}
+.md-editor-footer__sep {
+  opacity: 0.4;
+}
+
 .cm-md-faint {
   opacity: 0.32;
 }

@@ -45,6 +45,25 @@ interface MarkdownEditorProps {
   readOnly?: boolean;
   minHeight?: number;
   hideToolbar?: boolean;
+  /** When false, suppress the live word/char count footer. */
+  showWordCount?: boolean;
+}
+
+interface EditorStats {
+  cjk: number;
+  words: number;
+  chars: number;
+  lines: number;
+}
+
+function computeStats(text: string): EditorStats {
+  const cjkMatches = text.match(/[\u3400-\u4DBF\u4E00-\u9FFF]/g);
+  const cjk = cjkMatches ? cjkMatches.length : 0;
+  const wordMatches = text.match(/[A-Za-z0-9][A-Za-z0-9_'\-]*[A-Za-z0-9]|[A-Za-z0-9]/g);
+  const words = wordMatches ? wordMatches.length : 0;
+  const chars = text.length;
+  const lines = text.length === 0 ? 0 : text.split('\n').length;
+  return { cjk, words, chars, lines };
 }
 
 type ToolbarAction =
@@ -413,7 +432,10 @@ function runToolbarAction(view: EditorView, action: ToolbarAction): void {
 }
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, onChange, readOnly, minHeight = 360, hideToolbar = false }, ref) {
+  function MarkdownEditor(
+    { value, onChange, readOnly, minHeight = 360, hideToolbar = false, showWordCount = true },
+    ref,
+  ) {
     const hostRef = useRef<HTMLDivElement | null>(null);
     const viewRef = useRef<EditorView | null>(null);
     const readOnlyComp = useRef(new Compartment());
@@ -426,6 +448,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       query: string;
       lineStart: number;
     } | null>(null);
+    const [stats, setStats] = useState<EditorStats>(() => computeStats(value));
 
     useEffect(() => {
       if (!hostRef.current) return;
@@ -434,8 +457,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         parent: hostRef.current,
       });
       viewRef.current = view;
+      setStats(computeStats(view.state.doc.toString()));
 
-      const handler = (e: Event) => onChangeRef.current((e as CustomEvent<string>).detail);
+      const handler = (e: Event) => {
+        const next = (e as CustomEvent<string>).detail;
+        setStats(computeStats(next));
+        onChangeRef.current(next);
+      };
       view.dom.addEventListener('markdown-change', handler);
 
       const refresh = () => {
@@ -574,6 +602,17 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           data-testid="markdown-editor"
           style={{ minHeight } as CSSProperties}
         />
+        {!readOnly && showWordCount && (
+          <div className="md-editor-footer" data-testid="md-editor-footer">
+            <span>中文 {stats.cjk}</span>
+            <span className="md-editor-footer__sep">·</span>
+            <span>词 {stats.words}</span>
+            <span className="md-editor-footer__sep">·</span>
+            <span>字符 {stats.chars}</span>
+            <span className="md-editor-footer__sep">·</span>
+            <span>行 {stats.lines}</span>
+          </div>
+        )}
         {selectionMenu && !slashMenu && !readOnly && (
           <BubbleToolbar
             x={selectionMenu.x}
