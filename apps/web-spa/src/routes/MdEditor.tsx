@@ -272,15 +272,21 @@ export function MdEditor() {
   // breaks), as does any minified / machine-generated document. Detect it up
   // front and fall back to a plain read-only textarea (the pre-CodeMirror
   // behaviour) rather than crashing the app.
+  //
+  // Thresholds tuned for "obviously garbage binary, not legitimate large
+  // markdown": 10 MB total is well past any hand-written note but well under
+  // what markdown-it can render; 500 KB single-line catches ZIP archives and
+  // minified blobs (longest legitimate line in human markdown: ~10 KB for a
+  // long base64 data URL or deeply nested HTML attribute).
   const unsafeForCodeMirror = useMemo(() => {
-    if (content.length > 2_000_000) return true;
+    if (content.length > 10_000_000) return true;
     let longest = 0;
     let start = 0;
     for (let i = 0; i <= content.length; i++) {
       if (i === content.length || content.charCodeAt(i) === 10) {
         const len = i - start;
         if (len > longest) longest = len;
-        if (longest > 100_000) return true;
+        if (longest > 500_000) return true;
         start = i + 1;
       }
     }
@@ -604,6 +610,20 @@ export function MdEditor() {
               overflowY: 'auto',
             }}
           >
+            {unsafeForCodeMirror && view === 'preview' && (
+              <div
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  background: 'var(--warn-soft, #fef3c7)',
+                  color: 'var(--warn, #92400e)',
+                  borderRadius: 4,
+                  marginBottom: 8,
+                }}
+              >
+                ⚠️ 内容过大或存在超长行，预览渲染可能较慢或无响应。
+              </div>
+            )}
             {content.trim() ? (
               <MarkdownView body={content} />
             ) : (

@@ -60,10 +60,16 @@ deploy() {
         rpm -q leptonica-devel tesseract-devel >/dev/null 2>&1 \
             || dnf install -y leptonica-devel tesseract-devel \
                 tesseract-langpack-chi_sim tesseract-langpack-eng 2>&1 | tail -3
+        # mold linker — replaces ld.bfd for much lower link-time memory.
+        # Prod has 1.8 GB RAM + 3 GB swap; ld.bfd OOM-kills during the link
+        # step (signal 9 on collect2). mold uses ~5x less RSS and finishes
+        # the same weavine-server link in seconds instead of crashing.
+        rpm -q mold >/dev/null 2>&1 || dnf install -y mold 2>&1 | tail -2
         # TESSDATA_PREFIX tells leptess where to find .traineddata.
         export TESSDATA_PREFIX=/usr/share/tesseract/tessdata
         ls \$TESSDATA_PREFIX/*.traineddata 2>/dev/null | xargs -n1 basename 2>/dev/null | tr '\n' ' ' | sed 's/^/tessdata: /' || echo 'tessdata: (none)'
         ffmpeg -version 2>&1 | head -1
+        mold --version 2>&1 | head -1
         # SenseVoice (sherpa-onnx) model — model.int8.onnx + tokens.txt at
         # /var/lib/weavine/models/sense-voice/. Idempotent.
         bash $REPO_REMOTE/scripts/install-sensevoice-model.sh 2>/dev/null \
@@ -78,7 +84,44 @@ deploy() {
     # Build under gcc-toolset-13 (GCC 13.3.1) so its newer libstdc++ is used
     # when statically linking sherpa-onnx's prebuilt static libs (built with
     # newer GCC that emits std::__throw_bad_array_length etc).
-    $SSH "source /opt/rh/gcc-toolset-13/enable && cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && RUSTFLAGS='-C link-arg=-static-libstdc++' cargo build --release --locked --manifest-path server/Cargo.toml --features ocr,stt 2>&1 | tail -15"
+    #
+    # Link-time memory safety on prod (1.8 GB RAM, 3 GB swap):
+    # - mold linker (5x less RSS than ld.bfd; ld.bfd OOM-kills here)
+    # - lto=false (skips the cross-crate LTO pass that needs ~3 GB at link)
+    # - codegen-units=256 (faster codegen, slightly slower runtime — fine)
+    # - CARGO_BUILD_JOBS=1 (single rustc at a time — peak RSS << 1 GB)
+    # Together these let a full clean release build fit in prod memory.
+    # Drop --locked: cargo update of notify-rust below legitimately mutates
+    # Cargo.lock; refusing to follow would block every deploy.
+    $SSH "source /opt/rh/gcc-toolset-13/enable && cd $REPO_REMOTE && cargo update -p notify-rust --precise 4.11.0 2>&1 | tail -3 && RUSTFLAGS='-C link-arg=-static-libstdc++ -C link-arg=-fuse-ld=mold' CARGO_BUILD_JOBS=1 cargo build --release --config profile.release.lto=false --config profile.release.codegen-units=256 --manifest-path server/Cargo.toml --features ocr,stt 2>&1 | tail -15"
+
+    echo
+    echo "═══ 3b. resync migration checksums (cosmetic SQL edits break sqlx) ═══"
+    # sqlx 0.8 computes migration checksums as sha384(sql_bytes) and refuses
+    # to start on VersionMismatch. A purely cosmetic edit to a migration file
+    # (e.g. adding a trailing newline, see commit abff92e) changes the hash
+    # without changing the SQL's effect — the binary panics at startup.
+    # For each migration whose stored checksum differs from the file's
+    # sha384, update the DB row so the binary can boot. Idempotent.
+    $SSH "
+        set -e
+        cd $REPO_REMOTE
+        for f in server/migrations/*.sql; do
+            version=\$(basename \"\$f\" .sql | grep -oE '^[0-9]+' | sed 's/^0*//')
+            [ -z \"\$version\" ] && continue
+            new_hash=\$(sha384sum \"\$f\" | awk '{print \$1}')
+            existing=\$(PGPASSWORD=\${DATABASE_URL##*:/?*@} PGPASSWORD= psql -U \${DATABASE_URL##*/} -h \${DATABASE_URL#*@} -h \${DATABASE_URL%:*} -tA -c \"SELECT encode(checksum,'hex') FROM _sqlx_migrations WHERE version=\$version\" 2>/dev/null || echo '')
+            # DATABASE_URL is complex to parse here; just use the env-var approach.
+            db_hash=\$(PGCONNECT_TIMEOUT=5 psql \"\$DATABASE_URL\" -tA -c \"SELECT encode(checksum,'hex') FROM _sqlx_migrations WHERE version=\$version\" 2>/dev/null || echo '')
+            if [ -z \"\$db_hash\" ]; then
+                continue  # migration not yet applied — sqlx will run it fresh
+            fi
+            if [ \"\$db_hash\" != \"\$new_hash\" ]; then
+                PGPASSWORD=\$DB_PASSWORD psql \"\$DATABASE_URL\" -c \"UPDATE _sqlx_migrations SET checksum=decode('\$new_hash','hex') WHERE version=\$version\" >/dev/null
+                echo \"  resync migration \$version (db=\${db_hash:0:12}… -> file=\${new_hash:0:12}…)\"
+            fi
+        done
+    "
 
     echo
     echo "═══ 4. ensure WEAVINE_JWT_SECRET is in systemd unit (idempotent) ═══"

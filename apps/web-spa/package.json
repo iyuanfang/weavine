@@ -9,6 +9,8 @@
     "build": "pnpm exec tsc --noEmit && pnpm exec vite build",
     "build:tauri": "node ./scripts/build.mjs",
     "typecheck": "pnpm exec tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -43,6 +45,7 @@
     "@vitejs/plugin-react": "^4",
     "cross-env": "^7.0.3",
     "typescript": "^5",
-    "vite": "^5"
+    "vite": "^5",
+    "vitest": "^1.6.1"
   }
 }
