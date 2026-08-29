@@ -452,6 +452,8 @@ export function NoteNew() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
 if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+        // Inside the editor ⌘E wraps inline code (Obsidian convention) — let CodeMirror handle it.
+        if ((e.target as HTMLElement | null)?.closest('.md-editor-host')) return;
         e.preventDefault();
         setMode((m) => (m === 'edit' ? 'split' : m === 'split' ? 'preview' : 'edit'));
       }
@@ -748,6 +750,8 @@ export function NoteDetail() {
         void persist({ force: true });
       }
 if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+        // Inside the editor ⌘E wraps inline code (Obsidian convention) — let CodeMirror handle it.
+        if ((e.target as HTMLElement | null)?.closest('.md-editor-host')) return;
         e.preventDefault();
         setMode((m) => (m === 'edit' ? 'split' : m === 'split' ? 'preview' : 'edit'));
       }
