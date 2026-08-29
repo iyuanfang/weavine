@@ -53,6 +53,8 @@ type ToolbarAction =
   | { kind: 'lineApply'; insert: string }
   | { kind: 'link' }
   | { kind: 'codeBlock' }
+  | { kind: 'image' }
+  | { kind: 'table' }
   | { kind: 'clearFormatting' };
 
 interface SlashChoice {
@@ -73,11 +75,13 @@ const slashChoices: SlashChoice[] = [
   { key: 'mark', label: '高亮', hint: '⌘⇧H', insert: '==高亮==', category: 'inline' },
   { key: 'code', label: '行内代码', hint: '⇧⌘E', insert: '`代码`', category: 'inline' },
   { key: 'link', label: '链接', hint: '⌘K', insert: '[文字](https://)', category: 'inline' },
+  { key: 'image', label: '图片', hint: '⌘⇧I', insert: '![描述](https://)', category: 'inline' },
   { key: 'codeblock', label: '代码块', hint: '⌘⇧K', insert: '```\n\n```\n', category: 'block' },
   { key: 'quote', label: '引用', hint: '⌘⇧9', insert: '> 引用\n', category: 'block' },
   { key: 'ul', label: '无序列表', hint: '⌘⇧]', insert: '- 项目\n- 项目\n', category: 'block' },
   { key: 'ol', label: '有序列表', hint: '⌘⇧[', insert: '1. 项目\n2. 项目\n', category: 'block' },
   { key: 'check', label: '待办', hint: '⌘⇧.', insert: '- [ ] 待办\n', category: 'block' },
+  { key: 'table', label: '表格', hint: '⌘⇧T', insert: '| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n', category: 'block' },
   { key: 'divider', label: '分隔线', hint: '', insert: '\n---\n', category: 'block' },
 ];
 
@@ -311,6 +315,52 @@ function moveSelectedLines(dir: -1 | 1) {
   };
 }
 
+function buildTable(cols: number, rows: number): string {
+  const headerCells = Array.from({ length: cols }, (_, i) => ` 列${i + 1} `).join('|');
+  const sep = Array.from({ length: cols }, () => ' --- ').join('|');
+  const bodyRows = Array.from({ length: rows - 1 }, () =>
+    Array.from({ length: cols }, () => '     ').join('|'),
+  );
+  return `|${headerCells}|\n|${sep}|\n${bodyRows.map((r) => `|${r}|`).join('\n')}\n`;
+}
+
+function insertTable(rows = 3, cols = 3) {
+  return (view: EditorView): boolean => {
+    if (view.state.readOnly) return false;
+    const sel = view.state.selection.main;
+    const line = view.state.doc.lineAt(sel.head);
+    const atLineStart = line.from;
+    const text = buildTable(cols, rows);
+    const needsLeadingNewline = atLineStart > 0 && view.state.sliceDoc(atLineStart - 1, atLineStart) !== '\n';
+    const insert = `${needsLeadingNewline ? '\n' : ''}${text}`;
+    view.dispatch({
+      changes: { from: atLineStart, insert },
+      selection: { anchor: atLineStart + insert.length - 1 },
+    });
+    view.focus();
+    return true;
+  };
+}
+
+function insertImage() {
+  return (view: EditorView): boolean => {
+    if (view.state.readOnly) return false;
+    const sel = view.state.selection.main;
+    const altText = sel.empty ? '' : view.state.sliceDoc(sel.from, sel.to);
+    const snippet = `![${altText}](https://)`;
+    if (sel.empty) {
+      view.dispatch({
+        changes: { from: sel.head, insert: snippet },
+        selection: { anchor: sel.head + 2, head: sel.head + 2 },
+      });
+    } else {
+      view.dispatch({ changes: { from: sel.from, to: sel.to, insert: snippet } });
+    }
+    view.focus();
+    return true;
+  };
+}
+
 function buildState(doc: string, readOnly: boolean): EditorState {
   return EditorState.create({
     doc,
@@ -340,6 +390,10 @@ function buildState(doc: string, readOnly: boolean): EditorState {
   { key: 'Mod-Shift-H', run: toggleWrap('==') },
         { key: 'Mod-Shift-k', run: toggleCodeBlock() },
         { key: 'Mod-Shift-K', run: toggleCodeBlock() },
+        { key: 'Mod-Shift-t', run: insertTable() },
+        { key: 'Mod-Shift-T', run: insertTable() },
+        { key: 'Mod-Shift-i', run: insertImage() },
+        { key: 'Mod-Shift-I', run: insertImage() },
         { key: 'Mod-\\', run: clearFormatting },
         { key: 'Mod-Shift-ArrowUp', run: moveSelectedLines(-1) },
         { key: 'Mod-Shift-ArrowDown', run: moveSelectedLines(1) },
@@ -392,6 +446,14 @@ function runToolbarAction(view: EditorView, action: ToolbarAction): void {
     case 'clearFormatting': {
       clearFormatting(view);
       view.focus();
+      return;
+    }
+    case 'table': {
+      insertTable()(view);
+      return;
+    }
+    case 'image': {
+      insertImage()(view);
       return;
     }
     case 'lineApply': {
@@ -622,10 +684,12 @@ export function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) 
       <ToolbarBtn label="{}" title="代码块 ⌘⇧K" onClick={() => onAction({ kind: 'codeBlock' })} />
       <ToolbarSep />
       <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
+      <ToolbarBtn label="🖼" title="图片 ⌘⇧I" onClick={() => onAction({ kind: 'image' })} />
       <ToolbarBtn label="❝" title="引用 ⌘⇧9" onClick={() => onAction({ kind: 'lineApply', insert: '> ' })} />
       <ToolbarBtn label="•" title="无序列表 ⌘⇧]" onClick={() => onAction({ kind: 'lineApply', insert: '- ' })} />
       <ToolbarBtn label="1." title="有序列表 ⌘⇧[" onClick={() => onAction({ kind: 'lineApply', insert: '1. ' })} />
       <ToolbarBtn label="☑" title="待办 ⌘⇧." onClick={() => onAction({ kind: 'lineApply', insert: '- [ ] ' })} />
+      <ToolbarBtn label="⊞" title="表格 ⌘⇧T" onClick={() => onAction({ kind: 'table' })} />
       <ToolbarSep />
       <ToolbarBtn label="—" title="分隔线" onClick={() => onAction({ kind: 'line', insert: '\n---\n' })} />
       <ToolbarBtn label="×" title="清除格式 ⌘\" onClick={() => onAction({ kind: 'clearFormatting' })} />
