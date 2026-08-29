@@ -1,5 +1,16 @@
 import MarkdownIt from 'markdown-it';
 import markdownItMark from 'markdown-it-mark';
+// Multimd-table supports GFM | col | col | syntax as well as MultiMarkdown
+// =-row alignment. It's the most maintained markdown-it table plugin and
+// matches what GitHub / Obsidian / Typora / VS Code render.
+import markdownItMultimdTable from 'markdown-it-multimd-table';
+// GFM task lists: `- [ ]` and `- [x]` render as <input type=checkbox>.
+// markdown-it-task-lists is the maintained fork that supports enabled:false
+// (read-only checkbox in rendered HTML).
+// GFM task lists: `- [ ]` and `- [x]` → <input type=checkbox disabled>.
+// enabled:false is required so the rendered preview is read-only (notes
+// are only edited from the CodeMirror side).
+import markdownItTaskLists from 'markdown-it-task-lists';
 
 export type WikilinkTarget = 'contact' | 'project' | 'action' | 'event' | 'interaction';
 
@@ -8,7 +19,15 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: false,
   typographer: false,
-}).use(markdownItMark);
+})
+  .use(markdownItMark)
+  .use(markdownItMultimdTable, {
+    // multiline: true is GFM (pipe-table allows line breaks inside cells)
+    multiline: false,
+    rowspan: false,
+    headerless: false,
+  })
+  .use(markdownItTaskLists, { enabled: false });
 
 md.inline.ruler.after('emphasis', 'wikilink', (state, silent) => {
   const start = state.pos;

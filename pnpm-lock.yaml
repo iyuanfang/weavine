@@ -80,6 +80,12 @@ importers:
       markdown-it-mark:
         specifier: ^4.0.0
         version: 4.0.0
+      markdown-it-multimd-table:
+        specifier: ^4.2.3
+        version: 4.2.3
+      markdown-it-task-lists:
+        specifier: ^2.1.1
+        version: 2.1.1
       react:
         specifier: ^18
         version: 18.3.1
@@ -1507,6 +1513,12 @@ packages:
 
   markdown-it-mark@4.0.0:
     resolution: {integrity: sha512-YLhzaOsU9THO/cal0lUjfMjrqSMPjjyjChYM7oyj4DnyaXEzA8gnW6cVJeyCrCVeyesrY2PlEdUYJSPFYL4Nkg==}
+
+  markdown-it-multimd-table@4.2.3:
+    resolution: {integrity: sha512-KepCr2OMJqm7IT6sOIbuqHGe+NERhgy66XMrc5lo6dHW7oaPzMDtYwR1EGwK16/blb6mCSg4jqityOe0o/H7HA==}
+
+  markdown-it-task-lists@2.1.1:
+    resolution: {integrity: sha512-TxFAc76Jnhb2OUu+n3yz9RMu4CwGfaT788br6HhEDlvWfdeJcLUsxk1Hgw2yJio0OXsxv7pyIPmvECY7bMbluA==}
 
   markdown-it@14.3.0:
     resolution: {integrity: sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==}
@@ -3658,6 +3670,10 @@ snapshots:
       source-map-js: 1.2.1
 
   markdown-it-mark@4.0.0: {}
+
+  markdown-it-multimd-table@4.2.3: {}
+
+  markdown-it-task-lists@2.1.1: {}
 
   markdown-it@14.3.0:
     dependencies:
