@@ -22,6 +22,7 @@ import { useAdapter } from '../lib/adapter';
 import { MarkdownEditor, type MarkdownEditorHandle } from '../components/MarkdownEditor';
 import { MarkdownView } from '../components/MarkdownView';
 import { parseTocHeadings } from '../lib/markdown-toc';
+import { siblingMdPath } from '../lib/md-path';
 import { usePageScrollLock } from '../lib/use-page-scroll-lock';
 
 export function MdEditor() {
@@ -143,13 +144,17 @@ export function MdEditor() {
         setParams({ path: selected });
         return;
       }
-      try {
-        const sibling = await adapter.md.convertSiblingMdPath(selected);
-        setParams({ path: sibling, external_path: selected });
-      } catch (convErr) {
-        setParams({ path: selected });
-        setInfo(`无法为 .${ext} 自动生成 .md 兄弟文件: ${String(convErr)}`);
-      }
+      // Compute the sibling path locally — the exact same logic the OS
+      // "Open With" path uses (mdEditorUrlFor in App.tsx) — so the in-app
+      // dialog and a double-click behave identically.
+      //
+      // Deliberately not falling back to `setParams({ path: selected })` when
+      // the lookup fails: `path` without `external_path` makes the editor call
+      // read_md_file() on the original binary, which decodes a .docx ZIP
+      // archive as text and crashes CodeMirror. If the sibling can't be
+      // determined we route through the converter regardless.
+      const sibling = siblingMdPath(selected);
+      setParams({ path: sibling, external_path: selected });
     } catch (e) {
       setError(String(e));
     }
@@ -260,6 +265,27 @@ export function MdEditor() {
 
   // Parse headings for the TOC sidebar via the shared helper.
   const tocHeadings = useMemo(() => parseTocHeadings(content), [content]);
+
+  // CodeMirror cannot survive an enormous single line — it hangs and can take
+  // the whole window down. That is exactly what a mis-decoded binary container
+  // looks like (a .docx is a ZIP archive: megabytes of U+FFFD with no line
+  // breaks), as does any minified / machine-generated document. Detect it up
+  // front and fall back to a plain read-only textarea (the pre-CodeMirror
+  // behaviour) rather than crashing the app.
+  const unsafeForCodeMirror = useMemo(() => {
+    if (content.length > 2_000_000) return true;
+    let longest = 0;
+    let start = 0;
+    for (let i = 0; i <= content.length; i++) {
+      if (i === content.length || content.charCodeAt(i) === 10) {
+        const len = i - start;
+        if (len > longest) longest = len;
+        if (longest > 100_000) return true;
+        start = i + 1;
+      }
+    }
+    return false;
+  }, [content]);
 
   const scrollToLine = useCallback((line: number) => {
     editorRef.current?.scrollToLine(line);
@@ -507,20 +533,63 @@ export function MdEditor() {
             className={view === 'split' ? 'md-edit-pane md-edit-pane--split' : 'md-edit-pane md-edit-pane--solo'}
             style={{ flex: 1, minWidth: 0, display: 'flex', minHeight: 0 }}
           >
-            <MarkdownEditor
-              ref={editorRef}
-              value={content}
-              hideToolbar={false}
-              showWordCount={false}
-              onChange={(next) => {
-                setContent(next);
-                setDirty(true);
-              }}
-              onSave={() => {
-                saveFile(false);
-                return true;
-              }}
-            />
+            {unsafeForCodeMirror ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minWidth: 0,
+                  minHeight: 0,
+                }}
+              >
+                <div
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    background: 'var(--warn-soft, #fef3c7)',
+                    color: 'var(--warn, #92400e)',
+                    flexShrink: 0,
+                  }}
+                >
+                  ⚠️ 内容过大或存在超长行，已切换为<strong>只读</strong>纯文本预览，以免编辑器崩溃。
+                </div>
+                <textarea
+                  value={content}
+                  readOnly
+                  spellCheck={false}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: 'none',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    background: 'var(--surface, #fff)',
+                    color: 'var(--text, #111)',
+                    minWidth: 0,
+                    minHeight: 0,
+                  }}
+                />
+              </div>
+            ) : (
+              <MarkdownEditor
+                ref={editorRef}
+                value={content}
+                hideToolbar={false}
+                showWordCount={false}
+                onChange={(next) => {
+                  setContent(next);
+                  setDirty(true);
+                }}
+                onSave={() => {
+                  saveFile(false);
+                  return true;
+                }}
+              />
+            )}
           </div>
         )}
         {(view === 'preview' || view === 'split') && (

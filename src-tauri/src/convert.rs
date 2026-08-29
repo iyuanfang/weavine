@@ -54,6 +54,16 @@ impl SourceFormat {
         }
     }
 
+    /// True for container / binary formats that have no meaningful plain-text
+    /// rendering. Running `from_utf8_lossy` over a .docx (a ZIP archive) or a
+    /// .pdf yields megabytes of U+FFFD on effectively a single line, which
+    /// crashes CodeMirror outright once the md editor loads it. Conversion
+    /// failures for these formats must therefore surface a real error instead
+    /// of a "helpful" text fallback.
+    pub fn is_binary_container(self) -> bool {
+        matches!(self, Self::Docx | Self::Pdf | Self::Xlsx | Self::Pptx)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Md => "Markdown",
@@ -135,19 +145,6 @@ pub fn sha1_hex(bytes: &[u8]) -> String {
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Where the editor should write edits when the user opens a non-md file.
-/// Sibling `<name>.md` next to the original — keeps related files together
-/// for the user. The caller is expected to refuse overwriting an existing
-/// sibling without explicit confirmation.
-pub fn sibling_md_path(original: &Path) -> PathBuf {
-    let parent = original.parent().unwrap_or_else(|| Path::new(""));
-    let stem = original
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("untitled");
-    parent.join(format!("{stem}.md"))
-}
-
 /// Read a file as markdown. For `.md` / `.txt` this is a direct byte read;
 /// for the rest we ask markitdown and, if that fails, fall back to a
 /// plain-text read so unsupported formats still open in the editor.
@@ -207,7 +204,7 @@ fn convert_with_markitdown(
     // real converters.
     let ext = extension_of(path);
     let opts = markitdown::model::ConversionOptions {
-        file_extension: Some(ext),
+        file_extension: Some(ext.clone()),
         url: None,
         llm_client: None,
         llm_model: None,
@@ -221,7 +218,19 @@ fn convert_with_markitdown(
             fallback_used: false,
             fallback_reason: None,
         }),
+        // For binary containers a plain-text fallback is actively harmful, not
+        // merely useless: the decoded archive becomes one enormous line of
+        // U+FFFD and takes the editor down with it (CodeMirror cannot survive
+        // a multi-megabyte single line). Report a real error so the UI can say
+        // "cannot parse this file" instead of crashing.
+        Ok(None) if format.is_binary_container() => Err(format!(
+            "无法解析 {} 文件：转换器未能识别该文档（可能已损坏、加密，或是不支持的新版格式）",
+            ext
+        )),
         Ok(None) => Ok(plain_text_fallback(path, bytes, format, sha1, mtime, "no converter matched")),
+        Err(e) if format.is_binary_container() => {
+            Err(format!("无法解析 {} 文件: {}", ext, e))
+        }
         Err(e) => Ok(plain_text_fallback(path, bytes, format, sha1, mtime, &e.to_string())),
     }
 }
@@ -348,14 +357,4 @@ async fn convert_external_file_via_sidecar(path: String) -> Result<ConvertResult
 #[tauri::command]
 pub fn convert_supported_formats() -> Vec<FormatInfo> {
     supported_formats()
-}
-
-#[cfg(feature = "tauri")]
-#[tauri::command(rename_all = "snake_case")]
-pub fn convert_sibling_md_path(path: String) -> Result<String, String> {
-    let p = Path::new(&path);
-    if !p.exists() {
-        return Err(format!("文件不存在: {path}"));
-    }
-    Ok(sibling_md_path(p).to_string_lossy().into_owned())
 }

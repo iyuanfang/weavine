@@ -499,8 +499,6 @@ pub fn run() {
             #[cfg(not(target_os = "android"))]
             convert::convert_supported_formats,
             #[cfg(not(target_os = "android"))]
-            convert::convert_sibling_md_path,
-            #[cfg(not(target_os = "android"))]
             md_editor::md_get_recent_files,
             #[cfg(not(target_os = "android"))]
             md_editor::md_add_recent_file,

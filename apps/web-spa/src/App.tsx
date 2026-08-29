@@ -18,6 +18,7 @@ import { ReminderToastContainer, type ReminderToastItem } from './components/Rem
 import { useGlobalShortcut } from './hooks/useGlobalShortcut';
 import { RegisterSW } from './lib/register-sw';
 import { useReminderPoller } from './lib/use-reminder-poller';
+import { siblingMdPath } from './lib/md-path';
 
 import {
   AdapterProvider,
@@ -86,9 +87,7 @@ function mdEditorUrlFor(originalPath: string): string {
   if (MD_EXTS.has(ext)) {
     return `/md-editor?path=${encodeURIComponent(originalPath)}`;
   }
-  const dot = originalPath.lastIndexOf('.');
-  const slash = Math.max(originalPath.lastIndexOf('/'), originalPath.lastIndexOf('\\'));
-  const sibling = dot > slash ? originalPath.slice(0, dot) + '.md' : originalPath + '.md';
+  const sibling = siblingMdPath(originalPath);
   return `/md-editor?path=${encodeURIComponent(sibling)}&external_path=${encodeURIComponent(originalPath)}`;
 }
 
