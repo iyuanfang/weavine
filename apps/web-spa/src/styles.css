@@ -2611,6 +2611,24 @@ textarea.input-base {
   color: var(--muted, #6b7280);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
+.md-slash-menu__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+.md-slash-menu__group + .md-slash-menu__group {
+  border-top: 1px solid var(--border, #e5e7eb);
+  margin-top: 2px;
+}
+.md-slash-menu__group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 12px 2px;
+}
 
 @media (max-width: 720px) {
   .md-editor-toolbar {

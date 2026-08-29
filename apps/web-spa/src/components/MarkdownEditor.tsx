@@ -32,7 +32,7 @@ import { markdownPreview } from '../lib/cm-md-preview';
 
 export interface MarkdownEditorHandle {
   insertAtCursor: (text: string) => void;
-  wrapSelection: (before: string, after: string, placeholder?: string) => void;
+  wrapSelection: (before: string, after: string) => void;
   replaceLine: (text: string) => void;
   focus: () => void;
   getView: () => EditorView | null;
@@ -46,7 +46,7 @@ interface MarkdownEditorProps {
 }
 
 type ToolbarAction =
-  | { kind: 'wrap'; before: string; after: string; placeholder?: string }
+  | { kind: 'wrap'; before: string; after: string }
   | { kind: 'line'; insert: string }
   | { kind: 'lineApply'; insert: string }
   | { kind: 'link' };
@@ -56,28 +56,65 @@ interface SlashChoice {
   label: string;
   hint: string;
   insert: string;
+  category: 'heading' | 'inline' | 'block';
 }
 
 const slashChoices: SlashChoice[] = [
-  { key: 'h1', label: '一级标题', hint: 'H1', insert: '# 标题\n' },
-  { key: 'h2', label: '二级标题', hint: 'H2', insert: '## 标题\n' },
-  { key: 'h3', label: '三级标题', hint: 'H3', insert: '### 标题\n' },
-  { key: 'b', label: '加粗', hint: '⌘B', insert: '**加粗**' },
-  { key: 'i', label: '斜体', hint: '⌘I', insert: '*斜体*' },
-  { key: 'link', label: '链接', hint: '', insert: '[文字](https://)' },
-  { key: 'code', label: '行内代码', hint: '', insert: '`代码`' },
-  { key: 'quote', label: '引用', hint: '', insert: '> 引用\n' },
-  { key: 'ul', label: '无序列表', hint: '', insert: '- 项目\n- 项目\n' },
-  { key: 'ol', label: '有序列表', hint: '', insert: '1. 项目\n2. 项目\n' },
-  { key: 'check', label: '待办', hint: '', insert: '- [ ] 待办\n' },
-  { key: 'divider', label: '分隔线', hint: '', insert: '\n---\n' },
+  { key: 'h1', label: '一级标题', hint: '⌘1', insert: '# 标题\n', category: 'heading' },
+  { key: 'h2', label: '二级标题', hint: '⌘2', insert: '## 标题\n', category: 'heading' },
+  { key: 'h3', label: '三级标题', hint: '⌘3', insert: '### 标题\n', category: 'heading' },
+  { key: 'b', label: '加粗', hint: '⌘B', insert: '**加粗**', category: 'inline' },
+  { key: 'i', label: '斜体', hint: '⌘I', insert: '*斜体*', category: 'inline' },
+  { key: 's', label: '删除线', hint: '⌘⇧S', insert: '~~删除线~~', category: 'inline' },
+  { key: 'code', label: '行内代码', hint: '⌘E', insert: '`代码`', category: 'inline' },
+  { key: 'link', label: '链接', hint: '⌘K', insert: '[文字](https://)', category: 'inline' },
+  { key: 'quote', label: '引用', hint: '⌘⇧9', insert: '> 引用\n', category: 'block' },
+  { key: 'ul', label: '无序列表', hint: '⌘⇧]', insert: '- 项目\n- 项目\n', category: 'block' },
+  { key: 'ol', label: '有序列表', hint: '⌘⇧[', insert: '1. 项目\n2. 项目\n', category: 'block' },
+  { key: 'check', label: '待办', hint: '⌘⇧.', insert: '- [ ] 待办\n', category: 'block' },
+  { key: 'divider', label: '分隔线', hint: '', insert: '\n---\n', category: 'block' },
 ];
 
-function wrapKeymap(before: string, after?: string) {
+const slashCategoryOrder: SlashChoice['category'][] = ['heading', 'inline', 'block'];
+const slashCategoryLabel: Record<SlashChoice['category'], string> = {
+  heading: '标题',
+  inline: '行内',
+  block: '区块',
+};
+
+function toggleWrap(before: string, after?: string) {
   const afterStr = after ?? before;
   return (view: EditorView): boolean => {
     if (view.state.readOnly) return false;
     const sel = view.state.selection.main;
+    const docLen = view.state.doc.length;
+
+    // Both before and after markers must align — matches how Typora / Bear
+    // distinguish "fully wrapped selection" (toggle off) from "plain text"
+    // (toggle on). Partial overlap just re-wraps, which is harmless.
+    const beforeStart = sel.from - before.length;
+    const afterEnd = sel.to + afterStr.length;
+    const beforeMatch =
+      beforeStart >= 0 &&
+      view.state.sliceDoc(beforeStart, sel.from) === before;
+    const afterMatch =
+      afterEnd <= docLen &&
+      view.state.sliceDoc(sel.to, afterEnd) === afterStr;
+
+    if (beforeMatch && afterMatch) {
+      view.dispatch({
+        changes: [
+          { from: sel.to, to: afterEnd, insert: '' },
+          { from: beforeStart, to: sel.from, insert: '' },
+        ],
+        selection: {
+          anchor: beforeStart,
+          head: beforeStart + (sel.to - sel.from),
+        },
+      });
+      return true;
+    }
+
     const selected = view.state.sliceDoc(sel.from, sel.to);
     const text = selected
       ? `${before}${selected}${afterStr}`
@@ -88,6 +125,58 @@ function wrapKeymap(before: string, after?: string) {
         anchor: sel.from + before.length,
         head: sel.from + before.length + selected.length,
       },
+    });
+    return true;
+  };
+}
+
+function toggleLinePrefix(prefix: string) {
+  return (view: EditorView): boolean => {
+    if (view.state.readOnly) return false;
+    const sel = view.state.selection.main;
+    const startLine = view.state.doc.lineAt(sel.from);
+    const endLine = view.state.doc.lineAt(sel.to);
+    const changes: { from: number; to: number; insert: string }[] = [];
+    let cursorShift = 0;
+    for (let n = startLine.number; n <= endLine.number; n++) {
+      const line = view.state.doc.line(n);
+      const headingMatch = /^(#{1,6}) /.exec(line.text);
+      const hasExactPrefix = line.text.startsWith(prefix);
+      const removeLen = headingMatch ? headingMatch[0].length : 0;
+      const insert = hasExactPrefix ? '' : prefix;
+      changes.push({ from: line.from, to: line.from + removeLen, insert });
+      if (line.from <= sel.head && sel.head <= line.to) {
+        cursorShift = insert.length - removeLen;
+      }
+    }
+    view.dispatch({
+      changes,
+      selection: { anchor: sel.anchor + cursorShift, head: sel.head + cursorShift },
+    });
+    return true;
+  };
+}
+
+function demoteHeading() {
+  return (view: EditorView): boolean => {
+    if (view.state.readOnly) return false;
+    const sel = view.state.selection.main;
+    const startLine = view.state.doc.lineAt(sel.from);
+    const endLine = view.state.doc.lineAt(sel.to);
+    const changes: { from: number; to: number; insert: string }[] = [];
+    let cursorShift = 0;
+    for (let n = startLine.number; n <= endLine.number; n++) {
+      const line = view.state.doc.line(n);
+      const m = /^(#{1,6}) /.exec(line.text);
+      const removeLen = m ? m[0].length : 0;
+      changes.push({ from: line.from, to: line.from + removeLen, insert: '' });
+      if (line.from <= sel.head && sel.head <= line.to) {
+        cursorShift = -removeLen;
+      }
+    }
+    view.dispatch({
+      changes,
+      selection: { anchor: sel.anchor + cursorShift, head: sel.head + cursorShift },
     });
     return true;
   };
@@ -109,11 +198,25 @@ function buildState(doc: string, readOnly: boolean): EditorState {
         ...defaultKeymap,
         ...historyKeymap,
         indentWithTab,
-        { key: 'Mod-b', run: wrapKeymap('**') },
-        { key: 'Mod-B', run: wrapKeymap('**') },
-        { key: 'Mod-i', run: wrapKeymap('*') },
-        { key: 'Mod-I', run: wrapKeymap('*') },
-        { key: 'Mod-k', run: wrapKeymap('[', '](https://)') },
+        { key: 'Mod-b', run: toggleWrap('**') },
+        { key: 'Mod-B', run: toggleWrap('**') },
+        { key: 'Mod-i', run: toggleWrap('*') },
+        { key: 'Mod-I', run: toggleWrap('*') },
+        { key: 'Mod-k', run: toggleWrap('[', '](https://)') },
+        { key: 'Mod-e', run: toggleWrap('`') },
+        { key: 'Mod-Shift-s', run: toggleWrap('~~') },
+        { key: 'Mod-Shift-S', run: toggleWrap('~~') },
+        { key: 'Mod-1', run: toggleLinePrefix('# ') },
+        { key: 'Mod-2', run: toggleLinePrefix('## ') },
+        { key: 'Mod-3', run: toggleLinePrefix('### ') },
+        { key: 'Mod-4', run: toggleLinePrefix('#### ') },
+        { key: 'Mod-5', run: toggleLinePrefix('##### ') },
+        { key: 'Mod-6', run: toggleLinePrefix('###### ') },
+        { key: 'Mod-0', run: demoteHeading() },
+        { key: 'Mod-Shift-]', run: toggleLinePrefix('- ') },
+        { key: 'Mod-Shift-[', run: toggleLinePrefix('1. ') },
+        { key: 'Mod-Shift-9', run: toggleLinePrefix('> ') },
+        { key: 'Mod-Shift-.', run: toggleLinePrefix('- [ ] ') },
       ]),
       markdown({ base: markdownLanguage, codeLanguages: () => null }),
       markdownPreview,
@@ -135,36 +238,25 @@ function runToolbarAction(view: EditorView, action: ToolbarAction): void {
   const sel = view.state.selection.main;
   switch (action.kind) {
     case 'wrap': {
-      const selected = view.state.sliceDoc(sel.from, sel.to);
-      if (selected.length === 0) {
-        const text = `${action.before}${action.placeholder ?? ''}${action.after}`;
-        view.dispatch({
-          changes: { from: sel.from, insert: text },
-          selection: {
-            anchor: sel.from + action.before.length,
-            head: sel.from + action.before.length + (action.placeholder?.length ?? 0),
-          },
-        });
-      } else {
-        const text = `${action.before}${selected}${action.after}`;
-        view.dispatch({
-          changes: { from: sel.from, to: sel.to, insert: text },
-          selection: {
-            anchor: sel.from + action.before.length,
-            head: sel.from + action.before.length + selected.length,
-          },
-        });
-      }
+      toggleWrap(action.before, action.after)(view);
+      view.focus();
+      return;
+    }
+    case 'link': {
+      toggleWrap('[', '](https://)')(view);
       view.focus();
       return;
     }
     case 'lineApply': {
       const line = view.state.doc.lineAt(sel.head);
-      if (!line.text.startsWith(action.insert)) {
-        view.dispatch({
-          changes: { from: line.from, to: line.from, insert: action.insert },
-        });
-      }
+      const hasPrefix = line.text.startsWith(action.insert);
+      view.dispatch({
+        changes: {
+          from: line.from,
+          to: line.from + (hasPrefix ? action.insert.length : 0),
+          insert: hasPrefix ? '' : action.insert,
+        },
+      });
       view.focus();
       return;
     }
@@ -178,15 +270,7 @@ function runToolbarAction(view: EditorView, action: ToolbarAction): void {
       return;
     }
     case 'link': {
-      const selected = view.state.sliceDoc(sel.from, sel.to);
-      const text = selected ? `[${selected}](https://)` : '[文字](https://)';
-      view.dispatch({
-        changes: { from: sel.from, to: sel.to, insert: text },
-        selection: {
-          anchor: sel.from + (selected ? selected.length + 3 : 3),
-          head: sel.from + (selected ? selected.length + 3 : 3),
-        },
-      });
+      toggleWrap('[', '](https://)')(view);
       view.focus();
       return;
     }
@@ -300,8 +384,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           });
           view.focus();
         },
-        wrapSelection: (before, after, placeholder) => {
-          runToolbarAction(viewRef.current!, { kind: 'wrap', before, after, placeholder });
+        wrapSelection: (before, after) => {
+          runToolbarAction(viewRef.current!, { kind: 'wrap', before, after });
         },
         replaceLine: (text) => {
           const view = viewRef.current;
@@ -379,19 +463,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 function EditorToolbar({ onAction }: { onAction: (action: ToolbarAction) => void }) {
   return (
     <div className="md-editor-toolbar" data-testid="md-editor-toolbar">
-      <ToolbarBtn label="H1" title="一级标题" onClick={() => onAction({ kind: 'line', insert: '# ' })} />
-      <ToolbarBtn label="H2" title="二级标题" onClick={() => onAction({ kind: 'line', insert: '## ' })} />
-      <ToolbarBtn label="H3" title="三级标题" onClick={() => onAction({ kind: 'line', insert: '### ' })} />
+      <ToolbarBtn label="H1" title="一级标题 ⌘1" onClick={() => onAction({ kind: 'lineApply', insert: '# ' })} />
+      <ToolbarBtn label="H2" title="二级标题 ⌘2" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
+      <ToolbarBtn label="H3" title="三级标题 ⌘3" onClick={() => onAction({ kind: 'lineApply', insert: '### ' })} />
       <ToolbarSep />
-      <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**', placeholder: '加粗' })} />
-      <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*', placeholder: '斜体' })} />
-      <ToolbarBtn label="</>" title="行内代码" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`', placeholder: '代码' })} />
+      <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
+      <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
+      <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
+      <ToolbarBtn label="</>" title="行内代码 ⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
       <ToolbarSep />
-      <ToolbarBtn label="🔗" title="链接" onClick={() => onAction({ kind: 'link' })} />
-      <ToolbarBtn label="❝" title="引用" onClick={() => onAction({ kind: 'line', insert: '> ' })} />
-      <ToolbarBtn label="•" title="无序列表" onClick={() => onAction({ kind: 'line', insert: '- ' })} />
-      <ToolbarBtn label="1." title="有序列表" onClick={() => onAction({ kind: 'line', insert: '1. ' })} />
-      <ToolbarBtn label="☑" title="待办" onClick={() => onAction({ kind: 'line', insert: '- [ ] ' })} />
+      <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
+      <ToolbarBtn label="❝" title="引用 ⌘⇧9" onClick={() => onAction({ kind: 'lineApply', insert: '> ' })} />
+      <ToolbarBtn label="•" title="无序列表 ⌘⇧]" onClick={() => onAction({ kind: 'lineApply', insert: '- ' })} />
+      <ToolbarBtn label="1." title="有序列表 ⌘⇧[" onClick={() => onAction({ kind: 'lineApply', insert: '1. ' })} />
+      <ToolbarBtn label="☑" title="待办 ⌘⇧." onClick={() => onAction({ kind: 'lineApply', insert: '- [ ] ' })} />
+      <ToolbarSep />
       <ToolbarBtn label="—" title="分隔线" onClick={() => onAction({ kind: 'line', insert: '\n---\n' })} />
     </div>
   );
@@ -423,10 +509,13 @@ function BubbleToolbar({ x, y, onAction }: { x: number; y: number; onAction: (a:
       style={{ left: x, top: y, transform: 'translate(-50%, -100%)' }}
       data-testid="md-bubble-toolbar"
     >
-      <ToolbarBtn label="B" title="加粗" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
-      <ToolbarBtn label="I" title="斜体" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
-      <ToolbarBtn label="H2" title="二级标题" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
-      <ToolbarBtn label="🔗" title="链接" onClick={() => onAction({ kind: 'link' })} />
+      <ToolbarBtn label="B" title="加粗 ⌘B" onClick={() => onAction({ kind: 'wrap', before: '**', after: '**' })} />
+      <ToolbarBtn label="I" title="斜体 ⌘I" onClick={() => onAction({ kind: 'wrap', before: '*', after: '*' })} />
+      <ToolbarBtn label="S" title="删除线 ⌘⇧S" onClick={() => onAction({ kind: 'wrap', before: '~~', after: '~~' })} />
+      <ToolbarBtn label="</>" title="行内代码 ⌘E" onClick={() => onAction({ kind: 'wrap', before: '`', after: '`' })} />
+      <ToolbarSep />
+      <ToolbarBtn label="🔗" title="链接 ⌘K" onClick={() => onAction({ kind: 'link' })} />
+      <ToolbarBtn label="H2" title="二级标题 ⌘2" onClick={() => onAction({ kind: 'lineApply', insert: '## ' })} />
     </div>
   );
 }
@@ -479,18 +568,30 @@ function SlashMenu({
       data-testid="md-slash-menu"
       onMouseDown={(e) => e.preventDefault()}
     >
-      {list.map((c, i) => (
-        <button
-          key={c.key}
-          type="button"
-          className={`md-slash-menu__item ${i === idx ? 'is-active' : ''}`}
-          onClick={() => onPick(c)}
-          data-testid={`md-slash-${c.key}`}
-        >
-          <span className="md-slash-menu__label">{c.label}</span>
-          {c.hint && <span className="md-slash-menu__hint">{c.hint}</span>}
-        </button>
-      ))}
+      {slashCategoryOrder.map((cat) => {
+        const items = list.filter((c) => c.category === cat);
+        if (items.length === 0) return null;
+        return (
+          <div key={cat} className="md-slash-menu__group" data-testid={`md-slash-group-${cat}`}>
+            <div className="md-slash-menu__group-label">{slashCategoryLabel[cat]}</div>
+            {items.map((c) => {
+              const flatIdx = list.indexOf(c);
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  className={`md-slash-menu__item ${flatIdx === idx ? 'is-active' : ''}`}
+                  onClick={() => onPick(c)}
+                  data-testid={`md-slash-${c.key}`}
+                >
+                  <span className="md-slash-menu__label">{c.label}</span>
+                  {c.hint && <span className="md-slash-menu__hint">{c.hint}</span>}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
