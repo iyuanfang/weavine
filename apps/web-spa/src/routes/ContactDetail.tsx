@@ -457,6 +457,40 @@ export function ContactDetail() {
             }}
           >
             <span style={{ fontSize: 12, color: '#64748b' }}>筛选类型:</span>
+            <button
+              type="button"
+              data-testid="graph-filter-all"
+              onClick={() => setVisibleTypes(new Set(ALL_TYPES))}
+              disabled={visibleTypes.size === ALL_TYPES.length}
+              style={{
+                padding: '3px 8px',
+                fontSize: 12,
+                border: '1px solid #e2e8f0',
+                borderRadius: 4,
+                background: visibleTypes.size === ALL_TYPES.length ? '#f1f5f9' : '#fff',
+                color: visibleTypes.size === ALL_TYPES.length ? '#94a3b8' : '#475569',
+                cursor: visibleTypes.size === ALL_TYPES.length ? 'default' : 'pointer',
+              }}
+            >
+              全选
+            </button>
+            <button
+              type="button"
+              data-testid="graph-filter-none"
+              onClick={() => setVisibleTypes(new Set())}
+              disabled={visibleTypes.size === 0}
+              style={{
+                padding: '3px 8px',
+                fontSize: 12,
+                border: '1px solid #e2e8f0',
+                borderRadius: 4,
+                background: visibleTypes.size === 0 ? '#f1f5f9' : '#fff',
+                color: visibleTypes.size === 0 ? '#94a3b8' : '#475569',
+                cursor: visibleTypes.size === 0 ? 'default' : 'pointer',
+              }}
+            >
+              全不选
+            </button>
             {ALL_TYPES.map((t) => {
               const meta = TYPE_META[t];
               const checked = visibleTypes.has(t);
@@ -525,9 +559,10 @@ export function ContactDetail() {
               });
               navigate(`/graph/${n.entity_type}/${n.id}`);
             }}
+            onQuickCreate={() => setShowQuickCreate(true)}
           />
           <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
-            单击节点 = 打开详情页;↗ = 以此节点为中心重画图。
+            单击节点 = 打开详情页;↗ = 以此节点为中心重画图;中央 + = 新建并关联。
             需要看更多关联?点右上「⤢ 完整图」去全屏视图。
           </div>
         </section>

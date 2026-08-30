@@ -52,6 +52,11 @@ export interface EntityGraphProps {
    * underlying click event so the parent can stopPropagation as needed.
    */
   onNeighborDrill: (n: EntityGraphNode, e: React.MouseEvent) => void;
+  /**
+   * Optional: if provided, a "+" badge is rendered on the center node
+   * that triggers this callback when clicked.
+   */
+  onQuickCreate?: () => void;
   /** Render only the SVG (no error/loading chrome). Used by inline tab. */
   bare?: boolean;
 }
@@ -62,6 +67,7 @@ export function EntityGraph({
   visibleTypes,
   onNeighborOpen,
   onNeighborDrill,
+  onQuickCreate,
   bare,
 }: EntityGraphProps) {
   const adapter = useAdapter();
@@ -91,7 +97,7 @@ export function EntityGraph({
 
   if (!data) return null;
 
-  return <GraphSvg data={data} onNeighborOpen={onNeighborOpen} onNeighborDrill={onNeighborDrill} />;
+  return <GraphSvg data={data} onNeighborOpen={onNeighborOpen} onNeighborDrill={onNeighborDrill} onQuickCreate={onQuickCreate} />;
 }
 
 /**
@@ -140,9 +146,10 @@ interface GraphSvgProps {
   data: EntityGraphResponse & { hidden_count: number; total_neighbors: number };
   onNeighborOpen: (n: EntityGraphNode) => void;
   onNeighborDrill: (n: EntityGraphNode, e: React.MouseEvent) => void;
+  onQuickCreate?: () => void;
 }
 
-function GraphSvg({ data, onNeighborOpen, onNeighborDrill }: GraphSvgProps) {
+function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: GraphSvgProps) {
   const center = data.nodes.find((n) => n.is_center);
   const centerType = center?.entity_type;
   const others = data.nodes.filter((n) => !n.is_center);
@@ -308,6 +315,33 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill }: GraphSvgProps) {
               <text x={cx} y={cy + CENTER_R + 16} fontSize="12" fontWeight={600} fill="#1e293b" textAnchor="middle">
                 {truncate(center.label, 18)}
               </text>
+              {onQuickCreate && (
+                <g
+                  data-testid="graph-center-quick-create"
+                  style={{ cursor: 'pointer' }}
+                  onClick={onQuickCreate}
+                >
+                  <circle
+                    cx={cx + CENTER_R - 4}
+                    cy={cy - CENTER_R + 4}
+                    r={13}
+                    fill="#fff"
+                    stroke={TYPE_META[centerType].color}
+                    strokeWidth={2}
+                  />
+                  <text
+                    x={cx + CENTER_R - 4}
+                    y={cy - CENTER_R + 9}
+                    fontSize="18"
+                    fontWeight={700}
+                    fill={TYPE_META[centerType].color}
+                    textAnchor="middle"
+                    pointerEvents="none"
+                  >
+                    +
+                  </text>
+                </g>
+              )}
             </g>
           )}
 
