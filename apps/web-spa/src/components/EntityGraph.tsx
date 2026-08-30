@@ -160,13 +160,12 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
   const sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number; sectorR: number }> = [];
 
   if (others.length === 0) {
-  } else if (others.length <= 4) {
+  } else if (others.length <= 8) {
     /**
-     * Few-node fast path: skip per-type wedge grouping so 2 notes don't
-     * collapse onto the same vertical line and 1 project doesn't sit
-     * alone at 12 o'clock. Cardinal positions (N≤4) or even angular
-     * spread (N=5..8) keep nodes visually separated without touching
-     * canvas size.
+     * Few-node fast path: skip per-type wedge grouping so a single-type
+     * cluster (e.g. 5 notes) doesn't all stack in one wedge vertically.
+     * N=1..4 use cardinal positions for maximum horizontal spread;
+     * N=5..8 use even angular distribution starting at 12 o'clock.
      */
     const r = 200;
     for (let i = 0; i < others.length; i++) {
@@ -175,7 +174,8 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
         if (n === 1) return 0;
         if (n === 2) return i === 0 ? Math.PI : 0;
         if (n === 3) return -Math.PI / 2 + (i * 2 * Math.PI) / 3;
-        return -Math.PI / 2 + (i * Math.PI) / 2;
+        if (n === 4) return -Math.PI / 2 + (i * Math.PI) / 2;
+        return -Math.PI / 2 + (i * 2 * Math.PI) / n;
       })();
       const n = others[i];
       placedAt[`${n.entity_type}:${n.id}`] = {
