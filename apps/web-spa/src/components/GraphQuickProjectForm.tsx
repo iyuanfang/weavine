@@ -3,17 +3,17 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import { useGraphInvalidation } from './GraphQuickCreateModal';
+import { useGraphInvalidation, type GraphCenter } from './GraphQuickCreateModal';
 
 export interface GraphQuickProjectFormProps {
-  centerContactId: string | null;
+  center: GraphCenter;
   onClose: () => void;
   onCreated: (id: string) => void;
   onCancel: () => void;
 }
 
 export function GraphQuickProjectForm({
-  centerContactId,
+  center,
   onClose,
   onCreated,
   onCancel,
@@ -33,8 +33,8 @@ export function GraphQuickProjectForm({
         title: title.trim(),
         template,
       });
-      if (centerContactId) {
-        await adapter.projectContacts.add(project.id, centerContactId).catch(() => {
+      if (center.type === 'contact') {
+        await adapter.projectContacts.add(project.id, center.id).catch(() => {
           // Linking may fail (e.g. contact not loaded yet); creation is the
           // primary goal, the user can re-link manually.
         });

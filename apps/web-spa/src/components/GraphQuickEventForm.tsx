@@ -3,17 +3,17 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import { useGraphInvalidation } from './GraphQuickCreateModal';
+import { useGraphInvalidation, type GraphCenter } from './GraphQuickCreateModal';
 
 export interface GraphQuickEventFormProps {
-  centerContactId: string | null;
+  center: GraphCenter;
   onClose: () => void;
   onCreated: (id: string) => void;
   onCancel: () => void;
 }
 
 export function GraphQuickEventForm({
-  centerContactId,
+  center,
   onClose,
   onCreated,
   onCancel,
@@ -34,8 +34,9 @@ export function GraphQuickEventForm({
         title: title.trim(),
         type,
         start_at: toIsoLocal(startAt),
-        contact_id: centerContactId,
-        participant_contact_ids: centerContactId ? [centerContactId] : null,
+        contact_id: center.type === 'contact' ? center.id : null,
+        project_id: center.type === 'project' ? center.id : null,
+        participant_contact_ids: center.type === 'contact' ? [center.id] : null,
       });
       return event;
     },
@@ -86,9 +87,9 @@ export function GraphQuickEventForm({
           style={inputStyle}
         />
       </Field>
-      {centerContactId && (
+      {(center.type === 'contact' || center.type === 'project') && (
         <div style={{ fontSize: 12, color: '#64748b' }}>
-          将自动关联到当前联系人
+          将自动关联到当前{center.type === 'contact' ? '联系人' : '项目'}
         </div>
       )}
       {error && <div style={{ color: '#dc2626', fontSize: 13 }}>{error}</div>}

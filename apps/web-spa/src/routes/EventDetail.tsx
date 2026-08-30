@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -5,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { BacklinksPanel } from '../components/BacklinksPanel';
+import { GraphTab } from '../components/GraphTab';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 
@@ -24,6 +26,7 @@ export function EventDetail() {
   const fromParam = searchParams.get('from');
 
   const back = backTarget(fromParam, '/calendar');
+  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
 
   const eventQuery = useQuery({
     queryKey: ['event', id],
@@ -83,9 +86,6 @@ export function EventDetail() {
             <Link to={back.href} className="btn btn-ghost">
               {back.label}
             </Link>
-            <Link to={`/graph/event/${id}`} className="btn btn-secondary" data-testid="event-graph-link">
-              🕸️ 关联图
-            </Link>
             <Link
               to={`/events/${id}/edit?from=${encodeURIComponent(fromParam || `/events/${id}`)}`}
               className="btn btn-secondary"
@@ -105,8 +105,19 @@ export function EventDetail() {
         }
       />
 
-      <section className="section">
-        <h2 className="section__title">详情</h2>
+      <GraphTab
+        activeTab={tab}
+        onTabChange={setTab}
+        center={{ type: 'event', id }}
+        creatable={['note']}
+        detailLabel="详情"
+        graphLabel="🕸️ 关系图"
+      />
+
+      {tab === 'detail' && (
+        <>
+        <section className="section">
+          <h2 className="section__title">详情</h2>
         <div className="card" style={{ marginTop: 10, padding: 16 }}>
           <div
             style={{
@@ -217,6 +228,9 @@ export function EventDetail() {
           </div>
         </div>
       </section>
+        </>
+      )}
+
       <BacklinksPanel entityType="event" entityId={id} />
     </div>
   );

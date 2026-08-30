@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
 import { BacklinksPanel } from '../components/BacklinksPanel';
+import { GraphTab } from '../components/GraphTab';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 
@@ -70,6 +71,7 @@ export function InteractionDetail() {
   const [editSummary, setEditSummary] = useState('');
   const [editOccurredAt, setEditOccurredAt] = useState('');
   const [editChannel, setEditChannel] = useState('');
+  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
 
   // Seed edit fields when entering edit mode (or when the interaction loads).
   useEffect(() => {
@@ -205,7 +207,16 @@ export function InteractionDetail() {
         }
       />
 
-      {editing ? (
+      <GraphTab
+        activeTab={tab}
+        onTabChange={setTab}
+        center={{ type: 'interaction', id: id as string }}
+        creatable={[]}
+        detailLabel="详情"
+        graphLabel="🕸️ 关系图"
+      />
+
+      {tab === 'detail' && (editing ? (
         <form onSubmit={handleSaveEdit}>
           <section className="section">
             <h2 className="section__title">编辑</h2>
@@ -299,7 +310,7 @@ export function InteractionDetail() {
             </div>
           </section>
         </>
-      )}
+      ))}
 
       {(contact || event || action) && (
         <section className="section">

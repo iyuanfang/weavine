@@ -157,6 +157,7 @@ import { useUserId } from '../lib/auth';
 import { MarkdownView } from '../components/MarkdownView';
 import { MarkdownEditor, EditorToolbar } from '../components/MarkdownEditor';
 import { SearchablePicker } from '../components/SearchablePicker';
+import { GraphTab } from '../components/GraphTab';
 import type {
   Action,
   Contact,
@@ -641,6 +642,7 @@ export function NoteDetail() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
   const dirtyRef = useRef(false);
   const saveTokenRef = useRef(0);
   const debounceHandleRef = useRef<number | null>(null);
@@ -847,14 +849,6 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
           <button
             type="button"
             className="btn"
-            onClick={() => navigate(`/graph/note/${id}`)}
-            data-testid="note-graph-link"
-          >
-            🕸️ 关联图
-          </button>
-          <button
-            type="button"
-            className="btn"
             onClick={onCopyMarkdown}
             title="复制 Markdown 源码到剪贴板"
           >
@@ -881,6 +875,16 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
         </div>
       </header>
 
+      <GraphTab
+        activeTab={tab}
+        onTabChange={setTab}
+        center={{ type: 'note', id: id as string }}
+        creatable={[]}
+        detailLabel="详情"
+        graphLabel="🕸️ 关系图"
+      />
+
+      {tab === 'detail' && (
       <div className="note-detail__edit">
         <input
           type="text"
@@ -996,7 +1000,8 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
           <EntityPicker rosters={rosters} value={draftLinks} onChange={setDraftLinks} />
         </div>
       </div>
-      {error && <p className="danger">{error}</p>}
+      )}
+      {tab === 'detail' && error && <p className="danger">{error}</p>}
     </div>
   );
 }

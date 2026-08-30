@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { BacklinksPanel } from '../components/BacklinksPanel';
+import { GraphTab } from '../components/GraphTab';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 import type { UpdateActionInput } from '../lib/adapter/types';
@@ -40,6 +42,7 @@ export function ActionDetail() {
   const fromParam = searchParams.get('from');
 
   const back = backTarget(fromParam, '/actions');
+  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
 
   const actionQuery = useQuery({
     queryKey: ['action', id],
@@ -151,9 +154,6 @@ export function ActionDetail() {
             <Link to={back.href} className="btn btn-ghost">
               {back.label}
             </Link>
-            <Link to={`/graph/action/${id}`} className="btn btn-secondary" data-testid="action-graph-link">
-              🕸️ 关联图
-            </Link>
             <Link
               to={`/actions/${id}/edit?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
               className="btn btn-secondary"
@@ -173,7 +173,18 @@ export function ActionDetail() {
         }
       />
 
-      <section className="section">
+      <GraphTab
+        activeTab={tab}
+        onTabChange={setTab}
+        center={{ type: 'action', id }}
+        creatable={['note']}
+        detailLabel="详情"
+        graphLabel="🕸️ 关系图"
+      />
+
+      {tab === 'detail' && (
+        <>
+          <section className="section">
         <h2 className="section__title">详情</h2>
         <div className="card" style={{ marginTop: 10, padding: 16 }}>
           <div
@@ -263,7 +274,7 @@ export function ActionDetail() {
             </div>
           </div>
         </div>
-      </section>
+          </section>
 
       {!isDone && (
         <div className="cluster cluster--loose" style={{ marginTop: 16 }}>
@@ -295,6 +306,9 @@ export function ActionDetail() {
           </button>
         </div>
       )}
+        </>
+      )}
+
       <BacklinksPanel entityType="action" entityId={id} />
     </div>
   );

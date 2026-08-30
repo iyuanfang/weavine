@@ -3,17 +3,26 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
-import { useGraphInvalidation } from './GraphQuickCreateModal';
+import { useGraphInvalidation, type GraphCenter } from './GraphQuickCreateModal';
+import type { NoteEntityLink } from '../lib/adapter/types';
+
+const CENTER_TYPES: NoteEntityLink['entity_type'][] = [
+  'contact',
+  'project',
+  'event',
+  'action',
+  'interaction',
+];
 
 export interface GraphQuickNoteFormProps {
-  centerContactId: string | null;
+  center: GraphCenter;
   onClose: () => void;
   onCreated: (id: string) => void;
   onCancel: () => void;
 }
 
 export function GraphQuickNoteForm({
-  centerContactId,
+  center,
   onClose,
   onCreated,
   onCancel,
@@ -25,14 +34,17 @@ export function GraphQuickNoteForm({
   const [body, setBody] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const canLink = (CENTER_TYPES as readonly string[]).includes(center.type);
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!userId) throw new Error('未登录');
+      const linkEntityType = CENTER_TYPES.find((t) => t === center.type);
       const note = await adapter.notes.create(userId, {
         title: title.trim(),
         body: body.trim(),
-        entity_links: centerContactId
-          ? [{ entity_type: 'contact', entity_id: centerContactId }]
+        entity_links: linkEntityType
+          ? [{ entity_type: linkEntityType, entity_id: center.id }]
           : undefined,
       });
       return note;
@@ -77,9 +89,9 @@ export function GraphQuickNoteForm({
           style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
         />
       </Field>
-      {centerContactId && (
+      {canLink && (
         <div style={{ fontSize: 12, color: '#64748b' }}>
-          将自动关联到当前联系人
+          将自动关联
         </div>
       )}
       {error && <div style={{ color: '#dc2626', fontSize: 13 }}>{error}</div>}

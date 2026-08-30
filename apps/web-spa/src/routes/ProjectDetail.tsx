@@ -8,6 +8,7 @@ import { BacklinksPanel } from '../components/BacklinksPanel';
 import { stageColor } from '../lib/projectStageColor';
 import { backTarget } from '../lib/backNavigation';
 import { QuickCreateContact } from '../components/QuickCreateContact';
+import { GraphTab } from '../components/GraphTab';
 
 const TEMPLATE_LABELS: Record<string, string> = {
   general: '通用项目',
@@ -15,7 +16,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
   product_dev: '产品开发',
 };
 
-type TabKey = 'overview' | 'people' | 'tasks' | 'schedule';
+type TabKey = 'overview' | 'people' | 'tasks' | 'schedule' | 'graph';
 
 function nextStage(current: string, stages: string[]): string | null {
   const idx = stages.indexOf(current);
@@ -289,6 +290,7 @@ export function ProjectDetail() {
     { key: 'people', label: '联系人', count: people.length },
     { key: 'tasks', label: '待办', count: tasks.length },
     { key: 'schedule', label: '日程', count: events.length },
+    { key: 'graph', label: '🕸️ 关系图', count: null },
   ];
 
   return (
@@ -1043,6 +1045,17 @@ export function ProjectDetail() {
           )}
         </section>
       )}
+
+      {tab === 'graph' && (
+        <GraphTab
+          activeTab="graph"
+          onTabChange={(t) => setTab(t === 'detail' ? 'overview' : 'graph')}
+          center={{ type: 'project', id }}
+          creatable={['event', 'action', 'note']}
+          bare
+        />
+      )}
+
       <BacklinksPanel entityType="project" entityId={id} />
     </div>
   );

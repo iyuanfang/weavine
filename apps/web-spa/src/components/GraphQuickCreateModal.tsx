@@ -8,24 +8,30 @@ import { GraphQuickNoteForm } from './GraphQuickNoteForm';
 import { TYPE_META } from './EntityGraph';
 import type { EntityGraphNodeType } from '../lib/adapter/types';
 
-type CreateKind = 'project' | 'event' | 'action' | 'note';
+export type CreateKind = 'project' | 'event' | 'action' | 'note';
 
-const CREATABLE: CreateKind[] = ['project', 'event', 'action', 'note'];
+export interface GraphCenter {
+  type: EntityGraphNodeType;
+  id: string;
+}
+
+const ALL_CREATABLE: CreateKind[] = ['project', 'event', 'action', 'note'];
 
 export interface GraphQuickCreateModalProps {
-  centerType: EntityGraphNodeType;
-  centerId: string;
+  center: GraphCenter;
+  creatable?: CreateKind[];
   onClose: () => void;
   onCreated?: (kind: CreateKind, id: string) => void;
 }
 
 export function GraphQuickCreateModal({
-  centerType,
-  centerId,
+  center,
+  creatable,
   onClose,
   onCreated,
 }: GraphQuickCreateModalProps) {
   const [kind, setKind] = useState<CreateKind | null>(null);
+  const options = creatable ?? ALL_CREATABLE;
 
   return (
     <div
@@ -57,7 +63,7 @@ export function GraphQuickCreateModal({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-            {kind ? `新建${labelFor(kind)}` : '新建并关联到此联系人'}
+            {kind ? `新建${labelFor(kind)}` : `新建并关联到此${TYPE_META[center.type].label}`}
           </h3>
           <button
             type="button"
@@ -72,7 +78,7 @@ export function GraphQuickCreateModal({
 
         {!kind && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {CREATABLE.map((k) => (
+            {options.map((k) => (
               <button
                 key={k}
                 type="button"
@@ -103,7 +109,7 @@ export function GraphQuickCreateModal({
 
         {kind === 'project' && (
           <GraphQuickProjectForm
-            centerContactId={centerType === 'contact' ? centerId : null}
+            center={center}
             onClose={onClose}
             onCreated={(id) => onCreated?.('project', id)}
             onCancel={() => setKind(null)}
@@ -111,7 +117,7 @@ export function GraphQuickCreateModal({
         )}
         {kind === 'event' && (
           <GraphQuickEventForm
-            centerContactId={centerType === 'contact' ? centerId : null}
+            center={center}
             onClose={onClose}
             onCreated={(id) => onCreated?.('event', id)}
             onCancel={() => setKind(null)}
@@ -119,7 +125,7 @@ export function GraphQuickCreateModal({
         )}
         {kind === 'action' && (
           <GraphQuickActionForm
-            centerContactId={centerType === 'contact' ? centerId : null}
+            center={center}
             onClose={onClose}
             onCreated={(id) => onCreated?.('action', id)}
             onCancel={() => setKind(null)}
@@ -127,7 +133,7 @@ export function GraphQuickCreateModal({
         )}
         {kind === 'note' && (
           <GraphQuickNoteForm
-            centerContactId={centerType === 'contact' ? centerId : null}
+            center={center}
             onClose={onClose}
             onCreated={(id) => onCreated?.('note', id)}
             onCancel={() => setKind(null)}
