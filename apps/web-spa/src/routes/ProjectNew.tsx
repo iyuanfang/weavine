@@ -71,7 +71,7 @@ export function ProjectNew() {
   const stages = stagesQuery.data ?? [];
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <div className="page-header">
         <div>
           <h1 className="page-title">新建项目</h1>

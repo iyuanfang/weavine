@@ -78,7 +78,7 @@ export function ProjectEdit() {
   }
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <div className="page-header">
         <h1 className="page-title">编辑项目</h1>
       </div>

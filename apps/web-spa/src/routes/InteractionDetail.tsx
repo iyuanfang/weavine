@@ -164,7 +164,7 @@ export function InteractionDetail() {
   const backLabel = from === '/today' ? '← 今天' : contact ? '← 联系人' : '← 联系人列表';
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <PageHeader
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

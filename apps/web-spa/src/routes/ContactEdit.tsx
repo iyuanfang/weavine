@@ -130,7 +130,7 @@ export function ContactEdit() {
   }
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <PageHeader
         title="编辑联系人"
       />
