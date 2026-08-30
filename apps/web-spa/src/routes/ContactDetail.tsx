@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -12,11 +12,54 @@ import { CadencePicker } from '../components/CadencePicker';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
 import { CardImageViewModal } from '../components/CardImageViewModal';
+import { EntityGraph, ALL_TYPES, TYPE_META } from '../components/EntityGraph';
+import { GraphQuickCreateModal } from '../components/GraphQuickCreateModal';
+import { emit } from '../lib/telemetry';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { backTarget } from '../lib/backNavigation';
-import type { CreateInteractionInput, MediaItem } from '../lib/adapter/types';
+import type { CreateInteractionInput, EntityGraphNode, EntityGraphNodeType, MediaItem } from '../lib/adapter/types';
+
+const FILTER_STORAGE_KEY = 'weavine:contact-graph-filter:v1';
+
+function loadVisibleTypes(): Set<EntityGraphNodeType> {
+  if (typeof window === 'undefined') return new Set(ALL_TYPES);
+  try {
+    const raw = window.localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) return new Set(ALL_TYPES);
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set(ALL_TYPES);
+    return new Set(arr.filter((t) => ALL_TYPES.includes(t as EntityGraphNodeType)) as EntityGraphNodeType[]);
+  } catch {
+    return new Set(ALL_TYPES);
+  }
+}
+
+function tabStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: '8px 16px',
+    border: 'none',
+    background: active ? '#fff' : 'transparent',
+    borderBottom: active ? '2px solid #2563eb' : '2px solid transparent',
+    color: active ? '#2563eb' : '#64748b',
+    fontWeight: active ? 600 : 400,
+    cursor: 'pointer',
+    fontSize: 14,
+  };
+}
+
+function detailHrefFromNode(n: EntityGraphNode): string {
+  switch (n.entity_type) {
+    case 'contact': return `/contacts/${n.id}`;
+    case 'project': return `/projects/${n.id}`;
+    case 'event': return `/events/${n.id}`;
+    case 'action': return `/actions/${n.id}`;
+    case 'note': return `/notes/${n.id}`;
+    case 'interaction': return `/interactions/${n.id}`;
+    default: return '/';
+  }
+}
 
 const IMPORTANCE_LABELS: Record<string, string> = {
   normal: '普通',
@@ -101,6 +144,29 @@ export function ContactDetail() {
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const [viewingCard, setViewingCard] = useState(false);
+  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
+  const [visibleTypes, setVisibleTypes] = useState<Set<EntityGraphNodeType>>(() => loadVisibleTypes());
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(Array.from(visibleTypes)));
+      } catch {
+        // localStorage may be full / disabled; filter state still works in memory.
+      }
+    }
+  }, [visibleTypes]);
+
+  useEffect(() => {
+    if (tab === 'graph') {
+      emit('graph_tab_open', {
+        entity_type: 'contact',
+        entity_id: id,
+        source: 'tab',
+      });
+    }
+  }, [tab, id]);
 
   const cardImages: MediaItem[] = cardImagesQuery.data ?? [];
   const cardImageUrl = (m: MediaItem) =>
@@ -322,8 +388,12 @@ export function ContactDetail() {
               {avatarError}
             </span>
           )}
-          <Link to={`/graph/contact/${id}`} className="btn btn-secondary" data-testid="contact-graph-link">
-            🕸️ 关系图
+          <Link
+            to={`/graph/contact/${id}`}
+            className="btn btn-secondary"
+            data-testid="contact-graph-full-link"
+          >
+            ⤢ 完整图
           </Link>
           <Link
             to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
@@ -343,7 +413,127 @@ export function ContactDetail() {
         </div>
       </div>
 
-      {infoFields.length > 0 && (
+      <div
+        role="tablist"
+        aria-label="详情 / 关系图"
+        style={{
+          display: 'flex',
+          gap: 4,
+          borderBottom: '1px solid #e2e8f0',
+          marginTop: 16,
+        }}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'detail'}
+          data-testid="contact-tab-detail"
+          onClick={() => setTab('detail')}
+          style={tabStyle(tab === 'detail')}
+        >
+          详情
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'graph'}
+          data-testid="contact-tab-graph"
+          onClick={() => setTab('graph')}
+          style={tabStyle(tab === 'graph')}
+        >
+          🕸️ 关系图
+        </button>
+      </div>
+
+      {tab === 'graph' && (
+        <section className="section" style={{ marginTop: 12 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              marginBottom: 8,
+            }}
+          >
+            <span style={{ fontSize: 12, color: '#64748b' }}>筛选类型:</span>
+            {ALL_TYPES.map((t) => {
+              const meta = TYPE_META[t];
+              const checked = visibleTypes.has(t);
+              return (
+                <label
+                  key={t}
+                  data-testid={`graph-filter-${t}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '4px 8px',
+                    border: `1px solid ${checked ? meta.color : '#e2e8f0'}`,
+                    borderRadius: 6,
+                    background: checked ? `${meta.color}10` : '#fff',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = new Set(visibleTypes);
+                      if (e.target.checked) next.add(t);
+                      else next.delete(t);
+                      setVisibleTypes(next);
+                    }}
+                    style={{ margin: 0 }}
+                  />
+                  <span>{meta.icon}</span>
+                  <span>{meta.label}</span>
+                </label>
+              );
+            })}
+            <button
+              type="button"
+              data-testid="graph-quick-create-open"
+              onClick={() => setShowQuickCreate(true)}
+              className="btn btn-primary"
+              style={{ marginLeft: 'auto', padding: '6px 12px' }}
+            >
+              + 新建
+            </button>
+          </div>
+          <EntityGraph
+            centerType="contact"
+            centerId={id}
+            visibleTypes={visibleTypes}
+            onNeighborOpen={(n: EntityGraphNode) => {
+              emit('graph_node_click', {
+                entity_type: n.entity_type,
+                center_type: 'contact',
+                action: 'detail',
+              });
+              navigate(detailHrefFromNode(n));
+            }}
+            onNeighborDrill={(n, e) => {
+              e.stopPropagation();
+              if (!['contact', 'project', 'event', 'action', 'note', 'interaction'].includes(n.entity_type)) return;
+              emit('graph_node_click', {
+                entity_type: n.entity_type,
+                center_type: 'contact',
+                action: 'drill',
+              });
+              navigate(`/graph/${n.entity_type}/${n.id}`);
+            }}
+          />
+          <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
+            单击节点 = 打开详情页;↗ = 以此节点为中心重画图。
+            需要看更多关联?点右上「⤢ 完整图」去全屏视图。
+          </div>
+        </section>
+      )}
+
+      {tab === 'detail' && infoFields.length > 0 && (
         <section className="section">
           <h2 className="section__title">基本信息</h2>
           <div className="card" style={{ marginTop: 10, padding: 16 }}>
@@ -367,6 +557,8 @@ export function ContactDetail() {
         </section>
       )}
 
+      {tab === 'detail' && (
+      <>
       <section className="section">
         <h2 className="section__title">保持联系</h2>
         <div className="card" style={{ marginTop: 10, padding: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -571,6 +763,8 @@ export function ContactDetail() {
           </div>
         )}
       </section>
+      </>
+      )}
 
       {viewingAvatar && contactAvatarUrl && (
         <AvatarViewModal
@@ -593,6 +787,14 @@ export function ContactDetail() {
           file={cropFile}
           onCancel={() => setCropFile(null)}
           onConfirm={onCropConfirm}
+        />
+      )}
+
+      {showQuickCreate && (
+        <GraphQuickCreateModal
+          centerType="contact"
+          centerId={id}
+          onClose={() => setShowQuickCreate(false)}
         />
       )}
     </div>
