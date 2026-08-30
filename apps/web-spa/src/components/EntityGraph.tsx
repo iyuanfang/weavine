@@ -4,20 +4,13 @@ import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType, EntityGraphResponse } from '../lib/adapter/types';
 
 const W = 900;
-const H_DENSE = 600;
-const H_SPARSE = 260;
+const H = 600;
 const R_INNER = 70;
 const R_OUTER = 230;
 const NODE_R = 28;
 const CENTER_R = 44;
 const SECTOR_GAP_DEG = 2;
 const ringSpacing = 80;
-/**
- * Below this neighbor count, skip sector grouping and spread nodes evenly
- * across the full circle. Above it, fall back to per-type wedge sectors so
- * a hundred-node graph still doesn't try to cram 30 nodes into one slice.
- */
-const SPARSE_THRESHOLD = 8;
 
 export const GRAPH_NODE_CAP = 80;
 
@@ -161,32 +154,12 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
   const centerType = center?.entity_type;
   const others = data.nodes.filter((n) => !n.is_center);
 
-  const sparse = others.length > 0 && others.length <= SPARSE_THRESHOLD;
-  const H = sparse ? H_SPARSE : H_DENSE;
   const cx = W / 2;
   const cy = H / 2;
   const placedAt: Record<string, { x: number; y: number }> = {};
   const sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number; sectorR: number }> = [];
 
-  if (sparse) {
-    /**
-     * Sparse layout: distribute nodes evenly around the full 360° starting
-     * at 12 o'clock. No per-type wedge grouping — that would re-stack the
-     * few nodes vertically when only one type is present (e.g. 2 notes).
-     */
-    const MARGIN = 30;
-    const HALF_W = (W - 2 * MARGIN) / 2;
-    const HALF_H = (H - 2 * MARGIN) / 2;
-    const r = Math.min(HALF_W, HALF_H) - NODE_R - 8;
-    for (let i = 0; i < others.length; i++) {
-      const angle = -Math.PI / 2 + (2 * Math.PI * i) / others.length;
-      const n = others[i];
-      placedAt[`${n.entity_type}:${n.id}`] = {
-        x: cx + r * Math.cos(angle),
-        y: cy + r * Math.sin(angle),
-      };
-    }
-  } else if (others.length > 0) {
+  if (others.length > 0) {
     const byType = new Map<EntityGraphNodeType, EntityGraphNode[]>();
     for (const n of others) {
       const arr = byType.get(n.entity_type) ?? [];
@@ -309,9 +282,7 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
           style={{ display: 'block', background: 'linear-gradient(180deg,#fafbff,#f3f4f8)' }}
           data-testid="graph-svg"
         >
-          {!sparse && (
-            <circle cx={cx} cy={cy} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
-          )}
+          <circle cx={cx} cy={cy} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
 
           {data.edges.map((e, i) => {
             const fromKey = `${e.from_type}:${e.from_id}`;
