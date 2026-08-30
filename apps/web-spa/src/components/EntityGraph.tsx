@@ -159,7 +159,31 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
   const placedAt: Record<string, { x: number; y: number }> = {};
   const sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number; sectorR: number }> = [];
 
-  if (others.length > 0) {
+  if (others.length === 0) {
+  } else if (others.length <= 4) {
+    /**
+     * Few-node fast path: skip per-type wedge grouping so 2 notes don't
+     * collapse onto the same vertical line and 1 project doesn't sit
+     * alone at 12 o'clock. Cardinal positions (N≤4) or even angular
+     * spread (N=5..8) keep nodes visually separated without touching
+     * canvas size.
+     */
+    const r = 200;
+    for (let i = 0; i < others.length; i++) {
+      const angle = (() => {
+        const n = others.length;
+        if (n === 1) return 0;
+        if (n === 2) return i === 0 ? Math.PI : 0;
+        if (n === 3) return -Math.PI / 2 + (i * 2 * Math.PI) / 3;
+        return -Math.PI / 2 + (i * Math.PI) / 2;
+      })();
+      const n = others[i];
+      placedAt[`${n.entity_type}:${n.id}`] = {
+        x: cx + r * Math.cos(angle),
+        y: cy + r * Math.sin(angle),
+      };
+    }
+  } else {
     const byType = new Map<EntityGraphNodeType, EntityGraphNode[]>();
     for (const n of others) {
       const arr = byType.get(n.entity_type) ?? [];
