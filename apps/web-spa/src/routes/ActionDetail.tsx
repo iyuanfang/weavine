@@ -116,7 +116,7 @@ export function ActionDetail() {
   const isDone = action.status === 'done';
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <PageHeader
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

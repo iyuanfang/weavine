@@ -67,7 +67,7 @@ export function EventDetail() {
   const end = event.end_at ? new Date(event.end_at) : null;
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <PageHeader
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
