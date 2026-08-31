@@ -50,7 +50,7 @@ fn normalize_lww_timestamp(raw: &str) -> String {
         DateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%S%z"),
         DateTime::parse_from_rfc3339(raw),
     ];
-    for c in candidates.into_iter().flatten() {
+    if let Some(c) = candidates.into_iter().flatten().next() {
         return c.with_timezone(&Utc).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     }
     raw.to_string()
