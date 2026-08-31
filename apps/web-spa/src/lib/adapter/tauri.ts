@@ -547,17 +547,6 @@ export class TauriAdapter implements PRMAdapter {
         });
         return res.media;
       }
-      if (input.owner_type === 'contact' && input.kind === 'card_image') {
-        const bytes = input.bytes;
-        let bin = '';
-        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-        const data_url = `data:${input.mime};base64,${btoa(bin)}`;
-        const res = await invoke<{ media: MediaItem }>('save_card_image', {
-          contact_id: input.owner_id,
-          image_base64: data_url.split(',')[1] ?? data_url,
-        });
-        return res.media;
-      }
       throw new Error(`media kind '${input.kind}' / owner '${input.owner_type}' is not supported on desktop`);
     },
 

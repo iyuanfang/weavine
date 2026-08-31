@@ -461,7 +461,6 @@ pub fn run() {
             media::get_media_data_url,
             media::delete_media,
             ocr::extract_card,
-        ocr::save_card_image,
             note::list_notes,
             note::get_note,
             note::create_note,

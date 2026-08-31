@@ -9,7 +9,6 @@ interface Props {
   onConfirm: (input: {
     picked: Partial<Record<keyof ScannedFields, boolean>>;
     scanned: ScannedFields;
-    file: File | null;
   }) => Promise<void>;
 }
 
@@ -45,13 +44,11 @@ function displayValue(key: FieldKey, f: ScannedFields): string {
 
 export function RescanCardModal({ contact, onClose, onConfirm }: Props) {
   const [scanned, setScanned] = useState<ScannedFields | null>(null);
-  const [pickedFile, setPickedFile] = useState<File | null>(null);
   const [picks, setPicks] = useState<Partial<Record<FieldKey, boolean>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const onApply = (file: File | null, f: ScannedFields) => {
-    setPickedFile(file);
+  const onApply = (f: ScannedFields) => {
     setScanned(f);
     const present = nonEmptyFields(f);
     const initial: Partial<Record<FieldKey, boolean>> = {};
@@ -69,14 +66,14 @@ export function RescanCardModal({ contact, onClose, onConfirm }: Props) {
     for (const k of FIELD_ORDER) {
       if (picks[k]) picked[k] = true;
     }
-    if (Object.keys(picked).length === 0 && !pickedFile) {
-      setSubmitError('请至少选择一个字段或换一张名片图片');
+    if (Object.keys(picked).length === 0) {
+      setSubmitError('请至少选择一个字段');
       return;
     }
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await onConfirm({ picked, scanned, file: pickedFile });
+      await onConfirm({ picked, scanned });
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : String(e));
       setSubmitting(false);
@@ -180,22 +177,6 @@ export function RescanCardModal({ contact, onClose, onConfirm }: Props) {
                   </label>
                 );
               })}
-
-              {pickedFile && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    padding: 8,
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    fontSize: 'var(--text-sm)',
-                    color: 'var(--muted)',
-                  }}
-                  data-testid="rescan-card-image-row"
-                >
-                  将同时保存新图片作为「{contact.nickname}」的名片图（原图保留，不删除）
-                </div>
-              )}
             </div>
 
             {submitError && (
@@ -230,7 +211,6 @@ export function RescanCardModal({ contact, onClose, onConfirm }: Props) {
               className="btn btn-secondary"
               onClick={() => {
                 setScanned(null);
-                setPickedFile(null);
                 setPicks({});
                 setSubmitError(null);
               }}

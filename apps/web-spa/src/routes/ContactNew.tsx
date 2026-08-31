@@ -31,29 +31,10 @@ export function ContactNew() {
   const [wechat, setWechat] = useState('');
   const [importance, setImportance] = useState<Importance>(DEFAULT_IMPORTANCE);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [cardImageFile, setCardImageFile] = useState<File | null>(null);
-
   const createMutation = useMutation({
     mutationFn: (input: CreateContactInput) => adapter.contacts.create(input),
     onSuccess: async (contact) => {
       queryClient.invalidateQueries({ queryKey: ['contacts', userId] });
-      if (cardImageFile) {
-        try {
-          const bytes = new Uint8Array(await cardImageFile.arrayBuffer());
-          await adapter.media.upload({
-            kind: 'card_image',
-            owner_type: 'contact',
-            owner_id: contact.id,
-            bytes,
-            mime: cardImageFile.type || 'image/png',
-            filename: cardImageFile.name || 'card.png',
-          });
-        } catch (e) {
-          console.error('save card image failed:', e);
-        } finally {
-          setCardImageFile(null);
-        }
-      }
       navigate(`/contacts/${contact.id}`);
     },
   });
@@ -80,8 +61,7 @@ export function ContactNew() {
     return <div className="loading">正在加载用户…</div>;
   }
 
-  const applyScanned = (file: File | null, f: ScannedFields) => {
-    if (file) setCardImageFile(file);
+  const applyScanned = (f: ScannedFields) => {
     if (f.name) setName(f.name);
     if (f.company) setCompany(f.company);
     if (f.title) setTitle(f.title);

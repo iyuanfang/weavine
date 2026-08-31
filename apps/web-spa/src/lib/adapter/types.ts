@@ -94,7 +94,6 @@ export interface EntityGraphNode {
   id: string;
   entity_type: EntityGraphNodeType;
   label: string;
-  subtitle?: string | null;
   is_center?: boolean;
 }
 
@@ -110,7 +109,6 @@ export interface EntityGraphEdge {
 export interface EntityGraphResponse {
   center_type: EntityGraphNodeType;
   center_id: string;
-  depth: number;
   nodes: EntityGraphNode[];
   edges: EntityGraphEdge[];
 }
@@ -784,7 +782,7 @@ export interface MediaItem {
   alt_text: string | null;
 }
 
-export type MediaKind = 'avatar' | 'card_image' | 'attachment';
+export type MediaKind = 'avatar' | 'attachment';
 export type MediaOwnerType = 'contact' | 'event' | 'project';
 
 export interface UploadMediaInput {

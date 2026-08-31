@@ -68,7 +68,7 @@ impl From<Media> for MediaResponse {
 }
 
 fn validate_kind(kind: &str) -> Result<(), (StatusCode, String)> {
-    if matches!(kind, "avatar" | "card_image" | "attachment") {
+    if matches!(kind, "avatar" | "attachment") {
         Ok(())
     } else {
         Err((StatusCode::BAD_REQUEST, format!("invalid kind: {kind}")))

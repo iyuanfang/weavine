@@ -71,9 +71,8 @@ export function ContactEdit() {
   const handleRescanConfirm = async (input: {
     picked: Partial<Record<'name' | 'company' | 'title' | 'email' | 'phone' | 'address', boolean>>;
     scanned: ScannedFields;
-    file: File | null;
   }) => {
-    const { picked, scanned, file } = input;
+    const { picked, scanned } = input;
     if (picked.name && scanned.name) setName(scanned.name);
     if (picked.company && scanned.company) setCompany(scanned.company);
     if (picked.title && scanned.title) setTitle(scanned.title);
@@ -82,18 +81,6 @@ export function ContactEdit() {
       setPhone(scanned.phone.join(' / '));
     }
     if (picked.address && scanned.address) setAddress(scanned.address);
-    if (file) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await adapter.media.upload({
-        kind: 'card_image',
-        owner_type: 'contact',
-        owner_id: id,
-        bytes,
-        mime: file.type || 'image/png',
-        filename: file.name || 'card.png',
-      });
-      await queryClient.invalidateQueries({ queryKey: ['media', 'card_image', 'contact', id] });
-    }
     setRescanOpen(false);
   };
 

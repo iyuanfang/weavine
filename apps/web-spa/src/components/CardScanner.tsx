@@ -13,7 +13,7 @@ export interface ScannedFields {
 }
 
 interface Props {
-  onApply: (file: File | null, fields: ScannedFields) => void;
+  onApply: (fields: ScannedFields) => void;
   disabled?: boolean;
 }
 
@@ -73,12 +73,10 @@ export function CardScanner({ onApply, disabled }: Props) {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pickedFile, setPickedFile] = useState<File | null>(null);
 
   const onPick = async (file: File) => {
     setError(null);
     setResult(null);
-    setPickedFile(file);
     const dataUrl = await readAsDataUrl(file);
     setPreview(dataUrl);
     setBusy(true);
@@ -94,7 +92,7 @@ export function CardScanner({ onApply, disabled }: Props) {
 
   const apply = () => {
     if (!result) return;
-    onApply(pickedFile, {
+    onApply({
       name: result.fields.name,
       company: result.fields.company,
       title: result.fields.title,
