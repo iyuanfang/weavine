@@ -98,7 +98,7 @@ impl WeavineMcpServer {
         if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
         if let Some(v) = q.cursor { pairs.push(("cursor", v)); }
         let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        Ok(self.client.get("/api/notes", &refs, api!()).await?)
+        self.client.get("/api/notes", &refs, api!()).await
     }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(get_note)))]
@@ -106,7 +106,7 @@ impl WeavineMcpServer {
         &self,
         input: NoteId,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.get(&format!("/api/notes/{}", input.id), &[], api!()).await?)
+        self.client.get(&format!("/api/notes/{}", input.id), &[], api!()).await
     }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(create_note)))]
@@ -114,7 +114,7 @@ impl WeavineMcpServer {
         &self,
         body: CreateNoteBody,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/notes", &body, api!()).await?)
+        self.client.post("/api/notes", &body, api!()).await
     }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(update_note)))]
@@ -122,7 +122,7 @@ impl WeavineMcpServer {
         &self,
         input: UpdateNoteBody,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.put(&format!("/api/notes/{}", input.id), &input.fields, api!()).await?)
+        self.client.put(&format!("/api/notes/{}", input.id), &input.fields, api!()).await
     }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(delete_note)))]
@@ -130,8 +130,7 @@ impl WeavineMcpServer {
         &self,
         input: NoteId,
     ) -> McpResult<serde_json::Value> {
-        let v = self.client.delete(&format!("/api/notes/{}", input.id), api!()).await?;
-        Ok(v)
+        self.client.delete(&format!("/api/notes/{}", input.id), api!()).await
     }
 
     /// Notes that link to a given entity — i.e. "backlinks" from the
@@ -146,7 +145,7 @@ impl WeavineMcpServer {
             ("entity_type", q.entity_type.as_str()),
             ("entity_id", q.entity_id.as_str()),
         ];
-        Ok(self.client.get("/api/notes/backlinks", &pairs, api!()).await?)
+        self.client.get("/api/notes/backlinks", &pairs, api!()).await
     }
 
     /// Entities a given note links to — i.e. forward links from the
@@ -156,6 +155,6 @@ impl WeavineMcpServer {
         &self,
         input: NoteId,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.get(&format!("/api/notes/{}/entities", input.id), &[], api!()).await?)
+        self.client.get(&format!("/api/notes/{}/entities", input.id), &[], api!()).await
     }
 }

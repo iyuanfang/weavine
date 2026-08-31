@@ -111,25 +111,25 @@ impl WeavineMcpServer {
             if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
             if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
             let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-            Ok(self.client.get("/api/interactions", &refs, api!()).await?)
+            self.client.get("/api/interactions", &refs, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(get_interaction)))]
         pub async fn get_interaction(&self,
         input: InteractionId,) -> McpResult<serde_json::Value> {
-            Ok(self.client.get(&format!("/api/interactions/{}", input.id), &[], api!()).await?)
+            self.client.get(&format!("/api/interactions/{}", input.id), &[], api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(create_interaction)))]
         pub async fn create_interaction(&self,
         body: CreateInteractionBody,) -> McpResult<serde_json::Value> {
-            Ok(self.client.post("/api/interactions", &body, api!()).await?)
+            self.client.post("/api/interactions", &body, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(update_interaction)))]
         pub async fn update_interaction(&self,
         input: UpdateInteractionBody,) -> McpResult<serde_json::Value> {
-            Ok(self.client.put(&format!("/api/interactions/{}", input.id), &input.fields, api!()).await?)
+            self.client.put(&format!("/api/interactions/{}", input.id), &input.fields, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(delete_interaction)))]

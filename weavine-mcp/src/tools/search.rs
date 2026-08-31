@@ -23,6 +23,6 @@ impl WeavineMcpServer {
                 for e in ents { pairs.push(("entities", e)); }
             }
             let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-            Ok(self.client.get("/api/search", &refs, api!()).await?)
+            self.client.get("/api/search", &refs, api!()).await
         }
 }

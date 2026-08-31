@@ -14,11 +14,11 @@ impl WeavineMcpServer {
     #[tracing::instrument(skip_all, fields(tool = stringify!(diagnostic_user)))]
         pub async fn diagnostic_user(&self,
         _input: DiagnosticUserInput,) -> McpResult<serde_json::Value> {
-            Ok(self.client.get("/api/diagnostic/user", &[], api!()).await?)
+            self.client.get("/api/diagnostic/user", &[], api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(diagnostic_startup)))]
         pub async fn diagnostic_startup(&self) -> McpResult<serde_json::Value> {
-            Ok(self.client.get("/api/diagnostic/startup", &[], api!()).await?)
+            self.client.get("/api/diagnostic/startup", &[], api!()).await
         }
 }

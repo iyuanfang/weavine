@@ -64,19 +64,19 @@ impl WeavineMcpServer {
             if let Some(v) = q.q { pairs.push(("q", v)); }
             if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
             let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-            Ok(self.client.get("/api/tags", &refs, api!()).await?)
+            self.client.get("/api/tags", &refs, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(create_tag)))]
         pub async fn create_tag(&self,
         body: CreateTagBody,) -> McpResult<serde_json::Value> {
-            Ok(self.client.post("/api/tags", &body, api!()).await?)
+            self.client.post("/api/tags", &body, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(update_tag)))]
         pub async fn update_tag(&self,
         input: UpdateTagBody,) -> McpResult<serde_json::Value> {
-            Ok(self.client.put(&format!("/api/tags/{}", input.id), &input.fields, api!()).await?)
+            self.client.put(&format!("/api/tags/{}", input.id), &input.fields, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(delete_tag)))]

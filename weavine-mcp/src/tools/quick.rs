@@ -30,6 +30,6 @@ impl WeavineMcpServer {
         &self,
         body: QuickParseBody,
     ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/quick/parse", &body, api!()).await?)
+        self.client.post("/api/quick/parse", &body, api!()).await
     }
 }

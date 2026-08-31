@@ -23,7 +23,7 @@ pub struct SettingUpsertInput {
 impl WeavineMcpServer {
     #[tracing::instrument(skip_all, fields(tool = stringify!(list_settings)))]
         pub async fn list_settings(&self) -> McpResult<serde_json::Value> {
-            Ok(self.client.get("/api/settings", &[], api!()).await?)
+            self.client.get("/api/settings", &[], api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(upsert_setting)))]
@@ -31,7 +31,7 @@ impl WeavineMcpServer {
         input: SettingUpsertInput,) -> McpResult<serde_json::Value> {
             let body = serde_json::to_value(&input)
                 .map_err(|e| crate::error::McpError::Serde(format!("{e}")))?;
-            Ok(self.client.post("/api/settings/upsert", &body, api!()).await?)
+            self.client.post("/api/settings/upsert", &body, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(delete_setting)))]

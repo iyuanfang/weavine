@@ -20,7 +20,7 @@ impl WeavineMcpServer {
     #[tracing::instrument(skip_all, fields(tool = stringify!(sync_manifest)))]
         pub async fn sync_manifest(&self,
         _input: SyncManifestInput,) -> McpResult<serde_json::Value> {
-            Ok(self.client.post("/api/sync/manifest", &serde_json::Value::Null, api!()).await?)
+            self.client.post("/api/sync/manifest", &serde_json::Value::Null, api!()).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(sync_pull)))]
@@ -30,6 +30,6 @@ impl WeavineMcpServer {
             if let Some(s) = input.since {
                 body["since"] = serde_json::Value::String(s);
             }
-            Ok(self.client.post("/api/sync/pull", &body, api!()).await?)
+            self.client.post("/api/sync/pull", &body, api!()).await
         }
 }

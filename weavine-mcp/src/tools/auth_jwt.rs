@@ -27,18 +27,18 @@ impl WeavineMcpServer {
         pub async fn auth_register(&self,
         input: AuthRegisterInput,) -> McpResult<serde_json::Value> {
             let body = serde_json::json!({"email": input.email, "password": input.password});
-            Ok(self.client.post_public("/api/auth/register", &body).await?)
+            self.client.post_public("/api/auth/register", &body).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(auth_login)))]
         pub async fn auth_login(&self,
         input: AuthLoginInput,) -> McpResult<serde_json::Value> {
             let body = serde_json::json!({"email": input.email, "password": input.password});
-            Ok(self.client.post_public("/api/auth/login", &body).await?)
+            self.client.post_public("/api/auth/login", &body).await
         }
 
     #[tracing::instrument(skip_all, fields(tool = stringify!(auth_logout)))]
         pub async fn auth_logout(&self) -> McpResult<serde_json::Value> {
-            Ok(self.client.post_public("/api/auth/logout", &serde_json::Value::Null).await?)
+            self.client.post_public("/api/auth/logout", &serde_json::Value::Null).await
         }
 }
