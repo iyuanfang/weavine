@@ -142,7 +142,7 @@ export function EventEdit() {
     : null;
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <PageHeader title="编辑日程" />
 
       {linkedProject && (

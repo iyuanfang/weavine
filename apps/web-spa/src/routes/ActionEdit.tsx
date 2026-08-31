@@ -133,7 +133,7 @@ export function ActionEdit() {
     : null;
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <PageHeader title="编辑待办" />
 
       {linkedProject && (

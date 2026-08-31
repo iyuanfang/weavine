@@ -109,7 +109,7 @@ export function EventNew() {
   }
 
   return (
-    <div className="page page--narrow">
+    <div className="page">
       <PageHeader
         title={linkedProject ? `为「${linkedProject.title}」新建日程` : '新建日程'}
         subtitle={linkedProject ? '关联到当前项目，便于在项目页追溯' : '会面、纪念日、deadline'}
