@@ -141,50 +141,45 @@ pub struct UpdateContactBody {
 }
 
 impl WeavineMcpServer {
-    pub async fn list_contacts(
-        &self,
-        q: ListContactsQuery,
-    ) -> McpResult<serde_json::Value> {
-        let mut pairs: Vec<(&str, String)> = Vec::new();
-        if let Some(v) = &q.q { pairs.push(("q", v.clone())); }
-        if let Some(v) = &q.tag { pairs.push(("tag", v.clone())); }
-        if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
-        if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
-        if let Some(v) = &q.sort { pairs.push(("sort", v.clone())); }
-        let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let v = self.client.get("/api/contacts", &refs, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(list_contacts)))]
+        pub async fn list_contacts(&self,
+        q: ListContactsQuery,) -> McpResult<serde_json::Value> {
+            let mut pairs: Vec<(&str, String)> = Vec::new();
+            if let Some(v) = &q.q { pairs.push(("q", v.clone())); }
+            if let Some(v) = &q.tag { pairs.push(("tag", v.clone())); }
+            if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
+            if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
+            if let Some(v) = &q.sort { pairs.push(("sort", v.clone())); }
+            let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            let v = self.client.get("/api/contacts", &refs, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn get_contact(
-        &self,
-        input: ContactId,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.get(&format!("/api/contacts/{}", input.id), &[], api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(get_contact)))]
+        pub async fn get_contact(&self,
+        input: ContactId,) -> McpResult<serde_json::Value> {
+            let v = self.client.get(&format!("/api/contacts/{}", input.id), &[], api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn create_contact(
-        &self,
-        body: CreateContactBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.post("/api/contacts", &body, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(create_contact)))]
+        pub async fn create_contact(&self,
+        body: CreateContactBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.post("/api/contacts", &body, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn update_contact(
-        &self,
-        input: UpdateContactBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.put(&format!("/api/contacts/{}", input.id), &input.fields, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(update_contact)))]
+        pub async fn update_contact(&self,
+        input: UpdateContactBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.put(&format!("/api/contacts/{}", input.id), &input.fields, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn delete_contact(
-        &self,
-        input: ContactId,
-    ) -> McpResult<serde_json::Value> {
-        self.client.delete(&format!("/api/contacts/{}", input.id), api!()).await?;
-        Ok(serde_json::json!({ "ok": true }))
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(delete_contact)))]
+        pub async fn delete_contact(&self,
+        input: ContactId,) -> McpResult<serde_json::Value> {
+            self.client.delete(&format!("/api/contacts/{}", input.id), api!()).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
 }

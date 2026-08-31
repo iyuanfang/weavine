@@ -17,21 +17,19 @@ pub struct SyncPullInput {
 }
 
 impl WeavineMcpServer {
-    pub async fn sync_manifest(
-        &self,
-        _input: SyncManifestInput,
-    ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/sync/manifest", &serde_json::Value::Null, api!()).await?)
-    }
-
-    pub async fn sync_pull(
-        &self,
-        input: SyncPullInput,
-    ) -> McpResult<serde_json::Value> {
-        let mut body = serde_json::json!({"device_id": input.device_id});
-        if let Some(s) = input.since {
-            body["since"] = serde_json::Value::String(s);
+    #[tracing::instrument(skip_all, fields(tool = stringify!(sync_manifest)))]
+        pub async fn sync_manifest(&self,
+        _input: SyncManifestInput,) -> McpResult<serde_json::Value> {
+            Ok(self.client.post("/api/sync/manifest", &serde_json::Value::Null, api!()).await?)
         }
-        Ok(self.client.post("/api/sync/pull", &body, api!()).await?)
-    }
+
+    #[tracing::instrument(skip_all, fields(tool = stringify!(sync_pull)))]
+        pub async fn sync_pull(&self,
+        input: SyncPullInput,) -> McpResult<serde_json::Value> {
+            let mut body = serde_json::json!({"device_id": input.device_id});
+            if let Some(s) = input.since {
+                body["since"] = serde_json::Value::String(s);
+            }
+            Ok(self.client.post("/api/sync/pull", &body, api!()).await?)
+        }
 }

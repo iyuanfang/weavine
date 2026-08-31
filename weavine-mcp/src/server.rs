@@ -26,11 +26,18 @@ impl WeavineMcpServer {
         Ok(Self { client, cfg })
     }
 
+    /// Parse MCP arguments into a typed request body and validate required
+    /// non-empty string fields (`*_id`, `*_ids` arrays, common scalar ids).
+    /// Returns [`McpError::BadInput`] with a clear message on shape or
+    /// validation failure.
     fn parse<T: serde::de::DeserializeOwned>(
         args: Option<JsonObject>,
     ) -> McpResult<T> {
-        serde_json::from_value(Self::to_value(args.clone()))
-            .map_err(|e| McpError::BadInput(e.to_string()))
+        let v = Self::to_value(args);
+        let parsed: T = serde_json::from_value(v.clone())
+            .map_err(|e| McpError::BadInput(format!("invalid arguments: {e}")))?;
+        Self::validate_ids(&v)?;
+        Ok(parsed)
     }
 
     fn to_value(args: Option<JsonObject>) -> serde_json::Value {
@@ -38,6 +45,50 @@ impl WeavineMcpServer {
             Some(m) => serde_json::Value::Object(m),
             None => serde_json::Value::Object(serde_json::Map::new()),
         }
+    }
+
+    /// Reject obviously-bad identifiers: empty/whitespace strings, empty
+    /// arrays of UUIDs. Looks for any field whose name ends in `_id` or
+    /// whose name is exactly `id`, plus `*_ids` arrays. Does **not** check
+    /// UUID format — that's a server-side concern.
+    fn validate_ids(v: &serde_json::Value) -> McpResult<()> {
+        let Some(obj) = v.as_object() else {
+            return Ok(());
+        };
+        for (k, val) in obj {
+            let lower = k.to_ascii_lowercase();
+            let is_id_field = lower == "id"
+                || lower.ends_with("_id")
+                || lower.ends_with("_ids");
+            if !is_id_field {
+                continue;
+            }
+            match val {
+                serde_json::Value::String(s) if s.trim().is_empty() => {
+                    return Err(McpError::BadInput(format!(
+                        "field `{k}` must be a non-empty string"
+                    )));
+                }
+                serde_json::Value::Array(a) if a.is_empty() => {
+                    return Err(McpError::BadInput(format!(
+                        "field `{k}` must contain at least one id"
+                    )));
+                }
+                serde_json::Value::Array(a) => {
+                    for (i, item) in a.iter().enumerate() {
+                        if let serde_json::Value::String(s) = item {
+                            if s.trim().is_empty() {
+                                return Err(McpError::BadInput(format!(
+                                    "field `{k}[{i}]` must be a non-empty string"
+                                )));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 }
 
@@ -101,8 +152,8 @@ fn tool(name: &'static str, description: &'static str, schema: Arc<JsonObject>) 
 }
 
 fn tier1_tools() -> Vec<Tool> {
-    use crate::tools::{action, contact, event, project, reminder};
-    let mut t = Vec::with_capacity(32);
+    use crate::tools::{action, contact, event, note, project, quick, reminder};
+    let mut t = Vec::with_capacity(40);
     t.push(tool("list_contacts", "List contacts with optional filters.", schema_of::<contact::ListContactsQuery>()));
     t.push(tool("get_contact", "Get contact by id.", schema_of::<contact::ContactId>()));
     t.push(tool("create_contact", "Create a contact.", schema_of::<contact::CreateContactBody>()));
@@ -132,6 +183,14 @@ fn tier1_tools() -> Vec<Tool> {
     t.push(tool("create_reminder", "Create a reminder.", schema_of::<reminder::CreateReminderBody>()));
     t.push(tool("update_reminder", "Update a reminder. Input: {id, fields: {...}}.", schema_of::<reminder::UpdateReminderBody>()));
     t.push(tool("delete_reminder", "Delete a reminder by id.", schema_of::<reminder::ReminderId>()));
+    t.push(tool("list_notes", "List notes with optional limit + cursor.", schema_of::<note::ListNotesQuery>()));
+    t.push(tool("get_note", "Get note by id.", schema_of::<note::NoteId>()));
+    t.push(tool("create_note", "Create a note with optional entity links.", schema_of::<note::CreateNoteBody>()));
+    t.push(tool("update_note", "Update a note. Input: {id, fields: {...}}.", schema_of::<note::UpdateNoteBody>()));
+    t.push(tool("delete_note", "Delete a note by id.", schema_of::<note::NoteId>()));
+    t.push(tool("list_note_backlinks", "Notes that link to a given entity (entity -> notes).", schema_of::<note::NoteBacklinksQuery>()));
+    t.push(tool("list_note_entity_links", "Entities a note links to (note -> entities).", schema_of::<note::NoteId>()));
+    t.push(tool("quick_parse", "Parse free-form text into a structured QuickItem.", schema_of::<quick::QuickParseBody>()));
     t
 }
 
@@ -204,7 +263,7 @@ impl ServerHandler for WeavineMcpServer {
                 env!("CARGO_PKG_VERSION"),
             ))
             .with_instructions(match tier {
-                Tier::Default => "weavine-mcp (Tier 1): contacts, events, actions, projects, reminders. Set WEAVINE_MCP_TIER=full for additional resources.".to_string(),
+                Tier::Default => "weavine-mcp (Tier 1): contacts, events, actions, projects, reminders, notes, quick-parse. Set WEAVINE_MCP_TIER=full for additional resources.".to_string(),
                 Tier::Full => "weavine-mcp (Tier 2 / full): full access.".to_string(),
             })
     }
@@ -329,6 +388,38 @@ impl WeavineMcpServer {
             "delete_reminder" => {
                 let input: crate::tools::reminder::ReminderId = Self::parse(args)?;
                 self.delete_reminder(input).await?
+            }
+            "list_notes" => {
+                let input: crate::tools::note::ListNotesQuery = Self::parse(args)?;
+                self.list_notes(input).await?
+            }
+            "get_note" => {
+                let input: crate::tools::note::NoteId = Self::parse(args)?;
+                self.get_note(input).await?
+            }
+            "create_note" => {
+                let input: crate::tools::note::CreateNoteBody = Self::parse(args)?;
+                self.create_note(input).await?
+            }
+            "update_note" => {
+                let input: crate::tools::note::UpdateNoteBody = Self::parse(args)?;
+                self.update_note(input).await?
+            }
+            "delete_note" => {
+                let input: crate::tools::note::NoteId = Self::parse(args)?;
+                self.delete_note(input).await?
+            }
+            "list_note_backlinks" => {
+                let input: crate::tools::note::NoteBacklinksQuery = Self::parse(args)?;
+                self.list_note_backlinks(input).await?
+            }
+            "list_note_entity_links" => {
+                let input: crate::tools::note::NoteId = Self::parse(args)?;
+                self.list_note_entity_links(input).await?
+            }
+            "quick_parse" => {
+                let input: crate::tools::quick::QuickParseBody = Self::parse(args)?;
+                self.quick_parse(input).await?
             }
             "auth_register" => {
                 let input: crate::tools::auth_jwt::AuthRegisterInput = Self::parse(args)?;

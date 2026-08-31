@@ -101,46 +101,41 @@ pub struct UpdateInteractionBody {
 }
 
 impl WeavineMcpServer {
-    pub async fn list_interactions(
-        &self,
-        q: ListInteractionsQuery,
-    ) -> McpResult<serde_json::Value> {
-        let mut pairs: Vec<(&str, String)> = Vec::new();
-        if let Some(v) = q.contact_id { pairs.push(("contact_id", v)); }
-        if let Some(v) = q.event_id { pairs.push(("event_id", v)); }
-        if let Some(v) = q.kind { pairs.push(("kind", v)); }
-        if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
-        if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
-        let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        Ok(self.client.get("/api/interactions", &refs, api!()).await?)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(list_interactions)))]
+        pub async fn list_interactions(&self,
+        q: ListInteractionsQuery,) -> McpResult<serde_json::Value> {
+            let mut pairs: Vec<(&str, String)> = Vec::new();
+            if let Some(v) = q.contact_id { pairs.push(("contact_id", v)); }
+            if let Some(v) = q.event_id { pairs.push(("event_id", v)); }
+            if let Some(v) = q.kind { pairs.push(("kind", v)); }
+            if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
+            if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
+            let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            Ok(self.client.get("/api/interactions", &refs, api!()).await?)
+        }
 
-    pub async fn get_interaction(
-        &self,
-        input: InteractionId,
-    ) -> McpResult<serde_json::Value> {
-        Ok(self.client.get(&format!("/api/interactions/{}", input.id), &[], api!()).await?)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(get_interaction)))]
+        pub async fn get_interaction(&self,
+        input: InteractionId,) -> McpResult<serde_json::Value> {
+            Ok(self.client.get(&format!("/api/interactions/{}", input.id), &[], api!()).await?)
+        }
 
-    pub async fn create_interaction(
-        &self,
-        body: CreateInteractionBody,
-    ) -> McpResult<serde_json::Value> {
-        Ok(self.client.post("/api/interactions", &body, api!()).await?)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(create_interaction)))]
+        pub async fn create_interaction(&self,
+        body: CreateInteractionBody,) -> McpResult<serde_json::Value> {
+            Ok(self.client.post("/api/interactions", &body, api!()).await?)
+        }
 
-    pub async fn update_interaction(
-        &self,
-        input: UpdateInteractionBody,
-    ) -> McpResult<serde_json::Value> {
-        Ok(self.client.put(&format!("/api/interactions/{}", input.id), &input.fields, api!()).await?)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(update_interaction)))]
+        pub async fn update_interaction(&self,
+        input: UpdateInteractionBody,) -> McpResult<serde_json::Value> {
+            Ok(self.client.put(&format!("/api/interactions/{}", input.id), &input.fields, api!()).await?)
+        }
 
-    pub async fn delete_interaction(
-        &self,
-        input: InteractionId,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.delete(&format!("/api/interactions/{}", input.id), api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(delete_interaction)))]
+        pub async fn delete_interaction(&self,
+        input: InteractionId,) -> McpResult<serde_json::Value> {
+            let v = self.client.delete(&format!("/api/interactions/{}", input.id), api!()).await?;
+            Ok(v)
+        }
 }

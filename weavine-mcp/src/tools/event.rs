@@ -129,56 +129,52 @@ pub struct UpdateEventBody {
 }
 
 impl WeavineMcpServer {
-    pub async fn upcoming_events(&self) -> McpResult<serde_json::Value> {
-        let v = self.client.get("/api/events/upcoming", &[], api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(upcoming_events)))]
+        pub async fn upcoming_events(&self) -> McpResult<serde_json::Value> {
+            let v = self.client.get("/api/events/upcoming", &[], api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn list_events(
-        &self,
-        q: ListEventsQuery,
-    ) -> McpResult<serde_json::Value> {
-        let mut pairs: Vec<(&str, String)> = Vec::new();
-        if let Some(v) = &q.from { pairs.push(("from", v.clone())); }
-        if let Some(v) = &q.to { pairs.push(("to", v.clone())); }
-        if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
-        if let Some(v) = &q.project_id { pairs.push(("project_id", v.clone())); }
-        if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
-        if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
-        let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let v = self.client.get("/api/events", &refs, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(list_events)))]
+        pub async fn list_events(&self,
+        q: ListEventsQuery,) -> McpResult<serde_json::Value> {
+            let mut pairs: Vec<(&str, String)> = Vec::new();
+            if let Some(v) = &q.from { pairs.push(("from", v.clone())); }
+            if let Some(v) = &q.to { pairs.push(("to", v.clone())); }
+            if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
+            if let Some(v) = &q.project_id { pairs.push(("project_id", v.clone())); }
+            if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
+            if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
+            let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            let v = self.client.get("/api/events", &refs, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn get_event(
-        &self,
-        input: EventId,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.get(&format!("/api/events/{}", input.id), &[], api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(get_event)))]
+        pub async fn get_event(&self,
+        input: EventId,) -> McpResult<serde_json::Value> {
+            let v = self.client.get(&format!("/api/events/{}", input.id), &[], api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn create_event(
-        &self,
-        body: CreateEventBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.post("/api/events", &body, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(create_event)))]
+        pub async fn create_event(&self,
+        body: CreateEventBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.post("/api/events", &body, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn update_event(
-        &self,
-        input: UpdateEventBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.put(&format!("/api/events/{}", input.id), &input.fields, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(update_event)))]
+        pub async fn update_event(&self,
+        input: UpdateEventBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.put(&format!("/api/events/{}", input.id), &input.fields, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn delete_event(
-        &self,
-        input: EventId,
-    ) -> McpResult<serde_json::Value> {
-        self.client.delete(&format!("/api/events/{}", input.id), api!()).await?;
-        Ok(serde_json::json!({ "ok": true }))
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(delete_event)))]
+        pub async fn delete_event(&self,
+        input: EventId,) -> McpResult<serde_json::Value> {
+            self.client.delete(&format!("/api/events/{}", input.id), api!()).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
 }

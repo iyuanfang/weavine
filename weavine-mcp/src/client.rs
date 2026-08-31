@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use reqwest::{Client, StatusCode};
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::time::sleep;
 use tracing::{debug, warn};
@@ -221,6 +222,40 @@ impl WeavineClient {
                 Err(e) => return Err(McpError::Request(e.to_string())),
             }
         }
+    }
+
+    /// Typed wrapper around [`get`](Self::get). Use this from new tool
+    /// handlers to avoid manual `serde_json::from_value(value)` boilerplate.
+    pub async fn get_json<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, &str)],
+        api_key: &str,
+    ) -> McpResult<T> {
+        let v = self.get(path, query, api_key).await?;
+        serde_json::from_value(v).map_err(|e| McpError::Serde(e.to_string()))
+    }
+
+    /// Typed wrapper around [`post`](Self::post).
+    pub async fn post_json<Req: Serialize, Resp: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &Req,
+        api_key: &str,
+    ) -> McpResult<Resp> {
+        let v = self.post(path, body, api_key).await?;
+        serde_json::from_value(v).map_err(|e| McpError::Serde(e.to_string()))
+    }
+
+    /// Typed wrapper around [`put`](Self::put).
+    pub async fn put_json<Req: Serialize, Resp: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &Req,
+        api_key: &str,
+    ) -> McpResult<Resp> {
+        let v = self.put(path, body, api_key).await?;
+        serde_json::from_value(v).map_err(|e| McpError::Serde(e.to_string()))
     }
 }
 

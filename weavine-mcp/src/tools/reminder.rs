@@ -90,49 +90,44 @@ pub struct UpdateReminderBody {
 }
 
 impl WeavineMcpServer {
-    pub async fn list_reminders(
-        &self,
-        q: ListRemindersQuery,
-    ) -> McpResult<serde_json::Value> {
-        let mut pairs: Vec<(&str, String)> = Vec::new();
-        if let Some(v) = q.contact_id { pairs.push(("contact_id", v)); }
-        if let Some(v) = q.event_id { pairs.push(("event_id", v)); }
-        if let Some(v) = q.include_dismissed { pairs.push(("include_dismissed", v.to_string())); }
-        if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
-        let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let v = self.client.get("/api/reminders", &refs, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(list_reminders)))]
+        pub async fn list_reminders(&self,
+        q: ListRemindersQuery,) -> McpResult<serde_json::Value> {
+            let mut pairs: Vec<(&str, String)> = Vec::new();
+            if let Some(v) = q.contact_id { pairs.push(("contact_id", v)); }
+            if let Some(v) = q.event_id { pairs.push(("event_id", v)); }
+            if let Some(v) = q.include_dismissed { pairs.push(("include_dismissed", v.to_string())); }
+            if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
+            let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            let v = self.client.get("/api/reminders", &refs, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn get_reminder(
-        &self,
-        input: ReminderId,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.get(&format!("/api/reminders/{}", input.id), &[], api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(get_reminder)))]
+        pub async fn get_reminder(&self,
+        input: ReminderId,) -> McpResult<serde_json::Value> {
+            let v = self.client.get(&format!("/api/reminders/{}", input.id), &[], api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn create_reminder(
-        &self,
-        body: CreateReminderBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.post("/api/reminders", &body, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(create_reminder)))]
+        pub async fn create_reminder(&self,
+        body: CreateReminderBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.post("/api/reminders", &body, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn update_reminder(
-        &self,
-        input: UpdateReminderBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.put(&format!("/api/reminders/{}", input.id), &input.fields, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(update_reminder)))]
+        pub async fn update_reminder(&self,
+        input: UpdateReminderBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.put(&format!("/api/reminders/{}", input.id), &input.fields, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn delete_reminder(
-        &self,
-        input: ReminderId,
-    ) -> McpResult<serde_json::Value> {
-        self.client.delete(&format!("/api/reminders/{}", input.id), api!()).await?;
-        Ok(serde_json::json!({ "ok": true }))
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(delete_reminder)))]
+        pub async fn delete_reminder(&self,
+        input: ReminderId,) -> McpResult<serde_json::Value> {
+            self.client.delete(&format!("/api/reminders/{}", input.id), api!()).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
 }

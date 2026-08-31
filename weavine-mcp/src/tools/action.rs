@@ -125,50 +125,45 @@ pub struct UpdateActionBody {
 }
 
 impl WeavineMcpServer {
-    pub async fn list_actions(
-        &self,
-        q: ListActionsQuery,
-    ) -> McpResult<serde_json::Value> {
-        let mut pairs: Vec<(&str, String)> = Vec::new();
-        if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
-        if let Some(v) = &q.project_id { pairs.push(("project_id", v.clone())); }
-        if let Some(v) = &q.status { pairs.push(("status", v.clone())); }
-        if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
-        if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
-        let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
-        let v = self.client.get("/api/actions", &refs, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(list_actions)))]
+        pub async fn list_actions(&self,
+        q: ListActionsQuery,) -> McpResult<serde_json::Value> {
+            let mut pairs: Vec<(&str, String)> = Vec::new();
+            if let Some(v) = &q.contact_id { pairs.push(("contact_id", v.clone())); }
+            if let Some(v) = &q.project_id { pairs.push(("project_id", v.clone())); }
+            if let Some(v) = &q.status { pairs.push(("status", v.clone())); }
+            if let Some(v) = q.limit { pairs.push(("limit", v.to_string())); }
+            if let Some(v) = q.offset { pairs.push(("offset", v.to_string())); }
+            let refs: Vec<(&str, &str)> = pairs.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            let v = self.client.get("/api/actions", &refs, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn get_action(
-        &self,
-        input: ActionId,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.get(&format!("/api/actions/{}", input.id), &[], api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(get_action)))]
+        pub async fn get_action(&self,
+        input: ActionId,) -> McpResult<serde_json::Value> {
+            let v = self.client.get(&format!("/api/actions/{}", input.id), &[], api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn create_action(
-        &self,
-        body: CreateActionBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.post("/api/actions", &body, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(create_action)))]
+        pub async fn create_action(&self,
+        body: CreateActionBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.post("/api/actions", &body, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn update_action(
-        &self,
-        input: UpdateActionBody,
-    ) -> McpResult<serde_json::Value> {
-        let v = self.client.put(&format!("/api/actions/{}", input.id), &input.fields, api!()).await?;
-        Ok(v)
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(update_action)))]
+        pub async fn update_action(&self,
+        input: UpdateActionBody,) -> McpResult<serde_json::Value> {
+            let v = self.client.put(&format!("/api/actions/{}", input.id), &input.fields, api!()).await?;
+            Ok(v)
+        }
 
-    pub async fn delete_action(
-        &self,
-        input: ActionId,
-    ) -> McpResult<serde_json::Value> {
-        self.client.delete(&format!("/api/actions/{}", input.id), api!()).await?;
-        Ok(serde_json::json!({ "ok": true }))
-    }
+    #[tracing::instrument(skip_all, fields(tool = stringify!(delete_action)))]
+        pub async fn delete_action(&self,
+        input: ActionId,) -> McpResult<serde_json::Value> {
+            self.client.delete(&format!("/api/actions/{}", input.id), api!()).await?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
 }
