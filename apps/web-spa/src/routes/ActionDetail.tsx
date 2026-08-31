@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -42,7 +41,7 @@ export function ActionDetail() {
   const fromParam = searchParams.get('from');
 
   const back = backTarget(fromParam, '/actions');
-  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
+  const tab = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
 
   const actionQuery = useQuery({
     queryKey: ['action', id],
@@ -174,10 +173,7 @@ export function ActionDetail() {
       />
 
       <GraphTab
-        activeTab={tab}
-        onTabChange={setTab}
         center={{ type: 'action', id }}
-        creatable={['note']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />

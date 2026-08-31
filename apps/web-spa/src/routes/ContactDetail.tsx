@@ -11,13 +11,13 @@ import { AvatarViewModal } from '../components/AvatarViewModal';
 import { CadencePicker } from '../components/CadencePicker';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
-import { CardImageViewModal } from '../components/CardImageViewModal';
+
 import { GraphTab } from '../components/GraphTab';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { backTarget } from '../lib/backNavigation';
-import type { CreateInteractionInput, MediaItem } from '../lib/adapter/types';
+import type { CreateInteractionInput } from '../lib/adapter/types';
 
 const IMPORTANCE_LABELS: Record<string, string> = {
   normal: '普通',
@@ -83,17 +83,6 @@ export function ContactDetail() {
     enabled: !!userId,
   });
 
-  const cardImagesQuery = useQuery({
-    queryKey: ['media', 'card_image', 'contact', id],
-    queryFn: () =>
-      adapter.media.listByOwner({
-        kind: 'card_image',
-        owner_type: 'contact',
-        owner_id: id,
-      }),
-    enabled: !!id,
-  });
-
   const [interactionSummary, setInteractionSummary] = useState('');
   const [interactionChannel, setInteractionChannel] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -101,14 +90,7 @@ export function ContactDetail() {
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [viewingAvatar, setViewingAvatar] = useState(false);
-  const [viewingCard, setViewingCard] = useState(false);
-  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
-
-  const cardImages: MediaItem[] = cardImagesQuery.data ?? [];
-  const cardImageUrl = (m: MediaItem) =>
-    adapter.baseUrl
-      ? `${adapter.baseUrl}/files/${m.storage_key}`
-      : `/files/${m.storage_key}`;
+  const tab = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
 
   const createInteractionMutation = useMutation({
     mutationFn: (input: CreateInteractionInput) => adapter.interactions.create(input),
@@ -343,10 +325,8 @@ export function ContactDetail() {
       </div>
 
       <GraphTab
-        activeTab={tab}
-        onTabChange={setTab}
         center={{ type: 'contact', id }}
-        creatable={['project', 'event', 'action', 'note']}
+        creatable={['project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
@@ -404,21 +384,6 @@ export function ContactDetail() {
           </span>
         </div>
       </section>
-
-      {cardImages.length > 0 && (
-        <section className="section">
-          <h2 className="section__title">名片</h2>
-          <div className="card" style={{ marginTop: 10, padding: 16 }}>
-            <img
-              src={cardImageUrl(cardImages[0])}
-              alt={`${displayName} 的名片`}
-              onClick={() => setViewingCard(true)}
-              style={{ maxWidth: 320, maxHeight: 220, borderRadius: 6, cursor: 'pointer' }}
-              data-testid="contact-card-image"
-            />
-          </div>
-        </section>
-      )}
 
       <section className="section">
         <div className="section__header">
@@ -589,14 +554,6 @@ export function ContactDetail() {
           src={contactAvatarUrl}
           alt={displayName}
           onClose={() => setViewingAvatar(false)}
-        />
-      )}
-
-      {viewingCard && cardImages.length > 0 && (
-        <CardImageViewModal
-          src={cardImageUrl(cardImages[0])}
-          alt={`${displayName} 的名片`}
-          onClose={() => setViewingCard(false)}
         />
       )}
 

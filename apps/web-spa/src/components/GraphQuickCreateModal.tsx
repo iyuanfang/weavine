@@ -5,17 +5,18 @@ import { GraphQuickProjectForm } from './GraphQuickProjectForm';
 import { GraphQuickEventForm } from './GraphQuickEventForm';
 import { GraphQuickActionForm } from './GraphQuickActionForm';
 import { GraphQuickNoteForm } from './GraphQuickNoteForm';
+import { GraphQuickInteractionForm } from './GraphQuickInteractionForm';
 import { TYPE_META } from './EntityGraph';
 import type { EntityGraphNodeType } from '../lib/adapter/types';
 
-export type CreateKind = 'project' | 'event' | 'action' | 'note';
+export type CreateKind = 'project' | 'event' | 'action' | 'note' | 'interaction';
 
 export interface GraphCenter {
   type: EntityGraphNodeType;
   id: string;
 }
 
-const ALL_CREATABLE: CreateKind[] = ['project', 'event', 'action', 'note'];
+const ALL_CREATABLE: CreateKind[] = ['project', 'event', 'action', 'note', 'interaction'];
 
 export interface GraphQuickCreateModalProps {
   center: GraphCenter;
@@ -63,7 +64,9 @@ export function GraphQuickCreateModal({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-            {kind ? `新建${labelFor(kind)}` : `新建并关联到此${TYPE_META[center.type].label}`}
+            {kind
+              ? `新建${labelFor(kind)}`
+              : `关联到此${TYPE_META[center.type].label}`}
           </h3>
           <button
             type="button"
@@ -77,34 +80,36 @@ export function GraphQuickCreateModal({
         </div>
 
         {!kind && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {options.map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKind(k)}
-                data-testid={`graph-quick-create-${k}`}
-                style={{
-                  padding: 14,
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 8,
-                  background: '#fff',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  fontSize: 14,
-                }}
-              >
-                <span style={{ fontSize: 20 }}>{TYPE_META[k].icon}</span>
-                <span>
-                  <strong>{labelFor(k)}</strong>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{hintFor(k)}</div>
-                </span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {options.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  data-testid={`graph-quick-create-${k}`}
+                  style={{
+                    padding: 14,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    background: '#fff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    fontSize: 14,
+                  }}
+                >
+                  <span style={{ fontSize: 20 }}>{TYPE_META[k].icon}</span>
+                  <span>
+                    <strong>{labelFor(k)}</strong>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{hintFor(k)}</div>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {kind === 'project' && (
@@ -139,6 +144,14 @@ export function GraphQuickCreateModal({
             onCancel={() => setKind(null)}
           />
         )}
+        {kind === 'interaction' && (
+          <GraphQuickInteractionForm
+            center={center}
+            onClose={onClose}
+            onCreated={(id) => onCreated?.('interaction', id)}
+            onCancel={() => setKind(null)}
+          />
+        )}
       </div>
     </div>
   );
@@ -154,6 +167,7 @@ function hintFor(k: CreateKind): string {
     case 'event': return '约见/会议/截止日';
     case 'action': return '下一步要做的';
     case 'note': return '随手记一段';
+    case 'interaction': return '一次沟通互动';
   }
 }
 
@@ -165,5 +179,6 @@ export function useGraphInvalidation() {
     queryClient.invalidateQueries({ queryKey: ['events'] });
     queryClient.invalidateQueries({ queryKey: ['actions'] });
     queryClient.invalidateQueries({ queryKey: ['notes'] });
+    queryClient.invalidateQueries({ queryKey: ['interactions'] });
   };
 }

@@ -95,22 +95,40 @@ const NOTE_TEMPLATES: { id: string; icon: string; title: string; body: string }[
 `,
   },
   {
-    id: 'gratitude',
-    icon: '🙏',
-    title: '感谢日志',
-    body: `# 感谢
+    id: 'project-doc',
+    icon: '📘',
+    title: '项目文档',
+    body: `# 项目文档
 
-**对象**：
-**事由**：
-**时间**：
+**项目名称**：
+**负责人**：
+**状态**：
 
-## 对方给我的帮助
+## 概述
 - 
 
-## 对我的影响
+## 目标
+- [ ] 
+
+## 范围
+- **包含**：
+- **不包含**：
+
+## 里程碑
+| 时间 | 节点 | 负责人 |
+|------|------|--------|
+|      |      |        |
+
+## 利益相关方
 - 
 
-## 我可以回报的
+## 风险 & 缓解
+- 
+
+## 决策记录
+- 
+
+## 参考
 - 
 
 `,
@@ -553,6 +571,24 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
             </button>
           )}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+            {(mode === 'edit' || mode === 'split') && body.trim() === '' && (
+              <div className="note-edit__templates">
+                <span className="note-edit__templates-label">快速开始：</span>
+                {NOTE_TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="note-edit__template"
+                    onClick={() => {
+                      setBody(t.body);
+                      setTitle(t.title);
+                    }}
+                  >
+                    {t.icon} {t.title}
+                  </button>
+                ))}
+              </div>
+            )}
             {mode === 'split' && (
               <EditorToolbar
                 onAction={(action) => newEditorRef.current?.runAction(action)}
@@ -561,24 +597,6 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
             <div style={{ flex: 1, display: 'flex', minWidth: 0, alignItems: 'stretch' }}>
             {(mode === 'edit' || mode === 'split') && (
               <div className="note-edit__editor" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-                {body.trim() === '' && mode === 'edit' && (
-                  <div className="note-edit__templates">
-                    <span className="note-edit__templates-label">快速开始：</span>
-                    {NOTE_TEMPLATES.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className="note-edit__template"
-                        onClick={() => {
-                          setBody(t.body);
-                          setTitle(t.title);
-                        }}
-                      >
-                        {t.icon} {t.title}
-                      </button>
-                    ))}
-                  </div>
-                )}
                 <MarkdownEditor
                   ref={newEditorRef}
                   value={body}
@@ -633,6 +651,7 @@ export function NoteDetail() {
   const userId = useUserId() ?? '';
   const navigate = useNavigate();
   const rosters = useEntityRosters();
+  const [searchParams] = useSearchParams();
   const [note, setNote] = useState<Note | null | undefined>(undefined);
   const [mode, setMode] = useState<'edit' | 'preview' | 'split'>('preview');
   const [tocOpen, setTocOpen] = useState(false);
@@ -642,7 +661,7 @@ export function NoteDetail() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
+  const tab = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
   const dirtyRef = useRef(false);
   const saveTokenRef = useRef(0);
   const debounceHandleRef = useRef<number | null>(null);
@@ -876,10 +895,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
       </header>
 
       <GraphTab
-        activeTab={tab}
-        onTabChange={setTab}
         center={{ type: 'note', id: id as string }}
-        creatable={[]}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />

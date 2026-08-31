@@ -100,17 +100,6 @@ export function GraphView() {
     navigate(detailHref(n.entity_type, n.id));
   };
 
-  const onNeighborDrill = (n: EntityGraphNode, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!SUPPORTED_CENTERS.includes(n.entity_type)) return;
-    emit('graph_node_click', {
-      entity_type: n.entity_type,
-      center_type: centerType,
-      action: 'drill',
-    });
-    navigate(`/graph/${n.entity_type}/${n.id}`);
-  };
-
   const jumpTo = (c: Crumb, idx: number) => {
     const next = history.slice(0, idx + 1);
     setHistory(next);
@@ -183,12 +172,10 @@ export function GraphView() {
         centerType={centerType}
         centerId={params.entityId}
         onNeighborOpen={onNeighborOpen}
-        onNeighborDrill={onNeighborDrill}
       />
 
       <div className="card" style={{ padding: 12, marginTop: 12, fontSize: 12, color: '#64748b' }}>
-        <strong>提示:</strong>单击节点 = 打开详情页;节点右上角 ↗ = 以此节点为中心重新画图(钻取);
-        顶部面包屑可跳回任意层级。
+        <strong>提示:</strong>单击节点 = 打开该节点的关系图; 顶部面包屑可跳回任意层级。
       </div>
     </div>
   );

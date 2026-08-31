@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -93,7 +93,11 @@ export function ProjectDetail() {
 
   const back = backTarget(fromParam, '/projects');
 
-  const [tab, setTab] = useState<TabKey>('overview');
+  const urlTab = searchParams.get('tab') === 'graph' ? 'graph' : null;
+  const [tab, setTab] = useState<TabKey>(urlTab ?? 'overview');
+  useEffect(() => {
+    if (urlTab) setTab(urlTab);
+  }, [urlTab]);
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
   const [draftRoles, setDraftRoles] = useState<Record<string, string>>({});
@@ -1048,10 +1052,7 @@ export function ProjectDetail() {
 
       {tab === 'graph' && (
         <GraphTab
-          activeTab="graph"
-          onTabChange={(t) => setTab(t === 'detail' ? 'overview' : 'graph')}
           center={{ type: 'project', id }}
-          creatable={['event', 'action', 'note']}
           bare
         />
       )}

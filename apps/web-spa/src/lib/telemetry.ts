@@ -30,7 +30,7 @@ export interface TelemetryPayload {
   graph_node_click: {
     entity_type: string;
     center_type: string;
-    action: 'detail' | 'drill';
+    action: 'detail' | 'drill' | 'graph';
   };
   graph_overflow: {
     hidden_count: number;

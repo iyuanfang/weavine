@@ -1,18 +1,20 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { EntityGraph, ALL_TYPES, GRAPH_NODE_CAP, TYPE_META } from './EntityGraph';
-import { GraphQuickCreateModal, type CreateKind, type GraphCenter } from './GraphQuickCreateModal';
+import { ALL_TYPES, GRAPH_NODE_CAP, TYPE_META, type GraphCenter } from './EntityGraph';
+import { GraphQuickCreateModal, type CreateKind } from './GraphQuickCreateModal';
 import { emit } from '../lib/telemetry';
+import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
+
+const EntityGraph = lazy(() => import('./EntityGraph').then((m) => ({ default: m.EntityGraph })));
 
 export type GraphTabKey = 'detail' | 'graph';
 
 export interface GraphTabProps {
   center: GraphCenter;
-  creatable: CreateKind[];
-  activeTab: GraphTabKey;
-  onTabChange: (tab: GraphTabKey) => void;
+  creatable?: CreateKind[];
   detailLabel?: string;
   graphLabel?: string;
   bare?: boolean;
@@ -20,18 +22,36 @@ export interface GraphTabProps {
 
 export function GraphTab({
   center,
-  creatable,
-  activeTab,
-  onTabChange,
+  creatable = [],
   detailLabel = '详情',
   graphLabel = '🕸️ 关系图',
   bare = false,
 }: GraphTabProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab: GraphTabKey = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
+  const onTabChange = (tab: GraphTabKey) => {
+    setSearchParams(tab === 'graph' ? { tab: 'graph' } : {});
+  };
   const [visibleTypes, setVisibleTypes] = useState<ReadonlySet<EntityGraphNodeType>>(
     () => loadVisibleTypes(center)
   );
   const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [tabHovered, setTabHovered] = useState(false);
+
+  const adapter = useAdapter();
+  const graphQuery = useQuery({
+    queryKey: ['entity-graph', center.type, center.id],
+    queryFn: () => adapter.graph.get(center.type, center.id),
+    enabled: tabHovered || activeTab === 'graph',
+  });
+  const availableTypes = useMemo<ReadonlySet<EntityGraphNodeType>>(() => {
+    const set = new Set<EntityGraphNodeType>();
+    for (const n of graphQuery.data?.nodes ?? []) {
+      if (!n.is_center) set.add(n.entity_type);
+    }
+    return set;
+  }, [graphQuery.data]);
 
   useEffect(() => {
     persistVisibleTypes(center, visibleTypes);
@@ -47,25 +67,22 @@ export function GraphTab({
     }
   }, [activeTab, center]);
 
-  const onNeighborOpen = (n: EntityGraphNode) => {
-    emit('graph_node_click', {
-      entity_type: n.entity_type,
-      center_type: center.type,
-      action: 'detail',
-    });
-    navigate(detailHrefFromNode(n));
-  };
+  const onNeighborOpen = useCallback(
+    (n: EntityGraphNode) => {
+      emit('graph_node_click', {
+        entity_type: n.entity_type,
+        center_type: center.type,
+        action: 'graph',
+      });
+      navigate(graphHrefFromNode(n));
+    },
+    [center.type, navigate]
+  );
 
-  const onNeighborDrill = (n: EntityGraphNode, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!['contact', 'project', 'event', 'action', 'note', 'interaction'].includes(n.entity_type)) return;
-    emit('graph_node_click', {
-      entity_type: n.entity_type,
-      center_type: center.type,
-      action: 'drill',
-    });
-    navigate(`/graph/${n.entity_type}/${n.id}`);
-  };
+  const handleQuickCreate = useCallback(() => setShowQuickCreate(true), []);
+
+  const showEmptyCta =
+    !!graphQuery.data && availableTypes.size === 0 && creatable.length > 0;
 
   return (
     <>
@@ -95,6 +112,7 @@ export function GraphTab({
             aria-selected={activeTab === 'graph'}
             data-testid={`${center.type}-graph-tab`}
             onClick={() => onTabChange('graph')}
+            onMouseEnter={() => setTabHovered(true)}
             style={tabStyle(activeTab === 'graph')}
           >
             {graphLabel}
@@ -113,26 +131,30 @@ export function GraphTab({
               marginBottom: 8,
             }}
           >
-            <span style={{ fontSize: 12, color: '#64748b' }}>筛选类型:</span>
-            <button
-              type="button"
-              data-testid={`${center.type}-filter-all`}
-              onClick={() => setVisibleTypes(new Set(ALL_TYPES))}
-              disabled={visibleTypes.size === ALL_TYPES.length}
-              style={bulkBtnStyle(visibleTypes.size === ALL_TYPES.length)}
-            >
-              全选
-            </button>
-            <button
-              type="button"
-              data-testid={`${center.type}-filter-none`}
-              onClick={() => setVisibleTypes(new Set())}
-              disabled={visibleTypes.size === 0}
-              style={bulkBtnStyle(visibleTypes.size === 0)}
-            >
-              全不选
-            </button>
-            {ALL_TYPES.map((t) => {
+            {availableTypes.size > 1 && (
+              <>
+                <span style={{ fontSize: 12, color: '#64748b' }}>筛选类型:</span>
+                <button
+                  type="button"
+                  data-testid={`${center.type}-filter-all`}
+                  onClick={() => setVisibleTypes(new Set(ALL_TYPES))}
+                  disabled={visibleTypes.size === ALL_TYPES.length}
+                  style={bulkBtnStyle(visibleTypes.size === ALL_TYPES.length)}
+                >
+                  全选
+                </button>
+                <button
+                  type="button"
+                  data-testid={`${center.type}-filter-none`}
+                  onClick={() => setVisibleTypes(new Set())}
+                  disabled={visibleTypes.size === 0}
+                  style={bulkBtnStyle(visibleTypes.size === 0)}
+                >
+                  全不选
+                </button>
+              </>
+            )}
+            {ALL_TYPES.filter((t) => availableTypes.has(t)).map((t) => {
               const meta = TYPE_META[t];
               const checked = visibleTypes.has(t);
               return (
@@ -172,7 +194,7 @@ export function GraphTab({
               <button
                 type="button"
                 data-testid={`${center.type}-quick-create-open`}
-                onClick={() => setShowQuickCreate(true)}
+                onClick={handleQuickCreate}
                 style={{ marginLeft: 'auto', padding: '6px 12px' }}
                 className="btn btn-primary"
               >
@@ -180,17 +202,44 @@ export function GraphTab({
               </button>
             )}
           </div>
-          <EntityGraph
-            centerType={center.type}
-            centerId={center.id}
-            visibleTypes={visibleTypes}
-            onNeighborOpen={onNeighborOpen}
-            onNeighborDrill={onNeighborDrill}
-            onQuickCreate={creatable.length > 0 ? () => setShowQuickCreate(true) : undefined}
-          />
+          <Suspense fallback={<div style={{ padding: 16, color: '#64748b' }}>加载中…</div>}>
+            <EntityGraph
+              centerType={center.type}
+              centerId={center.id}
+              visibleTypes={visibleTypes}
+              onNeighborOpen={onNeighborOpen}
+              onQuickCreate={creatable.length > 0 ? handleQuickCreate : undefined}
+            />
+          </Suspense>
+          {showEmptyCta && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 16,
+                border: '1px dashed #cbd5e1',
+                borderRadius: 8,
+                textAlign: 'center',
+                background: '#f8fafc',
+              }}
+            >
+              <div style={{ fontSize: 14, color: '#475569', marginBottom: 8 }}>
+                暂无关联 — 添加第一条
+              </div>
+              <button
+                type="button"
+                data-testid={`${center.type}-empty-create-cta`}
+                onClick={handleQuickCreate}
+                className="btn btn-primary"
+                style={{ padding: '6px 12px' }}
+              >
+                + 添加{TYPE_META[creatable[0]].label}
+              </button>
+            </div>
+          )}
           <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
-            单击节点 = 打开详情页;↗ = 以此节点为中心重画图;中央 + = 新建并关联。
-            超过 {GRAPH_NODE_CAP} 个节点的关联会被截断,需要更多请到「完整图」全屏查看。
+            单击节点 = 查看该节点的关系图。
+            {creatable.length > 0 && '点击 + 新建按钮即可在此添加关联实体。'}
+            超过 {GRAPH_NODE_CAP} 个节点的关联会被截断。
           </div>
         </section>
       )}
@@ -258,14 +307,14 @@ function persistVisibleTypes(center: GraphCenter, set: ReadonlySet<EntityGraphNo
   }
 }
 
-function detailHrefFromNode(n: EntityGraphNode): string {
+function graphHrefFromNode(n: EntityGraphNode): string {
   switch (n.entity_type) {
-    case 'contact': return `/contacts/${n.id}`;
-    case 'project': return `/projects/${n.id}`;
-    case 'event': return `/events/${n.id}`;
-    case 'action': return `/actions/${n.id}`;
-    case 'note': return `/notes/${n.id}`;
-    case 'interaction': return `/interactions/${n.id}`;
+    case 'contact': return `/contacts/${n.id}?tab=graph`;
+    case 'project': return `/projects/${n.id}?tab=graph`;
+    case 'event': return `/events/${n.id}?tab=graph`;
+    case 'action': return `/actions/${n.id}?tab=graph`;
+    case 'note': return `/notes/${n.id}?tab=graph`;
+    case 'interaction': return `/interactions/${n.id}?tab=graph`;
     default: return '/';
   }
 }

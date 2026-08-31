@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -26,7 +25,7 @@ export function EventDetail() {
   const fromParam = searchParams.get('from');
 
   const back = backTarget(fromParam, '/calendar');
-  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
+  const tab = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
 
   const eventQuery = useQuery({
     queryKey: ['event', id],
@@ -106,10 +105,7 @@ export function EventDetail() {
       />
 
       <GraphTab
-        activeTab={tab}
-        onTabChange={setTab}
         center={{ type: 'event', id }}
-        creatable={['note']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />

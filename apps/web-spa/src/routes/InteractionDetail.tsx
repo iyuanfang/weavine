@@ -71,7 +71,7 @@ export function InteractionDetail() {
   const [editSummary, setEditSummary] = useState('');
   const [editOccurredAt, setEditOccurredAt] = useState('');
   const [editChannel, setEditChannel] = useState('');
-  const [tab, setTab] = useState<'detail' | 'graph'>('detail');
+  const tab = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
 
   // Seed edit fields when entering edit mode (or when the interaction loads).
   useEffect(() => {
@@ -208,10 +208,7 @@ export function InteractionDetail() {
       />
 
       <GraphTab
-        activeTab={tab}
-        onTabChange={setTab}
         center={{ type: 'interaction', id: id as string }}
-        creatable={[]}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
