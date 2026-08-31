@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType, EntityGraphResponse } from '../lib/adapter/types';
 
 const W = 900;
 const H = 600;
-const R_INNER = 70;
+const CX = W / 2;
+const CY = H / 2;
+const R_INNER = 80;
 const R_OUTER = 230;
 const NODE_R = 28;
 const CENTER_R = 44;
@@ -33,6 +35,11 @@ export const TYPE_META: Record<EntityGraphNodeType, { icon: string; color: strin
 
 export const ALL_TYPES: EntityGraphNodeType[] = Object.keys(TYPE_META) as EntityGraphNodeType[];
 
+export interface GraphCenter {
+  type: EntityGraphNodeType;
+  id: string;
+}
+
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
@@ -48,11 +55,6 @@ export interface EntityGraphProps {
   /** Called when a neighbor node is single-clicked. */
   onNeighborOpen: (n: EntityGraphNode) => void;
   /**
-   * Called when a neighbor's drill arrow (↗) is clicked. Receives the
-   * underlying click event so the parent can stopPropagation as needed.
-   */
-  onNeighborDrill: (n: EntityGraphNode, e: React.MouseEvent) => void;
-  /**
    * Optional: if provided, a "+" badge is rendered on the center node
    * that triggers this callback when clicked.
    */
@@ -66,7 +68,6 @@ export function EntityGraph({
   centerId,
   visibleTypes,
   onNeighborOpen,
-  onNeighborDrill,
   onQuickCreate,
   bare,
 }: EntityGraphProps) {
@@ -97,7 +98,7 @@ export function EntityGraph({
 
   if (!data) return null;
 
-  return <GraphSvg data={data} onNeighborOpen={onNeighborOpen} onNeighborDrill={onNeighborDrill} onQuickCreate={onQuickCreate} />;
+  return <GraphSvg data={data} onNeighborOpen={onNeighborOpen} onQuickCreate={onQuickCreate} />;
 }
 
 /**
@@ -142,25 +143,18 @@ function applyFilterAndCap(
   };
 }
 
-interface GraphSvgProps {
-  data: EntityGraphResponse & { hidden_count: number; total_neighbors: number };
-  onNeighborOpen: (n: EntityGraphNode) => void;
-  onNeighborDrill: (n: EntityGraphNode, e: React.MouseEvent) => void;
-  onQuickCreate?: () => void;
+interface LayoutResult {
+  placedAt: Record<string, { x: number; y: number }>;
+  sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number; sectorR: number }>;
 }
 
-function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: GraphSvgProps) {
-  const center = data.nodes.find((n) => n.is_center);
-  const centerType = center?.entity_type;
-  const others = data.nodes.filter((n) => !n.is_center);
-
-  const cx = W / 2;
-  const cy = H / 2;
+function computeLayout(others: EntityGraphNode[]): LayoutResult {
   const placedAt: Record<string, { x: number; y: number }> = {};
-  const sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number; sectorR: number }> = [];
+  const sectors: LayoutResult['sectors'] = [];
 
-  if (others.length === 0) {
-  } else if (others.length <= 8) {
+  if (others.length === 0) return { placedAt, sectors };
+
+  if (others.length <= 8) {
     /**
      * Few-node fast path: skip per-type wedge grouping so a single-type
      * cluster (e.g. 5 notes) doesn't all stack in one wedge vertically.
@@ -179,8 +173,8 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
       })();
       const n = others[i];
       placedAt[`${n.entity_type}:${n.id}`] = {
-        x: cx + r * Math.cos(angle),
-        y: cy + r * Math.sin(angle),
+        x: CX + r * Math.cos(angle),
+        y: CY + r * Math.sin(angle),
       };
     }
   } else {
@@ -267,14 +261,132 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
       nodes.forEach((n, i) => {
         const pos = clusterPos[i];
         placedAt[`${n.entity_type}:${n.id}`] = {
-          x: cx + pos.radius * Math.cos(pos.angle),
-          y: cy + pos.radius * Math.sin(pos.angle),
+          x: CX + pos.radius * Math.cos(pos.angle),
+          y: CY + pos.radius * Math.sin(pos.angle),
         };
       });
       sectors.push({ type: t, midAngle, count: nodes.length, sectorR });
       cursor += sweep;
     }
   }
+
+  return { placedAt, sectors };
+}
+
+interface GraphEdgeProps {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  stroke: string;
+}
+
+/** Memoized edge line — coords are stable across hover state changes. */
+const GraphEdge = memo(function GraphEdge({ ax, ay, bx, by, stroke }: GraphEdgeProps) {
+  return (
+    <line
+      x1={ax}
+      y1={ay}
+      x2={bx}
+      y2={by}
+      stroke={stroke}
+      strokeWidth={1.5}
+      opacity={0.5}
+    />
+  );
+});
+
+interface HoverableNodeProps {
+  node: EntityGraphNode;
+  isHovered: boolean;
+  x: number;
+  y: number;
+  meta: { icon: string; color: string; label: string };
+  onNeighborOpen: (n: EntityGraphNode) => void;
+  onHoverEnter: (key: string) => void;
+  onHoverLeave: (key: string) => void;
+}
+
+/**
+ * Memoized neighbor node. Props are stable across hover state changes
+ * (node, x, y, meta, callbacks all memoized at the parent), so only the
+ * previously-hovered and newly-hovered nodes re-render when hoveredId
+ * changes — every other node is skipped by React.memo.
+ */
+const HoverableNode = memo(function HoverableNode({
+  node,
+  isHovered,
+  x,
+  y,
+  meta,
+  onNeighborOpen,
+  onHoverEnter,
+  onHoverLeave,
+}: HoverableNodeProps) {
+  const key = `${node.entity_type}:${node.id}`;
+  return (
+    <g
+      data-testid={`graph-node-${node.entity_type}-${node.id}`}
+      style={{ cursor: 'pointer', transition: 'transform 180ms ease' }}
+      onMouseEnter={() => onHoverEnter(key)}
+      onMouseLeave={() => onHoverLeave(key)}
+      onClick={() => onNeighborOpen(node)}
+    >
+      <circle cx={x} cy={y} r={NODE_R + 6} fill="transparent" />
+      <circle
+        cx={x}
+        cy={y}
+        r={isHovered ? NODE_R + 6 : NODE_R}
+        fill="#fff"
+        stroke={meta.color}
+        strokeWidth={isHovered ? 3 : 2}
+        pointerEvents="none"
+        style={isHovered ? { filter: `drop-shadow(0 4px 10px ${meta.color}55)` } : undefined}
+      />
+      <text
+        x={x}
+        y={isHovered ? y + 6 : y + 5}
+        fontSize={isHovered ? 24 : 18}
+        textAnchor="middle"
+        pointerEvents="none"
+      >
+        {meta.icon}
+      </text>
+      <text
+        x={x}
+        y={isHovered ? y + NODE_R + 18 : y + NODE_R + 14}
+        fontSize={isHovered ? 14 : 11}
+        fontWeight={isHovered ? 600 : undefined}
+        fill={isHovered ? '#0f172a' : '#1e293b'}
+        textAnchor="middle"
+        pointerEvents="none"
+        style={{ paintOrder: 'stroke', stroke: '#fafbff', strokeWidth: isHovered ? 4 : 3 }}
+      >
+        {truncate(node.label, isHovered ? 18 : 14)}
+      </text>
+    </g>
+  );
+});
+
+interface GraphSvgProps {
+  data: EntityGraphResponse & { hidden_count: number; total_neighbors: number };
+  onNeighborOpen: (n: EntityGraphNode) => void;
+  onQuickCreate?: () => void;
+}
+
+function GraphSvg({ data, onNeighborOpen, onQuickCreate }: GraphSvgProps) {
+  const center = useMemo(() => data.nodes.find((n) => n.is_center), [data]);
+  const centerType = center?.entity_type;
+  const others = useMemo(() => data.nodes.filter((n) => !n.is_center), [data]);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const { placedAt, sectors } = useMemo(() => computeLayout(others), [others]);
+
+  const onHoverEnter = useCallback((key: string) => setHoveredId(key), []);
+  const onHoverLeave = useCallback(
+    (key: string) => setHoveredId((cur) => (cur === key ? null : cur)),
+    []
+  );
 
   const centerKey = center ? `${center.entity_type}:${center.id}` : '';
 
@@ -294,7 +406,6 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
           }}
         >
           ⚠️ 还有 {data.hidden_count} 个关联未显示(共 {data.total_neighbors} 个)。
-          试试勾选上面的类型筛选,或到完整图页面查看。
         </div>
       )}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -306,37 +417,26 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
           style={{ display: 'block', background: 'linear-gradient(180deg,#fafbff,#f3f4f8)' }}
           data-testid="graph-svg"
         >
-          <circle cx={cx} cy={cy} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
+          <circle cx={CX} cy={CY} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
 
           {data.edges.map((e, i) => {
             const fromKey = `${e.from_type}:${e.from_id}`;
             const toKey = `${e.to_type}:${e.to_id}`;
-            const ax = fromKey === centerKey ? cx : placedAt[fromKey]?.x ?? cx;
-            const ay = fromKey === centerKey ? cy : placedAt[fromKey]?.y ?? cy;
-            const bx = toKey === centerKey ? cx : placedAt[toKey]?.x ?? cx;
-            const by = toKey === centerKey ? cy : placedAt[toKey]?.y ?? cy;
+            const ax = fromKey === centerKey ? CX : placedAt[fromKey]?.x ?? CX;
+            const ay = fromKey === centerKey ? CY : placedAt[fromKey]?.y ?? CY;
+            const bx = toKey === centerKey ? CX : placedAt[toKey]?.x ?? CX;
+            const by = toKey === centerKey ? CY : placedAt[toKey]?.y ?? CY;
             const stroke = TYPE_META[e.to_type]?.color ?? '#94a3b8';
-            return (
-              <line
-                key={i}
-                x1={ax}
-                y1={ay}
-                x2={bx}
-                y2={by}
-                stroke={stroke}
-                strokeWidth={1.5}
-                opacity={0.5}
-              />
-            );
+            return <GraphEdge key={i} ax={ax} ay={ay} bx={bx} by={by} stroke={stroke} />;
           })}
 
           {center && centerType && (
             <g data-testid="graph-center">
-              <circle cx={cx} cy={cy} r={CENTER_R} fill={TYPE_META[centerType].color} stroke="#1e293b" strokeWidth={2} />
-              <text x={cx} y={cy + 5} fontSize="14" fontWeight={700} fill="#fff" textAnchor="middle">
+              <circle cx={CX} cy={CY} r={CENTER_R} fill={TYPE_META[centerType].color} stroke="#1e293b" strokeWidth={2} />
+              <text x={CX} y={CY + 5} fontSize="14" fontWeight={700} fill="#fff" textAnchor="middle">
                 {TYPE_META[centerType].icon}
               </text>
-              <text x={cx} y={cy + CENTER_R + 16} fontSize="12" fontWeight={600} fill="#1e293b" textAnchor="middle">
+              <text x={CX} y={CY + CENTER_R + 16} fontSize="12" fontWeight={600} fill="#1e293b" textAnchor="middle">
                 {truncate(center.label, 18)}
               </text>
               {onQuickCreate && (
@@ -346,16 +446,16 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
                   onClick={onQuickCreate}
                 >
                   <circle
-                    cx={cx + CENTER_R - 4}
-                    cy={cy - CENTER_R + 4}
+                    cx={CX + CENTER_R - 4}
+                    cy={CY - CENTER_R + 4}
                     r={13}
                     fill="#fff"
                     stroke={TYPE_META[centerType].color}
                     strokeWidth={2}
                   />
                   <text
-                    x={cx + CENTER_R - 4}
-                    y={cy - CENTER_R + 9}
+                    x={CX + CENTER_R - 4}
+                    y={CY - CENTER_R + 9}
                     fontSize="18"
                     fontWeight={700}
                     fill={TYPE_META[centerType].color}
@@ -372,8 +472,8 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
           {sectors.map((s) => {
             const meta = TYPE_META[s.type];
             const lr = s.sectorR + 30;
-            const lx = cx + lr * Math.cos(s.midAngle);
-            const ly = cy + lr * Math.sin(s.midAngle);
+            const lx = CX + lr * Math.cos(s.midAngle);
+            const ly = CY + lr * Math.sin(s.midAngle);
             const cosA = Math.cos(s.midAngle);
             const sinA = Math.sin(s.midAngle);
             const anchor = Math.abs(cosA) < 0.3 ? 'middle' : cosA > 0 ? 'start' : 'end';
@@ -396,78 +496,61 @@ function GraphSvg({ data, onNeighborOpen, onNeighborDrill, onQuickCreate }: Grap
           })}
 
           {others.length === 0 && (
-            <text x={cx} y={cy + R_OUTER + 40} fontSize="13" fill="#94a3b8" textAnchor="middle">
+            <text x={CX} y={CY + R_OUTER + 40} fontSize="13" fill="#94a3b8" textAnchor="middle">
               暂无关联
             </text>
           )}
 
-          {others.map((n) => {
-            const key = `${n.entity_type}:${n.id}`;
-            const p = placedAt[key];
-            if (!p) return null;
-            const meta = TYPE_META[n.entity_type];
-            if (!meta) return null;
-            return (
-              <g
-                key={key}
-                data-testid={`graph-node-${n.entity_type}-${n.id}`}
-                style={{ cursor: 'pointer' }}
-                onClick={() => onNeighborOpen(n)}
-              >
-                <circle cx={p.x} cy={p.y} r={NODE_R + 6} fill="transparent" />
-                <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r={NODE_R}
-                  fill="#fff"
-                  stroke={meta.color}
-                  strokeWidth={2}
-                  pointerEvents="none"
-                />
-                <text x={p.x} y={p.y + 5} fontSize="18" textAnchor="middle" pointerEvents="none">
-                  {meta.icon}
-                </text>
-                <text
+          {others
+            .filter((n) => `${n.entity_type}:${n.id}` !== hoveredId)
+            .map((n) => {
+              const key = `${n.entity_type}:${n.id}`;
+              const p = placedAt[key];
+              if (!p) return null;
+              const meta = TYPE_META[n.entity_type];
+              if (!meta) return null;
+              return (
+                <HoverableNode
+                  key={key}
+                  node={n}
+                  isHovered={false}
                   x={p.x}
-                  y={p.y + NODE_R + 14}
-                  fontSize="11"
-                  fill="#1e293b"
-                  textAnchor="middle"
-                  pointerEvents="none"
-                  style={{ paintOrder: 'stroke', stroke: '#fafbff', strokeWidth: 3 }}
-                >
-                  {truncate(n.label, 14)}
-                </text>
-                <g
-                  data-testid={`graph-node-${n.entity_type}-${n.id}-drill`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => onNeighborDrill(n, e)}
-                >
-                  <circle
-                    cx={p.x + NODE_R - 4}
-                    cy={p.y - NODE_R + 4}
-                    r={11}
-                    fill={meta.color}
-                    stroke="#fff"
-                    strokeWidth={2}
-                  />
-                  <text
-                    x={p.x + NODE_R - 4}
-                    y={p.y - NODE_R + 8}
-                    fontSize="14"
-                    fontWeight={700}
-                    fill="#fff"
-                    textAnchor="middle"
-                    pointerEvents="none"
-                  >
-                    ↗
-                  </text>
-                </g>
-              </g>
-            );
-          })}
+                  y={p.y}
+                  meta={meta}
+                  onNeighborOpen={onNeighborOpen}
+                  onHoverEnter={onHoverEnter}
+                  onHoverLeave={onHoverLeave}
+                />
+              );
+            })}
+
+          {/* SVG has no z-index — re-render the hovered node last so it sits on top */}
+          {others
+            .filter((n) => `${n.entity_type}:${n.id}` === hoveredId)
+            .map((n) => {
+              const key = `${n.entity_type}:${n.id}`;
+              const p = placedAt[key];
+              if (!p) return null;
+              const meta = TYPE_META[n.entity_type];
+              if (!meta) return null;
+              return (
+                <HoverableNode
+                  key={key}
+                  node={n}
+                  isHovered={true}
+                  x={p.x}
+                  y={p.y}
+                  meta={meta}
+                  onNeighborOpen={onNeighborOpen}
+                  onHoverEnter={onHoverEnter}
+                  onHoverLeave={onHoverLeave}
+                />
+              );
+            })}
         </svg>
       </div>
     </>
   );
 }
+
+export default EntityGraph;
