@@ -48,14 +48,14 @@ export function GraphTab({
   const availableTypes = useMemo<ReadonlySet<EntityGraphNodeType>>(() => {
     const set = new Set<EntityGraphNodeType>();
     for (const n of graphQuery.data?.nodes ?? []) {
-      if (!n.is_center) set.add(n.entity_type);
+      if (!n.is_center && TYPE_META[n.entity_type]) set.add(n.entity_type);
     }
     return set;
   }, [graphQuery.data]);
 
   useEffect(() => {
     persistVisibleTypes(center, visibleTypes);
-  }, [center, visibleTypes]);
+  }, [center.type, center.id, visibleTypes]);
 
   useEffect(() => {
     if (activeTab === 'graph') {
@@ -65,7 +65,7 @@ export function GraphTab({
         source: 'tab',
       });
     }
-  }, [activeTab, center]);
+  }, [activeTab, center.type, center.id]);
 
   const onNeighborOpen = useCallback(
     (n: EntityGraphNode) => {

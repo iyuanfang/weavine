@@ -27,7 +27,7 @@ import {
   useAdapter,
   type PRMAdapter,
 } from './lib/adapter';
-import type { Reminder } from './lib/adapter/types';
+import type { Reminder, SyncConflict } from './lib/adapter/types';
 
 interface QuickCaptureApi {
   open: (initialText?: string) => void;
@@ -148,6 +148,30 @@ export function AppInner({ children }: { children?: ReactNode }) {
     };
     window.addEventListener('weavine:reminder', handler);
     return () => window.removeEventListener('weavine:reminder', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const details = (e as CustomEvent<Array<SyncConflict>>).detail;
+      if (!details || details.length === 0) return;
+      for (const c of details) {
+        console.warn(
+          `[weavine:sync-conflicts] kind=${c.kind} row_id=${c.row_id} reason=${c.reason}`,
+        );
+      }
+      if ((window as unknown as { showNotification?: (t: string, b: string) => void }).showNotification) {
+        (window as unknown as { showNotification: (t: string, b: string) => void }).showNotification(
+          '同步冲突',
+          `${details.length} 条记录同步冲突，详见控制台`,
+        );
+      } else {
+        alert(
+          `同步冲突：${details.map((c) => `${c.kind}:${c.row_id} — ${c.reason}`).join('\n')}`,
+        );
+      }
+    };
+    window.addEventListener('weavine:sync-conflicts', handler);
+    return () => window.removeEventListener('weavine:sync-conflicts', handler);
   }, []);
 
   // §11.7 cold-start argv: drain the .md path captured by setup() before the

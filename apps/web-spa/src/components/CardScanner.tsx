@@ -38,6 +38,10 @@ function stripDataUrlPrefix(s: string): string {
   return i >= 0 ? s.slice(i + 1) : s;
 }
 
+const MAX_OCR_SIZE = 10 * 1024 * 1024;
+const DOWNSAMPLE_SIZE = 2 * 1024 * 1024;
+const DOWNSAMPLE_MAX_W = 1600;
+
 async function callExtract(imageBase64: string): Promise<ScanResult> {
   if (isTauri) {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -63,9 +67,46 @@ async function callExtract(imageBase64: string): Promise<ScanResult> {
     headers,
   });
   if (!resp.ok) {
-    throw new Error(`ocr failed: ${resp.status} ${await resp.text()}`);
+    const body = await resp.text();
+    if (resp.status === 413) {
+      throw new Error('图片过大，请压缩到 10MB 以下');
+    }
+    if (resp.status === 408 || resp.status === 504) {
+      throw new Error('OCR 处理超时，请上传更小的图片');
+    }
+    throw new Error(`ocr failed: ${resp.status} ${body}`);
   }
   return resp.json();
+}
+
+function downsample(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      if (img.width <= DOWNSAMPLE_MAX_W) {
+        resolve(file);
+        return;
+      }
+      const scale = DOWNSAMPLE_MAX_W / img.width;
+      const w = DOWNSAMPLE_MAX_W;
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('canvas unavailable')); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (blob) => blob
+          ? resolve(new File([blob], file.name, { type: file.type }))
+          : reject(new Error('downsample failed')),
+        file.type,
+        0.85,
+      );
+    };
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 export function CardScanner({ onApply, disabled }: Props) {
@@ -77,7 +118,12 @@ export function CardScanner({ onApply, disabled }: Props) {
   const onPick = async (file: File) => {
     setError(null);
     setResult(null);
-    const dataUrl = await readAsDataUrl(file);
+    if (file.size > MAX_OCR_SIZE) {
+      setError('图片过大，请压缩到 10MB 以下');
+      return;
+    }
+    const processed = file.size > DOWNSAMPLE_SIZE ? await downsample(file) : file;
+    const dataUrl = await readAsDataUrl(processed);
     setPreview(dataUrl);
     setBusy(true);
     try {

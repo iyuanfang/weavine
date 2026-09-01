@@ -104,10 +104,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <button
             type="button"
             onClick={() => {
-              // SPA nav, not a full reload. See SearchPalette.tsx for the
-              // full explanation of why `window.location.assign()` blanks
-              // the Tauri production webview (no SPA history fallback).
-              window.history.pushState({}, '', '/');
+              // Clear the captured error first — without this the boundary
+              // keeps rendering its fallback and the button appears to do
+              // nothing.
+              this.reset();
+              // SPA nav, not a full reload. See SearchPalette.tsx for why
+              // `window.location.assign()` blanks the Tauri production webview
+              // (no SPA history fallback for unknown paths).
+              //
+              // Target `/today`, not `/`: routes-config has no `/` route (it
+              // was removed so the marketing site could own `/` on web), so
+              // navigating there hits a 404.
+              window.history.pushState({}, '', '/today');
               window.dispatchEvent(new PopStateEvent('popstate'));
             }}
             style={{

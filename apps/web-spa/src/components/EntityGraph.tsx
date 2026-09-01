@@ -192,17 +192,6 @@ function computeLayout(others: EntityGraphNode[]): LayoutResult {
     const gapRad = (SECTOR_GAP_DEG * Math.PI) / 180;
     let cursor = -Math.PI / 2;
 
-    const MARGIN = 30;
-    const HALF_W = (W - 2 * MARGIN) / 2;
-    const HALF_H = (H - 2 * MARGIN) / 2;
-    const maxRForAngle = (angle: number): number => {
-      const cosA = Math.abs(Math.cos(angle));
-      const sinA = Math.abs(Math.sin(angle));
-      if (sinA < 0.01) return HALF_W;
-      if (cosA < 0.01) return HALF_H;
-      return Math.min(HALF_W / cosA, HALF_H / sinA);
-    };
-
     for (const t of orderedTypes) {
       const nodes = byType.get(t)!;
       const sweep = (nodes.length / others.length) * 2 * Math.PI;
@@ -210,17 +199,18 @@ function computeLayout(others: EntityGraphNode[]): LayoutResult {
       const endAngle = cursor + sweep - gapRad / 2;
       const midAngle = (startAngle + endAngle) / 2;
 
-      const sectorR = Math.min(maxRForAngle(midAngle), R_OUTER);
-      const scale = sectorR / R_OUTER;
-      const sectorRInner = R_INNER * scale;
-      const sectorRingSpacing = ringSpacing * scale;
-      const sectorJitter = 40 * scale;
+      /** Viewport 900x600 comfortably contains R_OUTER=230, so no angle-dependent scaling needed. */
+      const sectorR = R_OUTER;
+      const sectorRInner = R_INNER;
+      const sectorRingSpacing = ringSpacing;
+      const sectorJitter = 40;
 
       const ringCapacity = (ring: number): number => {
         if (ring === 0) return 1;
-        return Math.floor(ring / 2) + 2;
+        if (ring === 1) return 6;
+        return 6 + (ring - 1) * 3;
       };
-      const minSpacing = 140;
+      const minSpacing = 100;
       const maxRings = Math.floor((sectorR - sectorRInner) / sectorRingSpacing) + 1;
       const clusterPos: Array<{ angle: number; radius: number }> = [];
       let placed = 0;

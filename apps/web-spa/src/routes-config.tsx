@@ -4,7 +4,7 @@
 // each editing main.tsx (which would cause merge conflicts).
 
 import type { ComponentType, LazyExoticComponent } from 'react';
-import type { RouteObject } from 'react-router-dom';
+import { Link, type RouteObject } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
 import { RequireAuth } from './lib/auth/RequireAuth';
@@ -96,7 +96,28 @@ export const routes: AppRoute[] = [
   { path: '/notes/:id', Component: NoteDetail, label: 'NoteDetail' },
   { path: '/md-editor', Component: MdEditor, label: 'MdEditor' },
   { path: '/graph/:entityType/:entityId', Component: GraphView, label: 'GraphView' },
+  // Catch-all 404. Without it an unknown path matches no route and React
+  // Router renders nothing — a blank window with no way out. `/` is one such
+  // path (it was removed so the marketing site can own it on web), which is
+  // why main.tsx rewrites `/` → `/today` only at boot.
+  { path: '*', Component: NotFound, label: 'NotFound' },
 ];
+
+/** Shown for any path that matches no route. Declared with `function` so it is
+ *  hoisted above the `routes` array that references it. */
+function NotFound() {
+  return (
+    <div className="page">
+      <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>页面不存在</h1>
+      <p style={{ color: 'var(--text-muted)', margin: '0 0 16px', fontSize: 13 }}>
+        这个地址没有对应的页面，可能链接已失效。
+      </p>
+      <Link className="btn" to="/today">
+        返回今日
+      </Link>
+    </div>
+  );
+}
 
 /**
  * Build the React Router v6 data object array. Adapter + QueryClient

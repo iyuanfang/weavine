@@ -61,6 +61,19 @@ export function useReminderPoller() {
             if (!r) return;
             window.dispatchEvent(new CustomEvent("weavine:reminder", { detail: r }));
           });
+          const unlistenSync = await listen<Array<{ kind: string; row_id: string; reason: string }>>(
+            "weavine:sync-conflicts",
+            (event) => {
+              const payload = event.payload;
+              if (!payload || payload.length === 0) return;
+              window.dispatchEvent(new CustomEvent("weavine:sync-conflicts", { detail: payload }));
+            },
+          );
+          return () => {
+            cancelled = true;
+            if (unlisten) unlisten();
+            unlistenSync();
+          };
         } catch (e) {
           console.warn("reminder poller: failed to subscribe to tauri event", e);
         }

@@ -164,6 +164,12 @@ export interface Action {
   project_title?: string | null;
 }
 
+export interface SyncConflict {
+  kind: string;
+  row_id: string;
+  reason: string;
+}
+
 export interface Reminder {
   id: string;
   user_id: string;
@@ -743,6 +749,7 @@ export interface CloudSyncResult {
   pushed: number;
   pulled: number;
   conflicts: number;
+  conflict_details?: Array<{ kind: string; row_id: string; reason: string }>;
 }
 
 export interface ArchiveSummary {
