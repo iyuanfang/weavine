@@ -114,21 +114,32 @@ macro_rules! api {
 }
 
 fn extract_api_key(context: &RequestContext<RoleServer>) -> McpResult<String> {
-    let parts = context
-        .extensions
-        .get::<http::request::Parts>()
-        .ok_or_else(|| McpError::Auth("no http request parts in extensions".into()))?;
-    let auth = parts
-        .headers
-        .get(http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| McpError::Auth("missing Authorization header".into()))?;
-    let key = auth
-        .strip_prefix("Bearer ")
-        .or_else(|| auth.strip_prefix("bearer "))
-        .unwrap_or(auth)
-        .trim()
-        .to_string();
+    let mut key = if let Some(parts) = context.extensions.get::<http::request::Parts>() {
+        parts
+            .headers
+            .get(http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .map(|auth| {
+                auth.strip_prefix("Bearer ")
+                    .or_else(|| auth.strip_prefix("bearer "))
+                    .unwrap_or(auth)
+                    .trim()
+                    .to_string()
+            })
+    } else {
+        None
+    };
+
+    // Stdio transport has no HTTP headers — fall back to env vars.
+    if key.is_none() {
+        key = std::env::var("WEAVINE_MCP_API_KEY")
+            .or_else(|_| std::env::var("WV_MCP_KEY"))
+            .ok();
+    }
+
+    let key = key.ok_or_else(|| {
+        McpError::Auth("missing API key: set WEAVINE_MCP_API_KEY env var (stdio) or Authorization header (HTTP)".into())
+    })?;
     if key.is_empty() {
         return Err(McpError::Auth("empty api key".into()));
     }
@@ -190,15 +201,16 @@ fn tier1_tools() -> Vec<Tool> {
     t.push(tool("delete_note", "Delete a note by id.", schema_of::<note::NoteId>()));
     t.push(tool("list_note_backlinks", "Notes that link to a given entity (entity -> notes).", schema_of::<note::NoteBacklinksQuery>()));
     t.push(tool("list_note_entity_links", "Entities a note links to (note -> entities).", schema_of::<note::NoteId>()));
+    use crate::tools::auth_jwt;
     t.push(tool("quick_parse", "Parse free-form text into a structured QuickItem.", schema_of::<quick::QuickParseBody>()));
+    t.push(tool("auth_register", "Register a new account. No API key needed.", schema_of::<auth_jwt::AuthRegisterInput>()));
+    t.push(tool("auth_login", "Login by email + password. No API key needed.", schema_of::<auth_jwt::AuthLoginInput>()));
     t
 }
 
 fn tier2_tools() -> Vec<Tool> {
-    use crate::tools::{auth_jwt, diagnostic, interaction, search, setting, sync, tag};
-    let mut t = Vec::with_capacity(28);
-    t.push(tool("auth_register", "Register a new account. No API key needed.", schema_of::<auth_jwt::AuthRegisterInput>()));
-    t.push(tool("auth_login", "Login by email + password. No API key needed.", schema_of::<auth_jwt::AuthLoginInput>()));
+    use crate::tools::{diagnostic, interaction, search, setting, sync, tag};
+    let mut t = Vec::with_capacity(26);
     t.push(tool("auth_logout", "Logout the current session.", empty_schema()));
     t.push(tool("diagnostic_user", "Server-side diagnostic of the current user.", schema_of::<diagnostic::DiagnosticUserInput>()));
     t.push(tool("diagnostic_startup", "Server startup diagnostic — db connectivity, sync status, counts.", empty_schema()));
@@ -220,6 +232,42 @@ fn tier2_tools() -> Vec<Tool> {
     t
 }
 
+/// Tool names available in Tier 1 (Default).
+fn tier1_tool_names() -> &'static [&'static str] {
+    &[
+        "list_contacts", "get_contact", "create_contact", "update_contact", "delete_contact",
+        "upcoming_events", "list_events", "get_event", "create_event", "update_event", "delete_event",
+        "list_actions", "get_action", "create_action", "update_action", "delete_action",
+        "list_projects", "get_project", "create_project", "update_project", "delete_project",
+        "list_project_contacts", "add_project_contact", "remove_project_contact",
+        "list_reminders", "get_reminder", "create_reminder", "update_reminder", "delete_reminder",
+        "list_notes", "get_note", "create_note", "update_note", "delete_note",
+        "list_note_backlinks", "list_note_entity_links",
+        "quick_parse",
+        "auth_register", "auth_login",
+    ]
+}
+
+/// Tool names gated behind Tier 2 (Full).
+fn tier2_tool_names() -> &'static [&'static str] {
+    &[
+        "auth_logout",
+        "diagnostic_user", "diagnostic_startup",
+        "list_tags", "create_tag", "update_tag", "delete_tag",
+        "list_interactions", "get_interaction", "create_interaction", "update_interaction", "delete_interaction",
+        "list_settings", "upsert_setting", "delete_setting",
+        "search",
+        "sync_manifest", "sync_pull",
+    ]
+}
+
+/// Public auth tools that do NOT require a `wvk_` API key at the MCP layer.
+/// These tools call `post_public` which sends no Authorization header to weavine-server,
+/// so they must be callable before the user has any credentials.
+fn public_auth_tool_names() -> &'static [&'static str] {
+    &["auth_register", "auth_login"]
+}
+
 impl ServerHandler for WeavineMcpServer {
     async fn call_tool(
         &self,
@@ -228,7 +276,23 @@ impl ServerHandler for WeavineMcpServer {
     ) -> Result<CallToolResult, RmcpError> {
         let args = request.arguments;
         let name = request.name.as_ref();
-        let api_key = extract_api_key(&context)?;
+
+        // Tier check: Tier 2 tools require full tier; unknown tools are rejected.
+        if tier2_tool_names().contains(&name) {
+            if !self.cfg.tier.is_full() {
+                return Err(McpError::Auth(format!("tool '{name}' requires tier=full")).into());
+            }
+        } else if !tier1_tool_names().contains(&name) {
+            return Err(McpError::BadInput(format!("unknown tool: {name}")).into());
+        }
+
+        // Public auth tools (register/login) skip API-key extraction — the user has no key yet.
+        let api_key = if public_auth_tool_names().contains(&name) {
+            String::new()
+        } else {
+            extract_api_key(&context)?
+        };
+
         let v: serde_json::Value = API_KEY
             .scope(api_key, async move {
                 self.dispatch_tool(name, args).await

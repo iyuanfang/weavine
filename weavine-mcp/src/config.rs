@@ -44,6 +44,7 @@ pub struct Config {
     pub tier: Tier,
     pub transport: Transport,
     pub http_bind: String,
+    pub api_key: Option<String>,
 }
 
 impl Config {
@@ -54,11 +55,15 @@ impl Config {
         let transport = Transport::from_env();
         let http_bind = std::env::var("WEAVINE_MCP_HTTP_BIND")
             .unwrap_or_else(|_| "127.0.0.1:3001".to_string());
+        let api_key = std::env::var("WEAVINE_MCP_API_KEY")
+            .or_else(|_| std::env::var("WV_MCP_KEY"))
+            .ok();
         Ok(Config {
             base_url: base_url.trim_end_matches('/').to_string(),
             tier,
             transport,
             http_bind,
+            api_key,
         })
     }
 }
