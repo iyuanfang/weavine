@@ -77,37 +77,37 @@ fn load_center_node(
 ) -> rusqlite::Result<Option<EntityGraphNode>> {
     let row: Option<(String, Option<String>)> = match entity_type {
         "contact" => conn.query_row(
-            "SELECT id, nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT id, nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
         "project" => conn.query_row(
-            "SELECT id, title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT id, title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
         "event" => conn.query_row(
-            "SELECT id, title FROM \"Event\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT id, title FROM \"Event\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
         "action" => conn.query_row(
-            "SELECT id, title FROM \"Action\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT id, title FROM \"Action\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
         "note" => conn.query_row(
-            "SELECT id, title FROM \"Note\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT id, title FROM \"Note\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
         "tag" => conn.query_row(
-            "SELECT id, name FROM \"Tag\" WHERE id = ?1 AND user_id = ?2",
+            "SELECT id, name FROM \"Tag\" WHERE deleted_at IS NULL AND id = ?1 AND user_id = ?2",
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
         "interaction" => conn.query_row(
-            "SELECT id, summary FROM \"Interaction\" WHERE id = ?1 AND user_id = ?2",
+            "SELECT id, summary FROM \"Interaction\" WHERE deleted_at IS NULL AND id = ?1 AND user_id = ?2",
             params![entity_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         ).optional()?,
@@ -143,7 +143,7 @@ fn expand_contact(
     let mut stmt = conn.prepare(
         "SELECT p.id, p.title FROM \"ProjectContact\" pc \
          JOIN \"Project\" p ON p.id = pc.project_id \
-         WHERE pc.contact_id = ?1 AND pc.user_id = ?2 AND p.archived_at IS NULL",
+         WHERE pc.contact_id = ?1 AND pc.user_id = ?2 AND p.archived_at IS NULL AND p.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![contact_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -154,7 +154,7 @@ fn expand_contact(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT id, title FROM \"Event\" WHERE contact_id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+        "SELECT id, title FROM \"Event\" WHERE contact_id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![contact_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -165,7 +165,7 @@ fn expand_contact(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT id, title FROM \"Action\" WHERE contact_id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+        "SELECT id, title FROM \"Action\" WHERE contact_id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![contact_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -176,7 +176,7 @@ fn expand_contact(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT id, summary FROM \"Interaction\" WHERE contact_id = ?1 AND user_id = ?2",
+        "SELECT id, summary FROM \"Interaction\" WHERE deleted_at IS NULL AND contact_id = ?1 AND user_id = ?2",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![contact_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -189,7 +189,7 @@ fn expand_contact(
     let mut stmt = conn.prepare(
         "SELECT n.id, n.title FROM \"NoteEntity\" ne \
          JOIN \"Note\" n ON n.id = ne.note_id \
-         WHERE ne.entity_type = 'contact' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
+         WHERE ne.entity_type = 'contact' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL AND n.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![contact_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -199,19 +199,13 @@ fn expand_contact(
         push_neighbor(response, "note", id, label_or(Some(title), "(untitled)"), None, "contact", contact_id, "note_mentions");
     }
 
-    let mut stmt = conn.prepare(
-        "SELECT t.id, t.name FROM \"ContactTag\" ct \
-         JOIN \"Tag\" t ON t.id = ct.tag_id \
-         WHERE ct.contact_id = ?1 AND ct.user_id = ?2",
-    )?;
-    let rows: Vec<(String, String)> = stmt
-        .query_map(params![contact_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
-    for (id, name) in rows {
-        push_neighbor(response, "tag", id, label_or(Some(name), "(untitled)"), None, "contact", contact_id, "contact_tagged");
-    }
-
+    /**
+     * Tag neighbors intentionally omitted: GraphView UI redesign (2026-07-13)
+     * removed the tag filter toggle, and tag nodes lack TYPE_META definitions
+     * in the frontend, causing layout errors. Tags are still discoverable via
+     * the contact detail page's tag list. See server/handlers/graph.rs for the
+     * same exclusion on the server side.
+     */
     Ok(())
 }
 fn expand_project(
@@ -223,7 +217,7 @@ fn expand_project(
     let mut stmt = conn.prepare(
         "SELECT c.id, c.nickname FROM \"ProjectContact\" pc \
          JOIN \"Contact\" c ON c.id = pc.contact_id \
-         WHERE pc.project_id = ?1 AND pc.user_id = ?2 AND c.archived_at IS NULL",
+         WHERE pc.project_id = ?1 AND pc.user_id = ?2 AND c.archived_at IS NULL AND c.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![project_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -234,7 +228,7 @@ fn expand_project(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT id, title FROM \"Event\" WHERE project_id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+        "SELECT id, title FROM \"Event\" WHERE project_id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![project_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -245,7 +239,7 @@ fn expand_project(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT id, title FROM \"Action\" WHERE project_id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+        "SELECT id, title FROM \"Action\" WHERE project_id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![project_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -258,7 +252,7 @@ fn expand_project(
     let mut stmt = conn.prepare(
         "SELECT n.id, n.title FROM \"NoteEntity\" ne \
          JOIN \"Note\" n ON n.id = ne.note_id \
-         WHERE ne.entity_type = 'project' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
+         WHERE ne.entity_type = 'project' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL AND n.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![project_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -285,7 +279,7 @@ fn expand_event(
 
     if let Some(cid) = contact_id {
         let nickname: Option<String> = conn.query_row(
-            "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![&cid, user_id],
             |r| r.get(0),
         ).optional()?;
@@ -296,7 +290,7 @@ fn expand_event(
 
     if let Some(pid) = project_id {
         let title: Option<String> = conn.query_row(
-            "SELECT title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![&pid, user_id],
             |r| r.get(0),
         ).optional()?;
@@ -307,8 +301,8 @@ fn expand_event(
 
     let mut stmt = conn.prepare(
         "SELECT a.id, a.title FROM \"Action\" a \
-         WHERE a.user_id = ?1 AND a.archived_at IS NULL \
-           AND a.id IN (SELECT action_id FROM \"Interaction\" WHERE event_id = ?2 AND action_id IS NOT NULL)",
+         WHERE a.user_id = ?1 AND a.archived_at IS NULL AND a.deleted_at IS NULL \
+           AND a.id IN (SELECT action_id FROM \"Interaction\" WHERE deleted_at IS NULL AND event_id = ?2 AND action_id IS NOT NULL)",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![user_id, event_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -319,7 +313,7 @@ fn expand_event(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT id, summary FROM \"Interaction\" WHERE event_id = ?1 AND user_id = ?2",
+        "SELECT id, summary FROM \"Interaction\" WHERE deleted_at IS NULL AND event_id = ?1 AND user_id = ?2",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![event_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -332,7 +326,7 @@ fn expand_event(
     let mut stmt = conn.prepare(
         "SELECT n.id, n.title FROM \"NoteEntity\" ne \
          JOIN \"Note\" n ON n.id = ne.note_id \
-         WHERE ne.entity_type = 'event' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
+         WHERE ne.entity_type = 'event' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL AND n.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![event_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -359,7 +353,7 @@ fn expand_action(
 
     if let Some(cid) = contact_id {
         let nickname: Option<String> = conn.query_row(
-            "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![&cid, user_id],
             |r| r.get(0),
         ).optional()?;
@@ -370,7 +364,7 @@ fn expand_action(
 
     if let Some(pid) = project_id {
         let title: Option<String> = conn.query_row(
-            "SELECT title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![&pid, user_id],
             |r| r.get(0),
         ).optional()?;
@@ -381,8 +375,8 @@ fn expand_action(
 
     let mut stmt = conn.prepare(
         "SELECT e.id, e.title FROM \"Event\" e \
-         WHERE e.user_id = ?1 AND e.archived_at IS NULL \
-           AND e.id IN (SELECT event_id FROM \"Interaction\" WHERE action_id = ?2 AND event_id IS NOT NULL)",
+         WHERE e.user_id = ?1 AND e.archived_at IS NULL AND e.deleted_at IS NULL \
+           AND e.id IN (SELECT event_id FROM \"Interaction\" WHERE deleted_at IS NULL AND action_id = ?2 AND event_id IS NOT NULL)",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![user_id, action_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -393,7 +387,7 @@ fn expand_action(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT id, summary FROM \"Interaction\" WHERE action_id = ?1 AND user_id = ?2",
+        "SELECT id, summary FROM \"Interaction\" WHERE deleted_at IS NULL AND action_id = ?1 AND user_id = ?2",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![action_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -406,7 +400,7 @@ fn expand_action(
     let mut stmt = conn.prepare(
         "SELECT n.id, n.title FROM \"NoteEntity\" ne \
          JOIN \"Note\" n ON n.id = ne.note_id \
-         WHERE ne.entity_type = 'action' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
+         WHERE ne.entity_type = 'action' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL AND n.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![action_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -427,7 +421,7 @@ fn expand_interaction(
 ) -> rusqlite::Result<()> {
     let (contact_id, action_id, event_id): (Option<String>, Option<String>, Option<String>) =
         conn.query_row(
-            "SELECT contact_id, action_id, event_id FROM \"Interaction\" WHERE id = ?1 AND user_id = ?2",
+            "SELECT contact_id, action_id, event_id FROM \"Interaction\" WHERE deleted_at IS NULL AND id = ?1 AND user_id = ?2",
             params![interaction_id, user_id],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
@@ -436,7 +430,7 @@ fn expand_interaction(
 
     if let Some(cid) = contact_id {
         let nickname: Option<String> = conn.query_row(
-            "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![&cid, user_id],
             |r| r.get(0),
         ).optional()?;
@@ -447,7 +441,7 @@ fn expand_interaction(
 
     if let Some(aid) = action_id {
         let title: Option<String> = conn.query_row(
-            "SELECT title FROM \"Action\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT title FROM \"Action\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![&aid, user_id],
             |r| r.get(0),
         ).optional()?;
@@ -458,7 +452,7 @@ fn expand_interaction(
 
     if let Some(eid) = event_id {
         let title: Option<String> = conn.query_row(
-            "SELECT title FROM \"Event\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+            "SELECT title FROM \"Event\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
             params![&eid, user_id],
             |r| r.get(0),
         ).optional()?;
@@ -470,7 +464,7 @@ fn expand_interaction(
     let mut stmt = conn.prepare(
         "SELECT n.id, n.title FROM \"NoteEntity\" ne \
          JOIN \"Note\" n ON n.id = ne.note_id \
-         WHERE ne.entity_type = 'interaction' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL",
+         WHERE ne.entity_type = 'interaction' AND ne.entity_id = ?1 AND ne.user_id = ?2 AND n.archived_at IS NULL AND n.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![interaction_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?
@@ -501,7 +495,7 @@ fn expand_note(
         let (et, label_opt): (&'static str, Option<String>) = match entity_type.as_str() {
             "contact" => {
                 let label = conn.query_row(
-                    "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+                    "SELECT nickname FROM \"Contact\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
                     params![&entity_id, user_id],
                     |r| r.get(0),
                 ).optional()?;
@@ -509,7 +503,7 @@ fn expand_note(
             }
             "project" => {
                 let label = conn.query_row(
-                    "SELECT title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+                    "SELECT title FROM \"Project\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
                     params![&entity_id, user_id],
                     |r| r.get(0),
                 ).optional()?;
@@ -517,7 +511,7 @@ fn expand_note(
             }
             "event" => {
                 let label = conn.query_row(
-                    "SELECT title FROM \"Event\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+                    "SELECT title FROM \"Event\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
                     params![&entity_id, user_id],
                     |r| r.get(0),
                 ).optional()?;
@@ -525,7 +519,7 @@ fn expand_note(
             }
             "action" => {
                 let label = conn.query_row(
-                    "SELECT title FROM \"Action\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL",
+                    "SELECT title FROM \"Action\" WHERE id = ?1 AND user_id = ?2 AND archived_at IS NULL AND deleted_at IS NULL",
                     params![&entity_id, user_id],
                     |r| r.get(0),
                 ).optional()?;
@@ -533,7 +527,7 @@ fn expand_note(
             }
             "interaction" => {
                 let label = conn.query_row(
-                    "SELECT summary FROM \"Interaction\" WHERE id = ?1 AND user_id = ?2",
+                    "SELECT summary FROM \"Interaction\" WHERE deleted_at IS NULL AND id = ?1 AND user_id = ?2",
                     params![&entity_id, user_id],
                     |r| r.get(0),
                 ).optional()?;
@@ -596,7 +590,7 @@ fn expand_tag(
     let mut stmt = conn.prepare(
         "SELECT c.id, c.nickname FROM \"ContactTag\" ct \
          JOIN \"Contact\" c ON c.id = ct.contact_id \
-         WHERE ct.tag_id = ?1 AND ct.user_id = ?2 AND c.archived_at IS NULL",
+         WHERE ct.tag_id = ?1 AND ct.user_id = ?2 AND c.archived_at IS NULL AND c.deleted_at IS NULL",
     )?;
     let rows: Vec<(String, String)> = stmt
         .query_map(params![tag_id, user_id], |r| Ok((r.get(0)?, r.get(1)?)))?

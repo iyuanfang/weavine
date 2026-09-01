@@ -25,6 +25,7 @@ pub struct SyncResult {
     pub pushed: usize,
     pub pulled: usize,
     pub conflicts: usize,
+    pub conflict_details: Vec<Conflict>,
 }
 
 // ── Public API ────────────────────────────────────────
@@ -328,6 +329,14 @@ async fn push_all(
             result.conflicts += push_resp.conflicts.len();
             push_conflicts += push_resp.conflicts.len();
             last_server_rev = push_resp.server_revision;
+            for c in &push_resp.conflicts {
+                eprintln!(
+                    "[sync] conflict kind={} row_id={} reason={}",
+                    c.kind, c.row_id, c.reason
+                );
+                result.conflict_details.push(c.clone());
+                let _ = persist_sync_conflict(conn, c);
+            }
         }
     }
     // Only advance the watermark when every row was accepted. The next push
@@ -386,7 +395,30 @@ async fn pull_all(
     Ok(())
 }
 
-/// Apply a single ChangeRow to the local SQLite database.
+fn persist_sync_conflict(conn: &Connection, c: &Conflict) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS \"SyncConflicts\" (
+            \"id\"         INTEGER PRIMARY KEY AUTOINCREMENT,
+            \"kind\"       TEXT NOT NULL,
+            \"row_id\"     TEXT NOT NULL DEFAULT '',
+            \"reason\"     TEXT NOT NULL,
+            \"created_at\" TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        );
+        CREATE INDEX IF NOT EXISTS \"SyncConflicts_created_at_idx\"
+            ON \"SyncConflicts\"(\"created_at\" DESC);",
+    )?;
+    conn.execute(
+        "INSERT INTO \"SyncConflicts\" (\"kind\", \"row_id\", \"reason\") VALUES (?1, ?2, ?3)",
+        rusqlite::params![&c.kind, &c.row_id, &c.reason],
+    )?;
+    let _rows = conn.execute(
+        "DELETE FROM \"SyncConflicts\" WHERE \"id\" NOT IN (
+            SELECT \"id\" FROM \"SyncConflicts\" ORDER BY \"created_at\" DESC LIMIT 500
+        )",
+        [],
+    )?;
+    Ok(())
+}
 fn apply_change(
     conn: &Connection,
     change: &ChangeRow,
@@ -429,10 +461,39 @@ fn apply_change(
                 (1..=cols.len()).map(|i| format!("?{}", i)).collect();
             let ph_list = placeholders.join(", ");
 
-            let sql = format!(
-                "INSERT OR REPLACE INTO \"{}\" ({}) VALUES ({})",
-                table, col_list, ph_list
-            );
+            // `INSERT OR REPLACE` is really DELETE-then-INSERT, and with
+            // foreign_keys=ON that DELETE cascades: applying a pulled update
+            // for a contact / event / note would wipe its Reminder,
+            // ContactTag, NoteEntity and participant children. Those child
+            // rows have older revisions, so they are never re-pulled — the
+            // loss is silent and permanent.
+            //
+            // A true upsert (`ON CONFLICT … DO UPDATE`) is a plain UPDATE and
+            // fires no cascade. It also leaves columns that are absent from
+            // `push_columns` (e.g. Note.imported_from) untouched, which REPLACE
+            // would have reset to NULL.
+            //
+            // The two composite-PK junction tables (contact_tag,
+            // project_contact) have no `id` to conflict on, but they are
+            // leaves with no children of their own, so REPLACE is safe there.
+            let sql = if cols.contains(&"id") {
+                let update_set = cols
+                    .iter()
+                    .filter(|c| **c != "id")
+                    .map(|c| format!("\"{c}\" = excluded.\"{c}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "INSERT INTO \"{}\" ({}) VALUES ({}) \
+                     ON CONFLICT(\"id\") DO UPDATE SET {}",
+                    table, col_list, ph_list, update_set
+                )
+            } else {
+                format!(
+                    "INSERT OR REPLACE INTO \"{}\" ({}) VALUES ({})",
+                    table, col_list, ph_list
+                )
+            };
 
             let mut stmt = conn.prepare(&sql)?;
 

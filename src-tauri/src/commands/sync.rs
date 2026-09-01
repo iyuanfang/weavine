@@ -4,7 +4,7 @@
 //! stays Send — rusqlite::Connection is !Send, can't be held across `.await`.
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::db::Database;
 use crate::sync;
@@ -20,6 +20,7 @@ pub struct CloudStatus {
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cloud_login(
+    app: AppHandle,
     server_url: String,
     email: String,
     password: String,
@@ -37,6 +38,20 @@ pub async fn cloud_login(
         "[sync] initial sync done: pushed={} pulled={} conflicts={}",
         result.pushed, result.pulled, result.conflicts
     );
+    for c in &result.conflict_details {
+        eprintln!(
+            "[sync] conflict kind={} row_id={} reason={}",
+            c.kind, c.row_id, c.reason
+        );
+    }
+    if !result.conflict_details.is_empty() {
+        let payload: Vec<serde_json::Value> = result
+            .conflict_details
+            .iter()
+            .map(|c| serde_json::json!({ "kind": c.kind, "row_id": c.row_id, "reason": c.reason }))
+            .collect();
+        let _ = app.emit("weavine:sync-conflicts", payload);
+    }
 
     tauri::async_runtime::spawn_blocking(|| {
         let conn = open_db().map_err(|e| e.to_string())?;

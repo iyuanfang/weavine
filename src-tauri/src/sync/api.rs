@@ -87,7 +87,7 @@ pub struct PushResp {
     pub server_revision: i64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Conflict {
     pub kind: String,
     pub row_id: String,

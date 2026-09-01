@@ -97,12 +97,16 @@ pub async fn extract_card(
     let bytes = B64.decode(strip_data_url_prefix(&image_base64).as_bytes())
         .map_err(|e| format!("decode base64: {e}"))?;
 
+    const MAX_OCR_SIZE: usize = 10 * 1024 * 1024;
+    if bytes.len() > MAX_OCR_SIZE {
+        return Err("图片过大，请压缩到 10MB 以下".to_string());
+    }
+
     let part = reqwest::multipart::Part::bytes(bytes)
         .file_name("card.png")
         .mime_str("image/png")
         .map_err(|e| e.to_string())?;
     let form = reqwest::multipart::Form::new()
-        .text("kind", "card_image")
         .part("file", part);
 
     let resp = req
