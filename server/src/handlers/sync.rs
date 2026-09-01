@@ -18,12 +18,41 @@ use super::now_str;
 // junction row (push-all, no updated_at) so it is deliberately absent here.
 const UPDATED_AT_TABLES: &[&str] = &["contact", "project", "event", "action", "setting", "media", "note"];
 
+const DELETED_AT_TABLES: &[&str] =
+    &["contact", "tag", "project", "event", "action", "interaction",
+      "reminder", "setting", "media", "note"];
+
+/// Guard for column names interpolated into the upsert's `SET` clause.
+///
+/// Those names come verbatim from client-supplied JSON keys. A key such as
+/// `title = (SELECT email FROM user_account WHERE id='...') , body` would be
+/// spliced straight into the statement and let any authenticated caller read
+/// or modify rows they do not own. Only plain snake_case identifiers may pass.
+///
+/// (`jsonb_populate_record` needs no such guard: unknown keys are ignored.)
+fn is_safe_column_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 63 // PG NAMEDATALEN - 1
+        && name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
 /// Postgres errors that should become 200 + `conflicts` instead of 500.
+///
 fn is_data_conflict_error(msg: &str) -> bool {
     msg.contains("unique constraint")
         || msg.contains("duplicate key")
         || msg.contains("foreign key")
         || msg.contains("violates")
+        || msg.contains("invalid input syntax")
+        || msg.contains("not-null")
+        || msg.contains("check constraint")
+        || msg.contains("value too long")
+        || msg.contains("datetime")
+        || msg.contains("timestamp")
+        || msg.contains("out of range")
 }
 
 /// Convert the server's stored `updated_at` text into the ISO 8601 shape the
@@ -307,6 +336,11 @@ pub async fn push(
                         .map(|obj| {
                             obj.keys()
                                 .filter(|k| *k != "id" && *k != "user_id")
+                                // Reject anything that is not a plain column
+                                // name — see is_safe_column_name. Without this
+                                // a crafted key injects arbitrary SQL into the
+                                // SET clause built from these keys.
+                                .filter(|k| is_safe_column_name(k.as_str()))
                                 .cloned()
                                 .collect()
                         })
@@ -320,6 +354,15 @@ pub async fn push(
                             if let Some(pos) = update_clauses.iter().position(|c| c.starts_with(&format!("{k} ="))) {
                                 update_clauses[pos] = format!("{k} = reminder.{k} OR EXCLUDED.{k}");
                             }
+                        }
+                    }
+                    if DELETED_AT_TABLES.contains(&table) {
+                        if let Some(pos) =
+                            update_clauses.iter().position(|c| c.starts_with("deleted_at ="))
+                        {
+                            update_clauses[pos] = format!(
+                                "deleted_at = COALESCE(EXCLUDED.deleted_at, {table}.deleted_at)"
+                            );
                         }
                     }
                     let update_set = update_clauses.join(", ");
@@ -511,4 +554,74 @@ pub async fn prune_change_log(pool: &PgPool, ttl_days: i64) -> Result<u64, sqlx:
     .execute(pool)
     .await?;
     Ok(result.rows_affected())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_data_conflict_error_catches_invalid_input_syntax() {
+        let msg = "ERROR: invalid input syntax for type uuid: \"foo\"";
+        assert!(is_data_conflict_error(msg));
+    }
+
+    #[test]
+    fn is_data_conflict_error_catches_all_data_error_classes() {
+        assert!(is_data_conflict_error("unique constraint violated"));
+        assert!(is_data_conflict_error("duplicate key value"));
+        assert!(is_data_conflict_error("foreign key constraint"));
+        assert!(is_data_conflict_error("violates not-null"));
+        assert!(is_data_conflict_error("check constraint"));
+        assert!(is_data_conflict_error("value too long for type character varying"));
+        assert!(is_data_conflict_error("timestamp out of range"));
+        assert!(is_data_conflict_error("numeric value out of range"));
+    }
+
+    #[test]
+    fn is_data_conflict_error_returns_false_for_network_errors() {
+        assert!(!is_data_conflict_error("connection refused"));
+        assert!(!is_data_conflict_error("timeout exceeded"));
+        assert!(!is_data_conflict_error("unknown table"));
+    }
+
+    #[test]
+    fn deleted_at_clause_uses_coalesce_for_tombstone_protection() {
+        for table in DELETED_AT_TABLES {
+            let keys: Vec<String> = vec!["updated_at".into(), "deleted_at".into(), "title".into()];
+            let mut clauses: Vec<String> =
+                keys.iter().map(|k| format!("{k} = EXCLUDED.{k}")).collect();
+            if let Some(pos) = clauses.iter().position(|c| c.starts_with("deleted_at =")) {
+                clauses[pos] = format!(
+                    "deleted_at = COALESCE(EXCLUDED.deleted_at, {table}.deleted_at)"
+                );
+            }
+            let combined = clauses.join(", ");
+            assert!(
+                combined.contains(&format!("deleted_at = COALESCE(EXCLUDED.deleted_at, {table}.deleted_at)")),
+                "table={table} combined={combined}"
+            );
+        }
+    }
+
+    #[test]
+    fn deleted_at_clause_not_touched_for_junction_tables() {
+        for table in &["contact_tag", "project_contact", "note_entity", "entity_links"] {
+            let keys: Vec<String> = vec!["deleted_at".into(), "role".into()];
+            let mut clauses: Vec<String> =
+                keys.iter().map(|k| format!("{k} = EXCLUDED.{k}")).collect();
+            if DELETED_AT_TABLES.contains(table) {
+                if let Some(pos) = clauses.iter().position(|c| c.starts_with("deleted_at =")) {
+                    clauses[pos] = format!(
+                        "deleted_at = COALESCE(EXCLUDED.deleted_at, {table}.deleted_at)"
+                    );
+                }
+            }
+            let combined = clauses.join(", ");
+            assert!(
+                !combined.contains("COALESCE"),
+                "junction table {table} should not get COALESCE: {combined}"
+            );
+        }
+    }
 }

@@ -421,12 +421,13 @@ async fn expand_event(
                 "SELECT el.to_id AS contact_id, c.nickname \
                  FROM entity_links el \
                  LEFT JOIN contact c ON c.id = el.to_id AND c.user_id = el.user_id \
-                 WHERE el.from_type='event' AND el.from_id=$1 AND el.relation_type='participated' \
-                   AND c.deleted_at IS NULL AND c.archived_at IS NULL \
-                 ORDER BY el.created_at ASC",
-            )
-            .bind(event_id)
-            .fetch_all(pool)
+         WHERE el.from_type='event' AND el.from_id=$1 AND el.relation_type='participated' \
+           AND c.deleted_at IS NULL AND c.archived_at IS NULL AND el.user_id = $2 \
+         ORDER BY el.created_at ASC",
+    )
+    .bind(event_id)
+    .bind(user_id)
+    .fetch_all(pool)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             Ok::<_, (StatusCode, String)>(rows)

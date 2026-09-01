@@ -132,7 +132,12 @@ fn ocr_pass(path: &str, langs: &str) -> Result<OcrRun, String> {
                 leptess::capi::TessBaseAPISetPageSegMode(api.raw, psm);
             }
             api.set_image(&pix);
-            let _ = api.recognize();
+            // leptess::recognize returns tesseract's int return code:
+            // 0 = success, non-zero = error (see tesseract.h TessBaseAPIRecognize).
+            let rc = api.recognize();
+            if rc != 0 {
+                return Err(format!("recognize: rc={rc}"));
+            }
             let confidence = (api.mean_text_conf() as f32) / 100.0;
             let text = api.get_utf8_text()
                 .map_err(|e| format!("ocr: {e:?}"))?;

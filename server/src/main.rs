@@ -157,7 +157,12 @@ async fn main() {
 
     #[cfg(feature = "ocr")]
     {
-        app = app.merge(Router::new().route("/api/cards/extract", post(handlers::ocr::extract_card)));
+        app = app.merge(
+            Router::new()
+                .route("/api/cards/extract", post(handlers::ocr::extract_card))
+                .layer(axum::extract::DefaultBodyLimit::max(20 * 1024 * 1024))
+                .layer(tower_http::timeout::TimeoutLayer::new(Duration::from_secs(60))),
+        );
     }
 
     #[cfg(feature = "stt")]
