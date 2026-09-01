@@ -20,12 +20,6 @@ jobs:
           sudo apt-get install -y -qq libfuse2 fakeroot dpkg-dev
       - name: Install deps
         run: pnpm install --frozen-lockfile
-      - name: Prisma
-        run: |
-          pnpm exec prisma db push --accept-data-loss
-          pnpm exec prisma generate
-        env:
-          DATABASE_URL: 'file:./dev.db'
       - name: Build Next.js
         run: pnpm exec next build
         env:

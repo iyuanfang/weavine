@@ -1,0 +1,191 @@
+---
+import '../styles/global.css';
+
+const release = 'v1.3.18';
+const repo = 'iyuanfang/weavine';
+const releaseUrl = `https://github.com/${repo}/releases/tag/${release}`;
+
+const platforms = [
+  { name: 'macOS',     href: `#download-macos`,   file: '.dmg' },
+  { name: 'Windows',   href: `#download-windows`, file: '.msi' },
+  { name: 'Linux',     href: `#download-linux`,   file: '.deb' },
+  { name: 'Android',   href: `#download-android`, file: '.apk' },
+  { name: '网页版',     href: '/login',            file: '免安装', primary: true },
+];
+
+const features = [
+  {
+    icon: '⚡',
+    title: '快速记录 & 语音',
+    body: 'Ctrl+K 随时唤起，打字或说话都行。一句话自动归档到对应的联系人和项目。',
+  },
+  {
+    icon: '📷',
+    title: '名片扫描 & 导入',
+    body: '扫描名片自动识别姓名、公司、职位。也支持 CSV / vCard 批量导入，迁移零成本。',
+  },
+  {
+    icon: '📅',
+    title: '日程与提醒',
+    body: '会议、待办、重要日期，永远不会忘。跨设备同步提醒，手机桌面都能收到。',
+  },
+  {
+    icon: '📝',
+    title: '笔记 & 关联',
+    body: '为每个人、每件事写笔记，自动关联联系人和日程。按时间线回溯，不遗漏任何细节。',
+  },
+  {
+    icon: '🕸️',
+    title: '关系图谱',
+    body: '可视化查看联系人、项目、事件之间的关联网络。点击任意节点快速跳转，一眼看清人脉全貌。',
+  },
+  {
+    icon: '🔍',
+    title: '全局搜索',
+    body: '全文搜索联系人、笔记、项目、日程，一键直达。支持模糊匹配和标签筛选，再久远的信息也能秒级找到。',
+  },
+  {
+    icon: '🧠',
+    title: '智能关系管理',
+    body: '不只是通讯录。自动关联联系人、项目、待办和日程，帮你理清每个人背后的故事。',
+  },
+  {
+    icon: '🔄',
+    title: '多端同步',
+    body: '桌面、手机、网页，编辑即时同步。可以电脑上操作，手机上查看。',
+  },
+  {
+    icon: '🔒',
+    title: '数据在你手里',
+    body: '默认本地存储，离线可用。你的联系人、对话、日程，不会存在别人的服务器上。',
+  },
+];
+
+const screenshots = [
+  { src: '/screenshot-contacts.png', alt: '联系人管理' },
+  { src: '/screenshot-quick-capture.png', alt: '快速记录' },
+  { src: '/screenshot-calendar.png', alt: '日程管理' },
+];
+
+const downloads = [
+  { id: 'download-macos', name: 'macOS', desc: 'Universal · Apple Silicon + Intel', href: releaseUrl, file: '.dmg' },
+  { id: 'download-windows', name: 'Windows', desc: 'Windows 10 / 11 · 64-bit', href: releaseUrl, file: '.msi' },
+  { id: 'download-linux', name: 'Linux', desc: 'Debian / Ubuntu · .AppImage', href: releaseUrl, file: '.deb' },
+  { id: 'download-android', name: 'Android', desc: 'Android 8+ · 通用 APK', href: releaseUrl, file: '.apk' },
+  { name: '网页版', desc: '无需安装，浏览器即开即用', href: '/login', file: '→' },
+];
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Weavine — 记住每一个重要的人。语音记录、名片扫描、智能关联，帮你管好人和事。" />
+    <meta name="theme-color" content="#7c3aed" />
+    <title>Weavine · 记住每一个重要的人</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="font-sans">
+    <header class="border-b border-gray-100 sticky top-0 bg-white/80 backdrop-blur z-10">
+      <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="/" class="font-semibold text-lg tracking-tight">Weavine</a>
+        <nav class="flex gap-6 text-sm text-gray-600">
+          <a href="#features" class="hover:text-gray-900 transition">功能</a>
+          <a href="#screenshots" class="hover:text-gray-900 transition">截图</a>
+          <a href="#download" class="hover:text-gray-900 transition">下载</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="max-w-5xl mx-auto px-6 py-20 sm:py-28 text-center">
+        <h1 class="text-4xl sm:text-6xl font-bold tracking-tight">记住每一个重要的人</h1>
+        <p class="mt-6 text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+          语音、文字、名片——想到就记。自动关联联系人、项目和日程，帮你管好人和事。各种文档格式转换 md，方便存储和检索。
+        </p>
+        <div class="mt-10 flex flex-wrap gap-3 justify-center">
+          {platforms.map((p) => (
+            <a
+              href={p.href}
+              class:list={[
+                'inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg font-medium transition',
+                p.primary
+                  ? 'bg-brand-600 text-white hover:bg-brand-700'
+                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200',
+              ]}
+            >
+              <span>{p.name}</span>
+              <span class="text-xs opacity-70">{p.file}</span>
+            </a>
+          ))}
+        </div>
+        <p class="mt-6 text-sm text-gray-500">
+          最新版本 <a href={releaseUrl} class="underline hover:text-gray-700" rel="noopener">{release}</a>
+        </p>
+      </section>
+
+      <section id="features" class="bg-gray-50 py-20">
+        <div class="max-w-5xl mx-auto px-6">
+          <h2 class="text-3xl font-bold text-center">核心功能</h2>
+          <p class="mt-3 text-center text-gray-500 text-sm">不只是记事本，是你的关系管理引擎</p>
+          <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((f) => (
+              <div>
+                <div class="w-10 h-10 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center text-xl">{f.icon}</div>
+                <h3 class="mt-4 text-lg font-semibold">{f.title}</h3>
+                <p class="mt-2 text-gray-600 text-sm leading-relaxed">{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="screenshots" class="py-20">
+        <div class="max-w-5xl mx-auto px-6">
+          <h2 class="text-3xl font-bold text-center">看看实际效果</h2>
+          <div class="mt-12 grid sm:grid-cols-3 gap-6">
+            {screenshots.map((s) => (
+              <div class="rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <img src={s.src} alt={s.alt} class="w-full h-auto" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="download" class="bg-gray-50 py-20">
+        <div class="max-w-5xl mx-auto px-6">
+          <h2 class="text-3xl font-bold text-center">下载</h2>
+          <p class="mt-4 text-center text-gray-600 text-sm">全平台覆盖，数据跨设备同步</p>
+          <div class="mt-12 max-w-2xl mx-auto divide-y divide-gray-200 bg-white rounded-lg border border-gray-200">
+            {downloads.map((d) => (
+              <a
+                id={d.id}
+                href={d.href}
+                class="flex items-center justify-between p-5 hover:bg-gray-50 transition"
+                rel={d.href.startsWith('http') ? 'noopener' : undefined}
+              >
+                <div>
+                  <div class="font-medium">{d.name}</div>
+                  <div class="text-sm text-gray-500 mt-0.5">{d.desc}</div>
+                </div>
+                <span class="text-gray-400 text-sm">{d.file}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-gray-100 py-8">
+      <div class="max-w-5xl mx-auto px-6 text-sm text-gray-500 flex flex-col sm:flex-row gap-2 justify-between">
+        <div>© 2026 Weavine</div>
+        <div class="flex gap-4">
+          <a href={`https://github.com/${repo}`} class="hover:text-gray-900" rel="noopener">GitHub</a>
+          <a href={`https://github.com/${repo}/releases`} class="hover:text-gray-900" rel="noopener">Releases</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
