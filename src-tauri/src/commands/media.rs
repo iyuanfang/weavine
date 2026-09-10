@@ -242,8 +242,8 @@ fn upsert_media(
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn upload_avatar(
-    db: tauri::State<Database>,
+pub async fn upload_avatar(
+    db: tauri::State<'_, Database>,
     user_id: String,
     contact_id: String,
     data_url: String,
@@ -261,27 +261,68 @@ pub fn upload_avatar(
     let sha = sha256_hex(&bytes);
     let ext = ext_from_mime(&mime);
     let (_path, storage_key) = write_avatar_file(&user_id, &contact_id, ext, &bytes)?;
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let media = upsert_media(
-        &conn,
-        &user_id,
-        &contact_id,
-        &mime,
-        bytes.len() as i64,
-        &sha,
-        Some(&storage_key),
-        &storage_key,
-    )?;
-    // Mirror the server-side sync_contact_avatar trigger: the avatar Media
-    // row must be reflected on Contact so the contact list/detail render
-    // the image (avatarUrlFor reads contact.avatar_storage_key).
-    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-    conn.execute(
-        "UPDATE \"Contact\" SET avatar_storage_key=?1, avatar_mime=?2, updated_at=?3 \
-         WHERE id=?4",
-        params![&storage_key, &mime, &now, &contact_id],
-    )
-    .map_err(|e| e.to_string())?;
+    // Scope the connection guard: the server byte upload below must not hold
+    // the std Mutex across .await.
+    let (media, server_url, access_token) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let media = upsert_media(
+            &conn,
+            &user_id,
+            &contact_id,
+            &mime,
+            bytes.len() as i64,
+            &sha,
+            Some(&storage_key),
+            &storage_key,
+        )?;
+        // Mirror the server-side sync_contact_avatar trigger: the avatar Media
+        // row must be reflected on Contact so the contact list/detail render
+        // the image (avatarUrlFor reads contact.avatar_storage_key).
+        let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        conn.execute(
+            "UPDATE \"Contact\" SET avatar_storage_key=?1, avatar_mime=?2, updated_at=?3 \
+             WHERE id=?4",
+            params![&storage_key, &mime, &now, &contact_id],
+        )
+        .map_err(|e| e.to_string())?;
+        // Sync config for the server upload below (offline-first: either may
+        // be absent when the device is not linked to a cloud account).
+        let server_url = crate::sync::config::get(&conn, crate::sync::config::KEY_SERVER_URL)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        let access_token = crate::sync::config::get(&conn, crate::sync::config::KEY_ACCESS_TOKEN)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        (media, server_url, access_token)
+    };
+    // Push the avatar BYTES to the server. Sync carries only media metadata
+    // (avatar rows are excluded from push — a pushed local storage_key would
+    // overwrite the server-authoritative one via the sync_contact_avatar
+    // trigger and break the avatar on every other device). The server
+    // upserts on (user_id, kind, owner_type, owner_id) and the trigger
+    // mirrors the pointer onto contact. Best-effort: local display already
+    // works; a failed upload is retried on the next avatar change.
+    if !server_url.is_empty() && !access_token.is_empty() {
+        let filename = format!("avatar.{ext}");
+        if let Err(e) = crate::sync::api::upload_media_bytes(
+            &server_url,
+            &access_token,
+            "avatar",
+            "contact",
+            &contact_id,
+            &mime,
+            &filename,
+            bytes.clone(),
+        )
+        .await
+        {
+            eprintln!(
+                "[avatar] server byte upload failed (retried on next avatar change): {e}"
+            );
+        }
+    }
     Ok(AvatarResult {
         media,
         data_url: data_url,

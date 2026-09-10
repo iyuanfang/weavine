@@ -168,7 +168,21 @@ async function request<R>(
 
   // Empty body (204 No Content, etc.)
   if (resp.status === 204) return undefined as R;
-  return resp.json() as Promise<R>;
+  const json = (await resp.json()) as unknown;
+  // Server list endpoints wrap rows in a {items, cursor, has_more} envelope
+  // while every list call site types its data as a bare array — without this
+  // unwrap, `(query.data ?? []).filter(...)` crashes on every list page.
+  // See docs/audit-2026-09-08.md §S.
+  if (
+    json !== null &&
+    typeof json === 'object' &&
+    !Array.isArray(json) &&
+    'items' in json &&
+    Array.isArray((json as { items: unknown }).items)
+  ) {
+    return (json as { items: unknown }).items as R;
+  }
+  return json as R;
 }
 
 // ── Query-string builder ───────────────────────────────

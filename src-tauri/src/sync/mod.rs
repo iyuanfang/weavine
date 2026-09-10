@@ -294,6 +294,29 @@ async fn push_all(
             })
             .collect();
 
+        // Avatar rows are synced as BYTES (upload_avatar posts the binary to
+        // POST /api/media), not as metadata rows. Pushing the local metadata
+        // row would overwrite the server's authoritative storage_key with a
+        // desktop-local path and break the avatar on every other device
+        // (the server's sync_contact_avatar trigger mirrors storage_key onto
+        // contact). Deletions must still propagate, so keep rows that carry
+        // deleted_at.
+        let mapped_rows = if *kind == "media" {
+            mapped_rows
+                .into_iter()
+                .filter(|r| {
+                    r.get("kind").and_then(|v| v.as_str()) != Some("avatar")
+                        || r.get("deleted_at").is_some()
+                })
+                .collect()
+        } else {
+            mapped_rows
+        };
+
+        if mapped_rows.is_empty() {
+            continue;
+        }
+
         entities.push(EntityPush {
             kind: kind.to_string(),
             rows: mapped_rows,
@@ -392,7 +415,88 @@ async fn pull_all(
         since = pull_resp.latest_revision;
     }
 
+    // Avatar bytes self-heal: metadata rows sync via pull, but the binary
+    // only materializes locally after a download (the desktop WebView serves
+    // avatars from data_dir via files://localhost). Also backfills avatars
+    // created before the bytes-sync fix.
+    // Desktop-only: reads/writes the local data_dir via commands::media.
+    #[cfg(feature = "tauri")]
+    backfill_avatar_bytes(conn, server_url, access_token).await;
+
     Ok(())
+}
+
+/// Ensure every avatar Media row has its binary present at
+/// `data_dir/{storage_key}`. Missing bytes are fetched from
+/// `GET /api/media/{id}/blob` (server-authoritative storage). Failures are
+/// logged and retried on the next sync cycle — never fatal.
+#[cfg(feature = "tauri")]
+async fn backfill_avatar_bytes(conn: &Connection, server_url: &str, access_token: &str) {
+    let rows: Vec<(String, String)> = match conn.prepare(
+        "SELECT id, storage_key FROM \"Media\" \
+         WHERE kind='avatar' AND deleted_at IS NULL \
+           AND storage_key IS NOT NULL AND storage_key != ''",
+    ) {
+        Ok(mut stmt) => match stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))) {
+            Ok(iter) => iter.filter_map(|r| r.ok()).collect(),
+            Err(e) => {
+                eprintln!("[sync] avatar backfill query failed: {e}");
+                return;
+            }
+        },
+        Err(e) => {
+            eprintln!("[sync] avatar backfill prepare failed: {e}");
+            return;
+        }
+    };
+    if rows.is_empty() {
+        return;
+    }
+    let base = match crate::commands::media::data_dir() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("[sync] avatar backfill: data_dir: {e}");
+            return;
+        }
+    };
+    let mut fetched = 0usize;
+    for (id, key) in rows {
+        // Defensive: storage_key is a relative path fragment; reject anything
+        // that could escape data_dir (PathBuf::join replaces the base on
+        // absolute inputs).
+        if key.contains("..") || std::path::Path::new(&key).is_absolute() {
+            continue;
+        }
+        let path = base.join(&key);
+        if path.exists() {
+            continue;
+        }
+        match api::get_media_blob(server_url, access_token, &id).await {
+            Ok(bytes) => {
+                if let Some(parent) = path.parent() {
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        eprintln!("[sync] avatar mkdir {}: {e}", path.display());
+                        continue;
+                    }
+                }
+                match std::fs::write(&path, &bytes) {
+                    Ok(_) => {
+                        fetched += 1;
+                        eprintln!("[sync] avatar bytes downloaded: {key}");
+                    }
+                    Err(e) => eprintln!("[sync] avatar write {}: {e}", path.display()),
+                }
+            }
+            Err(e) => {
+                // Row without server bytes (e.g. avatar uploaded offline, or
+                // deleted remotely) — retried next cycle, never fatal.
+                eprintln!("[sync] avatar download {id} failed: {e}");
+            }
+        }
+    }
+    if fetched > 0 {
+        eprintln!("[sync] avatar backfill: {fetched} file(s) fetched");
+    }
 }
 
 fn persist_sync_conflict(conn: &Connection, c: &Conflict) -> rusqlite::Result<()> {

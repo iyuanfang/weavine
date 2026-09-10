@@ -105,6 +105,72 @@ fn client() -> reqwest::Result<reqwest::Client> {
         .build()
 }
 
+/// POST /api/media — multipart binary upload (avatar/attachment bytes).
+/// The server upserts on (user_id, kind, owner_type, owner_id), so repeated
+/// uploads for the same avatar converge on one server row whose storage_key
+/// is server-authoritative. Returns the server's MediaResponse JSON.
+pub async fn upload_media_bytes(
+    server_url: &str,
+    access_token: &str,
+    kind: &str,
+    owner_type: &str,
+    owner_id: &str,
+    mime: &str,
+    filename: &str,
+    bytes: Vec<u8>,
+) -> anyhow::Result<Value> {
+    let c = client()?;
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .mime_str(mime)
+        .map_err(|e| anyhow::anyhow!("mime {}: {e}", mime))?
+        .file_name(filename.to_string());
+    let form = reqwest::multipart::Form::new()
+        .text("kind", kind.to_string())
+        .text("owner_type", owner_type.to_string())
+        .text("owner_id", owner_id.to_string())
+        .part("file", part);
+    let resp = c
+        .post(format!(
+            "{}/api/media",
+            server_url.trim_end_matches('/')
+        ))
+        .bearer_auth(access_token)
+        .multipart(form)
+        .send()
+        .await?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        let snippet: String = text.chars().take(200).collect();
+        return Err(anyhow::anyhow!("media upload failed ({}): {}", status, snippet));
+    }
+    Ok(serde_json::from_str(&text)?)
+}
+
+/// GET /api/media/:id/blob — download the bytes for a media row.
+/// The server 302-redirects to /files/{storage_key}; reqwest follows it.
+pub async fn get_media_blob(
+    server_url: &str,
+    access_token: &str,
+    media_id: &str,
+) -> anyhow::Result<Vec<u8>> {
+    let c = client()?;
+    let resp = c
+        .get(format!(
+            "{}/api/media/{}/blob",
+            server_url.trim_end_matches('/'),
+            media_id
+        ))
+        .bearer_auth(access_token)
+        .send()
+        .await?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(anyhow::anyhow!("media blob fetch failed ({})", status));
+    }
+    Ok(resp.bytes().await?.to_vec())
+}
+
 /// POST /api/auth/login
 pub async fn login(server_url: &str, email: &str, password: &str) -> anyhow::Result<LoginResp> {
     let c = client()?;

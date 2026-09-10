@@ -103,7 +103,8 @@ const server = createServer(async (req, res) => {
     const all = Array.from(notes.values())
       .filter((n) => !n.deleted_at)
       .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-    return sendJson(res, 200, { items: all, cursor: null, has_more: false });
+    // Bare array — see "Generic collection lists" note above for rationale.
+    return sendJson(res, 200, all);
   }
   if (path === '/api/notes' && req.method === 'POST') {
     const body = await readBody(req);
@@ -162,6 +163,13 @@ const server = createServer(async (req, res) => {
   }
 
   // ── Generic collection lists (return empty) ────────────
+  // NOTE: dev-stub intentionally returns a bare array here, NOT the
+  // {items, cursor, has_more} envelope the real weavine-server emits. The web-spa
+  // HttpAdapter calls `request<Action[]>` (etc.) and unwraps nothing, so the
+  // envelope shape crashes TodayPage with "(actionsQuery.data ?? []).filter is
+  // not a function". This is a known stub fidelity gap documented in
+  // docs/audit-2026-09-08.md §S. Do not mirror server shape here until the
+  // adapter is fixed in a real PR.
   const listPaths = [
     '/api/contacts',
     '/api/tags',
@@ -172,8 +180,32 @@ const server = createServer(async (req, res) => {
     '/api/reminders',
   ];
   if (listPaths.includes(path) && req.method === 'GET') {
-    return sendJson(res, 200, { items: [], cursor: null, has_more: false });
+    return sendJson(res, 200, []);
   }
+
+  // ── Stub writes (POST/PUT/DELETE on collection items) ───────────
+  // dev-stub intentionally accepts writes silently so the UI can exercise
+  // create/update flows without the real server. The action id is generated
+  // by the client (weavine uses string ids), so we just echo back.
+  if (
+    listPaths.includes(path) &&
+    (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')
+  ) {
+    return sendJson(res, 200, {});
+  }
+  const itemPutMatch = /^\/api\/(contacts|events|actions|interactions|projects|reminders|tags|notes)\/[^/]+$/.exec(path);
+  if (
+    itemPutMatch &&
+    (req.method === 'PUT' || req.method === 'DELETE' || req.method === 'GET')
+  ) {
+    return sendJson(res, 200, {});
+  }
+  const reminderDismiss = /^\/api\/reminders\/[^/]+\/dismiss$/.exec(path);
+  if (reminderDismiss && req.method === 'POST') return sendJson(res, 200, {});
+  const settingsUpsert = path === '/api/settings/upsert' && req.method === 'POST';
+  if (settingsUpsert) return sendJson(res, 200, {});
+  const settingsDelete = path === '/api/settings' && req.method === 'DELETE';
+  if (settingsDelete) return sendJson(res, 200, {});
 
   // ── upcoming events shortcut ──────────────────────────
   if (path === '/api/events/upcoming' && req.method === 'GET') {
