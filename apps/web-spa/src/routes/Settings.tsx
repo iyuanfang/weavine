@@ -259,7 +259,8 @@ function CloudSyncPanel() {
     },
   });
 
-  const [serverUrl, setServerUrl] = useState('https://weavine.financialagent.cc');
+  // Cloud endpoint is fixed at the official deployment; not user-visible.
+  const CLOUD_SERVER_URL = 'https://www.weavine.com';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -316,10 +317,6 @@ function CloudSyncPanel() {
             <div>
               <span style={{ color: 'var(--text-muted)' }}>账号:</span>{' '}
               <strong>{status.user_email ?? '(未知)'}</strong>
-            </div>
-            <div>
-              <span style={{ color: 'var(--text-muted)' }}>服务器:</span>{' '}
-              <code style={{ fontSize: 'var(--text-xs)' }}>{status.server_url}</code>
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>上次拉取:</span> rev {status.last_pulled_revision} ·{' '}
@@ -392,17 +389,8 @@ function CloudSyncPanel() {
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
-            连接云账号，同步数据到 https://weavine.financialagent.cc。第一次连接会从云端拉取所有数据到本地。
+            连接云账号，在设备间同步数据。第一次连接会从云端拉取所有数据到本地。
           </p>
-          <div>
-            <label className="input-label">服务器地址</label>
-            <input
-              className="input-base"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              placeholder="https://weavine.financialagent.cc"
-            />
-          </div>
           <div>
             <label className="input-label">邮箱</label>
             <input
@@ -434,9 +422,9 @@ function CloudSyncPanel() {
               type="button"
               className="btn btn-primary"
               onClick={() =>
-                loginMutation.mutate({ serverUrl: serverUrl.trim(), email: email.trim(), password })
+                loginMutation.mutate({ serverUrl: CLOUD_SERVER_URL, email: email.trim(), password })
               }
-              disabled={loginMutation.isPending || !email.trim() || !password || !serverUrl.trim()}
+              disabled={loginMutation.isPending || !email.trim() || !password}
             >
               {loginMutation.isPending ? '连接中…' : '连接云账号'}
             </button>

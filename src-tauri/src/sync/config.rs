@@ -48,15 +48,28 @@ pub fn set_service_key(conn: &Connection, value: &str) -> rusqlite::Result<()> {
 /// (fresh install, before login). Self-hosters can override at build time
 /// via `WV_DEFAULT_SERVER_URL=<url>` passed to `cargo build`.
 pub fn default_server_url() -> &'static str {
-    option_env!("WV_DEFAULT_SERVER_URL").unwrap_or("https://weavine.financialagent.cc")
+    option_env!("WV_DEFAULT_SERVER_URL").unwrap_or("https://www.weavine.com")
 }
+
+/// Server URL stored by builds before the 2026-09 migration to
+/// www.weavine.com. Devices carrying this value are transparently re-pointed
+/// at the current default on the next effective_server_url() call.
+const LEGACY_SERVER_URL: &str = "https://weavine.financialagent.cc";
 
 /// Resolve the effective server URL: stored value if non-empty, else the
 /// built-in default. Anonymous cloud paths (OCR / voice / activation ping)
 /// use this so they keep working before the user has logged in.
 pub fn effective_server_url(conn: &Connection) -> String {
     match get(conn, KEY_SERVER_URL) {
-        Ok(Some(s)) if !s.is_empty() => s,
+        Ok(Some(s)) if !s.is_empty() => {
+            if s == LEGACY_SERVER_URL {
+                let migrated = default_server_url().to_string();
+                let _ = set(conn, KEY_SERVER_URL, &migrated);
+                migrated
+            } else {
+                s
+            }
+        }
         _ => default_server_url().to_string(),
     }
 }

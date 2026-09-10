@@ -95,13 +95,22 @@ export function installHeaders(appVersion: string): Record<string, string> {
 }
 
 const SERVER_URL_KEY = 'weavine:server_url';
-const DEFAULT_SERVER_URL = 'https://weavine.financialagent.cc';
+const DEFAULT_SERVER_URL = 'https://www.weavine.com';
+// Devices that stored the pre-migration cloud URL are transparently
+// re-pointed at the current default on the next getServerUrl() call.
+const LEGACY_SERVER_URLS = ['https://weavine.financialagent.cc'];
 
 export function getServerUrl(): string {
   if (typeof window === 'undefined') return '';
   try {
     const stored = window.localStorage.getItem(SERVER_URL_KEY);
-    if (stored && stored.trim()) return stored.trim();
+    if (stored && stored.trim()) {
+      if (LEGACY_SERVER_URLS.includes(stored.trim())) {
+        setServerUrl(DEFAULT_SERVER_URL);
+        return DEFAULT_SERVER_URL;
+      }
+      return stored.trim();
+    }
   } catch {
     // localStorage may be blocked
   }
