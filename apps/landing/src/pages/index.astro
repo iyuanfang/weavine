@@ -1,16 +1,14 @@
 ---
 import '../styles/global.css';
 
-const release = 'v1.3.18';
-const repo = 'iyuanfang/weavine';
-const releaseUrl = `https://github.com/${repo}/releases/tag/${release}`;
+const release = 'v1.5.0';
 
 const platforms = [
-  { name: 'macOS',     href: `#download-macos`,   file: '.dmg' },
-  { name: 'Windows',   href: `#download-windows`, file: '.msi' },
-  { name: 'Linux',     href: `#download-linux`,   file: '.deb' },
-  { name: 'Android',   href: `#download-android`, file: '.apk' },
-  { name: '网页版',     href: '/login',            file: '免安装', primary: true },
+  { name: 'macOS',     href: '/downloads/v1.5.0/Weavine_1.3.18_aarch64.dmg',        file: '.dmg' },
+  { name: 'Windows',   href: '/downloads/v1.5.0/Weavine_1.3.18_x64-setup.exe',      file: '.exe' },
+  { name: 'Linux',     href: '/downloads/v1.5.0/Weavine_1.3.18_amd64.deb',          file: '.deb' },
+  { name: 'Android',   href: '/downloads/v1.5.0/Weavine_arm64-release_cloud.apk',   file: '.apk' },
+  { name: '网页版',     href: '/today',            file: '免安装', primary: true },
 ];
 
 const features = [
@@ -121,7 +119,7 @@ const downloads = [
           ))}
         </div>
         <p class="mt-6 text-sm text-gray-500">
-          最新版本 <a href={releaseUrl} class="underline hover:text-gray-700" rel="noopener">{release}</a>
+          最新版本 <span class="font-medium text-gray-700">{release}</span>
         </p>
       </section>
 
@@ -190,8 +188,8 @@ const downloads = [
           >沪ICP备2022002774号-2</a>
         </div>
         <div class="flex gap-4">
-          <a href={`https://github.com/${repo}`} class="hover:text-gray-900" rel="noopener">GitHub</a>
-          <a href={`https://github.com/${repo}/releases`} class="hover:text-gray-900" rel="noopener">Releases</a>
+          <a href="#download" class="hover:text-gray-900" rel="noopener">下载</a>
+          <a href="/today" class="hover:text-gray-900" rel="noopener">打开网页版</a>
         </div>
       </div>
     </footer>
