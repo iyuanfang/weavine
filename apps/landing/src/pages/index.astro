@@ -68,11 +68,11 @@ const screenshots = [
 ];
 
 const downloads = [
-  { id: 'download-macos', name: 'macOS', desc: 'Universal · Apple Silicon + Intel', href: releaseUrl, file: '.dmg' },
-  { id: 'download-windows', name: 'Windows', desc: 'Windows 10 / 11 · 64-bit', href: releaseUrl, file: '.msi' },
-  { id: 'download-linux', name: 'Linux', desc: 'Debian / Ubuntu · .AppImage', href: releaseUrl, file: '.deb' },
-  { id: 'download-android', name: 'Android', desc: 'Android 8+ · 通用 APK', href: releaseUrl, file: '.apk' },
-  { name: '网页版', desc: '无需安装，浏览器即开即用', href: '/login', file: '→' },
+  { id: 'download-macos', name: 'macOS', desc: 'Apple Silicon · .dmg', href: '/downloads/v1.5.0/Weavine_1.3.18_aarch64.dmg', file: '.dmg' },
+  { id: 'download-windows', name: 'Windows', desc: 'Windows 10 / 11 · 64-bit', href: '/downloads/v1.5.0/Weavine_1.3.18_x64-setup.exe', file: '.exe' },
+  { id: 'download-linux', name: 'Linux', desc: 'Debian / Ubuntu · .deb', href: '/downloads/v1.5.0/Weavine_1.3.18_amd64.deb', file: '.deb' },
+  { id: 'download-android', name: 'Android', desc: 'Android 8+ · arm64 APK', href: '/downloads/v1.5.0/Weavine_arm64-release_cloud.apk', file: '.apk' },
+  { name: '网页版', desc: '无需安装，浏览器即开即用', href: '/today', file: '→' },
 ];
 ---
 
@@ -180,7 +180,15 @@ const downloads = [
 
     <footer class="border-t border-gray-100 py-8">
       <div class="max-w-5xl mx-auto px-6 text-sm text-gray-500 flex flex-col sm:flex-row gap-2 justify-between">
-        <div>© 2026 Weavine</div>
+        <div>
+          © 2026 Weavine ·
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hover:text-gray-700"
+          >沪ICP备2022002774号-2</a>
+        </div>
         <div class="flex gap-4">
           <a href={`https://github.com/${repo}`} class="hover:text-gray-900" rel="noopener">GitHub</a>
           <a href={`https://github.com/${repo}/releases`} class="hover:text-gray-900" rel="noopener">Releases</a>
