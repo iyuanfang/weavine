@@ -3,8 +3,7 @@ use axum::{
     extract::{multipart::Multipart, ConnectInfo, State},
     http::{HeaderMap, StatusCode},
 };
-use serde::Serialize;
-use std::cell::RefCell;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use super::auth::{
@@ -12,35 +11,37 @@ use super::auth::{
     OCR_VOICE_RL_LIMIT, OCR_VOICE_RL_WINDOW,
 };
 
-// Per-thread TessApi pool; re-inits when requested langs change.
-thread_local! {
-    static LEP_TESS: RefCell<Option<(String, leptess::tesseract::TessApi)>> = RefCell::new(None);
+/// PaddleOCR sidecar base URL (see deploy/paddle_sidecar.py). The sidecar
+/// owns the Python/Paddle runtime and accepts raw image bytes at POST /ocr,
+/// answering {"raw_text": str, "avg_confidence": f32} — the same shape the
+/// old in-process Tesseract path produced, so field extraction is unchanged.
+fn paddle_url() -> String {
+    std::env::var("WEAVINE_PADDLE_URL").unwrap_or_else(|_| "http://127.0.0.1:3031".to_string())
 }
 
-const CONFIDENCE_THRESHOLD: f32 = 0.65;
-
-fn tessdata_path() -> Option<std::path::PathBuf> {
-    if let Ok(p) = std::env::var("TESSDATA_PREFIX") {
-        return Some(std::path::PathBuf::from(p));
-    }
-    let candidates = [
-        "/usr/share/tesseract-ocr/4.00/tessdata",
-        "/usr/share/tesseract-ocr/5/tessdata",
-        "/usr/local/share/tessdata",
-        "/opt/homebrew/share/tessdata",
-    ];
-    for c in candidates {
-        let p = std::path::PathBuf::from(c);
-        if p.is_dir() { return Some(p); }
-    }
-    None
+#[derive(Deserialize)]
+struct PaddleOut {
+    raw_text: String,
+    avg_confidence: f32,
 }
 
-fn tess_langs() -> &'static str {
-    match std::env::var("TESS_LANGS") {
-        Ok(v) if !v.is_empty() => Box::leak(v.into_boxed_str()),
-        _ => "chi_sim+eng",
+async fn paddle_ocr(image: Bytes) -> Result<PaddleOut, (StatusCode, String)> {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    let client = CLIENT.get_or_init(reqwest::Client::new);
+    let url = format!("{}/ocr", paddle_url().trim_end_matches('/'));
+    let resp = client
+        .post(url)
+        .body(image)
+        .timeout(std::time::Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("paddle sidecar unreachable: {e}")))?;
+    if !resp.status().is_success() {
+        return Err((StatusCode::BAD_GATEWAY, format!("paddle sidecar {}", resp.status())));
     }
+    resp.json()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, format!("paddle sidecar decode: {e}")))
 }
 
 #[derive(Debug, Serialize)]
@@ -88,69 +89,6 @@ fn join_langs(langs: &[String]) -> String {
     let mut parts: Vec<&str> = langs.iter().map(|s| s.as_str()).collect();
     parts.sort_by_key(|l| if *l == "eng" { 1 } else { 0 });
     parts.join("+")
-}
-
-fn with_tess<F, R>(data_path: &str, langs: &str, f: F) -> Result<R, String>
-where
-    F: FnOnce(&mut leptess::tesseract::TessApi) -> Result<R, String>,
-{
-    LEP_TESS.with(|cell| {
-        let mut cell = cell.borrow_mut();
-        let reuse = match cell.as_ref() {
-            Some((l, _)) => l == langs,
-            None => false,
-        };
-        if !reuse {
-            let api = leptess::tesseract::TessApi::new(Some(data_path), langs)
-                .map_err(|e| format!("init leptess: {e}"))?;
-            *cell = Some((langs.to_string(), api));
-        }
-        let api = &mut cell.as_mut().expect("tess pool initialized").1;
-        f(api)
-    })
-}
-
-struct OcrRun { text: String, confidence: f32 }
-
-fn ocr_pass(path: &str, langs: &str) -> Result<OcrRun, String> {
-    let tessdata = tessdata_path()
-        .ok_or_else(|| "TESSDATA_PREFIX not set".to_string())?;
-    let tessdata = tessdata.to_string_lossy().into_owned();
-    let pix = leptess::leptonica::pix_read(std::path::Path::new(path))
-        .ok_or_else(|| "unsupported image format".to_string())?;
-
-    let psms = [
-        leptess::capi::TessPageSegMode_PSM_AUTO,
-        leptess::capi::TessPageSegMode_PSM_SINGLE_BLOCK,
-        leptess::capi::TessPageSegMode_PSM_SPARSE_TEXT,
-    ];
-    let mut best: Option<OcrRun> = None;
-    let mut best_conf: f32 = 0.0;
-    for psm in psms {
-        let run = with_tess(&tessdata, langs, |api| {
-            unsafe {
-                leptess::capi::TessBaseAPISetPageSegMode(api.raw, psm);
-            }
-            api.set_image(&pix);
-            // leptess::recognize returns tesseract's int return code:
-            // 0 = success, non-zero = error (see tesseract.h TessBaseAPIRecognize).
-            let rc = api.recognize();
-            if rc != 0 {
-                return Err(format!("recognize: rc={rc}"));
-            }
-            let confidence = (api.mean_text_conf() as f32) / 100.0;
-            let text = api.get_utf8_text()
-                .map_err(|e| format!("ocr: {e:?}"))?;
-            Ok(OcrRun { text, confidence })
-        })?;
-        let confidence = run.confidence;
-        if confidence > best_conf {
-            best_conf = confidence;
-            best = Some(run);
-        }
-        if confidence >= CONFIDENCE_THRESHOLD { break; }
-    }
-    best.ok_or_else(|| "ocr produced no text".to_string())
 }
 
 fn looks_like_phone(s: &str) -> bool {
@@ -395,41 +333,13 @@ pub async fn extract_card(
     }
     let image_bytes = image_bytes.ok_or_else(|| (StatusCode::BAD_REQUEST, "missing file".into()))?;
 
-    let tmp = tempfile::Builder::new().suffix(".png").tempfile()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("tmpfile: {e}")))?;
-    std::fs::write(tmp.path(), &image_bytes)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("write tmp: {e}")))?;
-
-    // leptess is !Send — run all Tesseract work on a blocking thread.
-    let result = tokio::task::spawn_blocking(move || {
-        let path = tmp.path().to_string_lossy().into_owned();
-        let initial_langs = tess_langs().to_string();
-        let mut best = ocr_pass(&path, &initial_langs)?;
-        let mut used_langs = initial_langs.clone();
-
-        let detected = detect_langs(&best.text);
-        let detected_langs = join_langs(&detected);
-        // Second pass only when confidence is low and detected langs differ.
-        if best.confidence < CONFIDENCE_THRESHOLD
-            && !detected_langs.is_empty()
-            && detected_langs != initial_langs
-        {
-            if let Ok(retry) = ocr_pass(&path, &detected_langs) {
-                if retry.confidence > best.confidence {
-                    best = retry;
-                    used_langs = detected_langs;
-                }
-            }
-        }
-
-        let langs_actual = detect_langs(&best.text);
-        Ok::<_, String>((best.text, best.confidence, used_langs, langs_actual))
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("ocr task: {e}")))?;
-
-    let (raw_text, avg_confidence, langs, langs_actual) = result
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    // PaddleOCR runs in the Python sidecar (deploy/paddle_sidecar.py); the
+    // Rust side only does transport + field extraction.
+    let out = paddle_ocr(image_bytes).await?;
+    let raw_text = out.raw_text;
+    let avg_confidence = out.avg_confidence;
+    let langs = "ppocr".to_string();
+    let langs_actual = detect_langs(&raw_text);
 
     let lines: Vec<OcrLine> = raw_text.lines().map(|l| l.to_string()).filter(|l| !l.trim().is_empty())
         .map(|text| OcrLine { text }).collect();

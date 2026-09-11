@@ -6,7 +6,9 @@ license = "AGPL-3.0"
 
 [features]
 default = ["ocr"]
-ocr = ["dep:leptess"]
+# Card OCR: the Rust side proxies to the PaddleOCR Python sidecar
+# (deploy/paddle_sidecar.py) — no Tesseract system deps needed anymore.
+ocr = []
 # Speech-to-text: whisper.cpp via whisper-rs (builds with cmake + a C++ compiler),
 # symphonia for audio demux/decode, rubato to resample to whisper's 16 kHz input.
 stt = ["dep:sherpa-onnx", "dep:symphonia", "dep:rubato"]
@@ -32,7 +34,8 @@ rand = "0.8"
 aes-gcm = "0.10"
 base64 = "0.22"
 sha2 = "0.10"
-leptess = { version = "0.6", optional = true }
+# Card-OCR sidecar transport (http://127.0.0.1 — no TLS feature needed)
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
 # NOTE: the spec mentions symphonia's `codec-opus` / `codec-webm` features, but
 # those do not exist in any *released* symphonia (0.5.x / 0.6.x) — Opus is an
 # empty placeholder crate upstream. Default features give us WebM/Matroska demux
