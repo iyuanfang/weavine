@@ -143,22 +143,67 @@ const downloads = [
       <section id="screenshots" class="py-20 overflow-hidden">
         <div class="max-w-5xl mx-auto px-6">
           <h2 class="text-3xl font-bold text-center">看看实际效果</h2>
-          <p class="mt-3 text-center text-gray-500 text-sm">自动轮播 · 悬停可暂停</p>
+          <p class="mt-3 text-center text-gray-500 text-sm">点击放大 · 左右切换 · Esc 关闭</p>
         </div>
         <div class="marquee mt-12" aria-label="产品截图轮播">
           <div class="marquee__track">
             {[0, 1].map((copy) => (
               <div class="marquee__group" aria-hidden={copy === 1 ? 'true' : undefined}>
-                {screenshots.map((s) => (
-                  <figure class="marquee__item">
-                    <img src={s.src} alt={copy === 0 ? s.alt : ''} loading="lazy" />
-                  </figure>
-                ))}
+                {screenshots.map((s, i) => {
+                  const id = `shot-${copy}-${i}`;
+                  return (
+                    <a href={`#${id}`} class="marquee__item">
+                      <img src={s.src} alt={copy === 0 ? s.alt : ''} loading="lazy" />
+                    </a>
+                  );
+                })}
               </div>
             ))}
           </div>
         </div>
       </section>
+
+      <!-- Lightbox: any #shot-N-M in the URL activates the matching overlay.
+           Each pane is the outer click-to-close; arrows at the sides
+           are sibling <a> elements (not nested) to satisfy HTML. -->
+      <div class="lightbox" id="lb">
+        <div class="lightbox__pane" id="shot-0-0" aria-label="联系人管理">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-contacts.png" alt="联系人管理" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-3" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-1" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+        <div class="lightbox__pane" id="shot-0-1" aria-label="快速记录">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-quick-capture.png" alt="快速记录" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-0" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-2" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+        <div class="lightbox__pane" id="shot-0-2" aria-label="日程管理">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-calendar.png" alt="日程管理" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-1" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-3" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+        <div class="lightbox__pane" id="shot-0-3" aria-label="新建联系人">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-new-contact.png" alt="新建联系人" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-2" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-0" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+      </div>
 
       <section id="download" class="bg-gray-50 py-20">
         <div class="max-w-5xl mx-auto px-6">
@@ -233,5 +278,68 @@ const downloads = [
     @media (prefers-reduced-motion: reduce) {
       .marquee__track { animation: none; }
     }
+
+    /* ── Lightbox: zero-JS, CSS-only via :target ── */
+    .lightbox { position: relative; }
+    .lightbox__pane {
+      position: fixed; inset: 0; background: transparent;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.18s ease;
+      z-index: 100;
+    }
+    .lightbox__pane:target { opacity: 1; pointer-events: none; }
+    .lightbox__pane:target .lightbox__backdrop {
+      pointer-events: auto;
+      background: rgba(0, 0, 0, 0.85);
+    }
+    .lightbox__pane:target .lightbox__img,
+    .lightbox__pane:target .lightbox__nav,
+    .lightbox__pane:target .lightbox__close,
+    .lightbox__pane:target .lightbox__arrow {
+      pointer-events: auto;
+    }
+
+    .lightbox__backdrop {
+      position: absolute; inset: 0; z-index: 0;
+      cursor: zoom-out;
+    }
+    .lightbox__img {
+      position: relative; z-index: 1;
+      max-width: 92vw; max-height: 88vh;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+    }
+    .lightbox__arrow {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 56px; height: 56px; pointer-events: none;
+      z-index: 2;
+    }
+    .lightbox__arrow::before {
+      content: ''; position: absolute; inset: 0;
+      border: solid #fff; border-width: 0 4px 4px 0;
+      width: 24px; height: 24px; top: 14px; left: 16px;
+    }
+    .lightbox__arrow--left { left: 5%; transform: translateY(-50%) rotate(135deg); }
+    .lightbox__arrow--right { right: 5%; transform: translateY(-50%) rotate(-45deg); }
+
+    .lightbox__nav {
+      position: absolute; top: 0; height: 100%;
+      width: 18vw; max-width: 220px;
+      cursor: pointer; z-index: 2;
+    }
+    .lightbox__nav--prev { left: 0; }
+    .lightbox__nav--next { right: 0; }
+
+    .lightbox__close {
+      position: absolute; top: 16px; right: 24px; z-index: 3;
+      width: 44px; height: 44px; line-height: 44px; text-align: center;
+      color: #fff; font-size: 28px; text-decoration: none;
+      border-radius: 50%; background: rgba(255, 255, 255, 0.1);
+    }
+    .lightbox__close:hover { background: rgba(255, 255, 255, 0.2); }
+
+    /* Lock page scroll while a lightbox is open. */
+    html:has(.lightbox__pane:target) { overflow: hidden; }
   </style>
 </html>
