@@ -2,8 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // TAURI_BUILD=1 → base: './' for Tauri release WebView (fixes v0.2.23 white screen
-// on macOS/Windows/Android). Otherwise base: '/app/' so the marketing site at /
-// and the SPA at /app/ coexist on the same domain via nginx try_files.
+// on macOS/Windows/Android). Otherwise base: '/' for Web SPA deep-link hard-reload.
 const isTauri = !!process.env.TAURI_BUILD;
 
 // Voice-recognition backend selector. pnpm filters process.env when spawning
@@ -16,7 +15,7 @@ const voiceMode = process.env.VITE_VOICE_MODE === 'local' ? 'local' : 'cloud';
 
 export default defineConfig({
   plugins: [react()],
-  base: isTauri ? './' : '/app/',
+  base: isTauri ? './' : '/',
   define: {
     'import.meta.env.VITE_VOICE_MODE': JSON.stringify(voiceMode),
   },
