@@ -35,6 +35,7 @@ pub async fn list(
     let auth = extract_auth(&headers, pool.as_ref()).await?;
     let rows = sqlx::query_as::<_, Action>(&format!(
         "{ACTION_SELECT} WHERE a.user_id = $1 \
+         AND a.deleted_at IS NULL \
          AND ($2::text IS NULL OR a.status = $2) \
          AND ($3::text IS NULL OR a.contact_id = $3) \
          AND ($4::text IS NULL OR a.project_id = $4) \

@@ -10,7 +10,7 @@ pub async fn sweep_user(pool: &PgPool, user_id: &str, now: DateTime<Utc>) -> Res
 
     let action = sqlx::query(
         "UPDATE action SET archived_at = $1, updated_at = $1 \
-         WHERE user_id = $2 AND archived_at IS NULL \
+         WHERE user_id = $2 AND archived_at IS NULL AND deleted_at IS NULL \
            AND status = 'done' AND completed_at IS NOT NULL \
            AND completed_at < $3",
     )
@@ -20,7 +20,7 @@ pub async fn sweep_user(pool: &PgPool, user_id: &str, now: DateTime<Utc>) -> Res
 
     let event = sqlx::query(
         "UPDATE event SET archived_at = $1, updated_at = $1 \
-         WHERE user_id = $2 AND archived_at IS NULL \
+         WHERE user_id = $2 AND archived_at IS NULL AND deleted_at IS NULL \
            AND COALESCE(end_at, start_at) < $3",
     )
     .bind(&now_str).bind(user_id).bind(&d1)
@@ -33,7 +33,7 @@ pub async fn sweep_user(pool: &PgPool, user_id: &str, now: DateTime<Utc>) -> Res
         .join(", ");
     let project_sql = format!(
         "UPDATE project SET archived_at = $1, updated_at = $1 \
-         WHERE user_id = $2 AND archived_at IS NULL \
+         WHERE user_id = $2 AND archived_at IS NULL AND deleted_at IS NULL \
            AND updated_at < $3 AND stage IN ({placeholders})"
     );
     let mut query = sqlx::query(&project_sql).bind(&now_str).bind(user_id).bind(&d7);

@@ -126,7 +126,9 @@ async function request<R>(
   method: string,
   path: string,
   body?: unknown,
+  reqOpts?: { unwrap?: boolean },
 ): Promise<R> {
+  const unwrap = reqOpts?.unwrap !== false;
   const url = buildUrl(baseUrl, path, method);
   const opts: RequestInit = {
     method,
@@ -169,11 +171,13 @@ async function request<R>(
   // Empty body (204 No Content, etc.)
   if (resp.status === 204) return undefined as R;
   const json = (await resp.json()) as unknown;
-  // Server list endpoints wrap rows in a {items, cursor, has_more} envelope
-  // while every list call site types its data as a bare array — without this
-  // unwrap, `(query.data ?? []).filter(...)` crashes on every list page.
+  // Some call sites (useInfiniteList pagination) consume the full
+  // {items, cursor, has_more} envelope — pass { unwrap: false } there.
+  // Everything else types its data as a bare array, so transparently
+  // unwrap the envelope or list pages crash on (data ?? []).filter(...).
   // See docs/audit-2026-09-08.md §S.
   if (
+    unwrap &&
     json !== null &&
     typeof json === 'object' &&
     !Array.isArray(json) &&
@@ -228,7 +232,7 @@ export class HttpAdapter implements PRMAdapter {
       limit?: number;
       cursor?: string | null;
     }): Promise<ListContactsResult> =>
-      request<{ items: Contact[]; cursor: string | null; has_more: boolean }>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p })),
+      request<{ items: Contact[]; cursor: string | null; has_more: boolean }>(this.baseUrl, 'GET', '/api/contacts' + qs({ ...p }), undefined, { unwrap: false }),
 
     get: (id: string): Promise<Contact> =>
       request<Contact>(this.baseUrl, 'GET', `/api/contacts/${id}`),
@@ -419,7 +423,7 @@ export class HttpAdapter implements PRMAdapter {
 
   notes = {
     list: (_user_id: string, cursor?: string | null): Promise<ListNotesResult> =>
-      request<{ items: Note[]; cursor: string | null; has_more: boolean }>(this.baseUrl, 'GET', '/api/notes' + qs({ cursor })),
+      request<{ items: Note[]; cursor: string | null; has_more: boolean }>(this.baseUrl, 'GET', '/api/notes' + qs({ cursor }), undefined, { unwrap: false }),
 
     get: async (_user_id: string, id: string): Promise<Note | null> => {
       try {
