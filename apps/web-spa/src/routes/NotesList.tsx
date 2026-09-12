@@ -28,12 +28,12 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'title', label: '标题 A-Z' },
 ];
 
-const LINK_KINDS: { value: string; label: string; icon: string }[] = [
-  { value: 'contact', label: '联系人', icon: '👤' },
-  { value: 'project', label: '项目', icon: '📁' },
-  { value: 'event', label: '日程', icon: '📅' },
-  { value: 'action', label: '待办', icon: '✅' },
-  { value: 'interaction', label: '互动', icon: '💬' },
+const LINK_KINDS: { value: string; label: string; color: string }[] = [
+  { value: 'contact', label: '联系人', color: '#2563eb' },
+  { value: 'project', label: '项目', color: '#7c3aed' },
+  { value: 'event', label: '日程', color: '#10b981' },
+  { value: 'action', label: '待办', color: '#f59e0b' },
+  { value: 'interaction', label: '互动', color: '#0ea5e9' },
 ];
 
 type LinkedFilter = 'all' | 'none' | string;
@@ -201,7 +201,10 @@ export function NotesList() {
               }`}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 'var(--text-base)' }}>⚪</span>
+                <span
+                  className="filter-panel__item-dot"
+                  style={{ background: '#cbd5e1' }}
+                />
                 <span>未关联</span>
               </span>
               <span className="filter-panel__count">{countsByKind.unlinked}</span>
@@ -218,7 +221,10 @@ export function NotesList() {
                 }`}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 'var(--text-base)' }}>{k.icon}</span>
+                  <span
+                    className="filter-panel__item-dot"
+                    style={{ background: k.color }}
+                  />
                   <span>{k.label}</span>
                 </span>
                 <span className="filter-panel__count">

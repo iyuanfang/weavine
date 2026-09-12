@@ -290,11 +290,6 @@ export function ContactDetail() {
             >
               {avatarUploading ? '上传中…' : '更换头像'}
             </button>
-            {avatarError && (
-              <span role="alert" style={{ color: '#dc2626', fontSize: 13, alignSelf: 'center' }}>
-                {avatarError}
-              </span>
-            )}
             <Link
               to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
               className="btn btn-secondary"
@@ -313,6 +308,20 @@ export function ContactDetail() {
           </>
         }
       />
+
+      {avatarError && (
+        <div
+          role="alert"
+          style={{
+            marginTop: -16,
+            marginBottom: 16,
+            color: '#dc2626',
+            fontSize: 'var(--text-sm)',
+          }}
+        >
+          头像上传失败：{avatarError}
+        </div>
+      )}
 
       <GraphTab
         center={{ type: 'contact', id }}
