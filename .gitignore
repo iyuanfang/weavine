@@ -55,3 +55,7 @@ jwt-*.pem
 apps/web-spa/test-crop.html
 apps/web-spa/src/test-crop.tsx
 apps/web-spa/public/crop-test/
+
+# Local sandbox (build caches, downloads, sandbox scripts)
+.runtime/
+.zcode/
