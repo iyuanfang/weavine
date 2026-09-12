@@ -404,7 +404,7 @@ button:focus-visible {
 /* ── Sections ───────────────────────────────────────── */
 
 .section {
-  margin-bottom: 28px;
+  margin-bottom: 18px;
   animation: section-fade-in-up 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -418,7 +418,7 @@ button:focus-visible {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .section__title {
@@ -551,7 +551,7 @@ button:focus-visible {
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 12px;
   box-shadow: var(--shadow-xs);
   transition: box-shadow var(--transition), border-color var(--transition),
     transform var(--transition);
@@ -578,11 +578,11 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elev);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   box-shadow: var(--shadow-xs);
   transition: border-color var(--transition), box-shadow var(--transition),
     transform var(--transition);
@@ -743,7 +743,7 @@ textarea.input-base {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 16px;
+  padding: 7px 12px;
   border-radius: var(--radius-sm);
   font-size: var(--text-base);
   font-weight: 500;
@@ -838,7 +838,7 @@ textarea.input-base {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 16px;
+  padding: 7px 12px;
   border-radius: var(--radius-sm);
   font-size: var(--text-base);
   font-weight: 500;
@@ -1139,7 +1139,7 @@ textarea.input-base {
 
 .empty-state {
   text-align: center;
-  padding: 22px 16px;
+  padding: 12px 16px;
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   color: var(--muted);

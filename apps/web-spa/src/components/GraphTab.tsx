@@ -93,7 +93,7 @@ export function GraphTab({
             display: 'flex',
             gap: 0,
             borderBottom: '1px solid #e2e8f0',
-            marginBottom: 16,
+            marginBottom: 12,
           }}
         >
           <button
