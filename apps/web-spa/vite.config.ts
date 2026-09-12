@@ -25,12 +25,14 @@ export default defineConfig({
     host: '127.0.0.1',
     hmr: { port: 5181 },
     proxy: {
+      // 13002: 13001 is haunted by a leaked loopback listener (dead-PID socket
+      // that survives WSL shutdown and swallows connections); move until reboot.
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://127.0.0.1:13002',
         changeOrigin: true,
       },
       '/files': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://127.0.0.1:13002',
         changeOrigin: true,
       },
     },
