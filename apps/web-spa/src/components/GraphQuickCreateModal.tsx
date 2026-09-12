@@ -16,7 +16,34 @@ export interface GraphCenter {
   id: string;
 }
 
-const ALL_CREATABLE: CreateKind[] = ['project', 'event', 'action', 'note', 'interaction'];
+const ALL_CREATABLE = ['project', 'event', 'action', 'note', 'interaction'] as const;
+
+/** Default set of kinds callers pass when they want every possible option. */
+export const ALL_CREATABLE_KINDS: CreateKind[] = [...ALL_CREATABLE];
+
+/** Single source of truth used by both the modal body and the GraphTab
+ *  create button to decide whether a center has any valid create options. */
+export function creatableForCenter(
+  centerType: EntityGraphNodeType,
+  requested: readonly CreateKind[] = ALL_CREATABLE_KINDS,
+): CreateKind[] {
+  const allowed = CREATABLE_BY_CENTER[centerType];
+  if (!allowed) return [];
+  return requested.filter((k) => allowed.has(k));
+}
+
+// For each center type, which new entity kinds produce a meaningful link back
+// to the center. The new entity must expose a foreign-key column or a
+// many-to-many table that references the center — otherwise the new node
+// would float with no edge in the graph (worse than not creating it).
+const CREATABLE_BY_CENTER: Record<EntityGraphNodeType, ReadonlySet<CreateKind>> = {
+  contact: new Set<CreateKind>(['project', 'event', 'action', 'note', 'interaction']),
+  project: new Set<CreateKind>(['event', 'action', 'note', 'interaction']),
+  event: new Set<CreateKind>(['note', 'interaction']),
+  action: new Set<CreateKind>(['note', 'interaction']),
+  interaction: new Set<CreateKind>(['note']),
+  note: new Set<CreateKind>(),
+};
 
 export interface GraphQuickCreateModalProps {
   center: GraphCenter;
@@ -32,7 +59,8 @@ export function GraphQuickCreateModal({
   onCreated,
 }: GraphQuickCreateModalProps) {
   const [kind, setKind] = useState<CreateKind | null>(null);
-  const options = creatable ?? ALL_CREATABLE;
+  const options = creatableForCenter(center.type, creatable);
+  if (options.length === 0) return null;
 
   return (
     <div

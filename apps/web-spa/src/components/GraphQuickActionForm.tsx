@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { ACTION_PRESETS } from './categoryPresets';
 import { useGraphInvalidation, type GraphCenter } from './GraphQuickCreateModal';
 
 export interface GraphQuickActionFormProps {
@@ -23,6 +24,7 @@ export function GraphQuickActionForm({
   const invalidate = useGraphInvalidation();
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState(2);
+  const [category, setCategory] = useState<string>(ACTION_PRESETS[0]?.value ?? '其他');
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -32,6 +34,7 @@ export function GraphQuickActionForm({
         user_id: userId,
         title: title.trim(),
         priority,
+        category,
         status: 'open',
         contact_id: center.type === 'contact' ? center.id : null,
         project_id: center.type === 'project' ? center.id : null,
@@ -78,6 +81,15 @@ export function GraphQuickActionForm({
           <option value={1}>高</option>
           <option value={2}>中</option>
           <option value={3}>低</option>
+        </select>
+      </Field>
+      <Field label="分类">
+        <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
+          {ACTION_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.icon} {p.label}
+            </option>
+          ))}
         </select>
       </Field>
       {(center.type === 'contact' || center.type === 'project') && (

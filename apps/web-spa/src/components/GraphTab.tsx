@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ALL_TYPES, GRAPH_NODE_CAP, TYPE_META, type GraphCenter } from './EntityGraph';
-import { GraphQuickCreateModal, type CreateKind } from './GraphQuickCreateModal';
+import { GraphQuickCreateModal, creatableForCenter, type CreateKind } from './GraphQuickCreateModal';
 import { emit } from '../lib/telemetry';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
@@ -67,7 +67,7 @@ export function GraphTab({
     }
   }, [activeTab, center.type, center.id]);
 
-  const onNeighborOpen = useCallback(
+const onNeighborOpen = useCallback(
     (n: EntityGraphNode) => {
       emit('graph_node_click', {
         entity_type: n.entity_type,
@@ -79,10 +79,18 @@ export function GraphTab({
     [center.type, navigate]
   );
 
+  // Only show create options that produce a meaningful link back to the
+  // center. Without this filter the modal would open with no options (note
+  // centers, etc.) and the + 新建 button would be misleading.
+  const effectiveCreatable = useMemo(
+    () => creatableForCenter(center.type, creatable),
+    [center.type, creatable],
+  );
+
   const handleQuickCreate = useCallback(() => setShowQuickCreate(true), []);
 
   const showEmptyCta =
-    !!graphQuery.data && availableTypes.size === 0 && creatable.length > 0;
+    !!graphQuery.data && availableTypes.size === 0 && effectiveCreatable.length > 0;
 
   return (
     <>
@@ -190,7 +198,7 @@ export function GraphTab({
                 </label>
               );
             })}
-            {creatable.length > 0 && (
+            {effectiveCreatable.length > 0 && (
               <button
                 type="button"
                 data-testid={`${center.type}-quick-create-open`}
@@ -208,7 +216,7 @@ export function GraphTab({
               centerId={center.id}
               visibleTypes={visibleTypes}
               onNeighborOpen={onNeighborOpen}
-              onQuickCreate={creatable.length > 0 ? handleQuickCreate : undefined}
+              onQuickCreate={effectiveCreatable.length > 0 ? handleQuickCreate : undefined}
             />
           </Suspense>
           {showEmptyCta && (
@@ -232,13 +240,13 @@ export function GraphTab({
                 className="btn btn-primary"
                 style={{ padding: '6px 12px' }}
               >
-                + 添加{TYPE_META[creatable[0]].label}
+                + 添加{TYPE_META[effectiveCreatable[0]].label}
               </button>
             </div>
           )}
           <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
             单击节点 = 查看该节点的关系图。
-            {creatable.length > 0 && '点击 + 新建按钮即可在此添加关联实体。'}
+            {effectiveCreatable.length > 0 && '点击 + 新建按钮即可在此添加关联实体。'}
             超过 {GRAPH_NODE_CAP} 个节点的关联会被截断。
           </div>
         </section>

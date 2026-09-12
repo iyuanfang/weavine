@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { EVENT_PRESETS } from './categoryPresets';
 import { useGraphInvalidation, type GraphCenter } from './GraphQuickCreateModal';
 
 export interface GraphQuickEventFormProps {
@@ -22,7 +23,7 @@ export function GraphQuickEventForm({
   const userId = useUserId();
   const invalidate = useGraphInvalidation();
   const [title, setTitle] = useState('');
-  const [type, setType] = useState('meeting');
+  const [type, setType] = useState<string>(EVENT_PRESETS[0]?.value ?? '会议');
   const [startAt, setStartAt] = useState(localDatetimeNow());
   const [error, setError] = useState<string | null>(null);
 
@@ -73,10 +74,11 @@ export function GraphQuickEventForm({
       </Field>
       <Field label="类型">
         <select value={type} onChange={(e) => setType(e.target.value)} style={inputStyle}>
-          <option value="meeting">会议</option>
-          <option value="call">通话</option>
-          <option value="meal">餐叙</option>
-          <option value="event">活动</option>
+          {EVENT_PRESETS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.icon} {p.label}
+            </option>
+          ))}
         </select>
       </Field>
       <Field label="开始时间">

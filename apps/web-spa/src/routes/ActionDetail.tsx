@@ -196,6 +196,7 @@ export function ActionDetail() {
 
       <GraphTab
         center={{ type: 'action', id }}
+        creatable={['project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
@@ -226,18 +227,6 @@ export function ActionDetail() {
                     </span>
                   );
                 })()
-              ) : (
-                <span className="text-sm text-muted">—</span>
-              )}
-            </div>
-            <div>
-              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
-                截止时间
-              </div>
-              {action.due_at ? (
-                <span style={{ fontSize: 'var(--text-base)' }}>
-                  📅 {new Date(action.due_at).toLocaleString('zh-CN')}
-                </span>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}

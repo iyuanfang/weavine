@@ -168,7 +168,7 @@ const NOTE_TEMPLATES: { id: string; icon: string; title: string; body: string }[
 `,
   },
 ];
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
@@ -177,6 +177,7 @@ import { MarkdownEditor, EditorToolbar } from '../components/MarkdownEditor';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { GraphTab } from '../components/GraphTab';
 import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
+import { backTarget } from '../lib/backNavigation';
 import type {
   Action,
   Contact,
@@ -663,6 +664,8 @@ export function NoteDetail() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const tab = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
+  const fromParam = searchParams.get('from');
+  const back = backTarget(fromParam, '/notes');
   const dirtyRef = useRef(false);
   const saveTokenRef = useRef(0);
   const debounceHandleRef = useRef<number | null>(null);
@@ -802,7 +805,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
     if (!window.confirm('确定删除这条笔记？此操作不可恢复。')) return;
     await persist({ force: true });
     await adapter.notes.delete(userId, id);
-    navigate('/notes');
+    navigate(fromParam || '/notes');
   };
 
   const onCopyMarkdown = async () => {
@@ -892,9 +895,9 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
         }
         actions={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => navigate('/notes')}>
-              ← 返回
-            </button>
+            <Link to={back.href} className="btn btn-ghost">
+              {back.label}
+            </Link>
             <button
               type="button"
               className="btn btn-secondary"
@@ -927,6 +930,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
 
       <GraphTab
         center={{ type: 'note', id: id as string }}
+        creatable={['project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />

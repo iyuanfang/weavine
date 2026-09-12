@@ -167,13 +167,7 @@ export function InteractionDetail() {
     <div className="page">
       <DetailHeaderCard
         icon={<EntityIconBadge>💬</EntityIconBadge>}
-        title={
-          interaction.summary
-            ? interaction.summary.length > 40
-              ? `${interaction.summary.slice(0, 40)}…`
-              : interaction.summary
-            : '互动记录'
-        }
+        title={formatDateTime(new Date(interaction.occurred_at))}
         badges={
           <>
             {interaction.channel && (
@@ -185,9 +179,13 @@ export function InteractionDetail() {
           </>
         }
         meta={
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
-            {formatDateTime(new Date(interaction.occurred_at))}
-          </span>
+          interaction.summary && (
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
+              {interaction.summary.length > 80
+                ? `${interaction.summary.slice(0, 80)}…`
+                : interaction.summary}
+            </span>
+          )
         }
         actions={
           <>
@@ -230,6 +228,7 @@ export function InteractionDetail() {
 
       <GraphTab
         center={{ type: 'interaction', id: id as string }}
+        creatable={['project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
@@ -301,24 +300,6 @@ export function InteractionDetail() {
         </form>
       ) : (
         <>
-          {interaction.channel && (
-            <section className="section">
-              <h2 className="section__title">渠道</h2>
-              <div className="card" style={{ marginTop: 8, padding: 12 }}>
-                <span className="badge badge--accent">{interaction.channel}</span>
-              </div>
-            </section>
-          )}
-
-          {interaction.source && interaction.source !== 'manual' && (
-            <section className="section">
-              <h2 className="section__title">来源</h2>
-              <div className="card" style={{ marginTop: 8, padding: 12 }}>
-                <InteractionSourceTag source={interaction.source} />
-              </div>
-            </section>
-          )}
-
           <section className="section">
             <h2 className="section__title">摘要</h2>
             <div className="card" style={{ marginTop: 8 }}>

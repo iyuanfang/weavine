@@ -107,6 +107,7 @@ export function EventDetail() {
 
       <GraphTab
         center={{ type: 'event', id }}
+        creatable={['project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
@@ -123,28 +124,6 @@ export function EventDetail() {
               gap: '14px 24px',
             }}
           >
-            <div>
-              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
-                类型
-              </div>
-              <div style={{ fontSize: 'var(--text-base)' }}>{formatEventType(event.type) || '—'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
-                开始时间
-              </div>
-              <div style={{ fontSize: 'var(--text-base)' }}>{start.toLocaleString('zh-CN')}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
-                结束时间
-              </div>
-              {end ? (
-                <div style={{ fontSize: 'var(--text-base)' }}>{end.toLocaleString('zh-CN')}</div>
-              ) : (
-                <span className="text-sm text-muted">—</span>
-              )}
-            </div>
             <div>
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 提前提醒
