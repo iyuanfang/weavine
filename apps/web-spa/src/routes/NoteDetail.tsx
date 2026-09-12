@@ -176,6 +176,7 @@ import { MarkdownView } from '../components/MarkdownView';
 import { MarkdownEditor, EditorToolbar } from '../components/MarkdownEditor';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { GraphTab } from '../components/GraphTab';
+import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import type {
   Action,
   Contact,
@@ -857,42 +858,72 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
 
   return (
     <div className="page note-detail">
-      <header className="page-header">
-        <button type="button" className="btn" onClick={() => navigate('/notes')}>
-          ← 返回
-        </button>
-        <div className="note-detail__actions">
-          <span className={`note-detail__save-status note-detail__save-status--${saveStatus}`}>
+      <DetailHeaderCard
+        icon={<EntityIconBadge>📝</EntityIconBadge>}
+        title={
+          <input
+            type="text"
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            placeholder="标题（无标题）"
+            aria-label="笔记标题"
+            style={{
+              display: 'block',
+              width: 'min(560px, 55vw)',
+              fontSize: 'inherit',
+              fontWeight: 'inherit',
+              fontFamily: 'inherit',
+              color: 'inherit',
+              border: 'none',
+              borderBottom: '1px dashed var(--border, #e5e7eb)',
+              background: 'transparent',
+              outline: 'none',
+              padding: 0,
+            }}
+          />
+        }
+        meta={
+          <span
+            className={`note-detail__save-status note-detail__save-status--${saveStatus}`}
+            style={{ fontSize: 'var(--text-sm)' }}
+          >
             {saveLabel}
           </span>
-          <button
-            type="button"
-            className="btn"
-            onClick={onCopyMarkdown}
-            title="复制 Markdown 源码到剪贴板"
-          >
-            复制 MD
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={onExportMd}
-            title="导出为本地 .md 文件；文件 mtime = imported_at，下次导入走快速路径"
-          >
-            导出 .md
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => navigate(`/notes/new?clone_from=${id}`)}
-          >
-            克隆
-          </button>
-          <button type="button" className="btn" onClick={onDelete}>
-            删除
-          </button>
-        </div>
-      </header>
+        }
+        actions={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => navigate('/notes')}>
+              ← 返回
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onCopyMarkdown}
+              title="复制 Markdown 源码到剪贴板"
+            >
+              复制 MD
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onExportMd}
+              title="导出为本地 .md 文件；文件 mtime = imported_at，下次导入走快速路径"
+            >
+              导出 .md
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => navigate(`/notes/new?clone_from=${id}`)}
+            >
+              克隆
+            </button>
+            <button type="button" className="btn btn-danger" onClick={onDelete}>
+              删除
+            </button>
+          </>
+        }
+      />
 
       <GraphTab
         center={{ type: 'note', id: id as string }}
@@ -902,13 +933,6 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
 
       {tab === 'detail' && (
       <div className="note-detail__edit">
-        <input
-          type="text"
-          className="input-base note-edit__title"
-          value={draftTitle}
-          onChange={(e) => setDraftTitle(e.target.value)}
-          placeholder="标题"
-        />
         <div className="note-edit__tabs" role="tablist">
             <button
               type="button"

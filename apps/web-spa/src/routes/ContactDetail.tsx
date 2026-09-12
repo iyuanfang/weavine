@@ -13,7 +13,7 @@ import { ReminderCountdown } from '../components/ReminderCountdown';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
 
 import { GraphTab } from '../components/GraphTab';
-import { avatarBg } from '../lib/contactColor';
+import { DetailHeaderCard } from '../components/DetailHeaderCard';
 import { tagColor } from '../lib/tagColor';
 import { avatarUrlFor } from '../lib/avatarUrl';
 import { backTarget } from '../lib/backNavigation';
@@ -225,47 +225,35 @@ export function ContactDetail() {
 
   return (
     <div className="page">
-      <div
-        className="card"
-        style={{
-          padding: 24,
-          marginBottom: 24,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 20,
-          flexWrap: 'wrap',
-          rowGap: 16,
-        }}
-      >
-        <div
-          className="avatar avatar--lg"
-          style={{ background: avatarBg(displayName), position: 'relative', cursor: 'pointer' }}
-          onClick={() => contactAvatarUrl && setViewingAvatar(true)}
-          title={contactAvatarUrl ? '点击查看大图' : ''}
-        >
-          <Avatar name={displayName} src={contactAvatarUrl} size={88} />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            style={{ display: 'none' }}
-            onChange={onAvatarChange}
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="cluster cluster--loose">
-            <h1 className="page-title" style={{ margin: 0 }}>
-              {displayName}
-            </h1>
-            {impLabel && (
-              <span className="badge" style={{ background: imp.bg, color: imp.fg }}>
-                {impLabel}
-              </span>
-            )}
+      <DetailHeaderCard
+        icon={
+          <div
+            style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}
+            onClick={() => contactAvatarUrl && setViewingAvatar(true)}
+            title={contactAvatarUrl ? '点击查看大图' : ''}
+          >
+            <Avatar name={displayName} src={contactAvatarUrl} size={56} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              style={{ display: 'none' }}
+              onChange={onAvatarChange}
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
-          {contact.tags.length > 0 && (
-            <div className="cluster" style={{ marginTop: 8 }}>
+        }
+        title={displayName}
+        badges={
+          impLabel && (
+            <span className="badge" style={{ background: imp.bg, color: imp.fg }}>
+              {impLabel}
+            </span>
+          )
+        }
+        meta={
+          contact.tags.length > 0 && (
+            <div className="cluster">
               {contact.tags.map((tag) => (
                 <Link
                   key={tag.id}
@@ -286,43 +274,45 @@ export function ContactDetail() {
                 </Link>
               ))}
             </div>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}>
-          <Link to={back.href} className="btn btn-ghost">
-            {back.label}
-          </Link>
-          <button
-            type="button"
-            onClick={onPickAvatar}
-            disabled={avatarUploading}
-            className="btn btn-secondary"
-            style={{ opacity: avatarUploading ? 0.6 : 1 }}
-          >
-            {avatarUploading ? '上传中…' : '更换头像'}
-          </button>
-          {avatarError && (
-            <span role="alert" style={{ color: '#dc2626', fontSize: 13, alignSelf: 'center' }}>
-              {avatarError}
-            </span>
-          )}
-          <Link
-            to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
-            className="btn btn-secondary"
-          >
-            编辑
-          </Link>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            className="btn btn-danger"
-            style={{ opacity: deleteMutation.isPending ? 0.6 : 1 }}
-          >
-            {deleteMutation.isPending ? '删除中…' : '删除'}
-          </button>
-        </div>
-      </div>
+          )
+        }
+        actions={
+          <>
+            <Link to={back.href} className="btn btn-ghost">
+              {back.label}
+            </Link>
+            <button
+              type="button"
+              onClick={onPickAvatar}
+              disabled={avatarUploading}
+              className="btn btn-secondary"
+              style={{ opacity: avatarUploading ? 0.6 : 1 }}
+            >
+              {avatarUploading ? '上传中…' : '更换头像'}
+            </button>
+            {avatarError && (
+              <span role="alert" style={{ color: '#dc2626', fontSize: 13, alignSelf: 'center' }}>
+                {avatarError}
+              </span>
+            )}
+            <Link
+              to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
+              className="btn btn-secondary"
+            >
+              编辑
+            </Link>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="btn btn-danger"
+              style={{ opacity: deleteMutation.isPending ? 0.6 : 1 }}
+            >
+              {deleteMutation.isPending ? '删除中…' : '删除'}
+            </button>
+          </>
+        }
+      />
 
       <GraphTab
         center={{ type: 'contact', id }}
@@ -334,7 +324,7 @@ export function ContactDetail() {
       {tab === 'detail' && infoFields.length > 0 && (
         <section className="section">
           <h2 className="section__title">基本信息</h2>
-          <div className="card" style={{ marginTop: 10, padding: 16 }}>
+          <div className="card" style={{ marginTop: 8, padding: 12 }}>
             <div
               style={{
                 display: 'grid',
@@ -359,7 +349,7 @@ export function ContactDetail() {
       <>
       <section className="section">
         <h2 className="section__title">保持联系</h2>
-        <div className="card" style={{ marginTop: 10, padding: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div className="card" style={{ marginTop: 8, padding: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <CadencePicker
             importance={contact.importance || 'low'}
             value={contact.keep_in_touch_cadence_days ?? null}

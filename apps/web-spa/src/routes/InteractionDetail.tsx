@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { PageHeader } from '../components/PageHeader';
+import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { GraphTab } from '../components/GraphTab';
@@ -165,45 +165,66 @@ export function InteractionDetail() {
 
   return (
     <div className="page">
-      <PageHeader
+      <DetailHeaderCard
+        icon={<EntityIconBadge>💬</EntityIconBadge>}
         title={
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 'var(--text-xl)' }}>💬</span>
-            互动记录
+          interaction.summary
+            ? interaction.summary.length > 40
+              ? `${interaction.summary.slice(0, 40)}…`
+              : interaction.summary
+            : '互动记录'
+        }
+        badges={
+          <>
+            {interaction.channel && (
+              <span className="badge badge--accent">{interaction.channel}</span>
+            )}
+            {interaction.source && interaction.source !== 'manual' && (
+              <InteractionSourceTag source={interaction.source} />
+            )}
+          </>
+        }
+        meta={
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
+            {formatDateTime(new Date(interaction.occurred_at))}
           </span>
         }
-        subtitle={formatDateTime(new Date(interaction.occurred_at))}
-        back={<Link to={backHref} className="btn btn-ghost">{backLabel}</Link>}
         actions={
-          !editing ? (
-            <div style={{ display: 'flex', gap: 8 }}>
+          <>
+            <Link to={backHref} className="btn btn-ghost">
+              {backLabel}
+            </Link>
+            {!editing && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  className="btn btn-secondary"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleteMutation.isPending}
+                  className="btn btn-danger"
+                  style={{ opacity: deleteMutation.isPending ? 0.6 : 1 }}
+                >
+                  {deleteMutation.isPending ? '删除中…' : '删除'}
+                </button>
+              </>
+            )}
+            {editing && (
               <button
                 type="button"
-                onClick={handleStartEdit}
-                className="btn btn-secondary"
+                onClick={handleCancelEdit}
+                className="btn btn-ghost"
+                disabled={updateMutation.isPending}
               >
-                编辑
+                取消
               </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleteMutation.isPending}
-                className="btn btn-danger"
-                style={{ opacity: deleteMutation.isPending ? 0.6 : 1 }}
-              >
-                {deleteMutation.isPending ? '删除中…' : '删除'}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="btn btn-ghost"
-              disabled={updateMutation.isPending}
-            >
-              取消
-            </button>
-          )
+            )}
+          </>
         }
       />
 
@@ -217,7 +238,7 @@ export function InteractionDetail() {
         <form onSubmit={handleSaveEdit}>
           <section className="section">
             <h2 className="section__title">编辑</h2>
-            <div className="card" style={{ marginTop: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="card" style={{ marginTop: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>时间</span>
                 <input
@@ -283,7 +304,7 @@ export function InteractionDetail() {
           {interaction.channel && (
             <section className="section">
               <h2 className="section__title">渠道</h2>
-              <div className="card" style={{ marginTop: 10, padding: 16 }}>
+              <div className="card" style={{ marginTop: 8, padding: 12 }}>
                 <span className="badge badge--accent">{interaction.channel}</span>
               </div>
             </section>
@@ -292,7 +313,7 @@ export function InteractionDetail() {
           {interaction.source && interaction.source !== 'manual' && (
             <section className="section">
               <h2 className="section__title">来源</h2>
-              <div className="card" style={{ marginTop: 10, padding: 16 }}>
+              <div className="card" style={{ marginTop: 8, padding: 12 }}>
                 <InteractionSourceTag source={interaction.source} />
               </div>
             </section>
@@ -300,7 +321,7 @@ export function InteractionDetail() {
 
           <section className="section">
             <h2 className="section__title">摘要</h2>
-            <div className="card" style={{ marginTop: 10 }}>
+            <div className="card" style={{ marginTop: 8 }}>
               <p style={{ margin: 0, fontSize: 'var(--text-base)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                 {interaction.summary}
               </p>
@@ -312,7 +333,7 @@ export function InteractionDetail() {
       {(contact || event || action) && (
         <section className="section">
           <h2 className="section__title">关联记录</h2>
-          <div className="card" style={{ marginTop: 10, padding: 16 }}>
+          <div className="card" style={{ marginTop: 8, padding: 12 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {contact && (
                 <Link

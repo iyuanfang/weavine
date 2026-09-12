@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { PageHeader } from '../components/PageHeader';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { GraphTab } from '../components/GraphTab';
+import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 
@@ -67,18 +67,19 @@ export function EventDetail() {
 
   return (
     <div className="page">
-      <PageHeader
-        title={
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 'var(--text-xl)' }}>📅</span>
-            {event.title}
-          </span>
+      <DetailHeaderCard
+        icon={<EntityIconBadge>📅</EntityIconBadge>}
+        title={event.title}
+        badges={
+          formatEventType(event.type) && (
+            <span className="badge badge--muted">{formatEventType(event.type)}</span>
+          )
         }
-        subtitle={
-          <>
-            {formatEventType(event.type)} · {start.toLocaleString('zh-CN')}
+        meta={
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
+            {start.toLocaleString('zh-CN')}
             {end && ` – ${end.toLocaleString('zh-CN')}`}
-          </>
+          </span>
         }
         actions={
           <>
@@ -113,8 +114,8 @@ export function EventDetail() {
       {tab === 'detail' && (
         <>
         <section className="section">
-          <h2 className="section__title">详情</h2>
-        <div className="card" style={{ marginTop: 10, padding: 16 }}>
+          <h2 className="section__title">基本信息</h2>
+        <div className="card" style={{ marginTop: 8, padding: 12 }}>
           <div
             style={{
               display: 'grid',
@@ -154,7 +155,7 @@ export function EventDetail() {
                 <span className="text-sm text-muted">—</span>
               )}
             </div>
-            <div style={{ gridColumn: '1 / -1' }}>
+            <div>
               <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
                 地点
               </div>
@@ -170,7 +171,7 @@ export function EventDetail() {
 
 <section className="section">
         <h2 className="section__title">关联</h2>
-        <div className="card" style={{ marginTop: 10, padding: 16 }}>
+        <div className="card" style={{ marginTop: 8, padding: 12 }}>
           <div
             style={{
               display: 'grid',

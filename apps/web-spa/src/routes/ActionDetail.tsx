@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { GraphTab } from '../components/GraphTab';
+import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 import type { UpdateActionInput } from '../lib/adapter/types';
@@ -116,43 +116,65 @@ export function ActionDetail() {
 
   return (
     <div className="page">
-      <PageHeader
+      <DetailHeaderCard
+        icon={<EntityIconBadge>{isDone ? '✅' : '📌'}</EntityIconBadge>}
         title={
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 'var(--text-xl)' }}>{isDone ? '✅' : '📌'}</span>
-            <span
-              style={{
-                textDecoration: isDone ? 'line-through' : 'none',
-                color: isDone ? 'var(--muted)' : 'inherit',
-              }}
-            >
-              {action.title}
-            </span>
+          <span
+            style={{
+              textDecoration: isDone ? 'line-through' : 'none',
+              color: isDone ? 'var(--muted)' : 'inherit',
+            }}
+          >
+            {action.title}
           </span>
         }
-        subtitle={
+        badges={
           <>
-            {statusLabel}
+            <span className="badge badge--muted">{statusLabel}</span>
             {action.priority > 0 && (
-              <span
-                className="badge"
-                style={{ background: prio.bg, color: prio.fg, marginLeft: 8 }}
-              >
+              <span className="badge" style={{ background: prio.bg, color: prio.fg }}>
                 {prioLabel}
               </span>
             )}
-            {action.due_at && (
-              <span style={{ marginLeft: 8 }}>
-                · 截止 {new Date(action.due_at).toLocaleString('zh-CN')}
-              </span>
-            )}
           </>
+        }
+        meta={
+          action.due_at && (
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
+              截止 {new Date(action.due_at).toLocaleString('zh-CN')}
+            </span>
+          )
         }
         actions={
           <>
             <Link to={back.href} className="btn btn-ghost">
               {back.label}
             </Link>
+            {!isDone && (
+              <button
+                type="button"
+                onClick={handleComplete}
+                disabled={completeMutation.isPending}
+                className="btn btn-primary"
+                style={{
+                  background: 'var(--success)',
+                  opacity: completeMutation.isPending ? 0.6 : 1,
+                }}
+              >
+                {completeMutation.isPending ? '完成中…' : '✓ 标记完成'}
+              </button>
+            )}
+            {isDone && (
+              <button
+                type="button"
+                onClick={handleReopen}
+                disabled={completeMutation.isPending}
+                className="btn btn-secondary"
+                style={{ opacity: completeMutation.isPending ? 0.6 : 1 }}
+              >
+                {completeMutation.isPending ? '处理中…' : '↺ 重新打开'}
+              </button>
+            )}
             <Link
               to={`/actions/${id}/edit?from=${encodeURIComponent(fromParam || `/actions/${id}`)}`}
               className="btn btn-secondary"
@@ -181,8 +203,8 @@ export function ActionDetail() {
       {tab === 'detail' && (
         <>
           <section className="section">
-        <h2 className="section__title">详情</h2>
-        <div className="card" style={{ marginTop: 10, padding: 16 }}>
+        <h2 className="section__title">基本信息</h2>
+        <div className="card" style={{ marginTop: 8, padding: 12 }}>
           <div
             style={{
               display: 'grid',
@@ -271,37 +293,6 @@ export function ActionDetail() {
           </div>
         </div>
           </section>
-
-      {!isDone && (
-        <div className="cluster cluster--loose" style={{ marginTop: 16 }}>
-          <button
-            type="button"
-            onClick={handleComplete}
-            disabled={completeMutation.isPending}
-            className="btn btn-primary"
-            style={{
-              background: 'var(--success)',
-              opacity: completeMutation.isPending ? 0.6 : 1,
-            }}
-          >
-            {completeMutation.isPending ? '完成中…' : '✓ 标记完成'}
-          </button>
-        </div>
-      )}
-
-      {isDone && (
-        <div className="cluster cluster--loose" style={{ marginTop: 16 }}>
-          <button
-            type="button"
-            onClick={handleReopen}
-            disabled={completeMutation.isPending}
-            className="btn btn-secondary"
-            style={{ opacity: completeMutation.isPending ? 0.6 : 1 }}
-          >
-            {completeMutation.isPending ? '处理中…' : '↺ 重新打开'}
-          </button>
-        </div>
-      )}
         </>
       )}
 

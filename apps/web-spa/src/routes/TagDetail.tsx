@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 
-import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import { avatarBg } from '../lib/contactColor';
 import { tagColor } from '../lib/tagColor';
 import type { Contact } from '../lib/adapter/types';
@@ -76,38 +76,43 @@ export function TagDetail() {
 
   return (
     <div className="page">
-      <PageHeader
-        title={
-          <span className="cluster cluster--loose">
-            <span className="dot dot--xl" style={{ background: color }} />
-            {currentTag.name}
-          </span>
+      <DetailHeaderCard
+        icon={
+          <EntityIconBadge background={color} color="#fff">
+            {currentTag.name.slice(0, 1).toUpperCase()}
+          </EntityIconBadge>
         }
-        subtitle={`${contacts.length} 个联系人`}
-        back={
+        title={currentTag.name}
+        badges={<span className="badge badge--muted">{contacts.length} 个联系人</span>}
+        actions={
           <Link to="/tags" className="btn btn-ghost">
             ← 返回
           </Link>
         }
       />
 
-      {isLoading ? (
-        <div className="loading">加载中</div>
-      ) : contacts.length === 0 ? (
-        <div className="empty-state">
-          <h3 className="empty-state__title">该标签下还没有联系人</h3>
-          <p className="empty-state__hint">给联系人的标签里选上「{currentTag.name}」</p>
-          <Link to="/contacts" className="btn btn-primary">
-            去看看联系人
-          </Link>
+      <section className="section">
+        <div className="section__header">
+          <h2 className="section__title">联系人</h2>
         </div>
-      ) : (
-        <div style={{ display: 'grid', gap: 6 }}>
-          {contacts.map((c: Contact) => (
-            <ContactRow key={c.id} contact={c} tagId={tagId} />
-          ))}
-        </div>
-      )}
+        {isLoading ? (
+          <div className="loading">加载中</div>
+        ) : contacts.length === 0 ? (
+          <div className="empty-state">
+            <h3 className="empty-state__title">该标签下还没有联系人</h3>
+            <p className="empty-state__hint">给联系人的标签里选上「{currentTag.name}」</p>
+            <Link to="/contacts" className="btn btn-primary">
+              去看看联系人
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 6 }}>
+            {contacts.map((c: Contact) => (
+              <ContactRow key={c.id} contact={c} tagId={tagId} />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -6,17 +6,17 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { stageColor } from '../lib/projectStageColor';
+import { avatarBg } from '../lib/contactColor';
 import { backTarget } from '../lib/backNavigation';
 import { QuickCreateContact } from '../components/QuickCreateContact';
 import { GraphTab } from '../components/GraphTab';
+import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 
 const TEMPLATE_LABELS: Record<string, string> = {
   general: '通用项目',
   sales: '销售管线',
   product_dev: '产品开发',
 };
-
-type TabKey = 'overview' | 'people' | 'tasks' | 'schedule' | 'graph';
 
 function nextStage(current: string, stages: string[]): string | null {
   const idx = stages.indexOf(current);
@@ -30,42 +30,6 @@ function formatDate(d: string | null | undefined, withTime = false): string {
   if (Number.isNaN(date.getTime())) return '—';
   if (withTime) return date.toLocaleString('zh-CN', { hour12: false });
   return date.toLocaleDateString('zh-CN');
-}
-
-function SummaryCard(props: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  cta: string;
-  onClick: () => void;
-  icon: string;
-}) {
-  return (
-    <button
-      type="button"
-      className="card"
-      onClick={props.onClick}
-      style={{
-        padding: 16,
-        textAlign: 'left',
-        border: '1px solid var(--border, #e5e7eb)',
-        background: '#fff',
-        cursor: 'pointer',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 'var(--text-lg)' }}>{props.icon}</span>
-        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>{props.label}</span>
-      </div>
-      <div style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: 4 }}>{props.value}</div>
-      {props.sub && (
-        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', marginBottom: 8 }}>{props.sub}</div>
-      )}
-      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--accent, #6366f1)', fontWeight: 500 }}>
-        {props.cta} →
-      </div>
-    </button>
-  );
 }
 
 function statusLabel(s: string): string {
@@ -93,11 +57,9 @@ export function ProjectDetail() {
 
   const back = backTarget(fromParam, '/projects');
 
-  const urlTab = searchParams.get('tab') === 'graph' ? 'graph' : null;
-  const [tab, setTab] = useState<TabKey>(urlTab ?? 'overview');
-  useEffect(() => {
-    if (urlTab) setTab(urlTab);
-  }, [urlTab]);
+  // Match ContactDetail/ActionDetail/EventDetail: tab lives in the URL so
+  // deep links and back-navigation work consistently. GraphTab owns switching.
+  const tab: 'detail' | 'graph' = searchParams.get('tab') === 'graph' ? 'graph' : 'detail';
   const [contactPickerOpen, setContactPickerOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState('');
   const [draftRoles, setDraftRoles] = useState<Record<string, string>>({});
@@ -262,86 +224,34 @@ export function ProjectDetail() {
         company: c.company,
       }));
 
-  const taskStatusCounts = {
-    inbox: tasks.filter((t) => t.status === 'inbox').length,
-    open: tasks.filter((t) => t.status === 'open').length,
-    waiting: tasks.filter((t) => t.status === 'waiting').length,
-    done: tasks.filter((t) => t.status === 'done').length,
-  };
-  const taskSubText =
-    tasks.length === 0
-      ? '尚无待办'
-      : [
-          taskStatusCounts.inbox ? `${taskStatusCounts.inbox} 收件箱` : null,
-          taskStatusCounts.open ? `${taskStatusCounts.open} 进行中` : null,
-          taskStatusCounts.waiting ? `${taskStatusCounts.waiting} 等待中` : null,
-          taskStatusCounts.done ? `${taskStatusCounts.done} 已完成` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ');
-
-  const upcomingEvents = events
-    .filter(
-      (e) => new Date(e.start_at).getTime() >= Date.now() - 24 * 60 * 60 * 1000,
-    )
-    .sort(
-      (a, b) =>
-        new Date(a.start_at).getTime() - new Date(b.start_at).getTime(),
-    );
-
-  const tabs: { key: TabKey; label: string; count: number | null }[] = [
-    { key: 'overview', label: '总览', count: null },
-    { key: 'people', label: '联系人', count: people.length },
-    { key: 'tasks', label: '待办', count: tasks.length },
-    { key: 'schedule', label: '日程', count: events.length },
-    { key: 'graph', label: '🕸️ 关系图', count: null },
-  ];
-
   return (
     <div className="page">
-      <div className="card" style={{ padding: 24, marginBottom: 16 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 16,
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="cluster cluster--loose">
-              <h1 className="page-title" style={{ margin: 0 }}>
-                {project.title}
-              </h1>
-              <span
-                className="badge"
-                style={{ background: '#f3f4f6', color: '#374151', fontSize: 'var(--text-xs)' }}
-              >
-                {templateLabel}
+      <DetailHeaderCard
+        icon={<EntityIconBadge>📁</EntityIconBadge>}
+        title={project.title}
+        badges={
+          <>
+            <span className="badge badge--muted" style={{ fontSize: 'var(--text-xs)' }}>
+              {templateLabel}
+            </span>
+            {isCompleted && (
+              <span className="badge badge--success" style={{ fontSize: 'var(--text-xs)' }}>
+                ✅ 已完成
               </span>
-              {isCompleted && (
-                <span
-                  className="badge"
-                  style={{ background: '#dcfce7', color: '#15803d', fontSize: 'var(--text-xs)' }}
-                >
-                  ✅ 已完成
-                </span>
-              )}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
-              开始: {formatDate(project.start_at)}
-              {project.due_at && <> · 截止: {formatDate(project.due_at)}</>}
-              {project.completed_at && (
-                <> · 完成: {formatDate(project.completed_at, true)}</>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            )}
+          </>
+        }
+        meta={
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>
+            开始: {formatDate(project.start_at)}
+            {project.due_at && <> · 截止: {formatDate(project.due_at)}</>}
+            {project.completed_at && <> · 完成: {formatDate(project.completed_at, true)}</>}
+          </span>
+        }
+        actions={
+          <>
             <Link to={back.href} className="btn btn-ghost">
               {back.label}
-            </Link>
-            <Link to={`/graph/project/${id}`} className="btn btn-secondary" data-testid="project-graph-link">
-              🕸️ 关联图
             </Link>
             <Link
               to={`/projects/${id}/edit?from=${encodeURIComponent(fromParam || `/projects/${id}`)}`}
@@ -358,186 +268,102 @@ export function ProjectDetail() {
             >
               {deleteMutation.isPending ? '删除中…' : '删除'}
             </button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        {stages.length > 0 && (
-          <div
-            style={{
-              marginTop: 24,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0,
-              flexWrap: 'wrap',
-            }}
-          >
-            {stages.map((s, i) => {
-              const isCurrent = i === currentIdx;
-              const isPast = i < currentIdx;
-              const isFuture = i > currentIdx;
-              return (
-                <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
-                  <div
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 20,
-                      fontSize: 'var(--text-base)',
-                      fontWeight: isCurrent ? 600 : 400,
-                      background: isCurrent
-                        ? stageColor(project.template, s)
-                        : isPast
-                          ? '#e0e7ff'
-                          : '#f3f4f6',
-                      color: isCurrent
-                        ? '#fff'
-                        : isPast
-                          ? 'var(--accent, #6366f1)'
-                          : '#9ca3af',
-                      border: isFuture ? '1px dashed #d1d5db' : 'none',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {s}
-                  </div>
-                  {i < stages.length - 1 && (
-                    <div
-                      style={{
-                        width: 24,
-                        height: 2,
-                        background: isPast ? 'var(--accent, #6366f1)' : '#e5e7eb',
-                        margin: '0 2px',
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+      <GraphTab
+        center={{ type: 'project', id }}
+        creatable={['event', 'action', 'note', 'interaction']}
+        detailLabel="详情"
+        graphLabel="🕸️ 关系图"
+      />
 
-        {next && (
-          <div style={{ marginTop: 16 }}>
-            <button
-              type="button"
-              onClick={handleAdvance}
-              disabled={updateMutation.isPending}
-              className="btn btn-primary"
-              style={{ opacity: updateMutation.isPending ? 0.6 : 1 }}
-            >
-              {updateMutation.isPending ? '推进中…' : `推进到下一阶段：${next}`}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          marginBottom: 16,
-          borderBottom: '1px solid var(--border, #e5e7eb)',
-        }}
-      >
-        {tabs.map((t) => {
-          const active = tab === t.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              style={{
-                padding: '8px 16px',
-                fontSize: 'var(--text-base)',
-                fontWeight: active ? 600 : 400,
-                color: active ? 'var(--accent, #6366f1)' : 'var(--muted)',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: active
-                  ? '2px solid var(--accent, #6366f1)'
-                  : '2px solid transparent',
-                cursor: 'pointer',
-                marginBottom: -1,
-              }}
-            >
-              {t.label}
-              {t.count !== null && (
-                <span
+      {tab === 'detail' && (
+        <div style={{ display: 'grid', gap: 14 }}>
+          {(stages.length > 0 || next) && (
+            <div className="card" style={{ padding: 12 }}>
+              {stages.length > 0 && (
+                <div
                   style={{
-                    marginLeft: 6,
-                    padding: '1px 6px',
-                    fontSize: 'var(--text-xs)',
-                    background: active ? '#eef2ff' : '#f3f4f6',
-                    color: active ? 'var(--accent)' : 'var(--muted)',
-                    borderRadius: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0,
+                    flexWrap: 'wrap',
                   }}
                 >
-                  {t.count}
-                </span>
+                  {stages.map((s, i) => {
+                    const isCurrent = i === currentIdx;
+                    const isPast = i < currentIdx;
+                    const isFuture = i > currentIdx;
+                    return (
+                      <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
+                        <div
+                          style={{
+                            padding: '4px 12px',
+                            borderRadius: 20,
+                            fontSize: 'var(--text-sm)',
+                            fontWeight: isCurrent ? 600 : 400,
+                            background: isCurrent
+                              ? stageColor(project.template, s)
+                              : isPast
+                                ? '#e0e7ff'
+                                : '#f3f4f6',
+                            color: isCurrent
+                              ? '#fff'
+                              : isPast
+                                ? 'var(--accent, #6366f1)'
+                                : '#9ca3af',
+                            border: isFuture ? '1px dashed #d1d5db' : 'none',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {s}
+                        </div>
+                        {i < stages.length - 1 && (
+                          <div
+                            style={{
+                              width: 18,
+                              height: 2,
+                              background: isPast ? 'var(--accent, #6366f1)' : '#e5e7eb',
+                              margin: '0 2px',
+                            }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-            </button>
-          );
-        })}
-      </div>
 
-      {tab === 'overview' && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: 12,
-          }}
-        >
-          <SummaryCard
-            label="联系人"
-            value={people.length}
-            sub={people.length === 0 ? '项目里最重要的资产' : '已建立关系'}
-            cta={people.length === 0 ? '添加联系人' : '查看联系人'}
-            onClick={() => setTab('people')}
-            icon="👥"
-          />
-          <SummaryCard
-            label="待办"
-            value={tasks.length}
-            sub={taskSubText}
-            cta="管理待办"
-            onClick={() => setTab('tasks')}
-            icon="✅"
-          />
-          <SummaryCard
-            label="日程"
-            value={upcomingEvents.length}
-            sub={
-              events.length === 0
-                ? '尚无日程'
-                : `${events.length} 个总计 · ${upcomingEvents.length} 个即将到来`
-            }
-            cta="查看日程"
-            onClick={() => setTab('schedule')}
-            icon="📅"
-          />
-        </div>
-      )}
+              {next && (
+                <div style={{ marginTop: stages.length > 0 ? 12 : 0 }}>
+                  <button
+                    type="button"
+                    onClick={handleAdvance}
+                    disabled={updateMutation.isPending}
+                    className="btn btn-primary"
+                    style={{ opacity: updateMutation.isPending ? 0.6 : 1 }}
+                  >
+                    {updateMutation.isPending ? '推进中…' : `推进到下一阶段：${next}`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
-      {tab === 'people' && (
         <section>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
-            <h2 className="section__title" style={{ margin: 0 }}>
-              关联联系人
-            </h2>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setContactPickerOpen((v) => !v)}
-            >
-              {contactPickerOpen ? '关闭' : '+ 添加联系人'}
-            </button>
+          <div className="section__header">
+            <h2 className="section__title">关联联系人</h2>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setContactPickerOpen((v) => !v)}
+              >
+                {contactPickerOpen ? '关闭' : '+ 添加联系人'}
+              </button>
+            </div>
           </div>
 
           {contactPickerOpen && (
@@ -551,7 +377,7 @@ export function ProjectDetail() {
                 style={{ marginBottom: 10 }}
               />
               {candidateContacts.length === 0 ? (
-                <div className="empty-state" style={{ padding: 16, fontSize: 'var(--text-base)' }}>
+                <div className="empty-state" style={{ padding: 12, fontSize: 'var(--text-base)' }}>
                   {contactSearch.trim()
                     ? searchQuery.isLoading
                       ? '搜索中…'
@@ -664,213 +490,177 @@ export function ProjectDetail() {
           {peopleQuery.isLoading ? (
             <div className="loading">加载中</div>
           ) : people.length === 0 ? (
-            <div className="card">
-              <div className="empty-state" style={{ padding: 32 }}>
-                <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 8 }}>👥</div>
-                <div style={{ marginBottom: 12 }}>还没有联系人</div>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setContactPickerOpen(true)}
-                >
-                  添加第一位联系人
-                </button>
-              </div>
-            </div>
+            <div className="empty-state">还没有联系人，点右上角「+ 添加联系人」</div>
           ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ display: 'grid', gap: 6 }}>
               {people.map((entry) => {
                 const c = entry.contact;
+                const displayName = c.nickname || c.name || '?';
                 return (
-                <div key={c.id} className="card" style={{ padding: 12 }}>
+                <div
+                  key={c.id}
+                  className="row-card"
+                  style={{ flexWrap: 'wrap', gap: '8px 12px', marginBottom: 0 }}
+                >
                   <div
+                    className="avatar"
                     style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      gap: 8,
+                      width: 32,
+                      height: 32,
+                      fontSize: 13,
+                      background: avatarBg(displayName),
                     }}
                   >
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                      <Link to={`/contacts/${c.id}?from=/projects/${id}`} style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--accent)' }}>
-                          {c.nickname}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 'var(--text-sm)',
-                            color: 'var(--muted)',
-                            marginTop: 2,
-                          }}
-                        >
-                          {c.company ?? '—'}
-                          {c.title ? ` · ${c.title}` : ''}
-                        </div>
-                        {c.tags && c.tags.length > 0 && (
-                          <div
-                            style={{
-                              fontSize: 'var(--text-xs)',
-                              color: 'var(--muted)',
-                              marginTop: 4,
-                            }}
-                          >
-                            {c.tags.map((t) => t.name).join(' · ')}
-                          </div>
-                        )}
-                      </Link>
-                      {editingRoleFor === c.id ? (
-                        <div className="cluster cluster--tight" style={{ maxWidth: 220 }}>
-                          {ROLE_PRESETS.map((r) => (
-                            <button
-                              key={r}
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                updateRoleMutation.mutate({ contact_id: c.id, role: r });
-                                setEditingRoleFor(null);
-                              }}
-                              style={{
-                                fontSize: 'var(--text-xs)',
-                                padding: '2px 8px',
-                                borderRadius: 999,
-                                border: `1px solid ${entry.role === r ? 'var(--accent)' : 'var(--border)'}`,
-                                background: entry.role === r ? 'var(--accent-soft, #eff6ff)' : 'transparent',
-                                color: entry.role === r ? 'var(--accent)' : 'var(--muted)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {r}
-                            </button>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setEditingRoleFor(null);
-                            }}
-                            style={{
-                              fontSize: 'var(--text-xs)',
-                              padding: '2px 8px',
-                              borderRadius: 999,
-                              border: '1px solid var(--border)',
-                              background: 'transparent',
-                              color: 'var(--muted)',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : entry.role ? (
+                    {displayName.slice(0, 1).toUpperCase()}
+                  </div>
+                  <Link
+                    to={`/contacts/${c.id}?from=/projects/${id}`}
+                    className="row-card__title"
+                    style={{ flex: '0 1 auto', textDecoration: 'none', color: 'var(--fg)' }}
+                  >
+                    {displayName}
+                  </Link>
+                  <span
+                    className="row-card__meta"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {[c.company, c.title].filter(Boolean).join(' · ')}
+                  </span>
+                  {editingRoleFor === c.id ? (
+                    <div className="cluster cluster--tight" style={{ flexShrink: 0 }}>
+                      {ROLE_PRESETS.map((r) => (
                         <button
+                          key={r}
                           type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            setEditingRoleFor(c.id);
-                          }}
-                          style={{
-                            background: '#eef2ff',
-                            color: '#4338ca',
-                            fontSize: 'var(--text-xs)',
-                            cursor: 'pointer',
-                            border: '1px solid #e0e7ff',
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            flexShrink: 0,
-                          }}
-                          title="点击修改角色"
-                        >
-                          {entry.role} ✎
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setEditingRoleFor(c.id);
+                            updateRoleMutation.mutate({ contact_id: c.id, role: r });
+                            setEditingRoleFor(null);
                           }}
                           style={{
                             fontSize: 'var(--text-xs)',
                             padding: '2px 8px',
                             borderRadius: 999,
-                            border: '1px dashed var(--border)',
-                            background: 'transparent',
-                            color: 'var(--muted)',
+                            border: `1px solid ${entry.role === r ? 'var(--accent)' : 'var(--border)'}`,
+                            background: entry.role === r ? 'var(--accent-soft, #eff6ff)' : 'transparent',
+                            color: entry.role === r ? 'var(--accent)' : 'var(--muted)',
                             cursor: 'pointer',
-                            flexShrink: 0,
                           }}
-                          title="设置角色"
                         >
-                          + 角色
+                          {r}
                         </button>
-                      )}
+                      ))}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingRoleFor(null);
+                        }}
+                        style={{
+                          fontSize: 'var(--text-xs)',
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          border: '1px solid var(--border)',
+                          background: 'transparent',
+                          color: 'var(--muted)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
+                  ) : entry.role ? (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (confirm(`从项目中移除「${c.nickname}」？`)) {
-                          removeContactMutation.mutate(c.id);
-                        }
+                        setEditingRoleFor(c.id);
                       }}
-                      disabled={removeContactMutation.isPending}
-                      className="btn btn-ghost"
-                      style={{ padding: '4px 8px', fontSize: 'var(--text-sm)' }}
+                      style={{
+                        background: '#eef2ff',
+                        color: '#4338ca',
+                        fontSize: 'var(--text-xs)',
+                        cursor: 'pointer',
+                        border: '1px solid #e0e7ff',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        flexShrink: 0,
+                      }}
+                      title="点击修改角色"
                     >
-                      移除
+                      {entry.role} ✎
                     </button>
-                  </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEditingRoleFor(c.id);
+                      }}
+                      style={{
+                        fontSize: 'var(--text-xs)',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        border: '1px dashed var(--border)',
+                        background: 'transparent',
+                        color: 'var(--muted)',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                      title="设置角色"
+                    >
+                      + 角色
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (confirm(`从项目中移除「${displayName}」？`)) {
+                        removeContactMutation.mutate(c.id);
+                      }
+                    }}
+                    disabled={removeContactMutation.isPending}
+                    className="btn btn-ghost"
+                    style={{ padding: '4px 8px', fontSize: 'var(--text-sm)', flexShrink: 0 }}
+                  >
+                    移除
+                  </button>
                 </div>
                 );
               })}
             </div>
           )}
         </section>
-      )}
+      
 
-      {tab === 'tasks' && (
         <section>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
-            <h2 className="section__title" style={{ margin: 0 }}>
-              关联待办
-            </h2>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => navigate(`/actions/new?from=/projects/${id}&projectId=${id}`)}
-            >
-              + 新建待办
-            </button>
+          <div className="section__header">
+            <h2 className="section__title">关联待办</h2>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <Link
+                to={`/actions/new?from=/projects/${id}&projectId=${id}`}
+                className="section__view-all"
+              >
+                + 新建待办
+              </Link>
+            </div>
           </div>
 
           {tasksQuery.isLoading ? (
             <div className="loading">加载中</div>
           ) : tasks.length === 0 ? (
-            <div className="card">
-              <div className="empty-state" style={{ padding: 32 }}>
-                <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 8 }}>✅</div>
-                <div style={{ marginBottom: 12 }}>还没有待办</div>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => navigate(`/actions/new?from=/projects/${id}&projectId=${id}`)}
-                >
-                  创建第一个待办
-                </button>
-              </div>
-            </div>
+            <div className="empty-state">还没有待办，点右上角「+ 新建待办」</div>
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
               {tasks.map((t) => (
@@ -951,46 +741,25 @@ export function ProjectDetail() {
             </div>
           )}
         </section>
-      )}
+      
 
-      {tab === 'schedule' && (
         <section>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
-            <h2 className="section__title" style={{ margin: 0 }}>
-              关联日程
-            </h2>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => navigate(`/events/new?from=/projects/${id}&projectId=${id}`)}
-            >
-              + 新建日程
-            </button>
+          <div className="section__header">
+            <h2 className="section__title">关联日程</h2>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <Link
+                to={`/events/new?from=/projects/${id}&projectId=${id}`}
+                className="section__view-all"
+              >
+                + 新建日程
+              </Link>
+            </div>
           </div>
 
           {eventsQuery.isLoading ? (
             <div className="loading">加载中</div>
           ) : events.length === 0 ? (
-            <div className="card">
-              <div className="empty-state" style={{ padding: 32 }}>
-                <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 8 }}>📅</div>
-                <div style={{ marginBottom: 12 }}>还没有日程</div>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => navigate(`/events/new?from=/projects/${id}&projectId=${id}`)}
-                >
-                  安排第一个日程
-                </button>
-              </div>
-            </div>
+            <div className="empty-state">还没有日程，点右上角「+ 新建日程」</div>
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
               {events
@@ -1048,13 +817,8 @@ export function ProjectDetail() {
             </div>
           )}
         </section>
-      )}
-
-      {tab === 'graph' && (
-        <GraphTab
-          center={{ type: 'project', id }}
-          bare
-        />
+      
+        </div>
       )}
 
       <BacklinksPanel entityType="project" entityId={id} />
