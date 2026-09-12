@@ -353,6 +353,17 @@ export class TauriAdapter implements PRMAdapter {
       const [items, has_more] = await invoke<[Note[], boolean]>('list_notes', {
         input: { user_id, cursor: cursor ?? null },
       });
+      // Fill entity_types so the notes-list 关联 filter works on desktop too
+      // (the HTTP list endpoint does this server-side). Local SQLite, so the
+      // per-note round-trip is cheap.
+      await Promise.all(
+        items.map(async (n) => {
+          const links = await invoke<NoteEntityLink[]>('list_note_entities', {
+            input: { user_id, note_id: n.id },
+          });
+          n.entity_types = [...new Set(links.map((l) => l.entity_type))];
+        }),
+      );
       const cursorOut = items.length > 0 ? `${items[items.length - 1].updated_at},${items[items.length - 1].id}` : null;
       return { items, cursor: cursorOut, has_more };
     },

@@ -419,6 +419,8 @@ export interface Note {
   updated_at: string;
   imported_from?: string | null;
   imported_at?: string | null;
+  /** Linked entity types (deduped), filled by the list endpoint for filtering. */
+  entity_types?: string[];
 }
 
 export interface NoteEntityLink {

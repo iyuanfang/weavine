@@ -74,8 +74,39 @@ pub async fn list(
     let has_more = rows.len() > limit as usize - 1;
     let rows: Vec<Note> = rows.into_iter().take(limit as usize - 1).collect();
     let last_item = rows.last().map(|n| format!("{},{}", n.updated_at, n.id));
+
+    // Per-note linked entity types so list views can offer 关联 filters and
+    // counts without N+1 GET /api/notes/{id}/entities round-trips.
+    let note_ids: Vec<String> = rows.iter().map(|n| n.id.clone()).collect();
+    let link_rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT note_id, entity_type FROM note_entity \
+         WHERE user_id = $1 AND note_id = ANY($2)",
+    )
+    .bind(&user_id)
+    .bind(&note_ids)
+    .fetch_all(&*pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("links: {e}")))?;
+    let mut types_by_note: std::collections::HashMap<String, Vec<String>> = Default::default();
+    for (note_id, entity_type) in link_rows {
+        types_by_note.entry(note_id).or_default().push(entity_type);
+    }
+    let items: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|n| {
+            let mut v = serde_json::to_value(n).unwrap_or_else(|_| serde_json::json!({}));
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert(
+                    "entity_types".to_string(),
+                    serde_json::json!(types_by_note.get(&n.id).cloned().unwrap_or_default()),
+                );
+            }
+            v
+        })
+        .collect();
+
     Ok(Json(serde_json::json!({
-        "items": rows,
+        "items": items,
         "cursor": last_item,
         "has_more": has_more,
     })))
