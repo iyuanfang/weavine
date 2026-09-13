@@ -1,6 +1,6 @@
 import { test, expect, request } from '@playwright/test';
 
-const SERVER = 'http://localhost:3000';
+const SERVER = process.env.SERVER_URL ?? 'http://127.0.0.1:13002';
 const SPA = 'http://127.0.0.1:5181';
 
 async function register(api: Awaited<ReturnType<typeof request.newContext>>, email: string, password: string) {

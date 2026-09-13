@@ -102,7 +102,7 @@ test.describe('Event reminder auto-derivation', () => {
     expect(rem.event_id).toBe(event.id);
     expect(rem.kind).toBe('time');
     expect(rem.invitation_token).toBe(`event:${event.id}:15`);
-    expect(rem.trigger_at.replace('+00:00', 'Z')).toBe('2026-08-15T09:45:00Z');
+    expect(rem.trigger_at.replace('+00:00', 'Z').replace(/\.000Z$/, 'Z')).toBe('2026-08-15T09:45:00Z');
     expect(rem.dispatched).toBe(false);
     expect(rem.dismissed).toBe(false);
 
@@ -112,7 +112,7 @@ test.describe('Event reminder auto-derivation', () => {
     expect(after2.length).toBe(1);
     const rem2 = after2[0]!;
     expect(rem2.invitation_token).toBe(`event:${event.id}:30`);
-    expect(rem2.trigger_at.replace('+00:00', 'Z')).toBe('2026-08-15T09:30:00Z');
+    expect(rem2.trigger_at.replace('+00:00', 'Z').replace(/\.000Z$/, 'Z')).toBe('2026-08-15T09:30:00Z');
 
     // 3. Set lead=0 — reminder should be deleted
     await updateEvent(api, session.access_token, event.id, { reminder_lead_minutes: 0 });

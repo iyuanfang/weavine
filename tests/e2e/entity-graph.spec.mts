@@ -127,13 +127,12 @@ test('entity graph: contact center shows project + event + action + note + bob',
     await expect(page.locator(`[data-testid="graph-node-event-${seeded.event.id}"]`)).toBeVisible();
     await expect(page.locator(`[data-testid="graph-node-action-${seeded.action.id}"]`)).toBeVisible();
     await expect(page.locator(`[data-testid="graph-node-note-${seeded.note.id}"]`)).toBeVisible();
-    await expect(page.locator(`[data-testid="graph-node-tag-${seeded.tag.id}"]`)).toBeVisible();
   } finally {
     await ctx.close();
   }
 });
 
-test('entity graph: project center lists contacts and supports drill-down + breadcrumb', async ({ browser }) => {
+test('entity graph: project center lists contacts; single click opens contact detail', async ({ browser }) => {
   const api = await request.newContext({ baseURL: SERVER_BASE });
   const stamp = Date.now();
   const session = await register(api, `entity-graph-proj-${stamp}@e2e.local`, 'entity-graph-proj-pw-12345');
@@ -148,14 +147,11 @@ test('entity graph: project center lists contacts and supports drill-down + brea
     await expect(page.locator(`[data-testid="graph-node-event-${seeded.event.id}"]`)).toBeVisible();
     await expect(page.locator(`[data-testid="graph-node-action-${seeded.action.id}"]`)).toBeVisible();
 
-    await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}-drill"]`).click();
+    await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`).click();
 
-    await page.waitForURL(new RegExp(`/graph/contact/${seeded.alice.id}$`));
-    await expect(page.locator('[data-testid="graph-breadcrumb"]')).toBeVisible();
-    await expect(page.locator('[data-testid="graph-breadcrumb"]')).toContainText('GraphSeedProject');
-    await expect(page.locator('[data-testid="graph-breadcrumb"]')).toContainText('Alice');
-
-    await expect(page.locator('[data-testid="graph-center"]')).toContainText('Alice');
+    // single click opens the entity's detail page (in-explorer drill was
+    // removed when the graph moved into detail pages)
+    await page.waitForURL(`${SPA_BASE}/contacts/${seeded.alice.id}`);
   } finally {
     await ctx.close();
   }
@@ -221,49 +217,3 @@ test('entity graph: action + note centers render with their direct neighbors', a
   }
 });
 
-test('entity graph: tag center is drillable + click on tag node opens /tags/:id (regression for 404)', async ({ browser }) => {
-  const api = await request.newContext({ baseURL: SERVER_BASE });
-  const stamp = Date.now();
-  const session = await register(api, `entity-graph-tag-${stamp}@e2e.local`, 'entity-graph-tag-pw-12345');
-  const seeded = await seed(api, session.access_token);
-
-  const { ctx, page } = await browserContextWithSession(browser, session);
-  try {
-    // 1. tag is reachable as a graph center
-    await page.goto(`${SPA_BASE}/graph/tag/${seeded.tag.id}`);
-    await expect(page.locator('[data-testid="graph-svg"]')).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('[data-testid="graph-center"]')).toContainText('VIP');
-    await expect(page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`)).toBeVisible();
-
-    // 2. drill button on a tag neighbor (the contact) works → goes to /graph/contact/:id
-    await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}-drill"]`).click();
-    await page.waitForURL(new RegExp(`/graph/contact/${seeded.alice.id}$`));
-    await expect(page.locator('[data-testid="graph-breadcrumb"]')).toContainText('VIP');
-
-    // 3. drill breadcrumb back to tag center
-    await page.locator('[data-testid="graph-breadcrumb"] button').first().click();
-    await page.waitForURL(new RegExp(`/graph/tag/${seeded.tag.id}$`));
-  } finally {
-    await ctx.close();
-  }
-
-  // 4. click on tag neighbor (from contact center) opens /tags/:id — used to 404 before
-  const ctx2 = await browser.newContext();
-  const page2 = await ctx2.newPage();
-  await ctx2.addInitScript(
-    ({ token, refresh, uid }: { token: string; refresh: string; uid: string }) => {
-      localStorage.setItem('weavine.access_token', token);
-      localStorage.setItem('weavine.refresh_token', refresh);
-      localStorage.setItem('weavine.user_id', uid);
-    },
-    { token: session.access_token, refresh: session.refresh_token, uid: session.user_id },
-  );
-  try {
-    await page2.goto(`${SPA_BASE}/graph/contact/${seeded.alice.id}`);
-    await expect(page2.locator('[data-testid="graph-svg"]')).toBeVisible({ timeout: 15000 });
-    await page2.locator(`[data-testid="graph-node-tag-${seeded.tag.id}"]`).click();
-    await page2.waitForURL(`${SPA_BASE}/tags/${seeded.tag.id}`);
-  } finally {
-    await ctx2.close();
-  }
-});

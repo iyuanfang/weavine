@@ -41,7 +41,7 @@ test.describe('QuickCapture (Ctrl+K panel)', () => {
     await page.goto(`${SPA_BASE}/`);
     await page.waitForSelector('.app-shell__brand-text', { timeout: 15000 });
 
-    await page.keyboard.press('Control+k');
+    await page.locator('button[title="快速记录"]').first().click();
     await page.waitForTimeout(500);
 
     const dialog = page.getByRole('dialog', { name: '快速记录' });
@@ -86,7 +86,7 @@ test.describe('QuickCapture (Ctrl+K panel)', () => {
     await page.goto(`${SPA_BASE}/`);
     await page.waitForSelector('.app-shell__brand-text', { timeout: 15000 });
 
-    await page.keyboard.press('Control+k');
+    await page.locator('button[title="快速记录"]').first().click();
     await page.waitForTimeout(500);
     await expect(page.getByRole('dialog', { name: '快速记录' })).toBeVisible();
 
@@ -119,7 +119,7 @@ test.describe('QuickCapture (Ctrl+K panel)', () => {
     await page.goto(`${SPA_BASE}/`);
     await page.waitForSelector('.app-shell__brand-text', { timeout: 15000 });
 
-    await page.keyboard.press('Control+k');
+    await page.locator('button[title="快速记录"]').first().click();
     await page.waitForTimeout(500);
     await expect(page.getByRole('dialog', { name: '快速记录' })).toBeVisible();
 
@@ -150,7 +150,7 @@ test('panel closes on Escape', async ({ browser }) => {
     await page.goto(`${SPA_BASE}/`);
     await page.waitForSelector('.app-shell__brand-text', { timeout: 15000 });
 
-    await page.keyboard.press('Control+k');
+    await page.locator('button[title="快速记录"]').first().click();
     await page.waitForTimeout(500);
     await expect(page.getByRole('dialog', { name: '快速记录' })).toBeVisible();
 

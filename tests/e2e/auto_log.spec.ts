@@ -1,6 +1,6 @@
 import { test, expect, request, type APIRequestContext } from '@playwright/test';
 
-const SERVER_BASE = 'http://127.0.0.1:3000';
+const SERVER_BASE = process.env.SERVER_URL ?? 'http://127.0.0.1:13002';
 const SPA_BASE = 'http://127.0.0.1:5181';
 
 interface AuthSession {
@@ -14,14 +14,16 @@ let session: AuthSession | null = null;
 test.describe('auto-log', () => {
   test.beforeAll(async () => {
     api = await request.newContext({ baseURL: SERVER_BASE });
-    const loginResp = await api!.post('/api/auth/login', {
-      data: {
-        email: 'qa-auto-log@example.com',
-        password: 'testpass123',
-        device: { name: 'qa-test', os: 'linux', app_version: '1.0.19' },
-      },
-    });
-    const body = await loginResp.json() as any;
+    // register-or-login: the account may not exist on a fresh local DB
+    const creds = {
+      email: 'qa-auto-log@example.com',
+      password: 'testpass123',
+      device: { name: 'qa-test', os: 'linux', app_version: '1.0.19' },
+    };
+    let resp = await api!.post('/api/auth/register', { data: creds });
+    if (!resp.ok()) resp = await api!.post('/api/auth/login', { data: creds });
+    if (!resp.ok()) throw new Error(`auto_log auth failed: ${resp.status()} ${await resp.text()}`);
+    const body = await resp.json() as any;
     session = { user_id: body.user_id, access_token: body.access_token };
   });
 

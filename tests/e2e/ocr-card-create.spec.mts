@@ -35,6 +35,8 @@ const CARD_PATH = path.resolve(
   'c5cebda1d4baeaf268e1fa40e14edf03.jpg',
 );
 
+const HAS_CARD = (await import('node:fs')).existsSync(CARD_PATH);
+
 interface AuthSession {
   user_id: string;
   access_token: string;
@@ -80,6 +82,7 @@ test.describe('OCR → contact creation', () => {
     page,
     baseURL,
   }) => {
+    test.skip(!HAS_CARD, 'card image fixture is an untracked local asset');
     const api = await request.newContext({ baseURL: SERVER_BASE });
     const stamp = Date.now();
     const email = `playwright-${stamp}@e2e.local`;

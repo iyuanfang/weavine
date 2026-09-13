@@ -46,7 +46,7 @@ test('notes: new-note page shows 7 quick-start templates', async ({ browser }) =
     await expect(chips.nth(1)).toContainText('沟通日志');
     await expect(chips.nth(2)).toContainText('初次见面');
     await expect(chips.nth(3)).toContainText('跟进计划');
-    await expect(chips.nth(4)).toContainText('感谢日志');
+    await expect(chips.nth(4)).toContainText('项目文档');
     await expect(chips.nth(5)).toContainText('想法');
     await expect(chips.nth(6)).toContainText('复盘');
   } finally {

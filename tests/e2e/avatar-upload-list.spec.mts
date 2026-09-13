@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 const SERVER_BASE = process.env.SERVER_URL ?? 'http://127.0.0.1:3000';
 const SPA_BASE = process.env.SPA_URL ?? 'http://127.0.0.1:5181';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const B64 = `/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q==`;
 const SAMPLE_PATH = path.resolve(
   __dirname,
   '..',
@@ -92,7 +93,12 @@ test.describe('avatar upload → list shows it', () => {
         file: {
           name: 'card.jpg',
           mimeType: 'image/jpeg',
-          buffer: (await import('node:fs')).readFileSync(SAMPLE_PATH),
+          buffer: await (async () => {
+            const fs = await import('node:fs');
+            if (fs.existsSync(SAMPLE_PATH)) return fs.readFileSync(SAMPLE_PATH);
+            // fixture card image is an untracked local asset; any valid image works here
+            return Buffer.from(B64, 'base64');
+          })(),
         },
       },
     });
