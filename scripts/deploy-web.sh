@@ -1,73 +1,60 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# scripts/deploy-web.sh — Deploy weavine web-spa (PWA) to prod (47.79.43.80)
+# scripts/deploy-web.sh — Deploy weavine web-spa (PWA) to prod
+# (wy = ubuntu@110.42.215.153, https://www.weavine.com)
 #
 # Why this script exists:
-#   - The web-spa is the user-facing PWA at https://weavine.financialagent.cc
-#     served as static files behind nginx on the prod server.
-#   - Deploy = rsync apps/web-spa/dist/ -> /www/weavine/spa/ on prod, with an
-#     atomic-swap style backup so a bad push never leaves the site 404.
-#   - nginx picks up the new files automatically (no reload needed unless
-#     the nginx config itself changes); we still run `nginx -t` as a safety
-#     check.
+#   - The web-spa is served as static files by nginx on wy, from
+#     /home/ubuntu/weavine/apps/web-spa/dist (SPA routes + hashed assets).
+#   - Deploy = build locally → backup remote dist → rsync new dist in place.
+#   - nginx picks up new files automatically (no reload needed).
 #
-# Usage:
-#   scripts/deploy-web.sh                            # build (if needed) + deploy
-#   REMOTE_PATH=/tmp/foo scripts/deploy-web.sh      # override target path
-#   SERVER=user@host scripts/deploy-web.sh          # override server
+# Usage (run from WSL — the Windows side has no key for this host):
+#   scripts/deploy-web.sh                            # build + deploy
+#   DIST_DIR=/path scripts/deploy-web.sh             # deploy an existing dist
 #
-# Required SSH: $SSH_KEY to root@$PROD (same as deploy-server.sh / deploy-landing.sh)
+# Required SSH: default key of the invoking user → ubuntu@110.42.215.153.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WEB_DIR="$REPO_ROOT/apps/web-spa"
-DIST_DIR="$WEB_DIR/dist"
-PROD=root@47.79.43.80
-SSH_KEY=${SSH_KEY:-/home/yf/.ssh/id_ed25519}
-SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=accept-new}"
-SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new $PROD"
-SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=accept-new"
-REMOTE_PATH="${REMOTE_PATH:-/www/weavine/spa/}"
+DIST_DIR="${DIST_DIR:-$WEB_DIR/dist}"
+PROD=${PROD:-ubuntu@110.42.215.153}
+SSH="ssh -o StrictHostKeyChecking=accept-new $PROD"
+REMOTE_DIST="/home/ubuntu/weavine/apps/web-spa/dist"
+APP_BASE_URL="${APP_BASE_URL:-https://www.weavine.com}"
 
-echo "→ Building web-spa..."
-(cd "$REPO_ROOT" && pnpm --dir "$WEB_DIR" run build)
+if [ ! -s "$DIST_DIR/index.html" ]; then
+    echo "→ Building web-spa..."
+    (cd "$REPO_ROOT" && pnpm --dir "$WEB_DIR" run build)
+fi
 
-# Sanity check that the dist is actually populated.
+# Sanity: dist populated (vite emits index-<hash>.js chunks).
 test -s "$DIST_DIR/index.html"
-# Vite emits multiple index-<hash>.js chunks in modern builds; `test -s "$DIST_DIR/spa/index-"*.js`
-# (unquoted glob) used to break with "test: too many arguments". Use compgen to confirm at
-# least one chunk exists and is non-empty.
 first_chunk=$(compgen -G "$DIST_DIR/spa/index-*.js" | head -1 || true)
 if [ -z "$first_chunk" ] || [ ! -s "$first_chunk" ]; then
     echo "→ dist is incomplete (no non-empty $DIST_DIR/spa/index-*.js)" >&2
     exit 1
 fi
+LOCAL_HASH=$(grep -o 'index-[^"]*\.js' "$DIST_DIR/index.html" | head -1)
 
-# Pick a backup name using unix seconds so multiple deploys don't collide.
+# Backup the current remote dist (unix seconds so deploys don't collide).
 TS=$(date +%s)
-BAK_PATH="/www/weavine/spa.${TS}.bak"
+echo "→ Backing up remote dist -> dist.${TS}.bak"
+$SSH "cp -r '$REMOTE_DIST' '${REMOTE_DIST}.bak.${TS}'"
 
-echo "→ Backing up current ${REMOTE_PATH} -> ${BAK_PATH} on prod"
-$SSH "mv '$REMOTE_PATH' '$BAK_PATH' && mkdir -p '$REMOTE_PATH'"
+echo "→ rsync $DIST_DIR/ -> $PROD:$REMOTE_DIST/"
+rsync -a --chmod=D755,F644 --delete "$DIST_DIR/" "$PROD:$REMOTE_DIST/"
 
-# rsync the new dist into a staging path, then mv into place. This avoids a
-# half-uploaded state if rsync is interrupted mid-transfer.
-STAGE_PATH="/www/weavine/spa.staging.${TS}"
-echo "→ Staging ${DIST_DIR}/ -> prod:${STAGE_PATH}"
-$SSH "mkdir -p '$STAGE_PATH'"
-rsync -avz --delete \
-    -e "ssh -i $SSH_KEY ${SSH_OPTS}" \
-    "$DIST_DIR/" \
-    "$PROD:$STAGE_PATH/"
+# Prune old dist backups (keep latest 3).
+$SSH "ls -1dt ${REMOTE_DIST}.bak.* 2>/dev/null | tail -n +4 | xargs -r rm -rf --"
 
-echo "→ Atomic swap: ${STAGE_PATH} -> ${REMOTE_PATH}"
-$SSH "rm -rf '$REMOTE_PATH' && mv '$STAGE_PATH' '$REMOTE_PATH'"
+echo "→ Verify live bundle hash"
+LIVE_HASH=$(curl -sS -m 10 "$APP_BASE_URL/today/" | grep -o 'index-[^"]*\.js' | head -1)
+echo "    local=$LOCAL_HASH live=$LIVE_HASH"
+if [ "$LOCAL_HASH" != "$LIVE_HASH" ]; then
+    echo "✗ FAIL — live hash does not match local build" >&2
+    exit 1
+fi
 
-echo "→ nginx config test"
-$SSH 'sudo nginx -t'
-
-echo "→ Cleaning up old backups (keeping latest 5)"
-$SSH "ls -1dt /www/weavine/spa.*.bak 2>/dev/null | tail -n +6 | xargs -r rm -rf --"
-
-echo "✓ Web SPA deployed to https://weavine.financialagent.cc/"
-echo "  Backup: $BAK_PATH"
+echo "✓ Web SPA deployed to $APP_BASE_URL/"
