@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
+import { ContactPickOrCreateModal } from './ContactPickOrCreateModal';
 import { useGraphInvalidation, type GraphCenter } from './GraphQuickCreateModal';
 
 export interface GraphQuickInteractionFormProps {
@@ -24,16 +25,33 @@ export function GraphQuickInteractionForm({
   const [summary, setSummary] = useState('');
   const [channel, setChannel] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // An interaction is always with someone: contact is required. It's fixed
+  // when the center IS the contact; otherwise picked via the picker modal.
+  const contactIsCenter = center.type === 'contact';
+  const [contactId, setContactId] = useState<string | null>(
+    contactIsCenter ? center.id : null,
+  );
+  const [pickingContact, setPickingContact] = useState(false);
+
+  const pickedContactQuery = useQuery({
+    queryKey: ['contact', contactId],
+    queryFn: () => adapter.contacts.get(contactId!),
+    enabled: !contactIsCenter && !!contactId,
+  });
+  const contactLabel = contactIsCenter
+    ? null
+    : pickedContactQuery.data?.nickname ?? pickedContactQuery.data?.name ?? '…';
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (!userId) throw new Error('未登录');
+      if (!contactId) throw new Error('请先选择联系人');
       const interaction = await adapter.interactions.create({
         user_id: userId,
         summary: summary.trim() || '快速记录',
         channel: channel.trim() || null,
         occurred_at: new Date().toISOString(),
-        contact_id: center.type === 'contact' ? center.id : null,
+        contact_id: contactId,
         action_id: center.type === 'action' ? center.id : null,
         event_id: center.type === 'event' ? center.id : null,
       });
@@ -56,6 +74,22 @@ export function GraphQuickInteractionForm({
       }}
       style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
     >
+      <Field label="联系人（必选）">
+        {contactIsCenter ? (
+          <div style={{ ...inputStyle, color: 'var(--muted)', background: '#f8fafc' }}>
+            当前联系人
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPickingContact(true)}
+            data-testid="interaction-pick-contact"
+            style={{ ...inputStyle, cursor: 'pointer', textAlign: 'left', color: contactId ? 'inherit' : 'var(--muted)' }}
+          >
+            {contactId ? contactLabel : '必选：点击选择联系人…'}
+          </button>
+        )}
+      </Field>
       <Field label="内容">
         <input
           type="text"
@@ -75,23 +109,35 @@ export function GraphQuickInteractionForm({
           style={inputStyle}
         />
       </Field>
-      {(center.type === 'contact' || center.type === 'action' || center.type === 'event') && (
-        <div style={{ fontSize: 12, color: '#64748b' }}>
-          将自动关联到当前{center.type === 'contact' ? '联系人' : center.type === 'action' ? '待办' : '日程'}
-        </div>
-      )}
+      <div style={{ fontSize: 12, color: '#64748b' }}>
+        {contactIsCenter || center.type === 'action' || center.type === 'event'
+          ? `将自动关联到当前${center.type === 'contact' ? '联系人' : center.type === 'action' ? '待办' : '日程'}`
+          : null}
+      </div>
       {error && <div style={{ color: '#dc2626', fontSize: 13 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button type="button" onClick={onCancel} className="btn btn-ghost">返回</button>
         <button
           type="submit"
           className="btn btn-primary"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || !contactId}
+          title={contactId ? undefined : '请先选择联系人'}
           style={{ opacity: mutation.isPending ? 0.6 : 1 }}
         >
           {mutation.isPending ? '创建中…' : '创建并关联'}
         </button>
       </div>
+      {pickingContact && (
+        <ContactPickOrCreateModal
+          title="选择联系人"
+          multiple={false}
+          onConfirm={(ids) => {
+            if (ids[0]) setContactId(ids[0]);
+            setPickingContact(false);
+          }}
+          onClose={() => setPickingContact(false)}
+        />
+      )}
     </form>
   );
 }

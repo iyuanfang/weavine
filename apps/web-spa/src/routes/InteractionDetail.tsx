@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
+import { ContactPickOrCreateModal } from '../components/ContactPickOrCreateModal';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { GraphTab } from '../components/GraphTab';
 import { useAdapter } from '../lib/adapter';
@@ -129,6 +130,18 @@ export function InteractionDetail() {
     }
   };
 
+  // 互动必须有联系人：历史数据（快速捕获等）缺联系人时在此补链。
+  const [fixingContact, setFixingContact] = useState(false);
+  const fixContactMutation = useMutation({
+    mutationFn: (contactId: string) =>
+      adapter.interactions.update({ id, contact_id: contactId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interaction', id] });
+      setFixingContact(false);
+    },
+    onError: (e: unknown) => alert(`关联联系人失败：${e instanceof Error ? e.message : String(e)}`),
+  });
+
   const handleStartEdit = () => {
     setEditing(true);
   };
@@ -228,7 +241,7 @@ export function InteractionDetail() {
 
       <GraphTab
         center={{ type: 'interaction', id: id as string }}
-        creatable={['project', 'event', 'action', 'note', 'interaction']}
+        creatable={['contact', 'project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
@@ -311,7 +324,7 @@ export function InteractionDetail() {
         </>
       ))}
 
-      {(contact || event || action) && (
+      {(contact || event || action || !interaction.contact_id) && (
         <section className="section">
           <h2 className="section__title">关联记录</h2>
           <div className="card" style={{ marginTop: 8, padding: 12 }}>
@@ -324,6 +337,25 @@ export function InteractionDetail() {
                 >
                   👤 {contact.nickname ?? contact.name ?? '?'}
                 </Link>
+              )}
+              {!contact && (
+                <button
+                  type="button"
+                  className="section__view-all"
+                  data-testid="interaction-link-contact"
+                  onClick={() => setFixingContact(true)}
+                  style={{
+                    alignSelf: 'flex-start',
+                    background: 'transparent',
+                    border: '1px dashed var(--border, #e5e7eb)',
+                    borderRadius: 999,
+                    padding: '3px 12px',
+                    cursor: 'pointer',
+                    color: 'var(--accent)',
+                  }}
+                >
+                  + 关联联系人（互动必须有对象）
+                </button>
               )}
               {event && (
                 <Link
@@ -349,6 +381,17 @@ export function InteractionDetail() {
       )}
 
       <BacklinksPanel entityType="interaction" entityId={id} />
+
+      {fixingContact && (
+        <ContactPickOrCreateModal
+          title="关联联系人"
+          multiple={false}
+          onConfirm={(ids) => {
+            if (ids[0]) fixContactMutation.mutate(ids[0]);
+          }}
+          onClose={() => setFixingContact(false)}
+        />
+      )}
     </div>
   );
 }
