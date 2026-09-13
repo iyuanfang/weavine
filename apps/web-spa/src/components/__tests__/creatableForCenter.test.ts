@@ -5,7 +5,9 @@ import { creatableForCenter, ALL_CREATABLE_KINDS } from '../GraphQuickCreateModa
 describe('creatableForCenter', () => {
   it('lists every kind for contact centers (the common case)', () => {
     const got = creatableForCenter('contact').sort();
-    expect(got).toEqual([...ALL_CREATABLE_KINDS].sort());
+    expect(got).toEqual(
+      ALL_CREATABLE_KINDS.filter((k) => k !== 'contact').sort(),
+    );
   });
 
   it('omits project from non-contact centers', () => {
@@ -14,13 +16,27 @@ describe('creatableForCenter', () => {
     expect(creatableForCenter('action')).not.toContain('project');
   });
 
-  it('keeps only note/interaction for event and action centers', () => {
-    expect(creatableForCenter('event').sort()).toEqual(['interaction', 'note']);
-    expect(creatableForCenter('action').sort()).toEqual(['interaction', 'note']);
+  it('never offers contact on contact centers (no self-link)', () => {
+    expect(creatableForCenter('contact')).not.toContain('contact');
   });
 
-  it('only allows note for interaction centers (no interaction recursion)', () => {
-    expect(creatableForCenter('interaction')).toEqual(['note']);
+  it('offers contact for project/event/action centers (link-existing or create)', () => {
+    expect(creatableForCenter('project')).toContain('contact');
+    expect(creatableForCenter('event').sort()).toEqual(['contact', 'note']);
+    expect(creatableForCenter('action').sort()).toEqual(['contact', 'note']);
+  });
+
+  it('offers no interaction for event/action centers (system auto-logs those)', () => {
+    expect(creatableForCenter('event')).not.toContain('interaction');
+    expect(creatableForCenter('action')).not.toContain('interaction');
+  });
+
+  it('offers no contact for note centers (no updatable link)', () => {
+    expect(creatableForCenter('note')).not.toContain('contact');
+  });
+
+  it('interaction centers: contact (fix missing person) + note, no recursion', () => {
+    expect(creatableForCenter('interaction').sort()).toEqual(['contact', 'note']);
   });
 
   it('returns an empty list for note and other terminal centers', () => {
@@ -38,6 +54,7 @@ describe('creatableForCenter', () => {
   });
 
   it('falls back to ALL_CREATABLE_KINDS when no kinds are provided', () => {
-    expect(creatableForCenter('contact', undefined).sort()).toEqual([...ALL_CREATABLE_KINDS].sort());
+    expect(creatableForCenter('project', undefined)).toContain('contact');
+    expect(creatableForCenter('project', undefined)).not.toContain('project');
   });
 });

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -6,6 +7,7 @@ import { useAdapter } from '../lib/adapter';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { GraphTab } from '../components/GraphTab';
 import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
+import { ContactPickOrCreateModal } from '../components/ContactPickOrCreateModal';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 
@@ -42,6 +44,36 @@ export function EventDetail() {
       navigate(fromParam || '/calendar');
     },
   });
+
+  // Same semantics as the event form: contact_id mirrors the first
+  // participant, so the event lands on the right person's timeline.
+  const participantsMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      adapter.events.update({
+        id,
+        participant_contact_ids: ids.length > 0 ? ids : null,
+        contact_id: ids[0] ?? null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event', id] });
+      queryClient.invalidateQueries({ queryKey: ['events', userId] });
+    },
+    onError: (e: unknown) => alert(`更新参与者失败：${e instanceof Error ? e.message : String(e)}`),
+  });
+
+  const [addingParticipants, setAddingParticipants] = useState(false);
+
+  const handleAddParticipants = (ids: string[]) => {
+    const existing = (eventQuery.data?.participants ?? []).map((p) => p.contact_id);
+    const merged = [...existing, ...ids.filter((x) => !existing.includes(x))];
+    setAddingParticipants(false);
+    participantsMutation.mutate(merged);
+  };
+
+  const handleRemoveParticipant = (contactId: string) => {
+    const existing = (eventQuery.data?.participants ?? []).map((p) => p.contact_id);
+    participantsMutation.mutate(existing.filter((x) => x !== contactId));
+  };
 
   const handleDelete = () => {
     if (confirm('确定要删除这个日程吗？此操作不可恢复。')) {
@@ -107,7 +139,7 @@ export function EventDetail() {
 
       <GraphTab
         center={{ type: 'event', id }}
-        creatable={['project', 'event', 'action', 'note', 'interaction']}
+        creatable={['contact', 'project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
@@ -159,29 +191,76 @@ export function EventDetail() {
             }}
           >
             <div>
-              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+              <div className="text-xs text-muted" style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
                 参与者
+                <button
+                  type="button"
+                  className="section__view-all"
+                  data-testid="event-add-participant"
+                  onClick={() => setAddingParticipants(true)}
+                  style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', color: 'var(--accent)' }}
+                >
+                  + 添加参与者
+                </button>
               </div>
               {event.participants && event.participants.length > 0 ? (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {event.participants.map((p) => (
-                    <Link
-                      key={p.contact_id}
-                      to={`/contacts/${p.contact_id}`}
-                      className="tag-chip tag-chip--active"
-                      data-testid="event-participant"
-                    >
-                      {p.nickname ?? '?'}
-                    </Link>
+                    <span key={p.contact_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                      <Link
+                        to={`/contacts/${p.contact_id}`}
+                        className="tag-chip tag-chip--active"
+                        data-testid="event-participant"
+                      >
+                        {p.nickname ?? '?'}
+                      </Link>
+                      <button
+                        type="button"
+                        aria-label={`移除 ${p.nickname ?? '参与者'}`}
+                        title="移除参与者"
+                        disabled={participantsMutation.isPending}
+                        onClick={() => handleRemoveParticipant(p.contact_id)}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--muted)',
+                          cursor: 'pointer',
+                          fontSize: 14,
+                          padding: '0 2px',
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
                   ))}
                 </div>
               ) : eventQuery.data?.contact_id ? (
-                <Link
-                  to={`/contacts/${eventQuery.data.contact_id}`}
-                  className="tag-chip tag-chip--active"
-                >
-                  {eventQuery.data.contact_nickname ?? '?'}
-                </Link>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                  <Link
+                    to={`/contacts/${eventQuery.data.contact_id}`}
+                    className="tag-chip tag-chip--active"
+                    data-testid="event-participant"
+                  >
+                    {eventQuery.data.contact_nickname ?? '?'}
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label="移除联系人"
+                    title="移除"
+                    disabled={participantsMutation.isPending}
+                    onClick={() => participantsMutation.mutate([])}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--muted)',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      padding: '0 2px',
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
               ) : (
                 <span className="text-sm text-muted">—</span>
               )}
@@ -208,6 +287,16 @@ export function EventDetail() {
       )}
 
       <BacklinksPanel entityType="event" entityId={id} />
+
+      {addingParticipants && (
+        <ContactPickOrCreateModal
+          title="添加参与者"
+          confirmLabel="添加"
+          excludeIds={(event.participants ?? []).map((p) => p.contact_id)}
+          onConfirm={handleAddParticipants}
+          onClose={() => setAddingParticipants(false)}
+        />
+      )}
     </div>
   );
 }

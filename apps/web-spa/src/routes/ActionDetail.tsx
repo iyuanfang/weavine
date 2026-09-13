@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -5,6 +6,7 @@ import { useAdapter } from '../lib/adapter';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { GraphTab } from '../components/GraphTab';
 import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
+import { ContactPickOrCreateModal } from '../components/ContactPickOrCreateModal';
 import { useUserId } from '../lib/auth';
 import { backTarget } from '../lib/backNavigation';
 import type { UpdateActionInput } from '../lib/adapter/types';
@@ -95,6 +97,19 @@ export function ActionDetail() {
       completed_at: null,
     });
   };
+
+  // 待办的相关人只有一个：选择即替换，可清除。
+  const [pickingContact, setPickingContact] = useState(false);
+  const contactMutation = useMutation({
+    mutationFn: (contactId: string | null) =>
+      adapter.actions.update({ id, contact_id: contactId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['action', id] });
+      queryClient.invalidateQueries({ queryKey: ['actions', userId] });
+      setPickingContact(false);
+    },
+    onError: (e: unknown) => alert(`更新关联联系人失败：${e instanceof Error ? e.message : String(e)}`),
+  });
 
   if (actionQuery.isLoading) {
     return <div className="loading">加载中</div>;
@@ -196,7 +211,7 @@ export function ActionDetail() {
 
       <GraphTab
         center={{ type: 'action', id }}
-        creatable={['project', 'event', 'action', 'note', 'interaction']}
+        creatable={['contact', 'project', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
@@ -232,15 +247,43 @@ export function ActionDetail() {
               )}
             </div>
             <div>
-              <div className="text-xs text-muted" style={{ marginBottom: 4 }}>
+              <div className="text-xs text-muted" style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
                 关联联系人
+                <button
+                  type="button"
+                  className="section__view-all"
+                  data-testid="action-set-contact"
+                  onClick={() => setPickingContact(true)}
+                  style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', color: 'var(--accent)' }}
+                >
+                  {action.contact_id ? '更换' : '+ 设置'}
+                </button>
               </div>
               {action.contact_id ? (
-                <span
-                  className="tag-chip tag-chip--active"
-                  style={{ cursor: 'default' }}
-                >
-                  {action.contact_nickname ?? '?'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                  <span
+                    className="tag-chip tag-chip--active"
+                    style={{ cursor: 'default' }}
+                  >
+                    {action.contact_nickname ?? '?'}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="清除关联联系人"
+                    title="清除"
+                    disabled={contactMutation.isPending}
+                    onClick={() => contactMutation.mutate(null)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--muted)',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      padding: '0 2px',
+                    }}
+                  >
+                    ×
+                  </button>
                 </span>
               ) : (
                 <span className="text-sm text-muted">—</span>
@@ -286,6 +329,15 @@ export function ActionDetail() {
       )}
 
       <BacklinksPanel entityType="action" entityId={id} />
+
+      {pickingContact && (
+        <ContactPickOrCreateModal
+          title="设置关联联系人"
+          multiple={false}
+          onConfirm={(ids) => contactMutation.mutate(ids[0] ?? null)}
+          onClose={() => setPickingContact(false)}
+        />
+      )}
     </div>
   );
 }

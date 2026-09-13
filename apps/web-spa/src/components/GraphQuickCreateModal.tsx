@@ -6,20 +6,27 @@ import { GraphQuickEventForm } from './GraphQuickEventForm';
 import { GraphQuickActionForm } from './GraphQuickActionForm';
 import { GraphQuickNoteForm } from './GraphQuickNoteForm';
 import { GraphQuickInteractionForm } from './GraphQuickInteractionForm';
+import { ContactPickOrCreateModal } from './ContactPickOrCreateModal';
 import { TYPE_META } from './EntityGraph';
+import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNodeType } from '../lib/adapter/types';
 
-export type CreateKind = 'project' | 'event' | 'action' | 'note' | 'interaction';
+export type CreateKind = 'contact' | 'project' | 'event' | 'action' | 'note' | 'interaction';
 
 export interface GraphCenter {
   type: EntityGraphNodeType;
   id: string;
 }
 
-const ALL_CREATABLE = ['project', 'event', 'action', 'note', 'interaction'] as const;
-
 /** Default set of kinds callers pass when they want every possible option. */
-export const ALL_CREATABLE_KINDS: CreateKind[] = [...ALL_CREATABLE];
+export const ALL_CREATABLE_KINDS: CreateKind[] = [
+  'contact',
+  'project',
+  'event',
+  'action',
+  'note',
+  'interaction',
+];
 
 /** Single source of truth used by both the modal body and the GraphTab
  *  create button to decide whether a center has any valid create options. */
@@ -36,12 +43,17 @@ export function creatableForCenter(
 // to the center. The new entity must expose a foreign-key column or a
 // many-to-many table that references the center — otherwise the new node
 // would float with no edge in the graph (worse than not creating it).
+// 'contact' means "link an existing or freshly created contact" — the link
+// semantics differ per center (event participant / action assignee /
+// project member) and live in linkContactToCenter below.
 const CREATABLE_BY_CENTER: Record<EntityGraphNodeType, ReadonlySet<CreateKind>> = {
   contact: new Set<CreateKind>(['project', 'event', 'action', 'note', 'interaction']),
-  project: new Set<CreateKind>(['event', 'action', 'note', 'interaction']),
-  event: new Set<CreateKind>(['note', 'interaction']),
-  action: new Set<CreateKind>(['note', 'interaction']),
-  interaction: new Set<CreateKind>(['note']),
+  project: new Set<CreateKind>(['contact', 'event', 'action', 'note', 'interaction']),
+  // Events/actions auto-log interactions (auto_log on the server), so
+  // creating one by hand here would duplicate what the system already does.
+  event: new Set<CreateKind>(['contact', 'note']),
+  action: new Set<CreateKind>(['contact', 'note']),
+  interaction: new Set<CreateKind>(['contact', 'note']),
   note: new Set<CreateKind>(),
 };
 
@@ -92,9 +104,11 @@ export function GraphQuickCreateModal({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-            {kind
-              ? `新建${labelFor(kind)}`
-              : `关联到此${TYPE_META[center.type].label}`}
+            {kind === 'contact'
+              ? `关联到${TYPE_META[center.type].label}`
+              : kind
+                ? `新建${labelFor(kind)}`
+                : `关联到此${TYPE_META[center.type].label}`}
           </h3>
           <button
             type="button"
@@ -140,6 +154,14 @@ export function GraphQuickCreateModal({
           </>
         )}
 
+        {kind === 'contact' && (
+          <GraphQuickContactLink
+            center={center}
+            onClose={onClose}
+            onLinked={(id) => onCreated?.('contact', id)}
+            onCancel={() => setKind(null)}
+          />
+        )}
         {kind === 'project' && (
           <GraphQuickProjectForm
             center={center}
@@ -191,12 +213,80 @@ function labelFor(k: CreateKind): string {
 
 function hintFor(k: CreateKind): string {
   switch (k) {
+    case 'contact': return '选已有或当场新建';
     case 'project': return '长期协作的容器';
     case 'event': return '约见/会议/截止日';
     case 'action': return '下一步要做的';
     case 'note': return '随手记一段';
     case 'interaction': return '一次沟通互动';
   }
+}
+
+// Link semantics differ per center: event participants are multi-select
+// (merged in one update); action/interaction have a single contact FK and
+// project membership is created per contact. The picker is shared; the write
+// path is not — each branch hits the relation its center actually has.
+function GraphQuickContactLink({
+  center,
+  onClose,
+  onLinked,
+  onCancel,
+}: {
+  center: GraphCenter;
+  onClose: () => void;
+  onLinked: (contactId: string) => void;
+  onCancel: () => void;
+}) {
+  const adapter = useAdapter();
+  const invalidate = useGraphInvalidation();
+  const multiple = center.type === 'event';
+
+  const linkOne = async (contactId: string) => {
+    if (center.type === 'project') {
+      await adapter.projectContacts.add(center.id, contactId, null);
+    } else if (center.type === 'event') {
+      const ev = await adapter.events.get(center.id);
+      const existing = (ev?.participants ?? []).map((p) => p.contact_id);
+      const merged = existing.includes(contactId) ? existing : [...existing, contactId];
+      await adapter.events.update({
+        id: center.id,
+        participant_contact_ids: merged.length > 0 ? merged : null,
+        contact_id: merged[0] ?? ev?.contact_id ?? null,
+      });
+    } else if (center.type === 'action') {
+      await adapter.actions.update({ id: center.id, contact_id: contactId });
+    } else if (center.type === 'interaction') {
+      // 互动必须有联系人 — 给悬空互动补上对象。
+      await adapter.interactions.update({ id: center.id, contact_id: contactId });
+    } else {
+      throw new Error(`联系人无法直接关联到${TYPE_META[center.type].label}`);
+    }
+  };
+
+  const link = async (contactIds: string[]) => {
+    try {
+      for (const contactId of contactIds) {
+        await linkOne(contactId);
+        onLinked(contactId);
+      }
+      invalidate();
+      onClose();
+    } catch (e) {
+      alert(`关联联系人失败：${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  return (
+    <ContactPickOrCreateModal
+      title={`关联到${TYPE_META[center.type].label}`}
+      multiple={multiple}
+      confirmLabel={multiple ? '全部添加' : '关联'}
+      onConfirm={(ids) => {
+        if (ids.length > 0) void link(ids);
+      }}
+      onClose={onCancel}
+    />
+  );
 }
 
 export function useGraphInvalidation() {

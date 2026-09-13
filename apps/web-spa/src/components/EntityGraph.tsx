@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType, EntityGraphResponse } from '../lib/adapter/types';
 
@@ -59,6 +59,16 @@ export interface EntityGraphProps {
    * that triggers this callback when clicked.
    */
   onQuickCreate?: () => void;
+  /**
+   * Optional: show a hover "−" badge on neighbors that support it. The
+   * callback unlinks the neighbor from the center — it must never delete
+   * the entity itself.
+   */
+  onUnlink?: (n: EntityGraphNode) => void;
+  /** Optional: whether a neighbor's edge can be unlinked (derived edges can't). */
+  canUnlink?: (n: EntityGraphNode) => boolean;
+  /** Optional: right-click / long-press on a neighbor opens a menu at screen coords. */
+  onNodeMenu?: (n: EntityGraphNode, at: { x: number; y: number }) => void;
   /** Render only the SVG (no error/loading chrome). Used by inline tab. */
   bare?: boolean;
 }
@@ -69,6 +79,9 @@ export function EntityGraph({
   visibleTypes,
   onNeighborOpen,
   onQuickCreate,
+  onUnlink,
+  canUnlink,
+  onNodeMenu,
   bare,
 }: EntityGraphProps) {
   const adapter = useAdapter();
@@ -98,7 +111,16 @@ export function EntityGraph({
 
   if (!data) return null;
 
-  return <GraphSvg data={data} onNeighborOpen={onNeighborOpen} onQuickCreate={onQuickCreate} />;
+  return (
+    <GraphSvg
+      data={data}
+      onNeighborOpen={onNeighborOpen}
+      onQuickCreate={onQuickCreate}
+      onUnlink={onUnlink}
+      canUnlink={canUnlink}
+      onNodeMenu={onNodeMenu}
+    />
+  );
 }
 
 /**
@@ -295,6 +317,9 @@ interface HoverableNodeProps {
   onNeighborOpen: (n: EntityGraphNode) => void;
   onHoverEnter: (key: string) => void;
   onHoverLeave: (key: string) => void;
+  onUnlink?: (n: EntityGraphNode) => void;
+  canUnlink?: (n: EntityGraphNode) => boolean;
+  onNodeMenu?: (n: EntityGraphNode, at: { x: number; y: number }) => void;
 }
 
 /**
@@ -312,8 +337,21 @@ const HoverableNode = memo(function HoverableNode({
   onNeighborOpen,
   onHoverEnter,
   onHoverLeave,
+  onUnlink,
+  canUnlink,
+  onNodeMenu,
 }: HoverableNodeProps) {
   const key = `${node.entity_type}:${node.id}`;
+  const unlinkable = !!(onUnlink && canUnlink?.(node));
+  const longPressRef = useRef<number | null>(null);
+
+  const clearLongPress = () => {
+    if (longPressRef.current !== null) {
+      window.clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  };
+
   return (
     <g
       data-testid={`graph-node-${node.entity_type}-${node.id}`}
@@ -321,6 +359,26 @@ const HoverableNode = memo(function HoverableNode({
       onMouseEnter={() => onHoverEnter(key)}
       onMouseLeave={() => onHoverLeave(key)}
       onClick={() => onNeighborOpen(node)}
+      onContextMenu={(e) => {
+        if (!onNodeMenu) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onNodeMenu(node, { x: e.clientX, y: e.clientY });
+      }}
+      onTouchStart={(e) => {
+        if (!onNodeMenu) return;
+        const t = e.changedTouches[0];
+        if (!t) return;
+        const at = { x: t.clientX, y: t.clientY };
+        clearLongPress();
+        longPressRef.current = window.setTimeout(() => {
+          longPressRef.current = null;
+          onNodeMenu(node, at);
+        }, 500);
+      }}
+      onTouchEnd={clearLongPress}
+      onTouchMove={clearLongPress}
+      onTouchCancel={clearLongPress}
     >
       <circle cx={x} cy={y} r={NODE_R + 6} fill="transparent" />
       <circle
@@ -354,6 +412,37 @@ const HoverableNode = memo(function HoverableNode({
       >
         {truncate(node.label, isHovered ? 18 : 14)}
       </text>
+      {isHovered && unlinkable && (
+        <g
+          data-testid={`graph-unlink-${node.entity_type}-${node.id}`}
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onUnlink?.(node);
+          }}
+        >
+          <title>断开与中心实体的关联（不删除该{meta.label}）</title>
+          <circle
+            cx={x + NODE_R - 2}
+            cy={y - NODE_R - 2}
+            r={9}
+            fill="#fff"
+            stroke="#ef4444"
+            strokeWidth={1.5}
+          />
+          <text
+            x={x + NODE_R - 2}
+            y={y - NODE_R + 2}
+            fontSize="14"
+            fontWeight={700}
+            fill="#ef4444"
+            textAnchor="middle"
+            pointerEvents="none"
+          >
+            −
+          </text>
+        </g>
+      )}
     </g>
   );
 });
@@ -362,9 +451,12 @@ interface GraphSvgProps {
   data: EntityGraphResponse & { hidden_count: number; total_neighbors: number };
   onNeighborOpen: (n: EntityGraphNode) => void;
   onQuickCreate?: () => void;
+  onUnlink?: (n: EntityGraphNode) => void;
+  canUnlink?: (n: EntityGraphNode) => boolean;
+  onNodeMenu?: (n: EntityGraphNode, at: { x: number; y: number }) => void;
 }
 
-function GraphSvg({ data, onNeighborOpen, onQuickCreate }: GraphSvgProps) {
+function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, onNodeMenu }: GraphSvgProps) {
   const center = useMemo(() => data.nodes.find((n) => n.is_center), [data]);
   const centerType = center?.entity_type;
   const others = useMemo(() => data.nodes.filter((n) => !n.is_center), [data]);
@@ -510,6 +602,9 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate }: GraphSvgProps) {
                   onNeighborOpen={onNeighborOpen}
                   onHoverEnter={onHoverEnter}
                   onHoverLeave={onHoverLeave}
+                  onUnlink={onUnlink}
+                  canUnlink={canUnlink}
+                  onNodeMenu={onNodeMenu}
                 />
               );
             })}
@@ -534,6 +629,9 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate }: GraphSvgProps) {
                   onNeighborOpen={onNeighborOpen}
                   onHoverEnter={onHoverEnter}
                   onHoverLeave={onHoverLeave}
+                  onUnlink={onUnlink}
+                  canUnlink={canUnlink}
+                  onNodeMenu={onNodeMenu}
                 />
               );
             })}

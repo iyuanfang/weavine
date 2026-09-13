@@ -1,11 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ALL_TYPES, GRAPH_NODE_CAP, TYPE_META, type GraphCenter } from './EntityGraph';
 import { GraphQuickCreateModal, creatableForCenter, type CreateKind } from './GraphQuickCreateModal';
 import { emit } from '../lib/telemetry';
 import { useAdapter } from '../lib/adapter';
+import { useUserId } from '../lib/auth';
 import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
 
 const EntityGraph = lazy(() => import('./EntityGraph').then((m) => ({ default: m.EntityGraph })));
@@ -38,8 +39,12 @@ export function GraphTab({
   );
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [tabHovered, setTabHovered] = useState(false);
+  const [menu, setMenu] = useState<{ node: EntityGraphNode; x: number; y: number } | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
 
   const adapter = useAdapter();
+  const userId = useUserId();
+  const queryClient = useQueryClient();
   const graphQuery = useQuery({
     queryKey: ['entity-graph', center.type, center.id],
     queryFn: () => adapter.graph.get(center.type, center.id),
@@ -85,6 +90,114 @@ const onNeighborOpen = useCallback(
   const effectiveCreatable = useMemo(
     () => creatableForCenter(center.type, creatable),
     [center.type, creatable],
+  );
+
+  // ── Unlink (断开关联) ────────────────────────────────────
+  // Every edge is backed by a real relation (FK or link table) except
+  // event↔action, which is derived through interactions — that pair gets no
+  // minus. Unlinking NEVER deletes the entity.
+  const canUnlinkNode = useCallback(
+    (n: EntityGraphNode) => {
+      const pair = `${center.type}:${n.entity_type}`;
+      return [
+        'contact:event', 'contact:action', 'contact:project', 'contact:note', 'contact:interaction',
+        'project:contact', 'project:event', 'project:action', 'project:note',
+        'event:contact', 'event:interaction', 'event:note',
+        'action:contact', 'action:interaction', 'action:note',
+        'interaction:contact', 'interaction:event', 'interaction:action', 'interaction:note',
+        'note:contact', 'note:project', 'note:event', 'note:action', 'note:interaction',
+      ].includes(pair);
+    },
+    [center.type],
+  );
+
+  const removeNoteLink = useCallback(
+    async (uid: string, noteId: string, entityType: string, entityId: string) => {
+      const note = await adapter.notes.get(uid, noteId);
+      if (!note) return;
+      const links = await adapter.notes.listEntityLinks(uid, noteId);
+      await adapter.notes.update(uid, noteId, {
+        id: noteId,
+        title: note.title,
+        body: note.body,
+        entity_links: links.filter(
+          (l) => !(l.entity_type === entityType && l.entity_id === entityId),
+        ),
+      });
+    },
+    [adapter],
+  );
+
+  // Form semantics: contact_id mirrors the first participant.
+  const removeEventParticipant = useCallback(
+    async (eventId: string, contactId: string) => {
+      const ev = await adapter.events.get(eventId);
+      if (!ev) return;
+      const rest = (ev.participants ?? [])
+        .map((p) => p.contact_id)
+        .filter((cid) => cid !== contactId);
+      await adapter.events.update({
+        id: eventId,
+        participant_contact_ids: rest.length > 0 ? rest : null,
+        contact_id: rest[0] ?? null,
+      });
+    },
+    [adapter],
+  );
+
+  const unlinkNeighbor = useCallback(
+    async (n: EntityGraphNode) => {
+      if (!userId || unlinking) return;
+      const uid = userId;
+      setUnlinking(true);
+      try {
+        if (n.entity_type === 'note') {
+          // note↔anything is a note_entity link; the note keeps its body.
+          await removeNoteLink(uid, n.id, center.type, center.id);
+        } else if (center.type === 'contact' && n.entity_type === 'event') {
+          await removeEventParticipant(n.id, center.id);
+        } else if (center.type === 'event' && n.entity_type === 'contact') {
+          await removeEventParticipant(center.id, n.id);
+        } else if (center.type === 'contact' && n.entity_type === 'project') {
+          await adapter.projectContacts.remove(n.id, center.id);
+        } else if (center.type === 'project' && n.entity_type === 'contact') {
+          await adapter.projectContacts.remove(center.id, n.id);
+        } else if (center.type === 'project' && n.entity_type === 'event') {
+          await adapter.events.update({ id: n.id, project_id: null });
+        } else if (center.type === 'event' && n.entity_type === 'project') {
+          await adapter.events.update({ id: center.id, project_id: null });
+        } else if (n.entity_type === 'interaction') {
+          const field = center.type === 'event' ? 'event_id'
+            : center.type === 'action' ? 'action_id'
+            : 'contact_id';
+          await adapter.interactions.update({ id: n.id, [field]: null });
+        } else if (center.type === 'interaction') {
+          const field = n.entity_type === 'event' ? 'event_id'
+            : n.entity_type === 'action' ? 'action_id'
+            : 'contact_id';
+          await adapter.interactions.update({ id: center.id, [field]: null });
+        } else if (n.entity_type === 'action') {
+          // action neighbor of a contact/project center: clear its FK
+          const field = center.type === 'contact' ? 'contact_id' : 'project_id';
+          await adapter.actions.update({ id: n.id, [field]: null });
+        } else if (center.type === 'action' && n.entity_type === 'contact') {
+          await adapter.actions.update({ id: center.id, contact_id: null });
+        } else {
+          throw new Error('该关联不支持断开');
+        }
+        queryClient.invalidateQueries({ queryKey: ['entity-graph', center.type, center.id] });
+      } catch (e) {
+        alert(`断开关联失败：${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setUnlinking(false);
+      }
+    },
+    [adapter, center.id, center.type, queryClient, removeEventParticipant, removeNoteLink, unlinking, userId],
+  );
+
+  const onNodeMenu = useCallback(
+    (node: EntityGraphNode, at: { x: number; y: number }) => setMenu({ node, x: at.x, y: at.y }),
+    [],
   );
 
   const handleQuickCreate = useCallback(() => setShowQuickCreate(true), []);
@@ -217,6 +330,9 @@ const onNeighborOpen = useCallback(
               visibleTypes={visibleTypes}
               onNeighborOpen={onNeighborOpen}
               onQuickCreate={effectiveCreatable.length > 0 ? handleQuickCreate : undefined}
+              onUnlink={unlinkNeighbor}
+              canUnlink={canUnlinkNode}
+              onNodeMenu={onNodeMenu}
             />
           </Suspense>
           {showEmptyCta && (
@@ -247,9 +363,28 @@ const onNeighborOpen = useCallback(
           <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
             单击节点 = 查看该节点的关系图。
             {effectiveCreatable.length > 0 && '点击 + 新建按钮即可在此添加关联实体。'}
+            悬停节点点 − 断开关联（不删除实体）；右键 / 长按节点打开操作菜单。
             超过 {GRAPH_NODE_CAP} 个节点的关联会被截断。
           </div>
         </section>
+      )}
+
+      {menu && (
+        <GraphNodeMenu
+          node={menu.node}
+          at={{ x: menu.x, y: menu.y }}
+          canUnlink={canUnlinkNode(menu.node)}
+          unlinking={unlinking}
+          onOpenDetail={() => {
+            setMenu(null);
+            navigate(detailHref(menu.node));
+          }}
+          onUnlink={() => {
+            void unlinkNeighbor(menu.node);
+            setMenu(null);
+          }}
+          onClose={() => setMenu(null)}
+        />
       )}
 
       {showQuickCreate && (
@@ -260,6 +395,119 @@ const onNeighborOpen = useCallback(
         />
       )}
     </>
+  );
+}
+
+function detailHref(n: EntityGraphNode): string {
+  switch (n.entity_type) {
+    case 'contact': return `/contacts/${n.id}`;
+    case 'project': return `/projects/${n.id}`;
+    case 'event': return `/events/${n.id}`;
+    case 'action': return `/actions/${n.id}`;
+    case 'note': return `/notes/${n.id}`;
+    case 'interaction': return `/interactions/${n.id}`;
+    default: return '/';
+  }
+}
+
+/** Right-click / long-press menu for a graph neighbor.
+ *  Deliberately offers no delete: entities are deleted from their detail
+ *  page, never from the canvas. */
+function GraphNodeMenu({
+  node,
+  at,
+  canUnlink,
+  unlinking,
+  onOpenDetail,
+  onUnlink,
+  onClose,
+}: {
+  node: EntityGraphNode;
+  at: { x: number; y: number };
+  canUnlink: boolean;
+  unlinking: boolean;
+  onOpenDetail: () => void;
+  onUnlink: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const meta = TYPE_META[node.entity_type];
+  const left = Math.min(at.x, window.innerWidth - 190);
+  const top = Math.min(at.y, window.innerHeight - 150);
+
+  return (
+    <div
+      data-testid="graph-node-menu"
+      style={{ position: 'fixed', inset: 0, zIndex: 1100 }}
+      onClick={onClose}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+    >
+      <div
+        style={{
+          position: 'fixed',
+          left,
+          top,
+          width: 180,
+          background: '#fff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
+          padding: 4,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ padding: '6px 10px', fontSize: 12, color: '#64748b', fontWeight: 600 }}>
+          {meta.icon} {node.label.slice(0, 12)}
+        </div>
+        {[
+          { label: '打开详情', fn: onOpenDetail, disabled: false },
+          {
+            label: unlinking ? '断开中…' : '断开关联',
+            fn: onUnlink,
+            disabled: !canUnlink || unlinking,
+            title: canUnlink ? '解除与当前实体的关联，不删除该实体' : '该关联由其它记录推导，无法直接断开',
+          },
+        ].map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            disabled={item.disabled}
+            title={'title' in item ? item.title : undefined}
+            onClick={item.fn}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              padding: '7px 10px',
+              border: 'none',
+              background: 'transparent',
+              borderRadius: 6,
+              cursor: item.disabled ? 'default' : 'pointer',
+              fontSize: 13,
+              color: item.disabled ? '#94a3b8' : '#0f172a',
+            }}
+            onMouseEnter={(e) => {
+              if (!item.disabled) (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
