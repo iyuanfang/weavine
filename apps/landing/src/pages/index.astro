@@ -1,0 +1,345 @@
+---
+import '../styles/global.css';
+
+const release = 'v1.5.0';
+
+const platforms = [
+  { name: 'macOS',     href: '/downloads/v1.5.0/Weavine_1.3.18_aarch64.dmg',        file: '.dmg' },
+  { name: 'Windows',   href: '/downloads/v1.5.0/Weavine_1.3.18_x64-setup.exe',      file: '.exe' },
+  { name: 'Linux',     href: '/downloads/v1.5.0/Weavine_1.3.18_amd64.deb',          file: '.deb' },
+  { name: 'Android',   href: '/downloads/v1.5.0/Weavine_arm64-release_cloud.apk',   file: '.apk' },
+  { name: '网页版',     href: '/today',            file: '免安装', primary: true },
+];
+
+const features = [
+  {
+    icon: '⚡',
+    title: '快速记录 & 语音',
+    body: 'Ctrl+K 随时唤起，打字或说话都行。一句话自动归档到对应的联系人和项目。',
+  },
+  {
+    icon: '📷',
+    title: '名片扫描 & 导入',
+    body: '扫描名片自动识别姓名、公司、职位。也支持 CSV / vCard 批量导入，迁移零成本。',
+  },
+  {
+    icon: '📅',
+    title: '日程与提醒',
+    body: '会议、待办、重要日期，永远不会忘。跨设备同步提醒，手机桌面都能收到。',
+  },
+  {
+    icon: '📝',
+    title: '笔记 & 关联',
+    body: '为每个人、每件事写笔记，自动关联联系人和日程。按时间线回溯，不遗漏任何细节。',
+  },
+  {
+    icon: '🕸️',
+    title: '关系图谱',
+    body: '可视化查看联系人、项目、事件之间的关联网络。点击任意节点快速跳转，一眼看清人脉全貌。',
+  },
+  {
+    icon: '🔍',
+    title: '全局搜索',
+    body: '全文搜索联系人、笔记、项目、日程，一键直达。支持模糊匹配和标签筛选，再久远的信息也能秒级找到。',
+  },
+  {
+    icon: '🧠',
+    title: '智能关系管理',
+    body: '不只是通讯录。自动关联联系人、项目、待办和日程，帮你理清每个人背后的故事。',
+  },
+  {
+    icon: '🔄',
+    title: '多端同步',
+    body: '桌面、手机、网页，编辑即时同步。可以电脑上操作，手机上查看。',
+  },
+  {
+    icon: '🔒',
+    title: '数据在你手里',
+    body: '默认本地存储，离线可用。你的联系人、对话、日程，不会存在别人的服务器上。',
+  },
+];
+
+const screenshots = [
+  { src: '/screenshot-contacts.png', alt: '联系人管理' },
+  { src: '/screenshot-quick-capture.png', alt: '快速记录' },
+  { src: '/screenshot-calendar.png', alt: '日程管理' },
+  { src: '/screenshot-new-contact.png', alt: '新建联系人' },
+];
+
+const downloads = [
+  { id: 'download-macos', name: 'macOS', desc: 'Apple Silicon · .dmg', href: '/downloads/v1.5.0/Weavine_1.3.18_aarch64.dmg', file: '.dmg' },
+  { id: 'download-windows', name: 'Windows', desc: 'Windows 10 / 11 · 64-bit', href: '/downloads/v1.5.0/Weavine_1.3.18_x64-setup.exe', file: '.exe' },
+  { id: 'download-linux', name: 'Linux', desc: 'Debian / Ubuntu · .deb', href: '/downloads/v1.5.0/Weavine_1.3.18_amd64.deb', file: '.deb' },
+  { id: 'download-android', name: 'Android', desc: 'Android 8+ · arm64 APK', href: '/downloads/v1.5.0/Weavine_arm64-release_cloud.apk', file: '.apk' },
+  { name: '网页版', desc: '无需安装，浏览器即开即用', href: '/today', file: '→' },
+];
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Weavine — 记住每一个重要的人。语音记录、名片扫描、智能关联，帮你管好人和事。" />
+    <meta name="theme-color" content="#7c3aed" />
+    <title>Weavine · 记住每一个重要的人</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="font-sans">
+    <header class="border-b border-gray-100 sticky top-0 bg-white/80 backdrop-blur z-10">
+      <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+        <a href="/" class="font-semibold text-lg tracking-tight">Weavine</a>
+        <nav class="flex gap-6 text-sm text-gray-600">
+          <a href="#features" class="hover:text-gray-900 transition">功能</a>
+          <a href="#screenshots" class="hover:text-gray-900 transition">截图</a>
+          <a href="#download" class="hover:text-gray-900 transition">下载</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="max-w-5xl mx-auto px-6 py-20 sm:py-28 text-center">
+        <h1 class="text-4xl sm:text-6xl font-bold tracking-tight">记住每一个重要的人</h1>
+        <p class="mt-6 text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+          语音、文字、名片——想到就记。自动关联联系人、项目和日程，帮你管好人和事。各种文档格式转换 md，方便存储和检索。
+        </p>
+        <div class="mt-10 flex flex-wrap gap-3 justify-center">
+          {platforms.map((p) => (
+            <a
+              href={p.href}
+              class:list={[
+                'inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg font-medium transition',
+                p.primary
+                  ? 'bg-brand-600 text-white hover:bg-brand-700'
+                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200',
+              ]}
+            >
+              <span>{p.name}</span>
+              <span class="text-xs opacity-70">{p.file}</span>
+            </a>
+          ))}
+        </div>
+        <p class="mt-6 text-sm text-gray-500">
+          最新版本 <span class="font-medium text-gray-700">{release}</span>
+        </p>
+      </section>
+
+      <section id="features" class="bg-gray-50 py-20">
+        <div class="max-w-5xl mx-auto px-6">
+          <h2 class="text-3xl font-bold text-center">核心功能</h2>
+          <p class="mt-3 text-center text-gray-500 text-sm">不只是记事本，是你的关系管理引擎</p>
+          <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((f) => (
+              <div>
+                <div class="w-10 h-10 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center text-xl">{f.icon}</div>
+                <h3 class="mt-4 text-lg font-semibold">{f.title}</h3>
+                <p class="mt-2 text-gray-600 text-sm leading-relaxed">{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="screenshots" class="py-20 overflow-hidden">
+        <div class="max-w-5xl mx-auto px-6">
+          <h2 class="text-3xl font-bold text-center">看看实际效果</h2>
+          <p class="mt-3 text-center text-gray-500 text-sm">点击放大 · 左右切换 · Esc 关闭</p>
+        </div>
+        <div class="marquee mt-12" aria-label="产品截图轮播">
+          <div class="marquee__track">
+            {[0, 1].map((copy) => (
+              <div class="marquee__group" aria-hidden={copy === 1 ? 'true' : undefined}>
+                {screenshots.map((s, i) => {
+                  const id = `shot-${copy}-${i}`;
+                  return (
+                    <a href={`#${id}`} class="marquee__item">
+                      <img src={s.src} alt={copy === 0 ? s.alt : ''} loading="lazy" />
+                    </a>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- Lightbox: any #shot-N-M in the URL activates the matching overlay.
+           Each pane is the outer click-to-close; arrows at the sides
+           are sibling <a> elements (not nested) to satisfy HTML. -->
+      <div class="lightbox" id="lb">
+        <div class="lightbox__pane" id="shot-0-0" aria-label="联系人管理">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-contacts.png" alt="联系人管理" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-3" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-1" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+        <div class="lightbox__pane" id="shot-0-1" aria-label="快速记录">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-quick-capture.png" alt="快速记录" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-0" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-2" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+        <div class="lightbox__pane" id="shot-0-2" aria-label="日程管理">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-calendar.png" alt="日程管理" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-1" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-3" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+        <div class="lightbox__pane" id="shot-0-3" aria-label="新建联系人">
+          <span class="lightbox__arrow lightbox__arrow--left" aria-hidden="true" />
+          <img class="lightbox__img" src="/screenshot-new-contact.png" alt="新建联系人" />
+          <span class="lightbox__arrow lightbox__arrow--right" aria-hidden="true" />
+          <a class="lightbox__close" href="#" aria-label="关闭">×</a>
+          <a class="lightbox__nav lightbox__nav--prev" href="#shot-0-2" aria-label="上一张" />
+          <a class="lightbox__nav lightbox__nav--next" href="#shot-0-0" aria-label="下一张" />
+          <a class="lightbox__backdrop" href="#" aria-label="关闭" />
+        </div>
+      </div>
+
+      <section id="download" class="bg-gray-50 py-20">
+        <div class="max-w-5xl mx-auto px-6">
+          <h2 class="text-3xl font-bold text-center">下载</h2>
+          <p class="mt-4 text-center text-gray-600 text-sm">全平台覆盖，数据跨设备同步</p>
+          <div class="mt-12 max-w-2xl mx-auto divide-y divide-gray-200 bg-white rounded-lg border border-gray-200">
+            {downloads.map((d) => (
+              <a
+                id={d.id}
+                href={d.href}
+                class="flex items-center justify-between p-5 hover:bg-gray-50 transition"
+                rel={d.href.startsWith('http') ? 'noopener' : undefined}
+              >
+                <div>
+                  <div class="font-medium">{d.name}</div>
+                  <div class="text-sm text-gray-500 mt-0.5">{d.desc}</div>
+                </div>
+                <span class="text-gray-400 text-sm">{d.file}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-gray-100 py-8">
+      <div class="max-w-5xl mx-auto px-6 text-sm text-gray-500 flex flex-col sm:flex-row gap-2 justify-between">
+        <div>
+          © 2026 Weavine ·
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hover:text-gray-700"
+          >沪ICP备2022002774号-2</a>
+        </div>
+        <div class="flex gap-4">
+          <a href="#download" class="hover:text-gray-900" rel="noopener">下载</a>
+          <a href="/today" class="hover:text-gray-900" rel="noopener">打开网页版</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+  <style>
+    .marquee { overflow: hidden; }
+    .marquee__track {
+      display: flex;
+      width: max-content;
+      animation: marquee-scroll 45s linear infinite;
+    }
+    .marquee:hover .marquee__track { animation-play-state: paused; }
+    .marquee__group {
+      display: flex;
+      gap: 24px;
+      padding-right: 24px;
+    }
+    .marquee__item {
+      flex: 0 0 auto;
+      width: min(480px, 80vw);
+      margin: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      background: #fff;
+    }
+    .marquee__item img { display: block; width: 100%; height: auto; }
+    @keyframes marquee-scroll {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .marquee__track { animation: none; }
+    }
+
+    /* ── Lightbox: zero-JS, CSS-only via :target ── */
+    .lightbox { position: relative; }
+    .lightbox__pane {
+      position: fixed; inset: 0; background: transparent;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.18s ease;
+      z-index: 100;
+    }
+    .lightbox__pane:target { opacity: 1; pointer-events: none; }
+    .lightbox__pane:target .lightbox__backdrop {
+      pointer-events: auto;
+      background: rgba(0, 0, 0, 0.85);
+    }
+    .lightbox__pane:target .lightbox__img,
+    .lightbox__pane:target .lightbox__nav,
+    .lightbox__pane:target .lightbox__close,
+    .lightbox__pane:target .lightbox__arrow {
+      pointer-events: auto;
+    }
+
+    .lightbox__backdrop {
+      position: absolute; inset: 0; z-index: 0;
+      cursor: zoom-out;
+    }
+    .lightbox__img {
+      position: relative; z-index: 1;
+      max-width: 92vw; max-height: 88vh;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+    }
+    .lightbox__arrow {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 56px; height: 56px; pointer-events: none;
+      z-index: 2;
+    }
+    .lightbox__arrow::before {
+      content: ''; position: absolute; inset: 0;
+      border: solid #fff; border-width: 0 4px 4px 0;
+      width: 24px; height: 24px; top: 14px; left: 16px;
+    }
+    .lightbox__arrow--left { left: 5%; transform: translateY(-50%) rotate(135deg); }
+    .lightbox__arrow--right { right: 5%; transform: translateY(-50%) rotate(-45deg); }
+
+    .lightbox__nav {
+      position: absolute; top: 0; height: 100%;
+      width: 18vw; max-width: 220px;
+      cursor: pointer; z-index: 2;
+    }
+    .lightbox__nav--prev { left: 0; }
+    .lightbox__nav--next { right: 0; }
+
+    .lightbox__close {
+      position: absolute; top: 16px; right: 24px; z-index: 3;
+      width: 44px; height: 44px; line-height: 44px; text-align: center;
+      color: #fff; font-size: 28px; text-decoration: none;
+      border-radius: 50%; background: rgba(255, 255, 255, 0.1);
+    }
+    .lightbox__close:hover { background: rgba(255, 255, 255, 0.2); }
+
+    /* Lock page scroll while a lightbox is open. */
+    html:has(.lightbox__pane:target) { overflow: hidden; }
+  </style>
+</html>

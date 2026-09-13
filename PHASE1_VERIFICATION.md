@@ -83,11 +83,11 @@ pnpm tauri dev        # opens window, runs Next.js + Tauri shell
 .worktrees/phase1-tauri/
 ├── src-tauri/
 │   ├── Cargo.toml                          (modified: added uuid, chrono, dirs, rusqlite, tauri)
-│   ├── tauri.conf.json                     (productName: Weavine, identifier: com.weavine.app)
+│   ├── tauri.conf.json                     (productName: Weavine, identifier: com.weavine.desktop)
 │   ├── capabilities/default.json           (Tauri v2 permissions)
 │   ├── build.rs                            (Tauri build script)
 │   └── src/
-│       ├── main.rs                         (calls prm_lib::run())
+│       ├── main.rs                         (calls weavine_lib::run())
 │       ├── lib.rs                          (run() with generate_handler![35 commands])
 │       ├── db.rs                           (Database struct + migrations)
 │       ├── models.rs                       (8 domain structs + 3 DTOs + SearchResults)

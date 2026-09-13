@@ -1,35 +1,118 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Weavine",
-  "version": "0.1.0",
-  "identifier": "com.weavine.prm",
+  "version": "1.3.18",
+  "identifier": "com.weavine.desktop",
   "build": {
-    "frontendDist": "../tauri-dist"
+    "beforeBuildCommand": "pnpm --dir apps/web-spa run build:tauri --voice-mode cloud",
+    "beforeDevCommand": "pnpm --dir apps/web-spa run dev",
+    "devUrl": "http://localhost:5181",
+    "frontendDist": "../apps/web-spa/dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
         "title": "Weavine",
-        "url": "/",
         "width": 1280,
-        "height": 820
+        "height": 820,
+        "visible": true,
+        "devtools": true
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    },
+    "withGlobalTauri": false
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage", "msi"],
-    "resources": ["../standalone-bundle/**/*", "../node_bin/*"],
+    "targets": [
+      "deb",
+      "appimage",
+      "msi",
+      "app",
+      "dmg"
+    ],
+    "resources": [],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico",
       "icons/icon.png"
+    ],
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["wix/preserve-data.wxs"],
+        "componentRefs": ["AppDataDir"]
+      },
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": true
+      }
+    },
+    "android": {
+      "minSdkVersion": 24
+    },
+    "iOS": {
+      "minimumSystemVersion": "15.0"
+    },
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown"],
+        "name": "Markdown Document",
+        "description": "Markdown document file",
+        "role": "Editor",
+        "mimeType": "text/markdown"
+      },
+      {
+        "ext": ["docx"],
+        "name": "Word Document",
+        "description": "Microsoft Word document (converted to Markdown for editing)",
+        "role": "Editor",
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      },
+      {
+        "ext": ["pdf"],
+        "name": "PDF Document",
+        "description": "PDF document (text extracted to Markdown for editing)",
+        "role": "Viewer",
+        "mimeType": "application/pdf"
+      },
+      {
+        "ext": ["txt"],
+        "name": "Plain Text",
+        "description": "Plain text file (read-only, opens as Markdown)",
+        "role": "Viewer",
+        "mimeType": "text/plain"
+      },
+      {
+        "ext": ["html", "htm"],
+        "name": "HTML Document",
+        "description": "HTML file (converted to Markdown for editing)",
+        "role": "Viewer",
+        "mimeType": "text/html"
+      },
+      {
+        "ext": ["xlsx"],
+        "name": "Excel Spreadsheet",
+        "description": "Excel workbook (converted to Markdown table for editing)",
+        "role": "Viewer",
+        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      },
+      {
+        "ext": ["pptx"],
+        "name": "PowerPoint Presentation",
+        "description": "PowerPoint slides (converted to Markdown for editing)",
+        "role": "Viewer",
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      }
     ]
-  }
+  },
+  "plugins": {}
 }

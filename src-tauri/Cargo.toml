@@ -1,20 +1,105 @@
 [package]
 name = "weavine"
-version = "0.1.0"
+version = "1.3.18"
 edition = "2021"
+default-run = "weavine"
+license = "AGPL-3.0"
 
 [lib]
 name = "weavine_lib"
-crate-type = ["lib"]
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+name = "weavine"
+path = "src/main.rs"
+
+[features]
+# `tauri` enables the Tauri 2 desktop / Android runtime. Required for any
+# GUI build. Mobile targets (`cargo tauri android build`) use this.
+default = ["tauri"]
+tauri = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-global-shortcut", "dep:tauri-plugin-notification", "dep:tauri-plugin-dialog", "dep:tauri-plugin-fs", "dep:tauri-plugin-single-instance", "dep:tauri-plugin-opener"]
+
+# Android voice-recognition flavor split. Exactly one of these must be set
+# when building an Android APK; the cloud flavor is the default because the
+# APK is ~15 MB (matches v1.0.18) while the local flavor is ~130 MB but
+# works fully offline.
+#
+# - `voice-cloud`  : no native voice deps, Android voice calls POST to
+#                    the server's /api/voice/recognize endpoint.
+# - `voice-local`  : links sherpa-onnx, bundles the .so files into
+#                    jniLibs/, and bundles the Whisper tiny model
+#                    under resources/. First-launch network access is
+#                    not required.
+#
+# The two are mutually exclusive: enabling both will fail at link time
+# (sherpa-onnx symbols collide with the absent-cloud stubs).
+voice-cloud = []
+voice-local = ["dep:sherpa-onnx"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", optional = true, features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", optional = true, features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-global-shortcut = { version = "2", optional = true }
+tauri-plugin-notification = { version = "2", optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
+tauri-plugin-fs = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
+chardetng = "0.1"
+encoding_rs = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
 dirs = "5"
+base64 = "0.22"
+sha2 = "0.10"
 uuid = { version = "1", features = ["v4"] }
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.5", features = ["cors", "fs", "set-header"] }
+bcrypt = "0.15"
+jsonwebtoken = "9"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
+anyhow = "1"
+regex = "1"
+fuzzy-matcher = "0.3"
+# markitdown is non-Android only — see [target.'cfg(not(target_os = "android"))'.dependencies] below.
+# It transitively pulls rig-core → reqwest 0.11 → native-tls → openssl-sys, which cannot
+# cross-compile for aarch64-linux-android without libssl. Since Android users don't need
+# to open .md files at all, we drop both the markitdown dep and the md_editor/convert
+# modules on Android (cfg-gated in lib.rs).
+# sqlx: optional — only activated when server crate depends with features= ["sqlx"]
+# Provides FromRow derive for models without pulling in runtime deps.
+sqlx = { version = "0.8", optional = true, default-features = false, features = ["macros", "derive", "postgres", "uuid", "chrono"] }
+
+# On-device speech recognition on Android via sherpa-onnx (SenseVoice).
+# Only enabled when building the `voice-local` flavor (see [features]).
+# The vendored 1.13.5 build.rs drops libsherpa-onnx-c-api.so and friends
+# into target/{triple}/{profile}/; src-tauri/build.rs then copies them
+# into gen/android/.../jniLibs/{abi}/ so Gradle packages them into the APK.
+# The SenseVoice int8 model is bundled via bundle.resources
+# (see tauri.local.conf.json) and extracted to the app data dir at startup
+# by android_assets::extract_sense_voice_to_data_dir() — there is no
+# download fallback.
+[target.'cfg(target_os = "android")'.dependencies]
+sherpa-onnx = { version = "1.13", optional = true, default-features = false, features = ["shared"] }
+# JNI + Android context access for android_assets.rs (AssetManager extraction).
+jni = "0.21"
+ndk-context = "0.1"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+markitdown = "0.1"
+
+# Windows-only: lets the converter sidecar silence the WER crash dialog so an
+# aborted markitdown conversion is silent (the parent reports the error).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_System_Diagnostics_Debug"] }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }

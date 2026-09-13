@@ -1,0 +1,286 @@
+// ── Field name filtering for sync ──
+//
+// Both SQLite and PG now use snake_case, so no name conversion is
+// needed. We only strip PG-only columns (server_revision) when applying
+// pulled data locally. deleted_at is preserved so soft-deletes propagate.
+
+use serde_json::Value;
+
+/// Identity — both schemas use snake_case.
+pub fn obj_camel_to_snake(v: &Value) -> Value {
+    v.clone()
+}
+
+/// Strip PG-only columns (server_revision) when pulling.
+/// Keys are already snake_case; no name mapping needed.
+/// `deleted_at` is preserved — soft-delete state must propagate.
+pub fn obj_snake_to_camel(v: &Value) -> Value {
+    match v {
+        Value::Object(map) => {
+            let mut out = serde_json::Map::with_capacity(map.len());
+            for (k, val) in map {
+                if k == "server_revision" { continue; }
+                out.insert(k.clone(), obj_snake_to_camel(val));
+            }
+            Value::Object(out)
+        }
+        Value::Array(arr) => Value::Array(arr.iter().map(obj_snake_to_camel).collect()),
+        other => other.clone(),
+    }
+}
+
+// Push order MUST respect FK dependencies so the server doesn't see
+// orphans (e.g. event.project_id before project.id is synced).
+// Levels:
+//   0: contact, tag, project, setting       (only FK to user_account)
+//   1: event (-> project), action (-> contact, project)
+//   2: interaction (-> contact, project, action, event),
+//      reminder   (-> contact, event)
+//   3: contact_tag    (-> contact, tag),
+//      project_contact (-> project, contact)
+pub const ENTITY_KINDS: &[&str] = &[
+    // level 0
+    "contact", "tag", "project", "setting", "note",
+    // level 1
+    "event", "action",
+    // level 2
+    "interaction", "reminder",
+    // level 3
+    "contact_tag", "project_contact", "media",
+    // level 3.5 (junction-like, push-all)
+    "entity_link", "note_entity",
+];
+
+pub const UPDATED_AT_TABLES: &[&str] = &[
+    "contact", "project", "event", "action", "setting", "media", "note",
+];
+
+pub const JUNCTION_TABLES: &[&str] = &["contact_tag", "project_contact", "entity_link", "note_entity"];
+
+pub fn sqlite_table_to_kind(table: &str) -> Option<&'static str> {
+    match table {
+        "Contact" => Some("contact"),
+        "Tag" => Some("tag"),
+        "Event" => Some("event"),
+        "Action" => Some("action"),
+        "Interaction" => Some("interaction"),
+        "Project" => Some("project"),
+        "Reminder" => Some("reminder"),
+        "Setting" => Some("setting"),
+        "ContactTag" => Some("contact_tag"),
+        "ProjectContact" => Some("project_contact"),
+        "Media" => Some("media"),
+        "EntityLink" => Some("entity_link"),
+        "Note" => Some("note"),
+        "NoteEntity" => Some("note_entity"),
+        _ => None,
+    }
+}
+
+pub fn kind_to_sqlite_table(kind: &str) -> Option<&'static str> {
+    match kind {
+        "contact" => Some("Contact"),
+        "tag" => Some("Tag"),
+        "event" => Some("Event"),
+        "action" => Some("Action"),
+        "interaction" => Some("Interaction"),
+        "project" => Some("Project"),
+        "reminder" => Some("Reminder"),
+        "setting" => Some("Setting"),
+        "contact_tag" => Some("ContactTag"),
+        "project_contact" => Some("ProjectContact"),
+        "media" => Some("Media"),
+        "entity_link" => Some("EntityLink"),
+        // PG table is plural `entity_links`; triggers log TG_TABLE_NAME,
+        // so pull deliveries arrive as the plural form.
+        "entity_links" => Some("EntityLink"),
+        "note" => Some("Note"),
+        "note_entity" => Some("NoteEntity"),
+        _ => None,
+    }
+}
+
+/// Normalize a wire kind (e.g. the plural PG table name `entity_links`
+/// from a pull delivery) into the canonical sync kind (`entity_link`).
+pub fn canonical_kind(kind: &str) -> &str {
+    match kind {
+        "entity_links" => "entity_link",
+        other => other,
+    }
+}
+
+/// Columns that are INTEGER in SQLite but represent booleans.
+/// Push must emit `Value::Bool`, not `Value::String("1"/"0")` —
+/// otherwise the server's `jsonb_populate_record` rejects with
+/// `invalid input syntax for type boolean: "1"`.
+pub fn boolean_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "contact" => &[] as &[&str],
+        "reminder" => &["dispatched", "dismissed"],
+        "event" => &["reminder_enabled"],
+        _ => &[],
+    }
+}
+
+/// Plain INTEGER columns (not booleans, not TEXT) that exist in
+/// `push_columns(...)`. Push must emit `Value::Number(n)`, not
+/// `Value::String(n.to_string())` — otherwise the server's
+/// `jsonb_populate_record` rejects with
+/// `invalid input syntax for type integer: "1"`.
+pub fn integer_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "contact" => &[] as &[&str],
+        "action" => &["priority"],
+        "reminder" => &["reminder_lead_minutes"],
+        "event" => &["reminder_lead_minutes"],
+        _ => &[],
+    }
+}
+
+/// Plain INTEGER columns on PULL (not boolean, not TEXT).
+/// Pull must write NULL (not "") for missing values, otherwise the next
+/// push round-trips the empty string to the server, which rejects
+/// `invalid input syntax for type integer: ""`.
+pub fn nullable_integer_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "contact" => &[] as &[&str],
+        "reminder" => &["reminder_lead_minutes"],
+        "event" => &["reminder_lead_minutes"],
+        _ => &[],
+    }
+}
+
+/// INTEGER columns that are NOT NULL on the server. Missing values
+/// become 0 (the server's DEFAULT) instead of NULL, otherwise the upsert
+/// fails the not-null constraint.
+pub fn default_zero_integer_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "action" => &["priority"],
+        _ => &[],
+    }
+}
+
+pub fn push_columns(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "contact" => &["id","user_id","nickname","name","company","title","address","email","phone","wechat","importance","last_interaction_at","created_at","updated_at","deleted_at"],
+        "tag" => &["id","user_id","name","color","created_at","deleted_at"],
+        "event" => &["id","user_id","title","event_type","start_at","end_at","location","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at","deleted_at"],
+        "action" => &["id","user_id","title","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at","deleted_at"],
+        "interaction" => &["id","user_id","contact_id","action_id","event_id","occurred_at","channel","summary","created_at","deleted_at"],
+        "project" => &["id","user_id","title","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at","deleted_at"],
+        "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","invitation_token","created_at","deleted_at"],
+        "setting" => &["id","user_id","key","value","updated_at"],
+        "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","storage_key","width","height","alt_text","created_at","updated_at"],
+        "contact_tag" => &["user_id","contact_id","tag_id"],
+        "project_contact" => &["user_id","project_id","contact_id","role","added_at"],
+        "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","label","created_at"],
+        "note" => &["id","user_id","title","body","archived_at","created_at","updated_at","deleted_at"],
+        "note_entity" => &["id","note_id","user_id","entity_type","entity_id","created_at"],
+        _ => &[],
+    }
+}
+
+/// Defensive drop: local-only columns that must never reach the server.
+///
+/// `push_columns(kind)` already excludes these by virtue of not listing them.
+/// This function is belt-and-suspenders — if a future change accidentally widens
+/// the whitelist, the privacy guarantee still holds (`imported_from` is a local
+/// filesystem path that must not leak). See §11.7.9.
+///
+/// Add new desktop-only columns here when introducing them. Tests must
+/// accompany every addition.
+pub fn drop_desktop_only_columns(kind: &str, data: &mut serde_json::Map<String, Value>) {
+    match kind {
+        "note" => {
+            data.remove("imported_from");
+            data.remove("imported_at");
+        }
+        _ => {}
+    }
+}
+
+/// Generate a UUID for junction tables that PG requires but SQLite doesn't have.
+pub fn add_junction_id(kind: &str, data: &mut serde_json::Map<String, Value>) {
+    if JUNCTION_TABLES.contains(&kind) && !data.contains_key("id") {
+        data.insert("id".into(), Value::String(uuid::Uuid::new_v4().to_string()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_obj_camel_to_snake_is_identity() {
+        let input = json!({"user_id": "test", "created_at": "2026-01-01", "event_type": "meeting"});
+        let out = obj_camel_to_snake(&input);
+        // Both schemas use snake_case now — passthrough
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn test_obj_snake_to_camel_strips_server_revision() {
+        let input = json!({"user_id": "test", "server_revision": 42, "deleted_at": "2026-08-28T10:00:00Z"});
+        let out = obj_snake_to_camel(&input);
+        // Keys stay snake_case (no name conversion needed), server_revision stripped,
+        // deleted_at preserved so soft-delete state propagates locally.
+        assert_eq!(out["user_id"], "test");
+        assert!(out.get("server_revision").is_none());
+        assert_eq!(out["deleted_at"], "2026-08-28T10:00:00Z");
+    }
+
+    #[test]
+    fn test_push_columns_are_snake_case() {
+        for kind in ENTITY_KINDS {
+            let cols = push_columns(kind);
+            assert!(!cols.is_empty(), "{} has no columns", kind);
+            for col in cols {
+                assert!(!col.contains(char::is_uppercase), "{} column {} is not snake_case", kind, col);
+            }
+        }
+    }
+
+    #[test]
+    fn push_columns_reminder_includes_invitation_token() {
+        let cols = push_columns("reminder");
+        assert!(cols.contains(&"invitation_token"), "reminder push must include invitation_token for cross-device cadence dedup");
+    }
+
+    #[test]
+    fn drop_desktop_only_columns_strips_imported_from_note() {
+        let mut map = serde_json::Map::new();
+        map.insert("id".into(), json!("n1"));
+        map.insert("user_id".into(), json!("u1"));
+        map.insert("title".into(), json!("hello"));
+        map.insert("body".into(), json!("world"));
+        map.insert("imported_from".into(), json!("C:\\Users\\foo\\note.md"));
+        map.insert("imported_at".into(), json!("2026-08-26T00:00:00.000Z"));
+
+        drop_desktop_only_columns("note", &mut map);
+
+        assert!(map.get("imported_from").is_none(), "imported_from must not leak to server");
+        assert!(map.get("imported_at").is_none(), "imported_at must not leak to server");
+        assert_eq!(map.get("id").unwrap(), "n1", "other fields preserved");
+        assert_eq!(map.get("title").unwrap(), "hello");
+    }
+
+    #[test]
+    fn drop_desktop_only_columns_no_op_for_other_kinds() {
+        let mut map = serde_json::Map::new();
+        map.insert("id".into(), json!("c1"));
+        map.insert("imported_from".into(), json!("not-a-note"));
+
+        drop_desktop_only_columns("contact", &mut map);
+
+        assert_eq!(map.get("imported_from").unwrap(), "not-a-note");
+        assert_eq!(map.get("id").unwrap(), "c1");
+    }
+
+    #[test]
+    fn push_columns_note_excludes_imported_columns() {
+        let cols = push_columns("note");
+        assert!(!cols.contains(&"imported_from"), "imported_from must not be pushed to server");
+        assert!(!cols.contains(&"imported_at"), "imported_at must not be pushed to server");
+    }
+}
