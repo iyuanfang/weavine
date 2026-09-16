@@ -85,33 +85,10 @@ export function AppInner({ children }: { children?: ReactNode }) {
   const seenReminderIds = useRef<Set<string>>(new Set());
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitial, setSearchInitial] = useState('');
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== '/') return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      e.preventDefault();
-      setSearchOpen(true);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== '\\') return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      e.preventDefault();
-      setQuickOpen((o) => !o);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-  // Desktop: also listen for the OS-level global-shortcut event in case the
-  // bare keydown listener doesn't receive it (depends on the platform's
-  // global-shortcut handling).
+  // Bare-key shortcuts: fire only when the webview has focus, so the user
+  // can still type `/` or `\` in other apps when this one is minimized.
+  // The handler is implemented once in useGlobalShortcut (skips typing targets).
+  useGlobalShortcut('/', () => setSearchOpen(true));
   useGlobalShortcut('\\', () => setQuickOpen((o) => !o));
   const openSearch = (initialQuery: string = '') => {
     setSearchInitial(initialQuery);

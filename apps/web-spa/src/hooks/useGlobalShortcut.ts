@@ -1,7 +1,4 @@
-import { listen } from '@tauri-apps/api/event';
 import { useEffect, useRef } from 'react';
-
-import { isTauri } from '../lib/adapter';
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -27,12 +24,6 @@ export function useGlobalShortcut(combo: string, cb: () => void) {
     .replace(/^ctrl\+/, '');
 
   useEffect(() => {
-    if (isTauri) {
-      const unlistenP = listen('ctrl-k-pressed', () => cbRef.current());
-      return () => {
-        unlistenP.then((unlisten) => unlisten()).catch(() => {});
-      };
-    }
     const handler = (e: KeyboardEvent) => {
       if (requireCtrl && !(e.ctrlKey || e.metaKey)) return;
       if (requireShift && !e.shiftKey) return;
@@ -46,6 +37,10 @@ export function useGlobalShortcut(combo: string, cb: () => void) {
       e.stopPropagation();
       cbRef.current();
     };
+    // Listen on the webview's window. The webview only receives keydown
+    // when it is focused, so the shortcut naturally does NOT fire when the
+    // app is minimized / another app has focus (e.g. the user can still
+    // type `\` in their browser).
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
   }, [combo]);

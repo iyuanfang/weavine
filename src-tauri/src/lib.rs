@@ -89,12 +89,7 @@ pub fn run() {
     use commands::{action, contact, diagnostic, event, install_id as cmd_install_id, interaction, media, note, ocr, project, project_contact, quick, reminder, search, setting, tag, voice};
     use db::Database;
     use std::fs;
-    use tauri::{Emitter, Manager};
-    // tauri-plugin-global-shortcut is desktop-only (the crate root has
-    // `#![cfg(not(any(target_os = "android", target_os = "ios")))]`).
-    // Import ShortcutState only on desktop so the Android build compiles.
-    #[cfg(desktop)]
-    use tauri_plugin_global_shortcut::ShortcutState;
+    use tauri::Manager;
     use tauri_plugin_notification;
 
     let initial_data_dir = db::get_db_path()
@@ -282,19 +277,11 @@ pub fn run() {
                 }
                 app.manage(std::sync::Mutex::new(pending));
             }
-            #[cfg(desktop)]
-            {
-                app.handle().plugin(
-                    tauri_plugin_global_shortcut::Builder::new()
-                        .with_shortcuts(["Backslash"])?
-                        .with_handler(|app, _shortcut, event| {
-                            if event.state == ShortcutState::Pressed {
-                                let _ = app.emit("ctrl-k-pressed", ());
-                            }
-                        })
-                        .build(),
-                )?;
-            }
+            // Note: \ used to be registered here as an OS-level global shortcut,
+            // but that stole the keystroke from other apps (e.g. the user
+            // couldn't type `\` in the browser). The shortcut is now handled
+            // inside the webview's keydown listener (apps/web-spa/.../useGlobalShortcut.ts),
+            // which only fires when the webview itself has focus.
             app.handle().plugin(tauri_plugin_notification::init())?;
             // opener works on desktop + mobile (used for Android APK sideload)
             app.handle().plugin(tauri_plugin_opener::init())?;
