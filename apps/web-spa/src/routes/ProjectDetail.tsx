@@ -274,7 +274,7 @@ export function ProjectDetail() {
 
       <GraphTab
         center={{ type: 'project', id }}
-        creatable={['event', 'action', 'note', 'interaction']}
+        creatable={['contact', 'event', 'action', 'note', 'interaction']}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
