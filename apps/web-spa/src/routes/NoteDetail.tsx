@@ -930,7 +930,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
 
       <GraphTab
         center={{ type: 'note', id: id as string }}
-        creatable={['project', 'event', 'action', 'note', 'interaction']}
+        creatable={[]}
         detailLabel="详情"
         graphLabel="🕸️ 关系图"
       />
