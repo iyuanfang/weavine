@@ -1,0 +1,315 @@
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+
+import { PageHeader } from '../components/PageHeader';
+import { useAdapter } from '../lib/adapter';
+import { useUserId } from '../lib/auth';
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearInterval(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+const SECTION_ICONS: Record<string, string> = {
+  联系人: '👥',
+  互动: '💬',
+  日程: '📅',
+  待办: '📌',
+  项目: '🎯',
+  笔记: '📝',
+};
+
+type FilterType = 'all' | 'contact' | 'interaction' | 'event' | 'action' | 'project' | 'note';
+
+const FILTER_OPTIONS: { value: FilterType; label: string; icon: string }[] = [
+  { value: 'all', label: '全部', icon: '·' },
+  { value: 'contact', label: '联系人', icon: '👥' },
+  { value: 'interaction', label: '互动', icon: '💬' },
+  { value: 'event', label: '日程', icon: '📅' },
+  { value: 'action', label: '待办', icon: '📌' },
+  { value: 'project', label: '项目', icon: '🎯' },
+  { value: 'note', label: '笔记', icon: '📝' },
+];
+
+function SearchFilter({
+  value,
+  onChange,
+}: {
+  value: FilterType;
+  onChange: (v: FilterType) => void;
+}) {
+  return (
+    <div className="search-filter" role="radiogroup" aria-label="筛选类型">
+      {FILTER_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          role="radio"
+          aria-checked={value === opt.value}
+          className={`search-filter__pill${value === opt.value ? ' is-active' : ''}`}
+          onClick={() => onChange(opt.value)}
+        >
+          <span aria-hidden style={{ marginRight: 4 }}>{opt.icon}</span>
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function SearchPage() {
+  const adapter = useAdapter();
+  const userId = useUserId();
+
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [includeArchived, setIncludeArchived] = useState(true);
+  const debouncedQuery = useDebouncedValue(query, 300);
+
+  const searchQuery = useQuery({
+    queryKey: ['search', userId, debouncedQuery, includeArchived],
+    queryFn: () =>
+      adapter.search.query(userId!, debouncedQuery, null, { include_archived: includeArchived }),
+    enabled: !!userId && debouncedQuery.length > 0,
+  });
+
+  if (!userId) {
+    return <div className="loading">正在加载用户…</div>;
+  }
+
+  if (searchQuery.isError) {
+    return (
+      <div className="page">
+        <div className="error-banner">搜索失败: {String(searchQuery.error)}</div>
+      </div>
+    );
+  }
+
+  const results = searchQuery.data;
+  const contacts = results?.contacts ?? [];
+  const interactions = results?.interactions ?? [];
+  const events = results?.events ?? [];
+  const actions = results?.actions ?? [];
+  const projects = results?.projects ?? [];
+  const notes = results?.notes ?? [];
+  const totalCount =
+    contacts.length +
+    interactions.length +
+    events.length +
+    actions.length +
+    projects.length +
+    notes.length;
+
+  return (
+    <div className="page">
+      <PageHeader
+        title="搜索"
+        subtitle={
+          debouncedQuery && results
+            ? `「${debouncedQuery}」共 ${totalCount} 条结果`
+            : '跨联系人、互动、日程、待办、项目、笔记'
+        }
+      />
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="search-input-row">
+          <input
+            type="text"
+            className="input-base"
+            placeholder="输入关键词开始搜索…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <SearchFilter value={filter} onChange={setFilter} />
+        </div>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 10,
+            fontSize: 'var(--text-sm)',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(e) => setIncludeArchived(e.target.checked)}
+            style={{ cursor: 'pointer' }}
+          />
+          包含已归档项（默认开启，关闭后只显示活跃内容）
+        </label>
+      </div>
+
+      {!query.trim() ? (
+        <div className="empty-state">
+          <h3 className="empty-state__title">想找什么？</h3>
+          <p className="empty-state__hint">试试人名、公司、互动摘要或日程标题</p>
+        </div>
+      ) : searchQuery.isLoading ? (
+        <div className="loading">搜索中</div>
+      ) : totalCount > 0 ? (
+        <div style={{ display: 'grid', gap: 24 }}>
+          {(filter === 'all' || filter === 'contact') && contacts.length > 0 && (
+            <SearchSection
+              title="联系人"
+              viewAllHref="/contacts"
+              items={contacts.map((c) => ({
+                key: c.id,
+                href: `/contacts/${c.id}?from=/search`,
+                title: c.nickname,
+                meta: c.company ?? '',
+              }))}
+            />
+          )}
+          {(filter === 'all' || filter === 'interaction') && interactions.length > 0 && (
+            <SearchSection
+              title="互动"
+              viewAllHref="/contacts"
+              items={interactions.map((i) => ({
+                key: i.id,
+                href: `/interactions/${i.id}`,
+                title: i.summary,
+                meta: new Date(i.occurred_at).toLocaleDateString('zh-CN', {
+                  month: 'numeric',
+                  day: 'numeric',
+                }),
+                tag: i.source === 'event' ? '📅 来自日程' : i.source === 'todo' ? '✅ 来自待办' : undefined,
+              }))}
+            />
+          )}
+          {(filter === 'all' || filter === 'event') && events.length > 0 && (
+            <SearchSection
+              title="日程"
+              viewAllHref="/calendar"
+              items={events.map((e) => ({
+                key: e.id,
+                href: `/events/${e.id}?from=/search`,
+                title: e.title,
+                meta: new Date(e.start_at).toLocaleString('zh-CN', {
+                  month: 'numeric',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                }),
+                isArchived: !!e.archived_at,
+              }))}
+            />
+          )}
+          {(filter === 'all' || filter === 'action') && actions.length > 0 && (
+            <SearchSection
+              title="待办"
+              viewAllHref="/actions"
+              items={actions.map((a) => ({
+                key: a.id,
+                href: `/actions/${a.id}?from=/search`,
+                title: a.title,
+                meta: a.due_at
+                  ? new Date(a.due_at).toLocaleDateString('zh-CN', {
+                      month: 'numeric',
+                      day: 'numeric',
+                    })
+                  : '',
+                isArchived: !!a.archived_at,
+              }))}
+            />
+          )}
+          {(filter === 'all' || filter === 'project') && projects.length > 0 && (
+            <SearchSection
+              title="项目"
+              viewAllHref="/projects"
+              items={projects.map((p) => ({
+                key: p.id,
+                href: `/projects/${p.id}?from=/search`,
+                title: p.title,
+                meta: p.stage,
+                isArchived: !!p.archived_at,
+              }))}
+            />
+          )}
+          {(filter === 'all' || filter === 'note') && notes.length > 0 && (
+            <SearchSection
+              title="笔记"
+              viewAllHref="/notes"
+              items={notes.map((n) => {
+                const firstLine = (n.body || '').split('\n').find((l) => l.trim().length > 0) ?? '';
+                const title = n.title || firstLine.replace(/^#+\s*/, '').slice(0, 40) || '（无标题）';
+                return {
+                  key: n.id,
+                  href: `/notes/${n.id}?from=/search`,
+                  title,
+                  meta: new Date(n.updated_at).toLocaleDateString('zh-CN', {
+                    month: 'numeric',
+                    day: 'numeric',
+                  }),
+                };
+              })}
+            />
+          )}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <h3 className="empty-state__title">未找到匹配的结果</h3>
+          <p className="empty-state__hint">试试换个关键词</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function SearchSection({
+  title,
+  viewAllHref,
+  items,
+  activeKey,
+}: {
+  title: string;
+  viewAllHref: string;
+  items: { key: string; href: string; title: string; meta: string; isArchived?: boolean; tag?: string }[];
+  activeKey?: string;
+}) {
+  return (
+    <section className="section" style={{ marginBottom: 0 }}>
+      <div className="section__header">
+        <h2 className="section__title">
+          {SECTION_ICONS[title] ?? '·'} {title}
+        </h2>
+        <Link to={viewAllHref} className="section__view-all">
+          全部 →
+        </Link>
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {items.map((item) => (
+          <Link
+            key={item.key}
+            to={item.href}
+            className={`row-card${item.key === activeKey ? ' row-card--active' : ''}`}
+            style={{ textDecoration: 'none', color: 'inherit' }}
+          >
+            <span className="row-card__title" style={{ opacity: item.isArchived ? 0.65 : 1 }}>
+              {item.isArchived && <span aria-hidden style={{ marginRight: 6 }}>📦</span>}
+              {item.title}
+            </span>
+            {item.tag && (
+              <span className="badge badge--muted" style={{ fontSize: 'var(--text-xs)', flexShrink: 0 }}>
+                {item.tag}
+              </span>
+            )}
+            {item.meta && <span className="row-card__meta">{item.meta}</span>}
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}

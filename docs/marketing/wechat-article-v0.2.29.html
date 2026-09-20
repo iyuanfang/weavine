@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>为什么选 Tauri 而不是 Electron？—— Weavine 技术选型</title>
+<style>
+  /* ---------- Reset & Base ---------- */
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    font-size: 15px; line-height: 1.8; color: #1e293b;
+    background: #f1f5f9; -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 680px; margin: 0 auto;
+    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    min-height: 100vh;
+  }
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; overflow: hidden;
+    padding: 40px 24px 36px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+    color: #f1f5f9;
+  }
+  .hero::before {
+    content: ""; position: absolute; top: -60%; right: -20%;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(59,130,246,.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero::after {
+    content: ""; position: absolute; bottom: 0; left: 0; right: 0;
+    height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+  }
+  .brand-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 28px; position: relative; z-index: 1;
+  }
+  .brand-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: #fff; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  }
+  .brand-icon img { width: 100%; height: 100%; display: block; border-radius: 6px; }
+  .brand-name { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+  .brand-sub { font-size: 12px; opacity: .8; margin-top: 2px; }
+  .hero h1 {
+    font-size: 28px; line-height: 1.35; font-weight: 800;
+    margin: 0 0 14px; letter-spacing: -.5px; position: relative; z-index: 1;
+  }
+  @media (min-width: 760px) { .hero h1 { font-size: 34px; } }
+  .hero .subtitle {
+    font-size: 14px; opacity: .85; margin: 0 0 24px; position: relative; z-index: 1;
+  }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    font-size: 12px; opacity: .8; position: relative; z-index: 1;
+  }
+  .meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .meta .dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,.6); }
+  /* ---------- Typography ---------- */
+  h2 {
+    font-size: 22px; line-height: 1.4; font-weight: 700;
+    color: #1e3a8a; margin: 48px 0 16px; padding-top: 8px;
+    border-bottom: 2px solid #dbeafe; padding-bottom: 10px;
+  }
+  h2::before {
+    content: ""; display: inline-block; width: 5px; height: 22px;
+    background: #2563eb; border-radius: 3px; margin-right: 12px;
+    vertical-align: -2px;
+  }
+  h3 { font-size: 17px; font-weight: 700; color: #1e40af; margin: 32px 0 10px; }
+  p { margin: 0 0 16px; text-align: justify; }
+  strong { color: #1e3a8a; font-weight: 700; }
+  em { color: #475569; font-style: normal; }
+  a { color: #2563eb; text-decoration: none; border-bottom: 1px solid rgba(37,99,235,.3); }
+  a:hover { border-bottom-color: #2563eb; }
+  /* ---------- Lead / Highlight box ---------- */
+  .highlight {
+    background: #eff6ff; border-left: 4px solid #2563eb;
+    padding: 18px 22px; border-radius: 0 8px 8px 0;
+    margin: 28px 0 36px; color: #1e3a8a; font-size: 15px; line-height: 1.75;
+  }
+  .highlight .label { font-size: 12px; font-weight: 600; letter-spacing: 1px; color: #2563eb; text-transform: uppercase; margin-bottom: 6px; }
+  .highlight p { margin: 0; text-align: left; }
+  .highlight p + p { margin-top: 8px; }
+  /* ---------- Blockquote ---------- */
+  blockquote {
+    margin: 24px 0; padding: 14px 22px;
+    background: #f8fafc; border-left: 4px solid #94a3b8;
+    color: #475569; font-style: italic; border-radius: 0 6px 6px 0;
+  }
+  /* ---------- Code blocks ---------- */
+  code {
+    font-family: "SF Mono", "JetBrains Mono", Consolas, Monaco, monospace;
+    font-size: 13.5px;
+  }
+  :not(pre) > code {
+    background: #f1f5f9; color: #be185d;
+    padding: 2px 6px; border-radius: 4px; font-size: .9em;
+    word-break: break-word; overflow-wrap: anywhere;
+  }
+  pre {
+    background: #0f172a; color: #e2e8f0;
+    border-radius: 8px; padding: 16px 20px; overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 16px 0 20px; font-size: 13px; line-height: 1.7;
+    border: 1px solid #1e293b;
+    max-width: 100%;
+  }
+  pre code { color: inherit; white-space: pre; }
+  /* ---------- Tables ---------- */
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 18px 0 24px; font-size: 14px;
+    background: #fff; border-radius: 8px; overflow: hidden;
+    box-shadow: 0 0 0 1px #e2e8f0;
+  }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 18px 0 24px; border-radius: 8px; }
+  .table-wrap table { margin: 0; }
+  thead { background: #eff6ff; }
+  th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  th { font-weight: 700; color: #1e3a8a; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  /* ---------- Lists ---------- */
+  ul, ol { padding-left: 24px; margin: 0 0 18px; }
+  li { margin-bottom: 8px; }
+  li::marker { color: #2563eb; font-weight: 700; }
+  /* ---------- Numbered reason cards ---------- */
+  .reason-list { margin: 20px 0 28px; }
+  .reason-item {
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 10px; padding: 18px 20px; margin-bottom: 14px;
+  }
+  .reason-item .num {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    background: #2563eb; color: #fff; padding: 3px 10px;
+    border-radius: 99px; letter-spacing: .5px; margin-bottom: 10px;
+  }
+  .reason-item h4 { margin: 0 0 8px; font-size: 16px; color: #1e3a8a; }
+  .reason-item p { font-size: 14px; color: #475569; margin: 0; line-height: 1.7; }
+  /* ---------- Callout (适合/不适合) ---------- */
+  .callout {
+    margin: 24px 0; border-radius: 10px; padding: 20px 22px;
+  }
+  .callout.pro { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .callout.con { background: #fef2f2; border: 1px solid #fecaca; }
+  .callout .tag {
+    display: inline-block; font-size: 12px; font-weight: 700;
+    padding: 3px 12px; border-radius: 99px; margin-bottom: 10px;
+  }
+  .callout.pro .tag { background: #22c55e; color: #fff; }
+  .callout.con .tag { background: #ef4444; color: #fff; }
+  .callout p { margin: 0; color: #1e293b; }
+  .callout p + p { margin-top: 8px; }
+  /* ---------- Stats row ---------- */
+  .stats-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+    margin: 24px 0 28px;
+  }
+  .stat-card {
+    text-align: center; background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 10px; padding: 16px 12px;
+  }
+  .stat-card .num { font-size: 24px; font-weight: 800; color: #2563eb; }
+  .stat-card .label { font-size: 12px; color: #64748b; margin-top: 4px; }
+  /* ---------- CTA Card ---------- */
+  .cta {
+    margin: 40px 0 24px;
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    color: #fff;
+    border-radius: 12px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .cta h3 { color: #fff; margin: 0 0 8px; font-size: 20px; }
+  .cta p { margin: 0 0 18px; opacity: .92; }
+  .cta a {
+    display: inline-block; background: #fff; color: #1e40af;
+    padding: 10px 22px; border-radius: 8px; font-weight: 700;
+    border-bottom: none; margin: 4px 6px;
+  }
+  .cta a:hover { background: #fef3c7; color: #1e3a8a; }
+  /* ---------- Separator ---------- */
+  hr {
+    border: none; border-top: 1px solid #e2e8f0;
+    margin: 40px 0;
+  }
+  /* ---------- Footer ---------- */
+  .footer {
+    text-align: center; padding: 32px 24px 40px;
+    background: #f8fafc; color: #64748b; font-size: 13px;
+  }
+  .footer p { margin: 0 0 6px; text-align: center; }
+  .footer .heart { color: #ef4444; }
+  /* ---------- Print (公众号 use) ---------- */
+  @media print {
+    body { background: #fff; }
+    .wrap { box-shadow: none; border-radius: 0; margin: 0; max-width: 100%; }
+    .hero { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .cta { background: #2563eb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .callout.pro { background: #f0fdf4 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .callout.con { background: #fef2f2 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre, table { page-break-inside: avoid; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="brand-row">
+      <div class="brand-icon">
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAYAAAD0eNT6AAAABmJLR0QA/wD/AP+gvaeTAAAgAElEQVR4nOy9bcyu2XUWdq19P+/7nq+Zc2Zi4xYV8tE0KJRiAQlKHEEgpEVVxI+KFKnlR9tUSZBgPJ6J7Xw55FCQiqrYzgeiJVCkCtJKpCC1tIVCImgaQQyihUJLC6VNCq1SGo/HZ+Z8vO/73Pfuj72uta6172cysT22x/bc0sw553nuZ997r732uq71sfdteOv67F3PPXfx1Hn/UsPFF1tfv6wvy9vbur29N3sW2/Y2wJ4F8EUAAMM9bN3Q2lnv/bYBgBn6tkGWBegd6B0dQHzXe/k7eoc1v9cMANC3bTTP+1sbfesd0HbM/BnTfX5vfCZ9ONkeAFjLPviffdtgrdU+87NtG/2LfiL6w1YNOP1c7Z+ZyGW0h6mPfAbM0Nd1/F37I/8Gps+8DxBZ4IQcYhyb3Mc2VC7axvwcv89gZWylDfbT5xjaB5ezSzt0IJ7nstRxxb9bG22GDrEvyL7rb1V28/fRZ6TMW8sJjTb9efHTnv3AmItoC33c18bYUzdBBZHeWf7RIc/ogFH3/IYmspQfdb/frOV9XTSz93wu511lId3m99kev1DZ1/aKTCB6P89HGeMm34kMoJ9Rj2z8M54L9L6JTCmH/tCsXXkbL7vgPoreX4LhowB+ARs+aofl53vvP9uP28++st39WfzIuy/x1vVZuez1b3nr+lSvp1944dlm9s5tsV9jx+M7rbWv3IAvNeCfgZn1dQWAClpAGET/RzHwAba9GpMAMCDB1EFU7UgA6wyU7EefjM66Aph+I/co8dDf9eNxul8Aq7UEWQH80heObUsAUDAqwK4g48+mHGksx/eURw/ypCSHgLEb6zSOWd67i20tyxinEDW0JdvX5+vPBWQLkcNEhNgnBZUZhDn+ZRlycVmSdEGeH8/w8bIf5jIOmbJnMwERmbOt0je9Z6O8x7xQSfu6jc94f5CONuSgehXgrMSW5M0qYaG4jitsaU7CDICQjq4gT+n31Odlib4P7mHo6yAioy2iJHJsOYsOplvtdxDBNp5Pfds6sLTRX1OayzkQwthHeyk7iFyQY+XngMtfwdz7wft6B8lQfL7JMzHpri0+9qqPJD3DYWlKaHvv/efN2v/RW/v71te/u2H5u61f/50HH77/Et66Pq3XWwTgjb6ee+7iqcPhNzbb3tV7/zpb2q/rG/658K4mry5AiZcbNy4emn96lnFbazsjG0DoRooLcwDN3vMPAyqGvZAJAYa+YRg+96hgNsAjPDbxjuyEV0qDpyBDoGUb/lsFihIFaEshNaBMZtB2AhDX5K1Gv7zPZR7Ydx/rKZAvHq/3hQDf1zXb0rlhdGMC7hgPx0SP1WwX0dAxAlb6CAf2GLtEH8B2qDc9wUn1L8aghECJ2Y4g2k6PZlKoEap9FIDtkwAvDr68ZwuyNp7R83dLA9ZtyJJyEO80L0siMXvUQdAOTkQ5DqQ+kwStEmmL31IultGBkG/3RwpYR7TCv1sc4JsBm/fLCQB/O2TWJoLTB+FwOdrhkEQqhprrKvS5b0P/l+YkQdqFk9LjWtqIeQixUa8Qeh2RjXUdcxi6vDphQ5UN9cKE9AWRTWICa/8XDH+7r8e/jkP76Veunv6bb0UL3tjrLQLwqV7375/fffTgN2Fdfzu2/ps68OtgdhGG+3AGrGvxhOjN8ZpBILx+s1hQGQlANUT0bsTgh+cWkQIIE9+EiS9yT/UY+fsB0of0KgOAJlAUQM+OCpCHN8FxtSQ6/Ey92dmwLIfsP7+jrAS882EoQD6Mo7QpMi+RBuljEBPpB2jgSKZogL1vkLaUHDHSEYA1ATT/HSSGZIJjYF+VzGmUQoH3tdIpJAfbXgahH94XBe0iV/H8VeYK7iVKoJ6gpiJCfhMZLQq4OSgdB1hSj4MItPBU" alt="Weavine" loading="lazy">
+      </div>
+      <div>
+        <div class="brand-name">Weavine</div>
+        <div class="brand-sub">Personal Relationship Manager · v0.2.29</div>
+      </div>
+    </div>
+    <h1>为什么选 Tauri 而不是 Electron？<br/>Weavine：一个 6.9 MB 的桌面应用<br/>是怎么做到的</h1>
+    <p class="subtitle">技术选型深度解析：Weavine 为什么用 Tauri 而不用 Electron，以及这 140 MB 的差距到底差在哪</p>
+    <div class="meta">
+      <span>2026-07-09</span><span class="dot"></span>
+      <span>开源 · AGPL-3.0</span><span class="dot"></span>
+      <span>预计阅读 12 分钟</span>
+    </div>
+  </header>
+
+  <div class="body" style="padding: 0 24px;">
+
+    <div class="highlight">
+      <div class="label">写在前面</div>
+      <p>我们做了一款开源的 PRM 工具叫 <strong>Weavine</strong>，最近加上了 CSV / vCard 批量导入和联系人排序分页。</p>
+      <p>每次有人看到下载页，都会问同一个问题：「6.9 MB 的 DMG？一个桌面应用？确定不是个网页快捷方式？」</p>
+      <p>这篇文章就来回答这个问题。</p>
+    </div>
+
+    <h2>一个常见的问题</h2>
+    <p>每次有人看到 Weavine 的下载页，都会问同一个问题：</p>
+    <blockquote>
+      「6.9 MB 的 DMG？一个桌面应用？确定不是个网页快捷方式？」
+    </blockquote>
+    <p>确定。这是一个完整的桌面应用——React 前端 + Rust 后端 + SQLite 本地数据库 + 可选的多端同步服务。它能离线打开、能管理几百个联系人、能按标签筛选、能搜索、能导入导出。</p>
+    <p>但它的安装包只有 <strong>6.9 MB</strong>（macOS）、<strong>7.9 MB</strong>（Windows）、<strong>6.9 MB</strong>（Linux）。</p>
+    <p><strong>对比一下：一个空白的 Electron 应用，打包出来至少 150 MB。</strong></p>
+    <p>这差距是怎么来的？答案就在标题里：<strong>Weavine 用 Tauri，不用 Electron。</strong></p>
+
+    <hr>
+
+    <h2>为什么 Electron 那么大？</h2>
+    <p>Electron 本质上是一个「浏览器套壳」。它把整个 Chromium 渲染引擎 + Node.js 运行时打包进你的应用。不管你的应用代码有多小——哪怕只有一个 <code>console.log</code>——你都得带着一整份 Chromium（~120 MB）和 Node.js（~30 MB）。</p>
+    <p>也就是说，Electron 的每个用户设备上，都跑着一份几乎完整的浏览器，只为渲染一个窗口。</p>
+    <p><strong>这带来的问题不只是包体积：</strong></p>
+    <ul>
+      <li><strong>内存占用高</strong>：Chromium 本身就要吃掉 200-400 MB 内存，哪怕你的应用只有一个输入框</li>
+      <li><strong>启动慢</strong>：加载 Chromium 的进程初始化、V8 引擎预热，冷启动通常 1-3 秒</li>
+      <li><strong>更新频繁</strong>：Chromium 的安全补丁月月有，你得跟着发新版本</li>
+      <li><strong>系统集成差</strong>：Electron 用自己的一套文件对话框、通知栏、菜单栏，和系统原生体验有隔阂</li>
+    </ul>
+    <p>不是说 Electron 不能用——VS Code、Slack、Discord 都用 Electron 做得很好。但它们的场景是「重度编辑器 / 聊天工具」，功能复杂到需要 Chromium 的渲染能力。</p>
+    <p><strong>Weavine 的场景不同。</strong> 它是一个人脉管理工具——表格、表单、列表、搜索。这些 UI 不需要 Chromium 的 GPU 合成、不需要 V8 的 JIT 预热、不需要 Service Worker 的离线缓存（因为本地数据就在 SQLite 里）。</p>
+
+    <hr>
+
+    <h2>Tauri 的方案：用系统的，不包的</h2>
+    <p>Tauri 的思路和 Electron 完全相反：</p>
+    <blockquote>
+      <strong>Electron 的哲学</strong>：我给你打包一个 Chromium，你永远不用担心用户的浏览器不兼容。<br><br>
+      <strong>Tauri 的哲学</strong>：用户的系统已经有 WebView（macOS 的 WKWebView、Windows 的 WebView2、Linux 的 WebKitGTK），我直接用系统的——不打包，不算体积。
+    </blockquote>
+    <p>对比一下两套架构：</p>
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>维度</th><th>Electron</th><th>Tauri</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>渲染引擎</td><td>自带 Chromium (~120 MB)</td><td><strong>调用系统 WebView（0 MB 额外）</strong></td></tr>
+        <tr><td>后端语言</td><td>Node.js (JavaScript)</td><td><strong>Rust（编译为原生二进制，同步服务器也用 Rust）</strong></td></tr>
+        <tr><td>安装包体积</td><td>150-300 MB</td><td><strong>6-10 MB</strong></td></tr>
+        <tr><td>内存占用</td><td>~200-500 MB 起</td><td><strong>~60-150 MB</strong></td></tr>
+        <tr><td>冷启动时间</td><td>1-3 秒</td><td><strong>&lt; 0.5 秒</strong></td></tr>
+        <tr><td>系统集成</td><td>自实现（不完美）</td><td><strong>原生（菜单栏、通知、托盘）</strong></td></tr>
+        <tr><td>跨平台支持</td><td>仅桌面</td><td><strong>桌面 + 移动端 + Web，同一份前端代码</strong></td></tr>
+        <tr><td>安全性</td><td>有 Node.js 沙箱逃逸历史</td><td><strong>Rust 编译时内存安全，攻击面小</strong></td></tr>
+        <tr><td>生态</td><td>成熟，插件多</td><td>较新，但核心功能够用</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><strong>Tauri 的「代价」是什么？</strong> 你需要用 Rust 写后端逻辑。Rust 的学习曲线比 JavaScript 陡——这是事实。但 Weavine 的技术选型从一开始就接受了这个代价，原因很简单：</p>
+    <p><strong>人脉管理工具处理的是你的客户数据、联系人信息、互动记录。这些数据应该由一门编译时保证内存安全的语言来管理。</strong> 用 Rust 写数据库操作，可以让出一类内存相关的 bug（use-after-free、buffer overflow），这对一个「数据不能丢」的应用来说，不是锦上添花，是底线要求。</p>
+    <p><strong>而且 Rust 的好处不止于桌面端。</strong> Weavine 的同步服务器（<code>weavine-server</code>）也全部用 Rust 编写——同样出自 <code>src-tauri</code> 的 Rust 代码库，<code>weavine_lib::models</code> 在桌面端和服务器端共享同一套 struct。这意味着一套 Rust 技能栈贯穿了从本地 SQLite 到云端 PostgreSQL 的整个数据路径。</p>
+    <p>如果用 Python 写同步服务器（比如 FastAPI + SQLAlchemy），性能差距是显著的：</p>
+    <ul>
+      <li><strong>单连接吞吐</strong>：Rust (axum) 处理 HTTP 请求的开销接近零，Python (ASGI) 每个请求有显著的 Python 运行时开销</li>
+      <li><strong>内存占用</strong>：生产中的 <code>weavine-server</code> 二进制不到 10 MB，Python 进程 + uvicorn + 依赖通常 100-200 MB</li>
+      <li><strong>冷启动</strong>：Rust 二进制启动即就绪，&lt; 10 ms；Python 需要加载 .pyc、初始化 ORM、建立连接池，通常 1-3 秒</li>
+      <li><strong>部署</strong>：Rust 单文件二进制，丢到服务器上就能跑；Python 需要 Python 解释器、虚拟环境、pip install、管理依赖版本</li>
+    </ul>
+    <p>选择 Rust 不是因为它「酷」，而是因为从头到尾用同一门语言——桌面端数据库操作、sync 客户端逻辑、sync 服务器端处理——让整个系统的性能曲线是平的，而不是在 Python 那层出现瓶颈。</p>
+
+    <h3>不止桌面：同一套前端，覆盖三个平台</h3>
+    <p>这是 Tauri 被很多人忽略的一个优势：<strong>它不止做桌面。</strong></p>
+    <p>Tauri v2 原生支持 Android 和 iOS，Web 端也有完整的 PWA 支持。Weavine 的架构是：</p>
+    <ul>
+      <li><strong>前端</strong>：<code>apps/web-spa</code>——React 18 + Vite + Tailwind，一套代码同时用于桌面 WebView、移动端 WebView 和浏览器</li>
+      <li><strong>桌面端</strong>：Tauri 桌面运行时，WebView 渲染 + Rust IPC 后端</li>
+      <li><strong>移动端</strong>：Tauri 移动运行时，同一份 WebView + 同一份 Rust 后端</li>
+      <li><strong>Web</strong>：直接部署到 <a href="https://weavine.financialagent.cc/">weavine.financialagent.cc</a>，前端代码不变，数据通过 <code>weavine-server</code> 同步</li>
+    </ul>
+    <p>Electron 做不到这一点。你不可能把 Electron 应用直接打包成 APK 或 IPA。想覆盖移动端，你得另起一套 React Native / Flutter / 原生开发，维护两套 UI 代码、两套业务逻辑。</p>
+    <p><strong>Weavine 的 React 前端在桌面、Android、Web 三个端上完全一致。</strong> 新增一个功能，三个端同时生效。不是「以后移植」，是现在就在这么做——v0.2.29 的 APK 安装包已经可以从 GitHub Releases 下载。</p>
+
+    <hr>
+
+    <h2>6.9 MB 是怎么拆出来的？</h2>
+    <p>Weavine v0.2.29 的 macOS DMG 打开后，里面是这样的：</p>
+<pre><code>Weavine.app/
+├── Contents/
+│   ├── MacOS/weavine          # Rust 二进制   ~15 MB（strip 后）
+│   └── Resources/
+│       ├── index.html + JS    # React 前端    ~1 MB（gzip 后）
+│       └── icons               # 应用图标     ~0.1 MB</code></pre>
+    <p><strong>没有 Chromium。没有 Node.js。没有 V8 快照。没有额外的运行时。</strong></p>
+    <p>整个应用的核心数据层（SQLite 读写、联系人搜索、标签管理、同步引擎）全部在 Rust 的 <code>weavine</code> 二进制里。前端 React 代码只负责渲染和交互——它调用 Tauri 的 IPC 桥去请求数据，不直接操作数据库。</p>
+    <p><strong>这比 Electron 的架构更干净。</strong> 在 Electron 应用里，JavaScript 层经常直接操作数据库（通过 <code>better-sqlite3</code> 之类的 Node.js 原生模块），导致前端代码和数据库 schema 耦合。Tauri 的 Rust 层天然是「业务逻辑层」的边界，前端只传命令、拿数据，不关心 SQL。</p>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="num">6.9 MB</div>
+        <div class="label">macOS 安装包</div>
+      </div>
+      <div class="stat-card">
+        <div class="num">~15 MB</div>
+        <div class="label">Rust 二进制（strip 后）</div>
+      </div>
+      <div class="stat-card">
+        <div class="num">~1 MB</div>
+        <div class="label">React 前端（gzip 后）</div>
+      </div>
+    </div>
+
+    <hr>
+
+    <h2>两个架构的「手感」差别</h2>
+    <p>如果你从 Electron 切换到 Tauri，最直观的感受是：</p>
+
+    <div class="reason-list">
+      <div class="reason-item">
+        <span class="num">1</span>
+        <h4>启动像点灯</h4>
+        <p>Weavine 的冷启动时间在 0.3-0.5 秒之间——点击图标 → 窗口出现 → 数据加载完毕，一个呼吸的功夫。Electron 应用通常需要看到 splash screen 转一圈。</p>
+      </div>
+      <div class="reason-item">
+        <span class="num">2</span>
+        <h4>后台安静</h4>
+        <p>Weavine 在后台（最小化）时，Rust 后端只做一件事：等待 IPC 调用。没有 Chromium 的 GC 线程、没有 V8 编译缓存、没有 Service Worker 的心跳请求。系统风扇不会因为一个联系人管理工具呼呼转。</p>
+      </div>
+      <div class="reason-item">
+        <span class="num">3</span>
+        <h4>更新无感</h4>
+        <p>Tauri 的更新机制基于 Rust 的 <code>tauri-plugin-updater</code>，下载的是增量 diff。Weavine 从 v0.2.28 升到 v0.2.29，下载量只有几百 KB。Electron 的 <code>electron-updater</code> 通常要下载整个 <code>app.asar</code>。</p>
+      </div>
+      <div class="reason-item">
+        <span class="num">4</span>
+        <h4>与系统一致</h4>
+        <p>Weavine 的菜单栏、文件对话框、通知栏用的是系统原生组件，而不是 Electron 模拟的。在 macOS 上，菜单栏快捷键是系统标准的；在 Windows 上，安装包是 MSI 而不是 NSIS 自解压包。</p>
+      </div>
+      <div class="reason-item">
+        <span class="num">5</span>
+        <h4>一个前端，三个端</h4>
+        <p>同一份 React 代码，同时跑在桌面、Android 和 Web 上。Weavine 的 APK 安装包已经可以从 GitHub Releases 下载，Web 版在 <a href="https://weavine.financialagent.cc/">weavine.financialagent.cc</a> 直接打开。Electron 做不到——你要覆盖移动端，就得另起一套开发栈。</p>
+      </div>
+    </div>
+
+    <hr>
+
+    <h2>但 Tauri 不是万能药</h2>
+    <p>这篇文章不是为了说「Tauri 比 Electron 好，大家快迁移」。任何一个技术选型都是 trade-off。</p>
+
+    <div class="callout pro">
+      <span class="tag">✅ Tauri 的适用范围</span>
+      <p>你的应用界面是「文档/表单/列表/图表」级别的复杂度，不需要浏览器扩展、不需要 DevTools 远程调试、不需要 Service Worker 做离线缓存（因为本地数据直接用 SQLite 或类似方案）。</p>
+    </div>
+
+    <div class="callout con">
+      <span class="tag">⚠️ Tauri 不适合的场景</span>
+      <p>你的应用重度依赖 Chromium 的特性（比如 DevTools 扩展、WebRTC 的复杂场景、Service Worker 的 push 通知）、或者你的团队没有人写 Rust、或者你需要在应用里嵌一个完整的浏览器（比如 Electron 的 <code>webview</code> 标签）。</p>
+    </div>
+
+    <p><strong>现实是：大部分桌面应用属于前者，不是后者。</strong> 但 Electron 的生态惯性让很多人默认「桌面应用 = Electron」。Tauri 的出现，至少给了我们一个「轻量级」的选择。</p>
+
+    <hr>
+
+    <h2>顺便说一句：Weavine 现在能批量导入联系人了</h2>
+    <p>写技术文章归写技术文章，产品更新也得说。</p>
+    <p>v0.2.29 增加了一个很多人等了很久的功能：<strong>联系人批量导入</strong>。</p>
+
+    <h3>支持两种格式</h3>
+    <p><strong>CSV（Excel / Numbers / WPS 导出）</strong>：识别中英文表头（昵称/姓名/公司/职位/邮箱/电话/微信/备注/城市），自动匹配列。支持 <code>,</code> 和 <code>""</code> 引号嵌套，不会因为字段里有逗号就错位。</p>
+    <p><strong>vCard（.vcf / .vcard，苹果通讯录 / 微信导出）</strong>：解析 RFC 6350 标准格式，包括 <code>N</code>（结构化姓名）、<code>FN</code>（显示名）、<code>ORG</code>、<code>TITLE</code>、<code>ADR</code>（提取城市）、<code>EMAIL</code>、<code>TEL</code>（优先手机号）、<code>NOTE</code>、<code>X-WECHAT</code> 等扩展属性。</p>
+
+    <h3>导入流程</h3>
+    <ol>
+      <li>点击联系人列表页的「导入 CSV / vCard」按钮</li>
+      <li>选择文件（支持 UTF-8 BOM，Excel 导出的 CSV 直接可用）</li>
+      <li>自动解析，显示解析到的联系人数量</li>
+      <li>确认后，并发 5 条逐个创建（<code>Promise.allSettled</code>），显示进度条</li>
+      <li>导入完成，显示成功/失败数</li>
+    </ol>
+
+    <h3>数据安全</h3>
+    <p>和 Weavine 的所有功能一样：<strong>导入的数据全程在本地处理</strong>。CSV 文件由浏览器 FileReader 读取，JavaScript 解析，通过 Tauri IPC 传给 Rust 层写入 SQLite。文件不上传、不经过任何服务器、不留临时文件。</p>
+
+    <hr>
+
+    <h2>总结</h2>
+    <p>选择 Tauri 不是因为「Electron 不好」，而是因为 <strong>Weavine 的场景不需要 Electron 的重量</strong>。</p>
+    <p>一个联系人管理工具，核心价值是「数据在你手里，随时能打开，不被打扰」。Tauri 的轻量、快速、原生集成，恰好匹配这个定位。而 Rust 的内存安全保证，让「数据不丢」这件事有了编译时级别的保障。</p>
+    <p>如果你在做下一个桌面应用，不妨先问自己一个问题：</p>
+    <blockquote>
+      <strong>你的应用真的需要一个 Chromium 吗？</strong>
+    </blockquote>
+    <p>如果答案是否定的，Tauri 值得一试。</p>
+
+    <hr>
+
+    <h2>附录：Weavine v0.2.29 技术更新</h2>
+    <p><strong>新增：</strong></p>
+    <ul>
+      <li>联系人批量导入（CSV / vCard），支持中英文表头，自动识别</li>
+      <li>联系人列表排序（最近联系 / 最近添加 / 姓名 A-Z）</li>
+      <li>联系人列表分页（每页 20 条，上限 200）</li>
+      <li>新增 <code>idx_contact_user_created</code> 索引优化排序性能</li>
+    </ul>
+    <p><strong>下载：</strong></p>
+    <ul>
+      <li>GitHub: <a href="https://github.com/iyuanfang/weavine">https://github.com/iyuanfang/weavine</a></li>
+      <li>Web 版: <a href="https://weavine.financialagent.cc/">https://weavine.financialagent.cc/</a></li>
+      <li>桌面版: <a href="https://github.com/iyuanfang/weavine/releases/tag/v0.2.29">https://github.com/iyuanfang/weavine/releases/tag/v0.2.29</a></li>
+    </ul>
+
+    <div class="cta">
+      <h3>现在就开始</h3>
+      <p>开源、免费、数据归你。6.9 MB 拿走。</p>
+      <a href="https://github.com/iyuanfang/weavine">⭐ GitHub 仓库</a>
+      <a href="https://github.com/iyuanfang/weavine/releases/tag/v0.2.29">📦 下载 v0.2.29</a>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>🔗 GitHub: <a href="https://github.com/iyuanfang/weavine">github.com/iyuanfang/weavine</a></p>
+    <p>📦 下载: <a href="https://github.com/iyuanfang/weavine/releases/tag/v0.2.29">v0.2.29 Release</a></p>
+    <p>💬 社区: 微信群 / GitHub Discussions</p>
+    <p style="margin-top: 18px;">如果这篇文章对你有帮助，请点个<strong>在看</strong>、<strong>转发</strong>给身边那个纠结技术选型的朋友。</p>
+    <p style="margin-top: 14px;">你的支持，是开源项目最大的燃料 <span class="heart">🪴</span></p>
+    <p style="margin-top: 24px; opacity: .6; font-size: 12px;">本文基于 Weavine v0.2.29 (2026-07-09)，所有功能以仓库 main 分支为准。</p>
+  </footer>
+</div>
+</body>
+</html>
