@@ -24,11 +24,21 @@ declare global {
  * Call this from the registration success handler so the new contact gets
  * stitched to their anonymous browser (page views / clicks already uploaded).
  */
+const SIGN_UP_FLAG = "mai_signup_emails"; // 已上报过 sign_up 的邮箱集合(JSON 数组)
+
 export function trackSignUp(input: {
   email: string;
   first_name?: string | null;
   plan?: string | null;
 }): void {
+  if (typeof window === 'undefined') return;
+  const flag = `${SIGN_UP_FLAG}:${input.email}`;
+  try {
+    if (localStorage.getItem(flag)) return;
+    localStorage.setItem(flag, String(Date.now()));
+  } catch {
+    /* private mode — fall through */
+  }
   trackIdentify(input);
 }
 
@@ -49,6 +59,12 @@ export function trackIdentify(input: {
   if (input.first_name) props.first_name = input.first_name;
   if (input.last_name) props.last_name = input.last_name;
   queue.push(['identify', props]);
+  // 持久化邮箱:页面刷新后 tracker.js 会自动 re-identify,所有事件继续带 email
+  try {
+    localStorage.setItem('mai_email', input.email);
+  } catch {
+    /* private mode */
+  }
 }
 
 /**
