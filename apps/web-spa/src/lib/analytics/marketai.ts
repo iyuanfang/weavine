@@ -29,13 +29,26 @@ export function trackSignUp(input: {
   first_name?: string | null;
   plan?: string | null;
 }): void {
+  trackIdentify(input);
+}
+
+/**
+ * Bind the current anonymous browser to a known identity. All subsequent
+ * events from the same browser will be attached to this email server-side
+ * (and prior anonymous events get backfilled to the same contact).
+ */
+export function trackIdentify(input: {
+  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}): void {
   if (typeof window === 'undefined') return;
   const queue = window.marketai;
   if (!queue || typeof queue.push !== 'function') return;
   const props: Record<string, unknown> = { email: input.email };
   if (input.first_name) props.first_name = input.first_name;
-  if (input.plan) props.plan = input.plan;
-  queue.push(['event', 'sign_up', props]);
+  if (input.last_name) props.last_name = input.last_name;
+  queue.push(['identify', props]);
 }
 
 /**
