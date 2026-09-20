@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { loadSession, login, register, saveSession } from '../lib/auth/storage';
 import { localUserQueryKey } from '../lib/auth';
+import { trackSignUp } from '../lib/analytics/marketai';
 
 function viteApiBase(): string {
   if (typeof import.meta === 'undefined') return '';
@@ -103,6 +104,11 @@ export function LoginPage() {
         mode === 'login'
           ? await login(trimmedEmail, password, base)
           : await register(trimmedEmail, password, base);
+      // Stream sign_up to MarketAI for analytics. The tracker was loaded by
+      // index.html and is queue-based, so this is safe even on first load.
+      // login() never calls trackSignUp — analytics distinguishes anonymous
+      // visits from new sign-ups on the backend side.
+      if (mode === 'register') trackSignUp({ email: trimmedEmail });
       saveSession(sess);
       queryClient.setQueryData(localUserQueryKey, {
         id: sess.user_id,
