@@ -48,7 +48,7 @@ deploy() {
     echo "═══ 2. build on prod (memory-safe release profile) ═══"
     $SSH "cd $REPO_REMOTE && nohup bash -lc 'CARGO_BUILD_JOBS=2 cargo build --release \
         --config profile.release.lto=false --config profile.release.codegen-units=256 \
-        --manifest-path server/Cargo.toml --features ocr' > /tmp/weavine-build.log 2>&1 &"
+        --manifest-path server/Cargo.toml --features ocr,stt' > /tmp/weavine-build.log 2>&1 &"
     echo "    build started; waiting…"
     while $SSH "pgrep -f 'cargo build' > /dev/null"; do sleep 15; done
     $SSH "grep -E 'Finished|^error' /tmp/weavine-build.log | tail -2"

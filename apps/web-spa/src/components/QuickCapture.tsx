@@ -8,7 +8,7 @@ import { parseQuick } from '../lib/adapter/quick-capture';
 import { PickerEmptyState } from './PickerEmptyState';
 import { QuickCreateContact } from './QuickCreateContact';
 import { SearchablePicker } from './SearchablePicker';
-import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
+import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recognizeWeb, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
 import type { VoiceRecordingHandle } from '../lib/voice';
 import type { ParsedQuick, QuickKind } from '../lib/quick-types';
 
@@ -187,9 +187,26 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
       }
       return;
     }
-    const handle = recognizeSpeech();
-    handleRef.current = handle;
-    handle.promise.then(done).catch(fail).finally(release);
+    // Web PWA: record locally and let our own server transcribe. The
+    // browser SpeechRecognition API routes through Google's servers and
+    // fails with 'network' errors in China, so it is only a fallback.
+    const handle = recordAudio();
+    handleRef.current = handle as VoiceRecordingHandle<Blob | string>;
+    handle.promise
+      .then(async (blob) => {
+        try {
+          return await recognizeWeb(blob);
+        } catch (webErr) {
+          if (!speechRecognitionAvailable()) throw webErr;
+          // Server unreachable / not configured — try the browser engine.
+          console.warn('[voice] server STT failed, falling back to browser recognition', webErr);
+          const browserHandle = recognizeSpeech();
+          return browserHandle.promise;
+        }
+      })
+      .then(done)
+      .catch(fail)
+      .finally(release);
   };
 
   const submit = async () => {

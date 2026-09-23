@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import { isTauri } from './adapter/tauri';
+import { getServerUrl, installHeaders } from './install-id';
 
 interface SpeechRecognitionCtor {
   new (): SpeechRecognitionLike;
@@ -305,6 +306,37 @@ export async function recognizeCloud(audioBlob: Blob): Promise<string> {
   }
   const audioBase64 = await blobToBase64(audioBlob);
   return invoke<string>('recognize_voice', { audio_base64: audioBase64 });
+}
+
+// ── Web STT (browser → weavine-server SenseVoice) ──────────────
+// The web PWA cannot use recognizeCloud (Tauri-only invoke) and the browser
+// SpeechRecognition API routes through Google's servers, which is unusable
+// in China (onerror: 'network' on virtually every attempt). Recording with
+// MediaRecorder and POSTing to our own server works everywhere the product
+// is deployed, and uses the same SenseVoice model as the Tauri cloud path.
+
+export async function recognizeWeb(audioBlob: Blob): Promise<string> {
+  if (audioBlob.size === 0) {
+    throw new Error('录音为空，请重试');
+  }
+  const base = getServerUrl();
+  if (!base) throw new Error('未配置服务器地址，无法使用语音识别');
+  const form = new FormData();
+  form.append('file', audioBlob, 'recording.webm');
+  const headers = installHeaders('web');
+  const res = await fetch(`${base.replace(/\/+$/, '')}/api/voice/recognize`, {
+    method: 'POST',
+    headers, // no Content-Type — the browser sets the multipart boundary
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`语音识别失败（${res.status}）：${body.slice(0, 120) || res.statusText}`);
+  }
+  const data = (await res.json()) as { text?: string };
+  const text = (data.text ?? '').trim();
+  if (!text) throw new Error('未识别到语音');
+  return text;
 }
 
 // ── Local on-device STT (Android only, sherpa-onnx SenseVoice) ──

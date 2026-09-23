@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
+import { beginVoice, checkVoiceModel, endVoice, isAndroidTauri, recognizeCloud, recognizeLocal, recognizeSpeech, recognizeWeb, recordAudio, speechRecognitionAvailable, voiceMode } from '../lib/voice';
 import type { VoiceRecordingHandle } from '../lib/voice';
 
 interface Props {
@@ -64,15 +64,27 @@ export function QuickFab({ onOpen }: Props) {
         });
       return;
     }
-    if (!speechRecognitionAvailable()) {
+    // Web PWA: record + POST to our server (browser SpeechRecognition
+    // routes through Google and fails in China); browser engine is the
+    // fallback when the server is unreachable.
+    if (!beginVoice()) {
       setBusy(false);
-      onOpen('');
       return;
     }
     setListening(true);
-    const handle = recognizeSpeech();
-    handleRef.current = handle;
+    const handle = recordAudio();
+    handleRef.current = handle as VoiceRecordingHandle<Blob | string>;
     handle.promise
+      .then(async (blob) => {
+        if (blob.size === 0) throw new Error('录音为空，请重试');
+        try {
+          return await recognizeWeb(blob);
+        } catch (webErr) {
+          if (!speechRecognitionAvailable()) throw webErr;
+          console.warn('[voice] server STT failed, falling back to browser recognition', webErr);
+          return recognizeSpeech().promise;
+        }
+      })
       .then((transcript) => {
         onOpen(transcript);
       })
