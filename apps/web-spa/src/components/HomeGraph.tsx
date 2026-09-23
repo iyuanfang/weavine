@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { TYPE_META } from './EntityGraph';
+import { nextReminderIn } from '../lib/keepInTouch';
 import type { Action, Contact, Event, Project } from '../lib/adapter/types';
 
 // Home-page "me-centered" relationship graph. Unlike EntityGraph (which is
@@ -46,6 +47,47 @@ function polar(r: number, angle: number): { x: number; y: number } {
   return { x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) };
 }
 
+const IMPORTANCE_WEIGHT: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+/**
+ * Who earns a spot on the inner ring when there are more contacts than
+ * slots? The weave answers "who should I see right now":
+ *   0. keep-in-touch already overdue  — they need action today
+ *   1. interacted within 7 days       — active threads
+ *   2. interacted within 30 days
+ *   3. high importance, however stale — matters even if quiet
+ *   4. everything else, most recent first
+ * Ties break by importance, then recency.
+ */
+function sortContactsForHome(contacts: Contact[]): Contact[] {
+  const now = new Date();
+  const daysSince = (iso: string | null | undefined): number | null =>
+    iso ? Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000) : null;
+
+  return [...contacts].sort((a, b) => {
+    const score = (c: Contact): number => {
+      const r = nextReminderIn(c.last_interaction_at, c.importance, c.keep_in_touch_cadence_days, now);
+      if (r.hasCadence && r.days !== null && r.days <= 0) return 0;
+      const d = daysSince(c.last_interaction_at);
+      if (d !== null && d < 7) return 1;
+      if (d !== null && d < 30) return 2;
+      if (c.importance === 'high') return 3;
+      return 4;
+    };
+    const sa = score(a);
+    const sb = score(b);
+    if (sa !== sb) return sa - sb;
+    const wa = IMPORTANCE_WEIGHT[a.importance] ?? 2;
+    const wb = IMPORTANCE_WEIGHT[b.importance] ?? 2;
+    if (wa !== wb) return wa - wb;
+    const da = daysSince(a.last_interaction_at);
+    const db = daysSince(b.last_interaction_at);
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  });
+}
+
 interface Props {
   contacts: Contact[];
   events: Event[];
@@ -59,7 +101,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const nodes = useMemo(() => {
-    const pickedContacts = contacts.slice(0, MAX_CONTACTS);
+    const pickedContacts = sortContactsForHome(contacts).slice(0, MAX_CONTACTS);
     const contactIds = new Set(pickedContacts.map((c) => c.id));
 
     const openActions = actions.filter((a) => a.status !== 'done');
@@ -126,23 +168,46 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   }, [contacts, events, actions, projects]);
 
   const hasContent = nodes.contactNodes.length > 0 || nodes.satelliteNodes.length > 0;
+  const hiddenContacts = Math.max(0, contacts.length - MAX_CONTACTS);
 
   return (
     <div className="card" style={{ position: 'relative', padding: 0, overflow: 'hidden' }}>
+      {hiddenContacts > 0 && (
+        <div
+          data-testid="home-graph-overflow"
+          style={{
+            padding: '5px 12px',
+            background: '#f0f9ff',
+            borderBottom: '1px solid #bae6fd',
+            color: '#075985',
+            fontSize: 12,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>还有 {hiddenContacts} 位联系人未上图（按最近互动与重要程度优先展示）</span>
+          <a
+            href="/contacts"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('/contacts');
+            }}
+            style={{ color: 'inherit', fontWeight: 600 }}
+          >
+            查看全部 →
+          </a>
+        </div>
+      )}
       <div
         style={{
-          position: 'absolute',
-          top: 10,
-          right: 14,
-          zIndex: 20,
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          justifyContent: 'space-between',
+          padding: '10px 14px 0',
         }}
       >
-        <h2 className="section__title" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
-          🕸️ 我的人脉网
-        </h2>
+        <h2 className="section__title" style={{ margin: 0 }}>🕸️ 我的人脉网</h2>
         <div style={{ position: 'relative' }}>
           <button
             type="button"
