@@ -152,7 +152,6 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const adapter = useAdapter();
   const queryClient = useQueryClient();
   const quickCapture = useQuickCapture();
-  const [addOpen, setAddOpen] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
   const [meCreateKind, setMeCreateKind] = useState<'contact' | 'action' | 'interaction' | 'event' | null>(null);
@@ -309,56 +308,11 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
           <button
             type="button"
             className="section__view-all"
-            onClick={() => setAddOpen((o) => !o)}
+            data-testid="home-graph-add"
+            onClick={() => setMeCreateOpen(true)}
           >
             ＋ 添加
           </button>
-          {addOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: '100%',
-                marginTop: 6,
-                zIndex: 30,
-                background: 'var(--bg-elevated, #fff)',
-                border: '1px solid var(--border, #e5e7eb)',
-                borderRadius: 10,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                padding: 6,
-                display: 'flex',
-                flexDirection: 'column',
-                minWidth: 128,
-              }}
-            >
-              {[
-                { label: '👤 联系人', href: '/contacts/new' },
-                { label: '📅 日程', href: '/events/new' },
-                { label: '✅ 待办', href: '/actions/new' },
-                { label: '📁 项目', href: '/projects/new' },
-              ].map((item) => (
-                <button
-                  key={item.href}
-                  type="button"
-                  onClick={() => {
-                    setAddOpen(false);
-                    navigate(item.href);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    textAlign: 'left',
-                    padding: '7px 10px',
-                    borderRadius: 7,
-                    cursor: 'pointer',
-                    fontSize: 'var(--text-sm)',
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
