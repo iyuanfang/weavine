@@ -95,9 +95,11 @@ export function GraphView() {
     emit('graph_node_click', {
       entity_type: n.entity_type,
       center_type: centerType,
-      action: 'detail',
+      action: 'graph',
     });
-    navigate(detailHref(n.entity_type, n.id));
+    // Node clicks always drill into that node's graph — the whole graph
+    // surface is one navigable weave (detail pages stay one breadcrumb away).
+    navigate(`/graph/${n.entity_type}/${n.id}`);
   };
 
   const jumpTo = (c: Crumb, idx: number) => {
