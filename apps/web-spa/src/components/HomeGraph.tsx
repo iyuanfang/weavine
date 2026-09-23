@@ -22,8 +22,10 @@ interface Satellite {
   id: string;
   kind: 'event' | 'action' | 'project';
   label: string;
-  /** Contacts this satellite is tied to (event participant / action owner / project members). */
+  /** Contacts this satellite is tied to (event participant / action owner / project members, capped). */
   linkedContactIds: string[];
+  /** Members beyond the edge cap (projects only) — shown as a +N badge. */
+  extraContacts?: number;
   href: string;
 }
 
@@ -189,7 +191,8 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         id: `project:${p.id}`,
         kind: 'project',
         label: p.title,
-        linkedContactIds: members,
+        linkedContactIds: members.slice(0, 3),
+        extraContacts: Math.max(0, members.length - 3),
         href: `/graph/project/${p.id}`,
       });
     }
@@ -428,6 +431,20 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 >
                   {truncate(sn.s.label, isHovered ? 18 : 14)}
                 </text>
+                {!isHovered && !!sn.s.extraContacts && (
+                  <text
+                    x={sn.x}
+                    y={isHovered ? sn.y + NODE_R + 32 : sn.y + NODE_R + 26}
+                    fontSize={10}
+                    fontWeight={600}
+                    fill={meta.color}
+                    textAnchor="middle"
+                    pointerEvents="none"
+                    style={{ paintOrder: 'stroke', stroke: '#fafbff', strokeWidth: 3 }}
+                  >
+                    +{sn.s.extraContacts} 人
+                  </text>
+                )}
               </g>
             );
           })}
