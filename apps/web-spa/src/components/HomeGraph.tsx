@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
+import { useQuickCapture } from '../App';
+import { QuickCreateContact } from './QuickCreateContact';
 import { TYPE_META } from './EntityGraph';
 import { nextReminderIn } from '../lib/keepInTouch';
 import type { Action, Contact, Event, Project } from '../lib/adapter/types';
@@ -43,6 +45,19 @@ const CENTER_R = 44;
 const NODE_R = 28;
 
 const ME_COLOR = '#1e293b';
+
+const meKindBtnStyle: React.CSSProperties = {
+  padding: 14,
+  border: '1px solid #e2e8f0',
+  borderRadius: 8,
+  background: '#fff',
+  cursor: 'pointer',
+  textAlign: 'left',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  fontSize: 14,
+};
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
@@ -132,8 +147,12 @@ interface Props {
 export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const navigate = useNavigate();
   const adapter = useAdapter();
+  const queryClient = useQueryClient();
+  const quickCapture = useQuickCapture();
   const [addOpen, setAddOpen] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const [meCreateOpen, setMeCreateOpen] = useState(false);
+  const [meCreateKind, setMeCreateKind] = useState<'contact' | null>(null);
 
   const activeProjects = useMemo(
     () => projects.filter((p) => !p.completed_at).slice(0, 5),
@@ -337,6 +356,115 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         </div>
       </div>
 
+      {meCreateOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="home-me-create"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={() => setMeCreateOpen(false)}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              padding: 20,
+              maxWidth: 480,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.04)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>在人脉网中新建</h3>
+              <button
+                type="button"
+                onClick={() => setMeCreateOpen(false)}
+                className="btn btn-ghost"
+                style={{ padding: '2px 10px' }}
+                aria-label="关闭"
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button
+                type="button"
+                data-testid="home-me-create-contact"
+                onClick={() => setMeCreateKind('contact')}
+                style={meKindBtnStyle}
+              >
+                <span style={{ fontSize: 20 }}>👤</span>
+                <span>
+                  <strong>联系人</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>就地创建，上图成为节点</div>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="home-me-create-capture"
+                onClick={() => {
+                  setMeCreateOpen(false);
+                  quickCapture.open();
+                }}
+                style={meKindBtnStyle}
+              >
+                <span style={{ fontSize: 20 }}>💬</span>
+                <span>
+                  <strong>说一句话</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>语音/文字生成互动·日程·待办</div>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="home-me-create-event"
+                onClick={() => navigate('/events/new')}
+                style={meKindBtnStyle}
+              >
+                <span style={{ fontSize: 20 }}>📅</span>
+                <span>
+                  <strong>日程</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>结构化表单</div>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="home-me-create-project"
+                onClick={() => navigate('/projects/new')}
+                style={meKindBtnStyle}
+              >
+                <span style={{ fontSize: 20 }}>📁</span>
+                <span>
+                  <strong>项目</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>结构化表单</div>
+                </span>
+              </button>
+            </div>
+            {meCreateKind === 'contact' && (
+              <div style={{ marginTop: 12, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                <QuickCreateContact
+                  defaultOpen
+                  onCreated={() => {
+                    queryClient.invalidateQueries({ queryKey: ['contacts'] });
+                    setMeCreateKind(null);
+                    setMeCreateOpen(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {hasContent ? (
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -500,12 +628,41 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
             );
           })}
 
-          {/* 我 at the center — mirrors EntityGraph's center node */}
+          {/* 我 at the center — mirrors EntityGraph's center node, with its + badge */}
           <g data-testid="home-graph-center">
             <circle cx={CX} cy={CY} r={CENTER_R} fill={ME_COLOR} stroke={ME_COLOR} strokeWidth={2} />
             <text x={CX} y={CY + 5} fontSize="16" fontWeight={700} fill="#fff" textAnchor="middle">
               我
             </text>
+            <g
+              data-testid="home-graph-center-quick-create"
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMeCreateOpen(true);
+              }}
+            >
+              <title>新建联系人 / 日程 / 待办…</title>
+              <circle
+                cx={CX + CENTER_R - 4}
+                cy={CY - CENTER_R + 4}
+                r={13}
+                fill="#fff"
+                stroke={ME_COLOR}
+                strokeWidth={2}
+              />
+              <text
+                x={CX + CENTER_R - 4}
+                y={CY - CENTER_R + 9}
+                fontSize="18"
+                fontWeight={700}
+                fill={ME_COLOR}
+                textAnchor="middle"
+                pointerEvents="none"
+              >
+                +
+              </text>
+            </g>
           </g>
         </svg>
       ) : (
