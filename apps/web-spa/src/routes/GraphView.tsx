@@ -131,26 +131,36 @@ export function GraphView() {
         }
       />
 
-      {history.length > 1 && (
-        <nav
-          className="card"
-          style={{ padding: '8px 12px', marginBottom: 12 }}
-          data-testid="graph-breadcrumb"
+      <nav
+        className="card"
+        style={{ padding: '8px 12px', marginBottom: 12 }}
+        data-testid="graph-breadcrumb"
+      >
+        <span style={{ marginRight: 8, color: '#64748b', fontSize: 13 }}>路径:</span>
+        <button
+          type="button"
+          onClick={() => navigate('/today')}
+          className="btn-link"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
+          data-testid="graph-breadcrumb-home"
         >
-          <span style={{ marginRight: 8, color: '#64748b', fontSize: 13 }}>路径:</span>
-          {history.map((c, i) => (
-            <span key={`${c.type}:${c.id}:${i}`}>
-              <button
-                type="button"
-                onClick={() => jumpTo(c, i)}
-                className="btn-link"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
-              >
-                {TYPE_META[c.type].icon} {c.label}
-              </button>
-              {i < history.length - 1 && <span style={{ color: '#94a3b8' }}> › </span>}
-            </span>
-          ))}
+          🏠 我的人脉网
+        </button>
+        {history.length > 0 && <span style={{ color: '#94a3b8' }}> › </span>}
+        {history.map((c, i) => (
+          <span key={`${c.type}:${c.id}:${i}`}>
+            <button
+              type="button"
+              onClick={() => jumpTo(c, i)}
+              className="btn-link"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
+            >
+              {TYPE_META[c.type].icon} {c.label}
+            </button>
+            {i < history.length - 1 && <span style={{ color: '#94a3b8' }}> › </span>}
+          </span>
+        ))}
+        {history.length > 1 && (
           <button
             type="button"
             onClick={clearHistory}
@@ -165,8 +175,8 @@ export function GraphView() {
           >
             清空
           </button>
-        </nav>
-      )}
+        )}
+      </nav>
 
       <EntityGraph
         centerType={centerType}
