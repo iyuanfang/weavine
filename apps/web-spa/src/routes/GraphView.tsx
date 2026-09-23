@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { PageHeader } from '../components/PageHeader';
-import { EntityGraph, TYPE_META } from '../components/EntityGraph';
+import { TYPE_META } from '../components/EntityGraph';
+import { GraphTab } from '../components/GraphTab';
+import { ALL_CREATABLE_KINDS } from '../components/GraphQuickCreateModal';
 import { useAdapter } from '../lib/adapter';
 import { emit } from '../lib/telemetry';
-import type { EntityGraphNode, EntityGraphNodeType } from '../lib/adapter/types';
+import type { EntityGraphNodeType } from '../lib/adapter/types';
 
 const SUPPORTED_CENTERS: EntityGraphNodeType[] = [
   'contact',
@@ -91,17 +93,6 @@ export function GraphView() {
 
   const center = graphQuery.data?.nodes.find((n) => n.is_center);
 
-  const onNeighborOpen = (n: EntityGraphNode) => {
-    emit('graph_node_click', {
-      entity_type: n.entity_type,
-      center_type: centerType,
-      action: 'graph',
-    });
-    // Node clicks always drill into that node's graph — the whole graph
-    // surface is one navigable weave (detail pages stay one breadcrumb away).
-    navigate(`/graph/${n.entity_type}/${n.id}`);
-  };
-
   const jumpTo = (c: Crumb, idx: number) => {
     const next = history.slice(0, idx + 1);
     setHistory(next);
@@ -180,10 +171,12 @@ export function GraphView() {
         )}
       </nav>
 
-      <EntityGraph
-        centerType={centerType}
-        centerId={params.entityId}
-        onNeighborOpen={onNeighborOpen}
+      {/* Same graph-tab surface as detail pages: type filters, quick create,
+          hover-unlink and node menu — one experience everywhere. */}
+      <GraphTab
+        center={{ type: centerType, id: params.entityId }}
+        creatable={ALL_CREATABLE_KINDS}
+        bare
       />
 
       <div className="card" style={{ padding: 12, marginTop: 12, fontSize: 12, color: '#64748b' }}>

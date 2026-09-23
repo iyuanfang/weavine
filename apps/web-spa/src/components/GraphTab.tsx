@@ -48,7 +48,8 @@ export function GraphTab({
   const graphQuery = useQuery({
     queryKey: ['entity-graph', center.type, center.id],
     queryFn: () => adapter.graph.get(center.type, center.id),
-    enabled: tabHovered || activeTab === 'graph',
+    // bare mode (GraphView route) renders only the graph — always fetch.
+    enabled: bare || tabHovered || activeTab === 'graph',
   });
   const availableTypes = useMemo<ReadonlySet<EntityGraphNodeType>>(() => {
     const set = new Set<EntityGraphNodeType>();
@@ -241,7 +242,7 @@ const onNeighborOpen = useCallback(
         </div>
       )}
 
-      {activeTab === 'graph' && (
+      {(bare || activeTab === 'graph') && (
         <section className="section" style={{ marginTop: 0 }}>
           <div
             style={{
