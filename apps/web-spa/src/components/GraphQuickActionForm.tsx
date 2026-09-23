@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { ACTION_PRESETS } from './categoryPresets';
+import { ContactMultiPicker } from './ContactMultiPicker';
 import { useGraphInvalidation, type GraphCenter } from './GraphQuickCreateModal';
 
 export interface GraphQuickActionFormProps {
@@ -28,6 +29,9 @@ export function GraphQuickActionForm({
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState(2);
   const [category, setCategory] = useState<string>(ACTION_PRESETS[0]?.value ?? '其他');
+  // Standalone creation (center is not a contact/project): optionally pick
+  // the contact this todo is a commitment to (multi-picker, first wins).
+  const [contactIds, setContactIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
@@ -39,7 +43,7 @@ export function GraphQuickActionForm({
         priority,
         category,
         status: 'open',
-        contact_id: center.type === 'contact' ? center.id : null,
+        contact_id: center.type === 'contact' ? center.id : contactIds[0] ?? null,
         project_id: center.type === 'project' ? center.id : null,
       });
       return action;
@@ -95,6 +99,11 @@ export function GraphQuickActionForm({
           ))}
         </select>
       </Field>
+      {center.type !== 'contact' && center.type !== 'project' && (
+        <Field label="关联联系人（可选，第一位生效）">
+          <ContactMultiPicker selectedIds={contactIds} onChange={setContactIds} />
+        </Field>
+      )}
       {(center.type === 'contact' || center.type === 'project') && (
         <div style={{ fontSize: 12, color: '#64748b' }}>
           将自动关联到当前{center.type === 'contact' ? '联系人' : '项目'}

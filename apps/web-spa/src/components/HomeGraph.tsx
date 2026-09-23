@@ -6,6 +6,7 @@ import { useAdapter } from '../lib/adapter';
 import { useQuickCapture } from '../App';
 import { QuickCreateContact } from './QuickCreateContact';
 import { GraphQuickActionForm } from './GraphQuickActionForm';
+import { GraphQuickEventForm } from './GraphQuickEventForm';
 import { GraphQuickInteractionForm } from './GraphQuickInteractionForm';
 import { TYPE_META } from './EntityGraph';
 import { nextReminderIn } from '../lib/keepInTouch';
@@ -154,7 +155,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
-  const [meCreateKind, setMeCreateKind] = useState<'contact' | 'action' | 'interaction' | null>(null);
+  const [meCreateKind, setMeCreateKind] = useState<'contact' | 'action' | 'interaction' | 'event' | null>(null);
   // Neutral center for the inline forms: they only link to the center when
   // it is a contact/project, so an interaction-type center means "standalone".
   const neutralCenter = { type: 'interaction' as const, id: '' };
@@ -432,13 +433,13 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
               <button
                 type="button"
                 data-testid="home-me-create-event"
-                onClick={() => navigate('/events/new')}
+                onClick={() => setMeCreateKind('event')}
                 style={meKindBtnStyle}
               >
                 <span style={{ fontSize: 20 }}>📅</span>
                 <span>
                   <strong>日程</strong>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>结构化表单</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>选参与者，就地创建</div>
                 </span>
               </button>
               <button
@@ -465,18 +466,6 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                   <div style={{ fontSize: 11, color: '#64748b' }}>选择见面的人，记录这次遇见</div>
                 </span>
               </button>
-              <button
-                type="button"
-                data-testid="home-me-create-project"
-                onClick={() => navigate('/projects/new')}
-                style={meKindBtnStyle}
-              >
-                <span style={{ fontSize: 20 }}>📁</span>
-                <span>
-                  <strong>项目</strong>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>结构化表单</div>
-                </span>
-              </button>
             </div>
             {meCreateKind === 'contact' && (
               <div style={{ marginTop: 12, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
@@ -487,6 +476,22 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                     setMeCreateKind(null);
                     setMeCreateOpen(false);
                   }}
+                />
+              </div>
+            )}
+            {meCreateKind === 'event' && (
+              <div style={{ marginTop: 12, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                <GraphQuickEventForm
+                  center={neutralCenter}
+                  submitLabel="创建日程"
+                  onClose={() => setMeCreateKind(null)}
+                  onCreated={() => {
+                    queryClient.invalidateQueries({ queryKey: ['events'] });
+                    queryClient.invalidateQueries({ queryKey: ['contacts'] });
+                    setMeCreateKind(null);
+                    setMeCreateOpen(false);
+                  }}
+                  onCancel={() => setMeCreateKind(null)}
                 />
               </div>
             )}
