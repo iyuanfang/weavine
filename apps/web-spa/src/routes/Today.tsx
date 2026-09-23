@@ -1,13 +1,15 @@
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { ContactBadge } from '../components/ContactBadge';
+import { HomeGraph } from '../components/HomeGraph';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
-import { NoteListItem } from '../components/NoteListItem';
-import { ProjectBadge } from '../components/ProjectBadge';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
+import { useQuickCapture } from '../App';
 import { useUserId } from '../lib/auth';
+import { seedDemoDataIfEmpty } from '../lib/seed-demo';
 import { nextReminderIn } from '../lib/keepInTouch';
 import type { Action, Event, Interaction, UpdateActionInput } from '../lib/adapter/types';
 
@@ -66,11 +68,21 @@ export function TodayPage() {
   const adapter = useAdapter();
   const userId = useUserId();
   const queryClient = useQueryClient();
+  const quickCapture = useQuickCapture();
+  const seedRanRef = useRef(false);
 
-  // Fetch the three feeds in parallel. We over-fetch slightly
-  // (200 actions, 10 events, 20 interactions) and then filter
-  // down to the "today" window client-side, because the Rust
-  // list commands don't expose a due_at range filter.
+  // First-run demo data. Runs before the feeds below; if it seeds anything
+  // the queries are invalidated so the graph/stream show it immediately.
+  useEffect(() => {
+    if (!userId || seedRanRef.current) return;
+    seedRanRef.current = true;
+    seedDemoDataIfEmpty(adapter, userId)
+      .then((seeded) => {
+        if (seeded) queryClient.invalidateQueries();
+      })
+      .catch(() => {});
+  }, [adapter, userId, queryClient]);
+
   const actionsQuery = useQuery({
     queryKey: ['actions', userId, 'all-for-today'],
     queryFn: () =>
@@ -117,12 +129,6 @@ export function TodayPage() {
         sort_by: 'last_interaction_at',
         limit: 200,
       }),
-    enabled: Boolean(userId),
-  });
-
-  const notesQuery = useQuery({
-    queryKey: ['notes', userId, 'recent-for-today'],
-    queryFn: () => adapter.notes.list(userId!).then((r) => r.items.slice(0, 5)),
     enabled: Boolean(userId),
   });
 
@@ -193,18 +199,11 @@ export function TodayPage() {
     eventsQuery.isLoading ||
     interactionsQuery.isLoading;
 
-  const overdueCount = todayDoActions.filter(
-    (a) => a.status !== 'done' && new Date(a.due_at!) < now,
-  ).length;
-
-  const activeProjects = (projectsQuery.data ?? []).filter(
-    (p) => !p.completed_at,
-  );
-  const activeProjectCount = activeProjects.length;
+  const contacts = contactsQuery.data?.items ?? [];
 
   // Contacts to reach out to: already overdue (any amount) or due within 7 days,
   // sorted by most overdue first. Top 5.
-  const suggestedContacts = (contactsQuery.data?.items ?? [])
+  const suggestedContacts = contacts
     .map((c) => ({ c, r: nextReminderIn(c.last_interaction_at, c.importance, c.keep_in_touch_cadence_days, now) }))
     .filter(({ r }) => r.hasCadence && r.days !== null && r.days <= 7)
     .sort((a, b) => (a.r.days ?? 0) - (b.r.days ?? 0))
@@ -215,7 +214,7 @@ export function TodayPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">今天</h1>
+          <h1 className="page-title">织遇</h1>
           <p className="page-subtitle">
             {now.toLocaleDateString('zh-CN', {
               year: 'numeric',
@@ -223,137 +222,57 @@ export function TodayPage() {
               day: 'numeric',
               weekday: 'long',
             })}
+            · 编织你遇见的每一个人
           </p>
         </div>
       </div>
 
-      <div
-        className="kpi-row"
+      {/* Capture bar — the primary action of the whole product. */}
+      <button
+        type="button"
+        onClick={() => quickCapture.open()}
+        className="card"
+        data-testid="home-capture-bar"
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 16,
-          marginBottom: 32,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '14px 18px',
+          marginBottom: 20,
+          cursor: 'text',
+          textAlign: 'left',
+          color: 'var(--muted)',
         }}
       >
-        <Link
-          to="/actions?from=/today"
-          className="card card--accent"
-          style={{
-            padding: '20px 22px',
-            textDecoration: 'none',
-            color: 'inherit',
-            display: 'block',
-          }}
+        <span style={{ fontSize: 'var(--text-lg)' }}>🎤</span>
+        <span style={{ flex: 1, fontSize: 'var(--text-base)' }}>
+          今天见了谁？说一句话，或点这里打字…
+        </span>
+        <span
+          className="text-xs text-muted"
+          style={{ flexShrink: 0, border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 'var(--text-md)' }}>🎯</span>
-            <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-              待办
-            </div>
-          </div>
-          <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
-            {todayDoActions.length}
-          </div>
-          {overdueCount > 0 ? (
-            <div className="text-xs" style={{ color: 'var(--danger)', marginTop: 4, fontWeight: 500 }}>
-              {overdueCount} 已过期
-            </div>
-          ) : (
-            <div className="text-xs text-muted" style={{ marginTop: 4 }}>
-              全部按时
-            </div>
-          )}
-        </Link>
-        <Link
-          to="/calendar?from=/today"
-          className="card"
-          style={{
-            padding: '20px 22px',
-            textDecoration: 'none',
-            color: 'inherit',
-            display: 'block',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 'var(--text-md)' }}>📅</span>
-            <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-              日程
-            </div>
-          </div>
-          <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
-            {upcomingEvents.length}
-          </div>
-          <div className="text-xs text-muted" style={{ marginTop: 4 }}>
-            接下来 3 天
-          </div>
-        </Link>
-        <Link
-          to="/projects?from=/today"
-          className="card"
-          style={{
-            padding: '20px 22px',
-            textDecoration: 'none',
-            color: 'inherit',
-            display: 'block',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 'var(--text-md)' }}>📁</span>
-            <div className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: 0.5 }}>
-              项目
-            </div>
-          </div>
-          <div style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, marginTop: 8, lineHeight: 1.1 }}>
-            {activeProjectCount}
-          </div>
-          <div className="text-xs text-muted" style={{ marginTop: 4 }}>
-            进行中
-          </div>
-        </Link>
-      </div>
+          \
+        </span>
+      </button>
+
+      {/* Me-centered relationship graph — the product's soul, front and center. */}
+      {contactsQuery.isLoading ? (
+        <div className="loading">加载中</div>
+      ) : (
+        <div style={{ marginBottom: 28 }}>
+          <HomeGraph
+            contacts={contacts}
+            events={eventsQuery.data ?? []}
+            actions={actionsQuery.data ?? []}
+            projects={projectsQuery.data ?? []}
+          />
+        </div>
+      )}
 
       <section className="section">
-        <SectionHeader title="🎯 今日待办" viewAllHref="/actions" />
-        {isLoading ? (
-          <Skeleton />
-        ) : todayDoActions.length > 0 ? (
-          todayDoActions.map((a) => (
-            <ActionCard
-              key={a.id}
-              action={a}
-              now={now}
-              onToggleDone={(status) =>
-                toggleDoneMutation.mutate({ id: a.id, status })
-              }
-            />
-          ))
-        ) : (
-          <div className="empty-state">
-            <h3 className="empty-state__title">🎉 今天没有到期的事</h3>
-            <p className="empty-state__hint">享受一段没有 deadline 的时光</p>
-          </div>
-        )}
-      </section>
-
-      <section className="section">
-        <SectionHeader title="近期日程" viewAllHref="/calendar" />
-        {isLoading ? (
-          <Skeleton />
-        ) : upcomingEvents.length > 0 ? (
-          upcomingEvents.map((e) => (
-            <EventCard key={e.id} event={e} baseDay={baseDay} />
-          ))
-        ) : (
-          <div className="empty-state">
-            <h3 className="empty-state__title">最近没有日程</h3>
-            <p className="empty-state__hint">去日程页加一个吧</p>
-          </div>
-        )}
-      </section>
-
-      <section className="section">
-        <SectionHeader title="📞 建议联系" viewAllHref="/contacts" />
+        <SectionHeader title="📞 该联系的人" viewAllHref="/contacts" />
         {contactsQuery.isLoading ? (
           <div className="loading">加载中</div>
         ) : suggestedContacts.length === 0 ? (
@@ -386,43 +305,56 @@ export function TodayPage() {
       </section>
 
       <section className="section">
-        <SectionHeader title="📝 近期互动" viewAllHref="/contacts" />
+        <SectionHeader title="💬 最近遇见" viewAllHref="/contacts" />
         {isLoading ? (
-          <Skeleton />
+          <div className="loading">加载中</div>
         ) : recentInteractions.length > 0 ? (
           recentInteractions.map((i) => (
             <InteractionRow key={i.id} interaction={i} />
           ))
         ) : (
           <div className="empty-state">
-            <h3 className="empty-state__title">最近 7 天没有互动</h3>
-            <p className="empty-state__hint">找个人打个招呼，记录一条互动</p>
+            <h3 className="empty-state__title">最近 7 天没有遇见</h3>
+            <p className="empty-state__hint">点上面的输入条，说一句「今天和张三喝了咖啡」试试</p>
           </div>
         )}
       </section>
 
       <section className="section">
-        <SectionHeader title="🗒️ 最近笔记" viewAllHref="/notes" />
-        {notesQuery.isLoading ? (
-          <Skeleton />
-        ) : (notesQuery.data ?? []).length > 0 ? (
-          <div className="card" style={{ padding: '4px 14px' }}>
-            {(notesQuery.data ?? []).map((n) => (
-              <NoteListItem
-                key={n.id}
-                id={n.id}
-                title={n.title}
-                body={n.body}
-                updatedAt={n.updated_at}
-                from="/today"
-                variant="row"
-              />
-            ))}
-          </div>
+        <SectionHeader title="🎯 今日待办" viewAllHref="/actions" />
+        {isLoading ? (
+          <div className="loading">加载中</div>
+        ) : todayDoActions.length > 0 ? (
+          todayDoActions.map((a) => (
+            <ActionCard
+              key={a.id}
+              action={a}
+              now={now}
+              onToggleDone={(status) =>
+                toggleDoneMutation.mutate({ id: a.id, status })
+              }
+            />
+          ))
         ) : (
           <div className="empty-state">
-            <h3 className="empty-state__title">还没有笔记</h3>
-            <p className="empty-state__hint">在联系人/项目里点「+ 笔记」或 Cmd/Ctrl+K 快速记录</p>
+            <h3 className="empty-state__title">🎉 今天没有到期的事</h3>
+            <p className="empty-state__hint">享受一段没有 deadline 的时光</p>
+          </div>
+        )}
+      </section>
+
+      <section className="section">
+        <SectionHeader title="近期日程" viewAllHref="/calendar" />
+        {isLoading ? (
+          <div className="loading">加载中</div>
+        ) : upcomingEvents.length > 0 ? (
+          upcomingEvents.map((e) => (
+            <EventCard key={e.id} event={e} baseDay={baseDay} />
+          ))
+        ) : (
+          <div className="empty-state">
+            <h3 className="empty-state__title">最近没有日程</h3>
+            <p className="empty-state__hint">去日程页加一个吧</p>
           </div>
         )}
       </section>
@@ -445,10 +377,6 @@ function SectionHeader({
       </Link>
     </div>
   );
-}
-
-function Skeleton() {
-  return <div className="loading">加载中</div>;
 }
 
 function ActionCard({
@@ -533,9 +461,6 @@ function ActionCard({
               overflow: 'hidden',
             }}
           >
-            {action.project_title && (
-              <ProjectBadge project={action.project_title} compact />
-            )}
             {action.contact_nickname && (
               <ContactBadge contact={action.contact_nickname} compact />
             )}
@@ -572,7 +497,7 @@ function EventCard({
     >
       <span className="row-card__icon" style={{ fontSize: 'var(--text-lg)' }}>📅</span>
       <span className="row-card__title">{event.title}</span>
-      {(event.location || event.contact_nickname || event.project_title) && (
+      {(event.location || event.contact_nickname) && (
         <span
           className="row-card__badges"
           style={{
@@ -584,9 +509,6 @@ function EventCard({
             alignItems: 'center',
           }}
         >
-          {event.project_title && (
-            <ProjectBadge project={event.project_title} compact />
-          )}
           {event.contact_nickname && (
             <ContactBadge contact={event.contact_nickname} compact />
           )}
