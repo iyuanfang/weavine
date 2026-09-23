@@ -79,8 +79,19 @@ export function ContactMultiPicker({ selectedIds, onChange }: Props) {
             </button>
           </div>
           <div className="tag-picker__chips">
-            {selectedContacts.map((c) => (
-              <span key={c.id} className="tag-picker__chip" style={{ background: '#eef2ff', color: '#3730a3', borderColor: '#c7d2fe' }}>
+            {selectedContacts.map((c, i) => (
+              <span
+                key={c.id}
+                className="tag-picker__chip"
+                style={
+                  i === 0
+                    ? { background: 'var(--accent, #2563eb)', color: '#fff', borderColor: 'var(--accent, #2563eb)' }
+                    : { background: '#eef2ff', color: '#3730a3', borderColor: '#c7d2fe' }
+                }
+              >
+                {i === 0 && (
+                  <strong style={{ marginRight: 2, fontSize: '0.85em', fontWeight: 700 }}>主</strong>
+                )}
                 {labelOf(c)}
                 <button
                   type="button"
@@ -92,6 +103,11 @@ export function ContactMultiPicker({ selectedIds, onChange }: Props) {
               </span>
             ))}
           </div>
+          {selectedContacts.length > 1 && (
+            <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+              第一位是主联系人（用于提醒与统计），移除后自动顺延
+            </div>
+          )}
         </div>
       ) : (
         <div className="tag-picker__empty">尚未选择参与者</div>
