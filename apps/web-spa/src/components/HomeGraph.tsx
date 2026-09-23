@@ -52,39 +52,68 @@ const IMPORTANCE_WEIGHT: Record<string, number> = { high: 0, medium: 1, low: 2 }
 /**
  * Who earns a spot on the inner ring when there are more contacts than
  * slots? The weave answers "who should I see right now":
- *   0. keep-in-touch already overdue  — they need action today
- *   1. interacted within 7 days       — active threads
- *   2. interacted within 30 days
- *   3. high importance, however stale — matters even if quiet
- *   4. everything else, most recent first
- * Ties break by importance, then recency.
+ *   0. keep-in-touch already overdue            — they need action today
+ *   1. imminent commitment (≤7d): upcoming
+ *      event or open action due with them       — a meeting is coming
+ *   2. interacted within 7 days                 — active threads
+ *   3. interacted within 30 days
+ *   4. high importance, however stale           — matters even if quiet
+ *   5. everything else, most recent first
+ * Ties break by the tier's own date (soonest first), then importance.
+ * High-importance contacts can never flood the ring: they sit in tier 4
+ * and only fill slots left over after overdue/imminent/recent people.
  */
-function sortContactsForHome(contacts: Contact[]): Contact[] {
+function sortContactsForHome(
+  contacts: Contact[],
+  events: Event[],
+  actions: Action[],
+): Contact[] {
   const now = new Date();
+  const soon = now.getTime() + 7 * 86_400_000;
+
+  // Per-contact timestamp of the soonest imminent commitment, if any.
+  const imminentAt = new Map<string, number>();
+  for (const e of events) {
+    if (!e.contact_id) continue;
+    const t = new Date(e.start_at).getTime();
+    if (t >= now.getTime() && t <= soon) {
+      const cur = imminentAt.get(e.contact_id);
+      if (cur === undefined || t < cur) imminentAt.set(e.contact_id, t);
+    }
+  }
+  for (const a of actions) {
+    if (a.status === 'done' || !a.contact_id || !a.due_at) continue;
+    const t = new Date(a.due_at).getTime();
+    if (t <= soon) {
+      const cur = imminentAt.get(a.contact_id);
+      if (cur === undefined || t < cur) imminentAt.set(a.contact_id, t);
+    }
+  }
+
   const daysSince = (iso: string | null | undefined): number | null =>
     iso ? Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000) : null;
 
   return [...contacts].sort((a, b) => {
-    const score = (c: Contact): number => {
+    const score = (c: Contact): { tier: number; at: number } => {
       const r = nextReminderIn(c.last_interaction_at, c.importance, c.keep_in_touch_cadence_days, now);
-      if (r.hasCadence && r.days !== null && r.days <= 0) return 0;
+      if (r.hasCadence && r.days !== null && r.days <= 0) {
+        return { tier: 0, at: r.days }; // most overdue first
+      }
+      const im = imminentAt.get(c.id);
+      if (im !== undefined) return { tier: 1, at: im }; // soonest commitment first
       const d = daysSince(c.last_interaction_at);
-      if (d !== null && d < 7) return 1;
-      if (d !== null && d < 30) return 2;
-      if (c.importance === 'high') return 3;
-      return 4;
+      if (d !== null && d < 7) return { tier: 2, at: d };
+      if (d !== null && d < 30) return { tier: 3, at: d };
+      if (c.importance === 'high') return { tier: 4, at: d ?? Number.MAX_SAFE_INTEGER };
+      return { tier: 5, at: d ?? Number.MAX_SAFE_INTEGER };
     };
     const sa = score(a);
     const sb = score(b);
-    if (sa !== sb) return sa - sb;
+    if (sa.tier !== sb.tier) return sa.tier - sb.tier;
+    if (sa.at !== sb.at) return sa.at - sb.at;
     const wa = IMPORTANCE_WEIGHT[a.importance] ?? 2;
     const wb = IMPORTANCE_WEIGHT[b.importance] ?? 2;
-    if (wa !== wb) return wa - wb;
-    const da = daysSince(a.last_interaction_at);
-    const db = daysSince(b.last_interaction_at);
-    if (da === null) return 1;
-    if (db === null) return -1;
-    return da - db;
+    return wa - wb;
   });
 }
 
@@ -101,7 +130,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const nodes = useMemo(() => {
-    const pickedContacts = sortContactsForHome(contacts).slice(0, MAX_CONTACTS);
+    const pickedContacts = sortContactsForHome(contacts, events, actions).slice(0, MAX_CONTACTS);
     const contactIds = new Set(pickedContacts.map((c) => c.id));
 
     const openActions = actions.filter((a) => a.status !== 'done');
