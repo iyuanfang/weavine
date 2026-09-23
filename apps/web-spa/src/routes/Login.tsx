@@ -145,7 +145,7 @@ export function LoginPage() {
       <div className="login-card">
         <h1 className="login-title">
           Weavine
-          <span className="login-tagline">管好人和事</span>
+          <span className="login-tagline">编织遇见的人</span>
         </h1>
         <p className="login-subtitle">
           {mode === 'login' ? '登录到您的账户' : '创建一个新账户'}

@@ -41,7 +41,7 @@ export function ForgotPasswordPage() {
       <div className="login-card">
         <h1 className="login-title">
           Weavine
-          <span className="login-tagline">管好人和事</span>
+          <span className="login-tagline">编织遇见的人</span>
         </h1>
         <p className="login-subtitle">重置密码</p>
         {submitted ? (

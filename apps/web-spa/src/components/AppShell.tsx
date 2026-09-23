@@ -81,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="app-shell__brand">
         <img src="/logo.svg" alt="Weavine" className="app-shell__brand-logo" />
         <span className="app-shell__brand-text">Weavine</span>
-        <span className="app-shell__brand-tagline">管好人和事</span>
+        <span className="app-shell__brand-tagline">编织遇见的人</span>
         <button
           type="button"
           className="app-shell__close"
