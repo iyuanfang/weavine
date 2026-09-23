@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAdapter } from '../lib/adapter';
 import { useQuickCapture } from '../App';
 import { QuickCreateContact } from './QuickCreateContact';
+import { GraphQuickActionForm } from './GraphQuickActionForm';
+import { GraphQuickInteractionForm } from './GraphQuickInteractionForm';
 import { TYPE_META } from './EntityGraph';
 import { nextReminderIn } from '../lib/keepInTouch';
 import type { Action, Contact, Event, Project } from '../lib/adapter/types';
@@ -152,7 +154,10 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
-  const [meCreateKind, setMeCreateKind] = useState<'contact' | null>(null);
+  const [meCreateKind, setMeCreateKind] = useState<'contact' | 'action' | 'interaction' | null>(null);
+  // Neutral center for the inline forms: they only link to the center when
+  // it is a contact/project, so an interaction-type center means "standalone".
+  const neutralCenter = { type: 'interaction' as const, id: '' };
 
   const activeProjects = useMemo(
     () => projects.filter((p) => !p.completed_at).slice(0, 5),
@@ -438,6 +443,30 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
               </button>
               <button
                 type="button"
+                data-testid="home-me-create-action"
+                onClick={() => setMeCreateKind('action')}
+                style={meKindBtnStyle}
+              >
+                <span style={{ fontSize: 20 }}>✅</span>
+                <span>
+                  <strong>待办</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>就地创建，上图成为节点</div>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="home-me-create-interaction"
+                onClick={() => setMeCreateKind('interaction')}
+                style={meKindBtnStyle}
+              >
+                <span style={{ fontSize: 20 }}>💬</span>
+                <span>
+                  <strong>互动</strong>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>选择见面的人，记录这次遇见</div>
+                </span>
+              </button>
+              <button
+                type="button"
                 data-testid="home-me-create-project"
                 onClick={() => navigate('/projects/new')}
                 style={meKindBtnStyle}
@@ -458,6 +487,37 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                     setMeCreateKind(null);
                     setMeCreateOpen(false);
                   }}
+                />
+              </div>
+            )}
+            {meCreateKind === 'action' && (
+              <div style={{ marginTop: 12, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                <GraphQuickActionForm
+                  center={neutralCenter}
+                  submitLabel="创建待办"
+                  onClose={() => setMeCreateKind(null)}
+                  onCreated={() => {
+                    queryClient.invalidateQueries({ queryKey: ['actions'] });
+                    setMeCreateKind(null);
+                    setMeCreateOpen(false);
+                  }}
+                  onCancel={() => setMeCreateKind(null)}
+                />
+              </div>
+            )}
+            {meCreateKind === 'interaction' && (
+              <div style={{ marginTop: 12, borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
+                <GraphQuickInteractionForm
+                  center={neutralCenter}
+                  submitLabel="记录互动"
+                  onClose={() => setMeCreateKind(null)}
+                  onCreated={() => {
+                    queryClient.invalidateQueries({ queryKey: ['interactions'] });
+                    queryClient.invalidateQueries({ queryKey: ['contacts'] });
+                    setMeCreateKind(null);
+                    setMeCreateOpen(false);
+                  }}
+                  onCancel={() => setMeCreateKind(null)}
                 />
               </div>
             )}

@@ -11,6 +11,8 @@ export interface GraphQuickInteractionFormProps {
   onClose: () => void;
   onCreated: (id: string) => void;
   onCancel: () => void;
+  /** Override the default '创建并关联' submit text (standalone creation says just 创建). */
+  submitLabel?: string;
 }
 
 export function GraphQuickInteractionForm({
@@ -18,6 +20,7 @@ export function GraphQuickInteractionForm({
   onClose,
   onCreated,
   onCancel,
+  submitLabel,
 }: GraphQuickInteractionFormProps) {
   const adapter = useAdapter();
   const userId = useUserId();
@@ -124,7 +127,7 @@ export function GraphQuickInteractionForm({
           title={contactId ? undefined : '请先选择联系人'}
           style={{ opacity: mutation.isPending ? 0.6 : 1 }}
         >
-          {mutation.isPending ? '创建中…' : '创建并关联'}
+          {mutation.isPending ? '创建中…' : (submitLabel ?? '创建并关联')}
         </button>
       </div>
       {pickingContact && (
