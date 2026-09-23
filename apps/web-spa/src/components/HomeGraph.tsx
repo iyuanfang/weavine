@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 
+import { useAdapter } from '../lib/adapter';
 import { TYPE_META } from './EntityGraph';
 import { nextReminderIn } from '../lib/keepInTouch';
 import type { Action, Contact, Event, Project } from '../lib/adapter/types';
@@ -20,7 +22,8 @@ interface Satellite {
   id: string;
   kind: 'event' | 'action' | 'project';
   label: string;
-  contactId: string | null;
+  /** Contacts this satellite is tied to (event participant / action owner / project members). */
+  linkedContactIds: string[];
   href: string;
 }
 
@@ -126,15 +129,40 @@ interface Props {
 
 export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const navigate = useNavigate();
+  const adapter = useAdapter();
   const [addOpen, setAddOpen] = useState(false);
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+
+  const activeProjects = useMemo(
+    () => projects.filter((p) => !p.completed_at).slice(0, 5),
+    [projects],
+  );
+
+  // Project members power the project→contact edges. One query per displayed
+  // project is fine at home scale (≤5).
+  const projectMembersQuery = useQuery({
+    queryKey: ['home-project-members', activeProjects.map((p) => p.id)],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        activeProjects.map(async (p) => {
+          try {
+            const members = await adapter.projectContacts.list(p.id);
+            return [p.id, members.map((m) => m.contact.id)] as const;
+          } catch {
+            return [p.id, [] as string[]] as const;
+          }
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, string[]>;
+    },
+    enabled: activeProjects.length > 0,
+  });
 
   const nodes = useMemo(() => {
     const pickedContacts = sortContactsForHome(contacts, events, actions).slice(0, MAX_CONTACTS);
     const contactIds = new Set(pickedContacts.map((c) => c.id));
 
     const openActions = actions.filter((a) => a.status !== 'done');
-    const activeProjects = projects.filter((p) => !p.completed_at);
 
     const satellites: Satellite[] = [];
     for (const e of events) {
@@ -142,7 +170,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         id: `event:${e.id}`,
         kind: 'event',
         label: e.title,
-        contactId: e.contact_id ?? null,
+        linkedContactIds: e.contact_id ? [e.contact_id] : [],
         href: `/graph/event/${e.id}`,
       });
     }
@@ -151,23 +179,28 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         id: `action:${a.id}`,
         kind: 'action',
         label: a.title,
-        contactId: a.contact_id ?? null,
+        linkedContactIds: a.contact_id ? [a.contact_id] : [],
         href: `/graph/action/${a.id}`,
       });
     }
     for (const p of activeProjects) {
+      const members = projectMembersQuery.data?.[p.id] ?? [];
       satellites.push({
         id: `project:${p.id}`,
         kind: 'project',
         label: p.title,
-        contactId: null, // project members live in a join table; keep projects on the outer ring
+        linkedContactIds: members,
         href: `/graph/project/${p.id}`,
       });
     }
 
     const pickedSatellites = satellites.slice(0, MAX_SATELLITES);
-    const orbitSatellites = pickedSatellites.filter((s) => !s.contactId || !contactIds.has(s.contactId));
-    const attachedSatellites = pickedSatellites.filter((s) => s.contactId && contactIds.has(s.contactId));
+    const attachedSatellites = pickedSatellites.filter((s) =>
+      s.linkedContactIds.some((cid) => contactIds.has(cid)),
+    );
+    const orbitSatellites = pickedSatellites.filter(
+      (s) => !s.linkedContactIds.some((cid) => contactIds.has(cid)),
+    );
 
     const contactNodes = pickedContacts.map((c, i) => {
       const angle = (2 * Math.PI * i) / Math.max(pickedContacts.length, 1) - Math.PI / 2;
@@ -177,13 +210,20 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
     const contactAngleById = new Map(contactNodes.map((n) => [n.contact.id, n.angle]));
 
     const satelliteNodes = [
-      ...attachedSatellites.map((s, i) => {
-        const base = contactAngleById.get(s.contactId!) ?? 0;
-        // Fan attached satellites slightly around their contact's angle so
-        // several items on one contact don't overlap.
-        const fan = ((i % 3) - 1) * 0.24;
-        return { s, ...polar(R_OUTER, base + fan) };
-      }),
+      ...(() => {
+        // Spread satellites sharing the same anchor contact symmetrically
+        // (-1, 0, +1 …) so their labels don't stack.
+        const anchorCounters = new Map<string, number>();
+        return attachedSatellites.map((s) => {
+          const anchor = s.linkedContactIds.find((cid) => contactAngleById.has(cid));
+          const key = anchor ?? '';
+          const idx = anchorCounters.get(key) ?? 0;
+          anchorCounters.set(key, idx + 1);
+          const base = anchor !== undefined ? contactAngleById.get(anchor)! : 0;
+          const fan = (idx - 1) * 0.34;
+          return { s, ...polar(R_OUTER, base + fan) };
+        });
+      })(),
       ...orbitSatellites.map((s, i) => {
         const angle =
           (2 * Math.PI * i) / Math.max(orbitSatellites.length, 1) -
@@ -194,7 +234,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
     ];
 
     return { contactNodes, satelliteNodes };
-  }, [contacts, events, actions, projects]);
+  }, [contacts, events, actions, activeProjects, projectMembersQuery.data]);
 
   const hasContent = nodes.contactNodes.length > 0 || nodes.satelliteNodes.length > 0;
   const hiddenContacts = Math.max(0, contacts.length - MAX_CONTACTS);
@@ -320,24 +360,26 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
               opacity={0.5}
             />
           ))}
-          {/* edges: contact → satellite */}
-          {nodes.satelliteNodes
-            .filter((sn) => sn.s.contactId && nodes.contactNodes.some((cn) => cn.contact.id === sn.s.contactId))
-            .map((sn) => {
-              const cn = nodes.contactNodes.find((c) => c.contact.id === sn.s.contactId)!;
-              return (
-                <line
-                  key={`edge-${sn.s.id}`}
-                  x1={cn.x}
-                  y1={cn.y}
-                  x2={sn.x}
-                  y2={sn.y}
-                  stroke={TYPE_META[sn.s.kind].color}
-                  strokeWidth={1.5}
-                  opacity={0.5}
-                />
-              );
-            })}
+          {/* edges: contact → satellite (event participant / action owner / project members) */}
+          {nodes.satelliteNodes.map((sn) =>
+            sn.s.linkedContactIds
+              .filter((cid) => nodes.contactNodes.some((cn) => cn.contact.id === cid))
+              .map((cid) => {
+                const cn = nodes.contactNodes.find((c) => c.contact.id === cid)!;
+                return (
+                  <line
+                    key={`edge-${sn.s.id}-${cid}`}
+                    x1={cn.x}
+                    y1={cn.y}
+                    x2={sn.x}
+                    y2={sn.y}
+                    stroke={TYPE_META[sn.s.kind].color}
+                    strokeWidth={1.5}
+                    opacity={0.5}
+                  />
+                );
+              }),
+          )}
 
           {/* satellites (outer ring) — EntityGraph node style */}
           {nodes.satelliteNodes.map((sn) => {
