@@ -1,13 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { TYPE_META } from './EntityGraph';
 import type { Action, Contact, Event, Project } from '../lib/adapter/types';
 
 // Home-page "me-centered" relationship graph. Unlike EntityGraph (which is
 // anchored on one entity and walks its neighbours), the home graph places a
 // virtual 我 at the center, the user's most relevant contacts on the inner
-// ring, and each contact's open events/actions/projects on an outer ring —
-// the "weave" the product is about, visible without digging into detail tabs.
+// ring, and each contact's open events/actions/projects on an outer ring.
+//
+// Visual language intentionally mirrors EntityGraph (white nodes + type-color
+// stroke + emoji icon + label halo, same edge style) so drilling from here
+// into /graph/:type/:id feels like zooming into the same picture. Node
+// clicks open the entity's graph view — the whole home page is a doorway
+// into the weave, not a dashboard.
 
 interface Satellite {
   id: string;
@@ -17,25 +23,27 @@ interface Satellite {
   href: string;
 }
 
-const NODE_COLORS: Record<string, string> = {
-  contact: 'var(--accent, #2563eb)',
-  event: '#16a34a',
-  action: '#ea580c',
-  project: '#9333ea',
-};
+const MAX_CONTACTS = 8;
+const MAX_SATELLITES = 12;
 
-const MAX_CONTACTS = 10;
-const MAX_SATELLITES = 14;
-
-const W = 860;
-const H = 430;
+const W = 900;
+const H = 460;
 const CX = W / 2;
 const CY = H / 2;
-const R_INNER = 112;
-const R_OUTER = 168;
+const R_INNER = 120;
+const R_OUTER = 190;
 
-function polar(cx: number, cy: number, r: number, angle: number): { x: number; y: number } {
-  return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+const CENTER_R = 44;
+const NODE_R = 28;
+
+const ME_COLOR = '#1e293b';
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+function polar(r: number, angle: number): { x: number; y: number } {
+  return { x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) };
 }
 
 interface Props {
@@ -48,6 +56,7 @@ interface Props {
 export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const navigate = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const nodes = useMemo(() => {
     const pickedContacts = contacts.slice(0, MAX_CONTACTS);
@@ -63,7 +72,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         kind: 'event',
         label: e.title,
         contactId: e.contact_id ?? null,
-        href: `/events/${e.id}`,
+        href: `/graph/event/${e.id}`,
       });
     }
     for (const a of openActions) {
@@ -72,7 +81,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         kind: 'action',
         label: a.title,
         contactId: a.contact_id ?? null,
-        href: `/actions/${a.id}`,
+        href: `/graph/action/${a.id}`,
       });
     }
     for (const p of activeProjects) {
@@ -81,7 +90,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         kind: 'project',
         label: p.title,
         contactId: null, // project members live in a join table; keep projects on the outer ring
-        href: `/projects/${p.id}`,
+        href: `/graph/project/${p.id}`,
       });
     }
 
@@ -91,7 +100,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
 
     const contactNodes = pickedContacts.map((c, i) => {
       const angle = (2 * Math.PI * i) / Math.max(pickedContacts.length, 1) - Math.PI / 2;
-      return { contact: c, angle, ...polar(CX, CY, R_INNER, angle) };
+      return { contact: c, angle, ...polar(R_INNER, angle) };
     });
 
     const contactAngleById = new Map(contactNodes.map((n) => [n.contact.id, n.angle]));
@@ -101,13 +110,15 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         const base = contactAngleById.get(s.contactId!) ?? 0;
         // Fan attached satellites slightly around their contact's angle so
         // several items on one contact don't overlap.
-        const fan = ((i % 3) - 1) * 0.22;
-        const angle = base + fan;
-        return { s, angle, ...polar(CX, CY, R_OUTER, angle) };
+        const fan = ((i % 3) - 1) * 0.24;
+        return { s, ...polar(R_OUTER, base + fan) };
       }),
       ...orbitSatellites.map((s, i) => {
-        const angle = (2 * Math.PI * i) / Math.max(orbitSatellites.length, 1) - Math.PI / 2 + Math.PI / Math.max(orbitSatellites.length, 1);
-        return { s, angle, ...polar(CX, CY, R_OUTER + 16, angle) };
+        const angle =
+          (2 * Math.PI * i) / Math.max(orbitSatellites.length, 1) -
+          Math.PI / 2 +
+          Math.PI / Math.max(orbitSatellites.length, 1);
+        return { s, ...polar(R_OUTER + 14, angle) };
       }),
     ];
 
@@ -120,13 +131,18 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
     <div className="card" style={{ position: 'relative', padding: 0, overflow: 'hidden' }}>
       <div
         style={{
+          position: 'absolute',
+          top: 10,
+          right: 14,
+          zIndex: 20,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 14px 0',
+          gap: 8,
         }}
       >
-        <h2 className="section__title" style={{ margin: 0 }}>🕸️ 我的人脉网</h2>
+        <h2 className="section__title" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+          🕸️ 我的人脉网
+        </h2>
         <div style={{ position: 'relative' }}>
           <button
             type="button"
@@ -189,8 +205,14 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
           viewBox={`0 0 ${W} ${H}`}
           role="img"
           aria-label="以我为中心的人脉关系图"
-          style={{ width: '100%', height: 'auto', display: 'block' }}
+          width="100%"
+          height={H}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ display: 'block', background: 'linear-gradient(180deg,#fafbff,#f3f4f8)' }}
         >
+          <circle cx={CX} cy={CY} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
+          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.3} />
+
           {/* spokes: 我 → contacts */}
           {nodes.contactNodes.map((n) => (
             <line
@@ -199,8 +221,9 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
               y1={CY}
               x2={n.x}
               y2={n.y}
-              stroke="var(--border, #d1d5db)"
-              strokeWidth={1.4}
+              stroke={TYPE_META.contact.color}
+              strokeWidth={1.5}
+              opacity={0.5}
             />
           ))}
           {/* edges: contact → satellite */}
@@ -215,73 +238,122 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                   y1={cn.y}
                   x2={sn.x}
                   y2={sn.y}
-                  stroke={NODE_COLORS[sn.s.kind]}
-                  strokeWidth={1.1}
-                  strokeOpacity={0.45}
-                  strokeDasharray="3 3"
+                  stroke={TYPE_META[sn.s.kind].color}
+                  strokeWidth={1.5}
+                  opacity={0.5}
                 />
               );
             })}
 
-          {/* satellites (outer ring) */}
-          {nodes.satelliteNodes.map((sn) => (
-            <g
-              key={sn.s.id}
-              onClick={() => navigate(sn.s.href)}
-              style={{ cursor: 'pointer' }}
-            >
-              <title>{sn.s.label}</title>
-              <circle cx={sn.x} cy={sn.y} r={9} fill={NODE_COLORS[sn.s.kind]} fillOpacity={0.92} />
-              <text
-                x={sn.x}
-                y={sn.y - 14}
-                textAnchor="middle"
-                fontSize={11}
-                fill="var(--muted, #6b7280)"
-                style={{ pointerEvents: 'none' }}
+          {/* satellites (outer ring) — EntityGraph node style */}
+          {nodes.satelliteNodes.map((sn) => {
+            const key = sn.s.id;
+            const isHovered = hoveredKey === key;
+            const meta = TYPE_META[sn.s.kind];
+            return (
+              <g
+                key={key}
+                data-testid={`home-graph-node-${sn.s.kind}-${sn.s.id}`}
+                style={{ cursor: 'pointer', transition: 'transform 180ms ease' }}
+                onMouseEnter={() => setHoveredKey(key)}
+                onMouseLeave={() => setHoveredKey((cur) => (cur === key ? null : cur))}
+                onClick={() => navigate(sn.s.href)}
               >
-                {sn.s.label.length > 8 ? `${sn.s.label.slice(0, 8)}…` : sn.s.label}
-              </text>
-            </g>
-          ))}
+                <title>{sn.s.label}</title>
+                <circle cx={sn.x} cy={sn.y} r={NODE_R + 6} fill="transparent" />
+                <circle
+                  cx={sn.x}
+                  cy={sn.y}
+                  r={isHovered ? NODE_R + 6 : NODE_R}
+                  fill="#fff"
+                  stroke={meta.color}
+                  strokeWidth={isHovered ? 3 : 2}
+                  pointerEvents="none"
+                  style={isHovered ? { filter: `drop-shadow(0 4px 10px ${meta.color}55)` } : undefined}
+                />
+                <text
+                  x={sn.x}
+                  y={isHovered ? sn.y + 6 : sn.y + 5}
+                  fontSize={isHovered ? 24 : 18}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                >
+                  {meta.icon}
+                </text>
+                <text
+                  x={sn.x}
+                  y={isHovered ? sn.y + NODE_R + 18 : sn.y + NODE_R + 14}
+                  fontSize={isHovered ? 14 : 11}
+                  fontWeight={isHovered ? 600 : undefined}
+                  fill={isHovered ? '#0f172a' : '#1e293b'}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                  style={{ paintOrder: 'stroke', stroke: '#fafbff', strokeWidth: isHovered ? 4 : 3 }}
+                >
+                  {truncate(sn.s.label, isHovered ? 18 : 14)}
+                </text>
+              </g>
+            );
+          })}
 
-          {/* contacts (inner ring) */}
-          {nodes.contactNodes.map((n) => (
-            <g
-              key={n.contact.id}
-              onClick={() => navigate(`/contacts/${n.contact.id}`)}
-              style={{ cursor: 'pointer' }}
-            >
-              <title>{n.contact.nickname}</title>
-              <circle cx={n.x} cy={n.y} r={22} fill="var(--accent, #2563eb)" />
-              <text
-                x={n.x}
-                y={n.y + 1}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontSize={12}
-                fontWeight={600}
-                fill="#fff"
-                style={{ pointerEvents: 'none' }}
+          {/* contacts (inner ring) — EntityGraph node style, 👤 icon */}
+          {nodes.contactNodes.map((n) => {
+            const key = `contact:${n.contact.id}`;
+            const isHovered = hoveredKey === key;
+            const meta = TYPE_META.contact;
+            return (
+              <g
+                key={key}
+                data-testid={`home-graph-node-contact-${n.contact.id}`}
+                style={{ cursor: 'pointer', transition: 'transform 180ms ease' }}
+                onMouseEnter={() => setHoveredKey(key)}
+                onMouseLeave={() => setHoveredKey((cur) => (cur === key ? null : cur))}
+                onClick={() => navigate(`/graph/contact/${n.contact.id}`)}
               >
-                {n.contact.nickname.slice(0, 3)}
-              </text>
-            </g>
-          ))}
+                <title>{n.contact.nickname} 的关系图</title>
+                <circle cx={n.x} cy={n.y} r={NODE_R + 6} fill="transparent" />
+                <circle
+                  cx={n.x}
+                  cy={n.y}
+                  r={isHovered ? NODE_R + 6 : NODE_R}
+                  fill="#fff"
+                  stroke={meta.color}
+                  strokeWidth={isHovered ? 3 : 2}
+                  pointerEvents="none"
+                  style={isHovered ? { filter: `drop-shadow(0 4px 10px ${meta.color}55)` } : undefined}
+                />
+                <text
+                  x={n.x}
+                  y={isHovered ? n.y + 6 : n.y + 5}
+                  fontSize={isHovered ? 24 : 18}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                >
+                  {meta.icon}
+                </text>
+                <text
+                  x={n.x}
+                  y={isHovered ? n.y + NODE_R + 18 : n.y + NODE_R + 14}
+                  fontSize={isHovered ? 14 : 11}
+                  fontWeight={isHovered ? 600 : undefined}
+                  fill={isHovered ? '#0f172a' : '#1e293b'}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                  style={{ paintOrder: 'stroke', stroke: '#fafbff', strokeWidth: isHovered ? 4 : 3 }}
+                >
+                  {truncate(n.contact.nickname, isHovered ? 18 : 8)}
+                </text>
+              </g>
+            );
+          })}
 
-          {/* 我 at the center */}
-          <circle cx={CX} cy={CY} r={30} fill="var(--fg, #111827)" />
-          <text
-            x={CX}
-            y={CY + 1}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={15}
-            fontWeight={700}
-            fill="#fff"
-          >
-            我
-          </text>
+          {/* 我 at the center — mirrors EntityGraph's center node */}
+          <g data-testid="home-graph-center">
+            <circle cx={CX} cy={CY} r={CENTER_R} fill={ME_COLOR} stroke={ME_COLOR} strokeWidth={2} />
+            <text x={CX} y={CY + 5} fontSize="16" fontWeight={700} fill="#fff" textAnchor="middle">
+              我
+            </text>
+          </g>
         </svg>
       ) : (
         <div className="empty-state" style={{ padding: '36px 16px' }}>
