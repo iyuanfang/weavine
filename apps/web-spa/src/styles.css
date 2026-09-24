@@ -134,7 +134,7 @@ button:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 160px 1fr;
   height: 100vh;
 }
 
@@ -177,6 +177,22 @@ button:focus-visible {
   padding: 0 16px;
 }
 
+.app-shell__brand {
+  flex-wrap: wrap;
+  overflow: hidden;
+  row-gap: 2px;
+}
+.app-shell__brand-tagline {
+  display: block;
+  flex-basis: 100%;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-shell__menu-item {
+  white-space: nowrap;
+}
 .app-shell__nav--collapsed .app-shell__brand-tagline,
 .app-shell__nav--collapsed .app-shell__brand-text,
 .app-shell__nav--collapsed .app-shell__menu-kbd,
@@ -362,8 +378,8 @@ button:focus-visible {
 
 .layout-split {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 32px;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
