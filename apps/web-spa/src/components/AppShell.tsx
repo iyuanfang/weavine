@@ -32,10 +32,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (typeof localStorage === 'undefined') return false;
     return localStorage.getItem('weavine:sidebar-collapsed') === '1';
   });
-  const [showReleaseTip, setShowReleaseTip] = useState(() => {
-    if (typeof localStorage === 'undefined') return false;
-    return localStorage.getItem('v108-tip-dismissed') !== '1';
-  });
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((c) => {
@@ -199,40 +195,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="app-shell__main">
-        {showReleaseTip && (
-          <div
-            className="card"
-            role="note"
-            style={{
-              margin: '12px 16px 0',
-              padding: '10px 14px',
-              fontSize: 'var(--text-base)',
-              lineHeight: 1.6,
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: 12,
-              background: 'var(--accent-soft, rgba(139, 92, 246, 0.08))',
-              border: '1px solid var(--accent, #8b5cf6)',
-            }}
-          >
-            <span>
-              📦 <strong>v1.0.8 新增</strong>：名片 OCR 扫描、语音输入、联系人头像、快速记录等。
-            </span>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => {
-                localStorage.setItem('v108-tip-dismissed', '1');
-                setShowReleaseTip(false);
-              }}
-              aria-label="关闭提示"
-              style={{ flexShrink: 0 }}
-            >
-              知道了
-            </button>
-          </div>
-        )}
+
         {children}
       </main>
 

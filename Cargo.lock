@@ -7319,7 +7319,7 @@ dependencies = [
 
 [[package]]
 name = "weavine"
-version = "1.3.18"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -7391,6 +7391,7 @@ dependencies = [
  "bcrypt",
  "chrono",
  "dashmap",
+ "hmac",
  "jsonwebtoken",
  "lettre",
  "rand 0.8.8",
