@@ -86,7 +86,7 @@ test('entity graph: contact with 1 interaction shows it as neighbor; click opens
     await expect(page.locator(`[data-testid="graph-node-interaction-${interaction.id}-drill"]`)).toHaveCount(0);
     // click → /interactions/:id (detail page, not drill)
     await node.click();
-    await page.waitForURL(`${SPA_BASE}/interactions/${interaction.id}`);
+    await page.waitForURL(`${SPA_BASE}/interactions/${interaction.id}?tab=graph`);
   } finally {
     await ctx.close();
     await api.dispose();

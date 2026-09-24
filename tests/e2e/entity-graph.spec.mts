@@ -149,9 +149,9 @@ test('entity graph: project center lists contacts; single click opens contact de
 
     await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`).click();
 
-    // single click opens the entity's detail page (in-explorer drill was
-    // removed when the graph moved into detail pages)
-    await page.waitForURL(`${SPA_BASE}/contacts/${seeded.alice.id}`);
+    // single click drills into that node's graph (?tab=graph — the unified
+    // graph surface on detail pages)
+    await page.waitForURL(`${SPA_BASE}/contacts/${seeded.alice.id}?tab=graph`);
   } finally {
     await ctx.close();
   }
@@ -172,7 +172,7 @@ test('entity graph: event center single-click on contact node opens contact deta
 
     await page.locator(`[data-testid="graph-node-contact-${seeded.alice.id}"]`).click();
 
-    await page.waitForURL(`${SPA_BASE}/contacts/${seeded.alice.id}`);
+    await page.waitForURL(`${SPA_BASE}/contacts/${seeded.alice.id}?tab=graph`);
   } finally {
     await ctx.close();
   }
