@@ -31,7 +31,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="设置"
         actions={
