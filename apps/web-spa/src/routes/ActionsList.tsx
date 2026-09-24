@@ -191,7 +191,7 @@ export function ActionsList() {
 
   if (actionsQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载待办失败: {String(actionsQuery.error)}</div>
       </div>
     );
@@ -431,7 +431,7 @@ export function ActionsList() {
   );
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="待办"
         subtitle={

@@ -142,7 +142,7 @@ export function Calendar() {
 
   if (eventsQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载日程失败: {String(eventsQuery.error)}</div>
       </div>
     );
@@ -179,7 +179,7 @@ export function Calendar() {
   const upcoming = upcomingQuery.data ?? [];
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title={
           <span>

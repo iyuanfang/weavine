@@ -96,7 +96,7 @@ export function ProjectsList() {
 
   if (projectsQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载失败: {String(projectsQuery.error)}</div>
       </div>
     );
@@ -193,7 +193,7 @@ export function ProjectsList() {
   );
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="项目"
         subtitle={`共 ${projects.length} 个项目 · 筛选后 ${filtered.length} 个`}

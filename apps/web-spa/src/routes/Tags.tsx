@@ -60,7 +60,7 @@ export function Tags() {
 
   if (tagsQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载标签失败: {String(tagsQuery.error)}</div>
       </div>
     );
@@ -160,7 +160,7 @@ export function Tags() {
   );
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="标签"
         subtitle={`${tags.length} 个 · ${usedTagCount} 个被使用`}

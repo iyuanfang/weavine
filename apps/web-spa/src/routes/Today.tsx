@@ -211,7 +211,7 @@ export function TodayPage() {
     .map(({ c, r }) => ({ c, days: r.days! }));
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <div className="page-header">
         <div>
           <h1 className="page-title">织遇</h1>

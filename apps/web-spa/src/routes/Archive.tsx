@@ -150,7 +150,7 @@ export default function ArchivePage() {
   if (!userId) return <div className="loading">正在加载用户…</div>;
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="📦 已归档"
         subtitle={

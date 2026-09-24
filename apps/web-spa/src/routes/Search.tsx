@@ -84,7 +84,7 @@ export function SearchPage() {
 
   if (searchQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">搜索失败: {String(searchQuery.error)}</div>
       </div>
     );
@@ -106,7 +106,7 @@ export function SearchPage() {
     notes.length;
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="搜索"
         subtitle={
