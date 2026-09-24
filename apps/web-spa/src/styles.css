@@ -3010,3 +3010,86 @@ textarea.input-base {
 .md-edit-pane--split textarea::-webkit-scrollbar {
   display: none;
 }
+
+/* ── Mobile filter bar + bottom-sheet drawer ──────────────────
+   Desktop keeps the sticky left sidebar (.filter-panel as a grid
+   column). Under 640px the sidebar hides; search stays inline in a
+   slim bar and the filter groups live in a bottom sheet. */
+
+.filter-bar-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .filter-bar-mobile {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .filter-bar-mobile__search {
+    flex: 1;
+    min-width: 0;
+  }
+  .filter-bar-mobile__search .filter-panel__section {
+    padding: 0;
+  }
+  .filter-bar-mobile__search .filter-panel__title {
+    display: none;
+  }
+  .filter-bar-mobile__search .input-base {
+    width: 100%;
+  }
+  .filter-bar-mobile__toggle {
+    white-space: nowrap;
+    border: 1px solid var(--border, #e2e8f0);
+    background: #fff;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  /* hide the in-flow sidebar — its content lives in the drawer */
+  .layout-split > .filter-panel {
+    display: none !important;
+  }
+  .filter-drawer {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 900;
+    display: flex;
+    align-items: flex-end;
+  }
+  .filter-drawer__sheet {
+    background: #fff;
+    width: 100%;
+    max-height: 78vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .filter-drawer__handle {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: #cbd5e1;
+    margin: 0 auto 12px;
+  }
+  .filter-drawer .filter-panel {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    padding-right: 0;
+  }
+  .filter-drawer .filter-panel__section {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .filter-drawer__done {
+    width: 100%;
+    margin-top: 14px;
+  }
+}

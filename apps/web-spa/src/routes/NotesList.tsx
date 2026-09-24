@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useInfiniteList, useScrollSentinel } from '../lib/useInfiniteList';
 import { useNavigate } from 'react-router-dom';
 
+import { FilterPanelShell } from '../components/FilterPanelShell';
 import { useAdapter, isTauri } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { mdEditorUrl } from '../lib/md-path';
@@ -145,20 +146,21 @@ export function NotesList() {
       </header>
 
       <div className="layout-split">
-        <aside className="filter-panel">
-          <div className="filter-panel__section">
-            <div className="filter-panel__title">搜索</div>
-            <input
-              type="text"
-              className="input-base"
-              placeholder="标题、正文…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="filter-panel__divider" />
+        <FilterPanelShell
+          search={
+            <div className="filter-panel__section">
+              <div className="filter-panel__title">搜索</div>
+              <input
+                type="text"
+                className="input-base"
+                placeholder="标题、正文…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          }
+        >
 
           <div className="filter-panel__section">
             <div className="filter-panel__title">排序</div>
@@ -233,7 +235,7 @@ export function NotesList() {
               </button>
             ))}
           </div>
-        </aside>
+        </FilterPanelShell>
 
         <div>
           {isLoading && notes.length === 0 && (

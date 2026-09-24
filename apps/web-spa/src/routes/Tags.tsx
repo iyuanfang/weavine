@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { FilterPanelShell } from '../components/FilterPanelShell';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import type { CreateTagInput, Contact } from '../lib/adapter/types';
@@ -177,7 +178,7 @@ export function Tags() {
       />
 
       <div className="layout-split">
-        <aside className="filter-panel">{panel}</aside>
+        <FilterPanelShell>{panel}</FilterPanelShell>
 
         <div className="layout-split__main">
           {showCreate && (

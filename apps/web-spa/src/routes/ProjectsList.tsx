@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
+import { FilterPanelShell } from '../components/FilterPanelShell';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { stageDotStyle } from '../lib/projectStageColor';
@@ -101,20 +102,20 @@ export function ProjectsList() {
     );
   }
 
+  const searchPanel = (
+    <div className="filter-panel__section">
+      <input
+        type="text"
+        className="input-base"
+        placeholder="🔍 搜索项目…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+    </div>
+  );
+
   const panel = (
     <>
-      <div className="filter-panel__section">
-        <input
-          type="text"
-          className="input-base"
-          placeholder="🔍 搜索项目…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      <div className="filter-panel__divider" />
-
       <div className="filter-panel__section">
         <div className="filter-panel__title">状态</div>
         {[
@@ -204,7 +205,7 @@ export function ProjectsList() {
       />
 
       <div className="layout-split">
-        <aside className="filter-panel">{panel}</aside>
+        <FilterPanelShell search={searchPanel}>{panel}</FilterPanelShell>
 
         <div className="layout-split__main">
           {isLoading ? (

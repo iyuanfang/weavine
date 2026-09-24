@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { ReminderCountdown } from '../components/ReminderCountdown';
+import { FilterPanelShell } from '../components/FilterPanelShell';
 import { useAdapter } from '../lib/adapter';
 import { useInfiniteList, useScrollSentinel } from '../lib/useInfiniteList';
 import { useUserId } from '../lib/auth';
@@ -256,24 +257,21 @@ export function ContactsList() {
       </div>
 
       <div className="layout-split">
-        <aside className="filter-panel">
-          <div className="filter-panel__section">
-            <div className="filter-panel__title">搜索</div>
-            <input
-              type="text"
-              className="input-base"
-              placeholder="姓名、公司…"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                
-              }}
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="filter-panel__divider" />
-
+        <FilterPanelShell
+          search={
+            <div className="filter-panel__section">
+              <div className="filter-panel__title">搜索</div>
+              <input
+                type="text"
+                className="input-base"
+                placeholder="姓名、公司…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          }
+        >
           <div className="filter-panel__section">
             <div className="filter-panel__title">排序</div>
             {SORT_OPTIONS.map((opt) => (
@@ -408,7 +406,7 @@ export function ContactsList() {
               + 新建联系人
             </Link>
           </div>
-        </aside>
+        </FilterPanelShell>
 
         <div className="layout-split__main">
           {(contacts ?? []).length === 0 && isLoading ? (

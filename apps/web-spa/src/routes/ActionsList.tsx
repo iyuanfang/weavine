@@ -22,6 +22,7 @@ import { ProjectBadge } from '../components/ProjectBadge';
 import { statusMeta } from '../components/StatusPicker';
 import { priorityMeta } from '../components/PriorityPicker';
 import { categoryMeta, ACTION_PRESETS } from '../components/categoryPresets';
+import { FilterPanelShell } from '../components/FilterPanelShell';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import type { Action, UpdateActionInput } from '../lib/adapter/types';
@@ -272,20 +273,20 @@ export function ActionsList() {
     ? Math.round((doneTodayCount / (totalActive + doneTodayCount)) * 100)
     : 0;
 
+  const searchPanel = (
+    <div className="filter-panel__section">
+      <input
+        type="text"
+        className="input-base"
+        placeholder="🔍 搜索待办、联系人…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+    </div>
+  );
+
   const panel = (
     <>
-      <div className="filter-panel__section">
-        <input
-          type="text"
-          className="input-base"
-          placeholder="🔍 搜索待办、联系人…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      <div className="filter-panel__divider" />
-
       <div className="filter-panel__section">
         <div className="filter-panel__title">状态</div>
         <button
@@ -451,7 +452,7 @@ export function ActionsList() {
       />
 
       <div className="layout-split">
-        <aside className="filter-panel">{panel}</aside>
+        <FilterPanelShell search={searchPanel}>{panel}</FilterPanelShell>
 
         <div className="layout-split__main">
           {actionsQuery.isLoading ? (

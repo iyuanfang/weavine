@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ProjectBadge } from '../components/ProjectBadge';
 import { ContactBadge } from '../components/ContactBadge';
 import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
+import { FilterPanelShell } from '../components/FilterPanelShell';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import type { Event } from '../lib/adapter/types';
@@ -85,6 +86,7 @@ export function Calendar() {
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
 
   const { monthStart, monthEnd } = useMemo(() => {
     const now = new Date();
@@ -147,8 +149,17 @@ export function Calendar() {
   }
 
   const allEvents = eventsQuery.data ?? [];
-  const visible =
-    typeFilter === 'all' ? allEvents : allEvents.filter((e) => e.type === typeFilter);
+  const q = search.trim().toLowerCase();
+  const visible = allEvents
+    .filter((e) => (typeFilter === 'all' ? true : e.type === typeFilter))
+    .filter((e) => {
+      if (!q) return true;
+      return (
+        e.title.toLowerCase().includes(q) ||
+        (e.location ?? '').toLowerCase().includes(q) ||
+        (e.contact_nickname ?? '').toLowerCase().includes(q)
+      );
+    });
 
   const groups = groupByDay(visible);
   const days = Object.keys(groups)
@@ -218,7 +229,20 @@ export function Calendar() {
       />
 
       <div className="layout-split">
-        <aside className="filter-panel">
+        <FilterPanelShell
+          search={
+            <div className="filter-panel__section">
+              <input
+                type="text"
+                className="input-base"
+                placeholder="🔍 搜索日程、地点、联系人…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          }
+        >
           <div className="filter-panel__section">
             <div className="filter-panel__title">月份</div>
             <div
@@ -362,14 +386,16 @@ export function Calendar() {
               </div>
             </>
           )}
-        </aside>
+        </FilterPanelShell>
 
         <div className="layout-split__main">
           {isLoading ? (
             <div className="loading">加载中</div>
           ) : days.length === 0 ? (
             <div className="empty-state">
-              <h3 className="empty-state__title">这个月没有日程</h3>
+              <h3 className="empty-state__title">
+                {q ? `没有匹配「${search.trim()}」的日程` : '这个月没有日程'}
+              </h3>
               <p className="empty-state__hint">
                 {typeFilter !== 'all'
                   ? `切换到「全部」或选其他类型。`
