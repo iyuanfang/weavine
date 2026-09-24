@@ -1,18 +1,39 @@
 import { useQuery } from '@tanstack/react-query';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdapter } from '../lib/adapter';
 import type { EntityGraphNode, EntityGraphNodeType, EntityGraphResponse } from '../lib/adapter/types';
 
-const W = 900;
-const H = 600;
-const CX = W / 2;
-const CY = H / 2;
-const R_INNER = 80;
-const R_OUTER = 230;
-const NODE_R = 28;
-const CENTER_R = 44;
-const SECTOR_GAP_DEG = 2;
-const ringSpacing = 80;
+// Desktop and mobile canvases: a 390px phone scaling the 900px desktop
+// viewBox renders ~40% size nodes — unreadable. The mobile canvas is near
+// 1:1 with phone viewports so nodes keep their real size.
+interface GraphLayout {
+  W: number; H: number; CX: number; CY: number;
+  R_INNER: number; R_OUTER: number; NODE_R: number; CENTER_R: number;
+  ringSpacing: number; minSpacing: number; jitter: number;
+}
+const LAYOUT_DESKTOP: GraphLayout = {
+  W: 900, H: 600, CX: 450, CY: 300,
+  R_INNER: 80, R_OUTER: 230, NODE_R: 28, CENTER_R: 44,
+  ringSpacing: 80, minSpacing: 100, jitter: 40,
+};
+const LAYOUT_MOBILE: GraphLayout = {
+  W: 480, H: 640, CX: 240, CY: 320,
+  R_INNER: 60, R_OUTER: 160, NODE_R: 26, CENTER_R: 40,
+  ringSpacing: 55, minSpacing: 68, jitter: 26,
+};
+
+function useGraphLayout(): GraphLayout {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const fn = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return mobile ? LAYOUT_MOBILE : LAYOUT_DESKTOP;
+}
 
 export const GRAPH_NODE_CAP = 80;
 
@@ -170,7 +191,7 @@ interface LayoutResult {
   sectors: Array<{ type: EntityGraphNodeType; midAngle: number; count: number; sectorR: number }>;
 }
 
-function computeLayout(others: EntityGraphNode[]): LayoutResult {
+function computeLayout(L: GraphLayout, others: EntityGraphNode[]): LayoutResult {
   const placedAt: Record<string, { x: number; y: number }> = {};
   const sectors: LayoutResult['sectors'] = [];
 
@@ -195,8 +216,8 @@ function computeLayout(others: EntityGraphNode[]): LayoutResult {
       })();
       const n = others[i];
       placedAt[`${n.entity_type}:${n.id}`] = {
-        x: CX + r * Math.cos(angle),
-        y: CY + r * Math.sin(angle),
+        x: L.CX + r * Math.cos(angle),
+        y: L.CY + r * Math.sin(angle),
       };
     }
   } else {
@@ -211,7 +232,7 @@ function computeLayout(others: EntityGraphNode[]): LayoutResult {
       ...[...byType.keys()].filter((t) => !TYPE_ORDER.includes(t)),
     ];
 
-    const gapRad = (SECTOR_GAP_DEG * Math.PI) / 180;
+    const gapRad = (2 * Math.PI) / 180; // SECTOR_GAP_DEG
     let cursor = -Math.PI / 2;
 
     for (const t of orderedTypes) {
@@ -222,17 +243,17 @@ function computeLayout(others: EntityGraphNode[]): LayoutResult {
       const midAngle = (startAngle + endAngle) / 2;
 
       /** Viewport 900x600 comfortably contains R_OUTER=230, so no angle-dependent scaling needed. */
-      const sectorR = R_OUTER;
-      const sectorRInner = R_INNER;
-      const sectorRingSpacing = ringSpacing;
-      const sectorJitter = 40;
+      const sectorR = L.R_OUTER;
+      const sectorRInner = L.R_INNER;
+      const sectorRingSpacing = L.ringSpacing;
+      const sectorJitter = L.jitter;
 
       const ringCapacity = (ring: number): number => {
         if (ring === 0) return 1;
         if (ring === 1) return 6;
         return 6 + (ring - 1) * 3;
       };
-      const minSpacing = 100;
+      const minSpacing = L.minSpacing;
       const maxRings = Math.floor((sectorR - sectorRInner) / sectorRingSpacing) + 1;
       const clusterPos: Array<{ angle: number; radius: number }> = [];
       let placed = 0;
@@ -273,8 +294,8 @@ function computeLayout(others: EntityGraphNode[]): LayoutResult {
       nodes.forEach((n, i) => {
         const pos = clusterPos[i];
         placedAt[`${n.entity_type}:${n.id}`] = {
-          x: CX + pos.radius * Math.cos(pos.angle),
-          y: CY + pos.radius * Math.sin(pos.angle),
+          x: L.CX + pos.radius * Math.cos(pos.angle),
+          y: L.CY + pos.radius * Math.sin(pos.angle),
         };
       });
       sectors.push({ type: t, midAngle, count: nodes.length, sectorR });
@@ -313,6 +334,7 @@ interface HoverableNodeProps {
   isHovered: boolean;
   x: number;
   y: number;
+  L: GraphLayout;
   meta: { icon: string; color: string; label: string };
   onNeighborOpen: (n: EntityGraphNode) => void;
   onHoverEnter: (key: string) => void;
@@ -333,6 +355,7 @@ const HoverableNode = memo(function HoverableNode({
   isHovered,
   x,
   y,
+  L,
   meta,
   onNeighborOpen,
   onHoverEnter,
@@ -380,11 +403,11 @@ const HoverableNode = memo(function HoverableNode({
       onTouchMove={clearLongPress}
       onTouchCancel={clearLongPress}
     >
-      <circle cx={x} cy={y} r={NODE_R + 6} fill="transparent" />
+      <circle cx={x} cy={y} r={L.NODE_R + 6} fill="transparent" />
       <circle
         cx={x}
         cy={y}
-        r={isHovered ? NODE_R + 6 : NODE_R}
+        r={isHovered ? L.NODE_R + 6 : L.NODE_R}
         fill="#fff"
         stroke={meta.color}
         strokeWidth={isHovered ? 3 : 2}
@@ -402,7 +425,7 @@ const HoverableNode = memo(function HoverableNode({
       </text>
       <text
         x={x}
-        y={isHovered ? y + NODE_R + 18 : y + NODE_R + 14}
+        y={isHovered ? y + L.NODE_R + 18 : y + L.NODE_R + 14}
         fontSize={isHovered ? 14 : 11}
         fontWeight={isHovered ? 600 : undefined}
         fill={isHovered ? '#0f172a' : '#1e293b'}
@@ -423,16 +446,16 @@ const HoverableNode = memo(function HoverableNode({
         >
           <title>断开与中心实体的关联（不删除该{meta.label}）</title>
           <circle
-            cx={x + NODE_R - 2}
-            cy={y - NODE_R - 2}
+            cx={x + L.NODE_R - 2}
+            cy={y - L.NODE_R - 2}
             r={9}
             fill="#fff"
             stroke="#ef4444"
             strokeWidth={1.5}
           />
           <text
-            x={x + NODE_R - 2}
-            y={y - NODE_R + 2}
+            x={x + L.NODE_R - 2}
+            y={y - L.NODE_R + 2}
             fontSize="14"
             fontWeight={700}
             fill="#ef4444"
@@ -457,12 +480,13 @@ interface GraphSvgProps {
 }
 
 function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, onNodeMenu }: GraphSvgProps) {
+  const L = useGraphLayout();
   const center = useMemo(() => data.nodes.find((n) => n.is_center), [data]);
   const centerType = center?.entity_type;
   const others = useMemo(() => data.nodes.filter((n) => !n.is_center), [data]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const { placedAt, sectors } = useMemo(() => computeLayout(others), [others]);
+  const { placedAt, sectors } = useMemo(() => computeLayout(L, others), [L, others]);
 
   const onHoverEnter = useCallback((key: string) => setHoveredId(key), []);
   const onHoverLeave = useCallback(
@@ -492,33 +516,33 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
       )}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <svg
-          viewBox={`0 0 ${W} ${H}`}
+          viewBox={`0 0 ${L.W} ${L.H}`}
           width="100%"
-          height={H}
+          height={L.H}
           preserveAspectRatio="xMidYMid meet"
           style={{ display: 'block', background: 'linear-gradient(180deg,#fafbff,#f3f4f8)' }}
           data-testid="graph-svg"
         >
-          <circle cx={CX} cy={CY} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
+          <circle cx={L.CX} cy={L.CY} r={L.R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
 
           {data.edges.map((e, i) => {
             const fromKey = `${e.from_type}:${e.from_id}`;
             const toKey = `${e.to_type}:${e.to_id}`;
-            const ax = fromKey === centerKey ? CX : placedAt[fromKey]?.x ?? CX;
-            const ay = fromKey === centerKey ? CY : placedAt[fromKey]?.y ?? CY;
-            const bx = toKey === centerKey ? CX : placedAt[toKey]?.x ?? CX;
-            const by = toKey === centerKey ? CY : placedAt[toKey]?.y ?? CY;
+            const ax = fromKey === centerKey ? L.CX : placedAt[fromKey]?.x ?? L.CX;
+            const ay = fromKey === centerKey ? L.CY : placedAt[fromKey]?.y ?? L.CY;
+            const bx = toKey === centerKey ? L.CX : placedAt[toKey]?.x ?? L.CX;
+            const by = toKey === centerKey ? L.CY : placedAt[toKey]?.y ?? L.CY;
             const stroke = TYPE_META[e.to_type]?.color ?? '#94a3b8';
             return <GraphEdge key={i} ax={ax} ay={ay} bx={bx} by={by} stroke={stroke} />;
           })}
 
           {center && centerType && (
             <g data-testid="graph-center">
-              <circle cx={CX} cy={CY} r={CENTER_R} fill={TYPE_META[centerType].color} stroke="#1e293b" strokeWidth={2} />
-              <text x={CX} y={CY + 5} fontSize="14" fontWeight={700} fill="#fff" textAnchor="middle">
+              <circle cx={L.CX} cy={L.CY} r={L.CENTER_R} fill={TYPE_META[centerType].color} stroke="#1e293b" strokeWidth={2} />
+              <text x={L.CX} y={L.CY + 5} fontSize="14" fontWeight={700} fill="#fff" textAnchor="middle">
                 {TYPE_META[centerType].icon}
               </text>
-              <text x={CX} y={CY + CENTER_R + 16} fontSize="12" fontWeight={600} fill="#1e293b" textAnchor="middle">
+              <text x={L.CX} y={L.CY + L.CENTER_R + 16} fontSize="12" fontWeight={600} fill="#1e293b" textAnchor="middle">
                 {truncate(center.label, 18)}
               </text>
               {onQuickCreate && (
@@ -528,16 +552,16 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
                   onClick={onQuickCreate}
                 >
                   <circle
-                    cx={CX + CENTER_R - 4}
-                    cy={CY - CENTER_R + 4}
+                    cx={L.CX + L.CENTER_R - 4}
+                    cy={L.CY - L.CENTER_R + 4}
                     r={13}
                     fill="#fff"
                     stroke={TYPE_META[centerType].color}
                     strokeWidth={2}
                   />
                   <text
-                    x={CX + CENTER_R - 4}
-                    y={CY - CENTER_R + 9}
+                    x={L.CX + L.CENTER_R - 4}
+                    y={L.CY - L.CENTER_R + 9}
                     fontSize="18"
                     fontWeight={700}
                     fill={TYPE_META[centerType].color}
@@ -554,8 +578,8 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
           {sectors.map((s) => {
             const meta = TYPE_META[s.type];
             const lr = s.sectorR + 30;
-            const lx = CX + lr * Math.cos(s.midAngle);
-            const ly = CY + lr * Math.sin(s.midAngle);
+            const lx = L.CX + lr * Math.cos(s.midAngle);
+            const ly = L.CY + lr * Math.sin(s.midAngle);
             const cosA = Math.cos(s.midAngle);
             const sinA = Math.sin(s.midAngle);
             const anchor = Math.abs(cosA) < 0.3 ? 'middle' : cosA > 0 ? 'start' : 'end';
@@ -578,7 +602,7 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
           })}
 
           {others.length === 0 && (
-            <text x={CX} y={CY + R_OUTER + 40} fontSize="13" fill="#94a3b8" textAnchor="middle">
+            <text x={L.CX} y={L.CY + L.R_OUTER + 40} fontSize="13" fill="#94a3b8" textAnchor="middle">
               暂无关联
             </text>
           )}
@@ -598,6 +622,7 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
                   isHovered={false}
                   x={p.x}
                   y={p.y}
+                  L={L}
                   meta={meta}
                   onNeighborOpen={onNeighborOpen}
                   onHoverEnter={onHoverEnter}
@@ -625,6 +650,7 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
                   isHovered={true}
                   x={p.x}
                   y={p.y}
+                  L={L}
                   meta={meta}
                   onNeighborOpen={onNeighborOpen}
                   onHoverEnter={onHoverEnter}
