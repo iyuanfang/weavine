@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -34,18 +34,29 @@ interface Satellite {
   href: string;
 }
 
-const MAX_CONTACTS = 8;
-const MAX_SATELLITES = 12;
+// Desktop and mobile get separate canvases: a 390px phone scaling the
+// 900px desktop canvas renders ~18px nodes — unreadable. The mobile
+// canvas is near 1:1 with the viewport, so nodes keep their real size,
+// and it shows fewer nodes to stay uncluttered.
+const LAYOUT = {
+  desktop: { W: 900, H: 460, R_INNER: 120, R_OUTER: 190, CENTER_R: 44, NODE_R: 28, MAX_CONTACTS: 8, MAX_SATELLITES: 12 },
+  mobile: { W: 480, H: 560, R_INNER: 125, R_OUTER: 185, CENTER_R: 50, NODE_R: 34, MAX_CONTACTS: 6, MAX_SATELLITES: 6 },
+};
 
-const W = 900;
-const H = 460;
-const CX = W / 2;
-const CY = H / 2;
-const R_INNER = 120;
-const R_OUTER = 190;
+type Layout = (typeof LAYOUT)['desktop'];
 
-const CENTER_R = 44;
-const NODE_R = 28;
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const fn = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return mobile;
+}
 
 const ME_COLOR = '#1e293b';
 
@@ -66,8 +77,8 @@ function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-function polar(r: number, angle: number): { x: number; y: number } {
-  return { x: CX + r * Math.cos(angle), y: CY + r * Math.sin(angle) };
+function polar(d: Layout, r: number, angle: number): { x: number; y: number } {
+  return { x: d.W / 2 + r * Math.cos(angle), y: d.H / 2 + r * Math.sin(angle) };
 }
 
 const IMPORTANCE_WEIGHT: Record<string, number> = { high: 0, medium: 1, low: 2 };
@@ -152,7 +163,14 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const adapter = useAdapter();
   const queryClient = useQueryClient();
   const quickCapture = useQuickCapture();
+  const isMobile = useIsMobile();
+  const dims: Layout = isMobile ? LAYOUT.mobile : LAYOUT.desktop;
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  // Satellites the user removed from the home view (− badge). event/action
+  // are REALLY unlinked from their contact in the DB; projects are only
+  // collapsed here (member relations are multi-person data, not an edge).
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
+  const [confirmTarget, setConfirmTarget] = useState<Satellite | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
   const [meCreateKind, setMeCreateKind] = useState<'contact' | 'action' | 'interaction' | 'event' | null>(null);
   // Neutral center for the inline forms: they only link to the center when
@@ -185,7 +203,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   });
 
   const nodes = useMemo(() => {
-    const pickedContacts = sortContactsForHome(contacts, events, actions).slice(0, MAX_CONTACTS);
+    const pickedContacts = sortContactsForHome(contacts, events, actions).slice(0, dims.MAX_CONTACTS);
     const contactIds = new Set(pickedContacts.map((c) => c.id));
 
     const openActions = actions.filter((a) => a.status !== 'done');
@@ -221,7 +239,8 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
       });
     }
 
-    const pickedSatellites = satellites.slice(0, MAX_SATELLITES);
+    const visibleSatellites = satellites.filter((s) => !hiddenIds.has(s.id));
+    const pickedSatellites = visibleSatellites.slice(0, dims.MAX_SATELLITES);
     const attachedSatellites = pickedSatellites.filter((s) =>
       s.linkedContactIds.some((cid) => contactIds.has(cid)),
     );
@@ -231,7 +250,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
 
     const contactNodes = pickedContacts.map((c, i) => {
       const angle = (2 * Math.PI * i) / Math.max(pickedContacts.length, 1) - Math.PI / 2;
-      return { contact: c, angle, ...polar(R_INNER, angle) };
+      return { contact: c, angle, ...polar(dims, dims.R_INNER, angle) };
     });
 
     const contactAngleById = new Map(contactNodes.map((n) => [n.contact.id, n.angle]));
@@ -248,7 +267,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
           anchorCounters.set(key, idx + 1);
           const base = anchor !== undefined ? contactAngleById.get(anchor)! : 0;
           const fan = (idx - 1) * 0.34;
-          return { s, ...polar(R_OUTER, base + fan) };
+          return { s, ...polar(dims, dims.R_OUTER, base + fan) };
         });
       })(),
       ...orbitSatellites.map((s, i) => {
@@ -256,15 +275,50 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
           (2 * Math.PI * i) / Math.max(orbitSatellites.length, 1) -
           Math.PI / 2 +
           Math.PI / Math.max(orbitSatellites.length, 1);
-        return { s, ...polar(R_OUTER + 14, angle) };
+        return { s, ...polar(dims, dims.R_OUTER + 14, angle) };
       }),
     ];
 
     return { contactNodes, satelliteNodes };
-  }, [contacts, events, actions, activeProjects, projectMembersQuery.data]);
+  }, [contacts, events, actions, activeProjects, projectMembersQuery.data, dims, hiddenIds]);
+
+  // − badge confirm: event/action really unlink from their contact (the
+  // entity survives, it just loses the edge — same rule as EntityGraph);
+  // projects are only collapsed from the home view because member
+  // relations are shared multi-person data, not a single edge.
+  const confirmUnlink = async () => {
+    if (!confirmTarget) return;
+    const s = confirmTarget;
+    const rawId = s.id.replace(/^(event|action|project):/, '');
+    try {
+      if (s.kind === 'event') {
+        const ev = await adapter.events.get(rawId);
+        if (ev) {
+          const rest = (ev.participants ?? [])
+            .map((p) => p.contact_id)
+            .filter((cid): cid is string => !!cid && !s.linkedContactIds.includes(cid));
+          // NOTE: the server PUT skips participant_contact_ids when the JSON
+          // value is null — clearing the list requires an explicit [].
+          await adapter.events.update({
+            id: ev.id,
+            participant_contact_ids: rest,
+            contact_id: rest[0] ?? null,
+          });
+        }
+      } else if (s.kind === 'action') {
+        await adapter.actions.update({ id: rawId, contact_id: null });
+      }
+      setHiddenIds((prev) => new Set(prev).add(s.id));
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['actions'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    } finally {
+      setConfirmTarget(null);
+    }
+  };
 
   const hasContent = nodes.contactNodes.length > 0 || nodes.satelliteNodes.length > 0;
-  const hiddenContacts = Math.max(0, contacts.length - MAX_CONTACTS);
+  const hiddenContacts = Math.max(0, contacts.length - dims.MAX_CONTACTS);
 
   return (
     <div className="card" style={{ position: 'relative', padding: 0, overflow: 'hidden' }}>
@@ -315,6 +369,63 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
           </button>
         </div>
       </div>
+
+      {confirmTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="home-graph-unlink-confirm"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={() => setConfirmTarget(null)}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 10,
+              padding: 20,
+              maxWidth: 400,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+              {confirmTarget.kind === 'project' ? '从首页收起该项目？' : '断开关联？'}
+            </h3>
+            <p style={{ margin: '0 0 4px', fontSize: 14, color: '#1e293b' }}>
+              「{confirmTarget.label}」
+            </p>
+            <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+              {confirmTarget.kind === 'project'
+                ? '仅在首页人脉网中收起，项目及其成员数据不受影响。'
+                : '将断开它与联系人的关联。实体本身不会被删除。'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setConfirmTarget(null)}>
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-testid="home-graph-unlink-confirm-ok"
+                style={{ background: '#ef4444', borderColor: '#ef4444' }}
+                onClick={() => void confirmUnlink()}
+              >
+                {confirmTarget.kind === 'project' ? '收起' : '断开关联'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {meCreateOpen && (
         <div
@@ -486,23 +597,23 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
 
       {hasContent ? (
         <svg
-          viewBox={`0 0 ${W} ${H}`}
+          viewBox={`0 0 ${dims.W} ${dims.H}`}
           role="img"
           aria-label="以我为中心的人脉关系图"
           width="100%"
-          height={H}
+          height={dims.H}
           preserveAspectRatio="xMidYMid meet"
           style={{ display: 'block', background: 'linear-gradient(180deg,#fafbff,#f3f4f8)' }}
         >
-          <circle cx={CX} cy={CY} r={R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
-          <circle cx={CX} cy={CY} r={R_INNER} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.3} />
+          <circle cx={dims.W / 2} cy={dims.H / 2} r={dims.R_OUTER + 30} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.4} />
+          <circle cx={dims.W / 2} cy={dims.H / 2} r={dims.R_INNER} fill="none" stroke="#e5e7eb" strokeDasharray="2 4" opacity={0.3} />
 
           {/* spokes: 我 → contacts */}
           {nodes.contactNodes.map((n) => (
             <line
               key={`spoke-${n.contact.id}`}
-              x1={CX}
-              y1={CY}
+              x1={dims.W / 2}
+              y1={dims.H / 2}
               x2={n.x}
               y2={n.y}
               stroke={TYPE_META.contact.color}
@@ -546,11 +657,11 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 onClick={() => navigate(sn.s.href)}
               >
                 <title>{sn.s.label}</title>
-                <circle cx={sn.x} cy={sn.y} r={NODE_R + 6} fill="transparent" />
+                <circle cx={sn.x} cy={sn.y} r={dims.NODE_R + 6} fill="transparent" />
                 <circle
                   cx={sn.x}
                   cy={sn.y}
-                  r={isHovered ? NODE_R + 6 : NODE_R}
+                  r={isHovered ? dims.NODE_R + 6 : dims.NODE_R}
                   fill="#fff"
                   stroke={meta.color}
                   strokeWidth={isHovered ? 3 : 2}
@@ -568,7 +679,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 </text>
                 <text
                   x={sn.x}
-                  y={isHovered ? sn.y + NODE_R + 18 : sn.y + NODE_R + 14}
+                  y={isHovered ? sn.y + dims.NODE_R + 18 : sn.y + dims.NODE_R + 14}
                   fontSize={isHovered ? 14 : 11}
                   fontWeight={isHovered ? 600 : undefined}
                   fill={isHovered ? '#0f172a' : '#1e293b'}
@@ -581,7 +692,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 {!isHovered && !!sn.s.extraContacts && (
                   <text
                     x={sn.x}
-                    y={isHovered ? sn.y + NODE_R + 32 : sn.y + NODE_R + 26}
+                    y={isHovered ? sn.y + dims.NODE_R + 32 : sn.y + dims.NODE_R + 26}
                     fontSize={10}
                     fontWeight={600}
                     fill={meta.color}
@@ -591,6 +702,37 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                   >
                     +{sn.s.extraContacts} 人
                   </text>
+                )}
+                {(isHovered || isMobile) && (
+                  <g
+                    data-testid={`home-graph-unlink-${sn.s.kind}-${sn.s.id}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmTarget(sn.s);
+                    }}
+                  >
+                    <title>从人脉网移除（不删除实体本身）</title>
+                    <circle
+                      cx={sn.x + dims.NODE_R - 2}
+                      cy={sn.y - dims.NODE_R - 2}
+                      r={isMobile ? 12 : 9}
+                      fill="#fff"
+                      stroke="#ef4444"
+                      strokeWidth={1.5}
+                    />
+                    <text
+                      x={sn.x + dims.NODE_R - 2}
+                      y={sn.y - dims.NODE_R + 2}
+                      fontSize="14"
+                      fontWeight={700}
+                      fill="#ef4444"
+                      textAnchor="middle"
+                      pointerEvents="none"
+                    >
+                      −
+                    </text>
+                  </g>
                 )}
               </g>
             );
@@ -611,11 +753,11 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 onClick={() => navigate(`/graph/contact/${n.contact.id}`)}
               >
                 <title>{n.contact.nickname} 的关系图</title>
-                <circle cx={n.x} cy={n.y} r={NODE_R + 6} fill="transparent" />
+                <circle cx={n.x} cy={n.y} r={dims.NODE_R + 6} fill="transparent" />
                 <circle
                   cx={n.x}
                   cy={n.y}
-                  r={isHovered ? NODE_R + 6 : NODE_R}
+                  r={isHovered ? dims.NODE_R + 6 : dims.NODE_R}
                   fill="#fff"
                   stroke={meta.color}
                   strokeWidth={isHovered ? 3 : 2}
@@ -633,7 +775,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 </text>
                 <text
                   x={n.x}
-                  y={isHovered ? n.y + NODE_R + 18 : n.y + NODE_R + 14}
+                  y={isHovered ? n.y + dims.NODE_R + 18 : n.y + dims.NODE_R + 14}
                   fontSize={isHovered ? 14 : 11}
                   fontWeight={isHovered ? 600 : undefined}
                   fill={isHovered ? '#0f172a' : '#1e293b'}
@@ -649,8 +791,8 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
 
           {/* 我 at the center — mirrors EntityGraph's center node, with its + badge */}
           <g data-testid="home-graph-center">
-            <circle cx={CX} cy={CY} r={CENTER_R} fill={ME_COLOR} stroke={ME_COLOR} strokeWidth={2} />
-            <text x={CX} y={CY + 5} fontSize="16" fontWeight={700} fill="#fff" textAnchor="middle">
+            <circle cx={dims.W / 2} cy={dims.H / 2} r={dims.CENTER_R} fill={ME_COLOR} stroke={ME_COLOR} strokeWidth={2} />
+            <text x={dims.W / 2} y={dims.H / 2 + 5} fontSize="16" fontWeight={700} fill="#fff" textAnchor="middle">
               我
             </text>
             <g
@@ -663,16 +805,16 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
             >
               <title>新建联系人 / 日程 / 待办…</title>
               <circle
-                cx={CX + CENTER_R - 4}
-                cy={CY - CENTER_R + 4}
+                cx={dims.W / 2 + dims.CENTER_R - 4}
+                cy={dims.H / 2 - dims.CENTER_R + 4}
                 r={13}
                 fill="#fff"
                 stroke={ME_COLOR}
                 strokeWidth={2}
               />
               <text
-                x={CX + CENTER_R - 4}
-                y={CY - CENTER_R + 9}
+                x={dims.W / 2 + dims.CENTER_R - 4}
+                y={dims.H / 2 - dims.CENTER_R + 9}
                 fontSize="18"
                 fontWeight={700}
                 fill={ME_COLOR}

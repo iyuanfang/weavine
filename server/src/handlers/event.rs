@@ -429,8 +429,11 @@ pub async fn update(
         }
 
         let new_first: Option<&String> = new_ids.first();
+        // When the participant list is cleared, contact_id must become SQL
+        // NULL — binding "" (the default) violates the contact foreign key
+        // and 500s the whole update.
         sqlx::query("UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3")
-            .bind(new_first.cloned().unwrap_or_default())
+            .bind(new_first.cloned())
             .bind(&now)
             .bind(&id)
             .execute(&mut *tx)
