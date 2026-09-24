@@ -41,7 +41,7 @@ interface Satellite {
 // and it shows fewer nodes to stay uncluttered.
 const LAYOUT = {
   desktop: { W: 900, H: 460, R_INNER: 120, R_OUTER: 190, CENTER_R: 44, NODE_R: 28, MAX_CONTACTS: 8, MAX_SATELLITES: 12 },
-  mobile: { W: 480, H: 490, R_INNER: 115, R_OUTER: 168, CENTER_R: 48, NODE_R: 32, MAX_CONTACTS: 6, MAX_SATELLITES: 6 },
+  mobile: { W: 480, H: 435, R_INNER: 105, R_OUTER: 155, CENTER_R: 46, NODE_R: 31, MAX_CONTACTS: 6, MAX_SATELLITES: 6 },
 };
 
 type Layout = (typeof LAYOUT)['desktop'];
