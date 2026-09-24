@@ -348,8 +348,7 @@ pub fn extract_auth_with_service(headers: &HeaderMap) -> Result<Option<String>, 
         if SERVICE_KEYS.get().map_or(false, |ks| {
             ks.iter().any(|k| constant_time_eq(token.as_bytes(), k.as_bytes()))
         }) {
-                return Ok(Some(SERVICE_USER_ID.to_string()));
-            }
+            return Ok(Some(SERVICE_USER_ID.to_string()));
         }
     }
     Ok(None)
