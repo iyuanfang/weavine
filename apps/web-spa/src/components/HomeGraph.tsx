@@ -167,10 +167,6 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const isMobile = useIsMobile();
   const dims: Layout = isMobile ? LAYOUT.mobile : LAYOUT.desktop;
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  // Satellites the user removed from the home view (− badge). event/action
-  // are REALLY unlinked from their contact in the DB; projects are only
-  // collapsed here (member relations are multi-person data, not an edge).
-  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
   const [confirmTarget, setConfirmTarget] = useState<Satellite | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
   const [meCreateKind, setMeCreateKind] = useState<
@@ -242,8 +238,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
       });
     }
 
-    const visibleSatellites = satellites.filter((s) => !hiddenIds.has(s.id));
-    const pickedSatellites = visibleSatellites.slice(0, dims.MAX_SATELLITES);
+    const pickedSatellites = satellites.slice(0, dims.MAX_SATELLITES);
     const attachedSatellites = pickedSatellites.filter((s) =>
       s.linkedContactIds.some((cid) => contactIds.has(cid)),
     );
@@ -283,37 +278,25 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
     ];
 
     return { contactNodes, satelliteNodes };
-  }, [contacts, events, actions, activeProjects, projectMembersQuery.data, dims, hiddenIds]);
+  }, [contacts, events, actions, activeProjects, projectMembersQuery.data, dims]);
 
-  // − badge confirm: event/action really unlink from their contact (the
-  // entity survives, it just loses the edge — same rule as EntityGraph);
-  // projects are only collapsed from the home view because member
-  // relations are shared multi-person data, not a single edge.
-  const confirmUnlink = async () => {
+  // − badge: deletes the entity outright (server soft-deletes via
+  // deleted_at). The confirm dialog is the only guard against mis-taps.
+  const confirmDelete = async () => {
     if (!confirmTarget) return;
     const s = confirmTarget;
     const rawId = s.id.replace(/^(event|action|project):/, '');
     try {
       if (s.kind === 'event') {
-        const ev = await adapter.events.get(rawId);
-        if (ev) {
-          const rest = (ev.participants ?? [])
-            .map((p) => p.contact_id)
-            .filter((cid): cid is string => !!cid && !s.linkedContactIds.includes(cid));
-          // NOTE: the server PUT skips participant_contact_ids when the JSON
-          // value is null — clearing the list requires an explicit [].
-          await adapter.events.update({
-            id: ev.id,
-            participant_contact_ids: rest,
-            contact_id: rest[0] ?? null,
-          });
-        }
+        await adapter.events.delete(rawId);
       } else if (s.kind === 'action') {
-        await adapter.actions.update({ id: rawId, contact_id: null });
+        await adapter.actions.delete(rawId);
+      } else if (s.kind === 'project') {
+        await adapter.projects.delete(rawId);
       }
-      setHiddenIds((prev) => new Set(prev).add(s.id));
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['actions'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
     } finally {
       setConfirmTarget(null);
@@ -402,15 +385,10 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-              {confirmTarget.kind === 'project' ? '从首页收起该项目？' : '断开关联？'}
+              删除{confirmTarget.kind === 'event' ? '日程' : confirmTarget.kind === 'action' ? '待办' : '项目'}「{confirmTarget.label}」？
             </h3>
-            <p style={{ margin: '0 0 4px', fontSize: 14, color: '#1e293b' }}>
-              「{confirmTarget.label}」
-            </p>
             <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-              {confirmTarget.kind === 'project'
-                ? '仅在首页人脉网中收起，项目及其成员数据不受影响。'
-                : '将断开它与联系人的关联。实体本身不会被删除。'}
+              确认后将从人脉网中删除。此操作不可恢复。
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button type="button" className="btn btn-ghost" onClick={() => setConfirmTarget(null)}>
@@ -421,9 +399,9 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 className="btn btn-primary"
                 data-testid="home-graph-unlink-confirm-ok"
                 style={{ background: '#ef4444', borderColor: '#ef4444' }}
-                onClick={() => void confirmUnlink()}
+                onClick={() => void confirmDelete()}
               >
-                {confirmTarget.kind === 'project' ? '收起' : '断开关联'}
+                删除
               </button>
             </div>
           </div>
@@ -742,7 +720,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                       setConfirmTarget(sn.s);
                     }}
                   >
-                    <title>从人脉网移除（不删除实体本身）</title>
+                    <title>删除</title>
                     <circle
                       cx={sn.x + dims.NODE_R - 2}
                       cy={sn.y - dims.NODE_R - 2}
