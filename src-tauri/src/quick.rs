@@ -283,7 +283,10 @@ fn match_contact(s: &str, contacts: &[Contact]) -> Option<(String, f32)> {
             }
         }
         if let Some(phone) = &c.phone {
-            if phone.len() >= 4 && s.contains(&phone[phone.len() - 4..]) {
+            // chars().rev().take(4): byte-slicing phone[len-4..] panics when
+            // the number contains multibyte chars straddling the boundary.
+            let last4: String = phone.chars().rev().take(4).collect();
+            if last4.chars().count() == 4 && s.contains(&last4) {
                 best = Some((c.id.clone(), 0.95));
             }
         }

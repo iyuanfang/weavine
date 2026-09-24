@@ -42,7 +42,21 @@ impl LocalFsStorage {
     }
 
     fn path_for(&self, key: &StorageKey) -> PathBuf {
-        self.root.join(&key.0)
+        // Keys are minted as
+        // `{user_id}/{kind}/{owner_type}/{owner_id}/{sha}-{uuid}.{ext}` and
+        // are the only values that may reach the filesystem; anything with
+        // traversal segments, separators or absolute-path components is
+        // rejected before join().
+        let key = &key.0;
+        if key.is_empty()
+            || key.starts_with('/')
+            || key.starts_with("\\")
+            || key.contains("\\")
+            || key.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..")
+        {
+            return self.root.clone();
+        }
+        self.root.join(key)
     }
 }
 
@@ -123,6 +137,13 @@ pub async fn serve_file(
     Path(key): Path<String>,
     axum::Extension(storage): axum::Extension<Arc<dyn Storage>>,
 ) -> Result<Response<Body>, (StatusCode, String)> {
+    if key.is_empty()
+        || key.starts_with('/')
+        || key.contains("\\")
+        || key.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
+        return Err((StatusCode::BAD_REQUEST, "invalid storage key".into()));
+    }
     let ext = key.rsplit('.').next().unwrap_or("bin");
     let mime = match ext {
         "png" => "image/png",

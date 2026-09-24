@@ -3,7 +3,6 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
-const GRACE_PERIOD_SECS: i64 = 5;
 
 #[derive(serde::Deserialize)]
 pub struct ScheduleArgs {
@@ -47,9 +46,13 @@ pub fn schedule_notification(app: AppHandle, args: ScheduleArgs) -> Result<(), S
 
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        if delay > GRACE_PERIOD_SECS {
-            tokio::time::sleep(Duration::from_secs((delay - GRACE_PERIOD_SECS) as u64)).await;
-        }
+        // Sleep the FULL delay. Waking GRACE_PERIOD_SECS early raced the
+        // claim: claim_due_reminders only selects trigger_at <= now, so at
+        // wake time the reminder was still 5 s in the future, the claim
+        // returned nothing, and the task exited — the reminder never fired
+        // until the next app launch's catch-up.
+        let sleep_secs = delay.max(0) as u64;
+        tokio::time::sleep(Duration::from_secs(sleep_secs)).await;
         let db = app_clone.state::<crate::db::Database>();
         let due = {
             let conn = match db.conn.lock() {
