@@ -10,16 +10,22 @@ interface GraphLayout {
   W: number; H: number; CX: number; CY: number;
   R_INNER: number; R_OUTER: number; NODE_R: number; CENTER_R: number;
   ringSpacing: number; minSpacing: number; jitter: number;
+  ICON_FONT: number; LABEL_FONT: number;
 }
 const LAYOUT_DESKTOP: GraphLayout = {
   W: 900, H: 600, CX: 450, CY: 300,
   R_INNER: 80, R_OUTER: 230, NODE_R: 28, CENTER_R: 44,
   ringSpacing: 80, minSpacing: 100, jitter: 40,
+  ICON_FONT: 20, LABEL_FONT: 13,
 };
+// 390 = exactly the iPhone-class viewport width, so the SVG renders 1:1
+// and every font/radius below is what the user actually sees (no hover
+// exists on touch — sizes must read statically).
 const LAYOUT_MOBILE: GraphLayout = {
-  W: 480, H: 415, CX: 240, CY: 208,
-  R_INNER: 50, R_OUTER: 138, NODE_R: 26, CENTER_R: 38,
-  ringSpacing: 44, minSpacing: 62, jitter: 22,
+  W: 390, H: 470, CX: 195, CY: 235,
+  R_INNER: 48, R_OUTER: 132, NODE_R: 28, CENTER_R: 40,
+  ringSpacing: 44, minSpacing: 58, jitter: 20,
+  ICON_FONT: 22, LABEL_FONT: 13,
 };
 
 function useGraphLayout(): GraphLayout {
@@ -417,7 +423,7 @@ const HoverableNode = memo(function HoverableNode({
       <text
         x={x}
         y={isHovered ? y + 6 : y + 5}
-        fontSize={isHovered ? 24 : 18}
+        fontSize={isHovered ? L.ICON_FONT + 6 : L.ICON_FONT}
         textAnchor="middle"
         pointerEvents="none"
       >
@@ -589,7 +595,7 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
                 key={`label-${s.type}`}
                 x={lx}
                 y={ly + dy}
-                fontSize="12"
+                fontSize={L.LABEL_FONT}
                 fontWeight={600}
                 fill="#1e293b"
                 textAnchor={anchor}

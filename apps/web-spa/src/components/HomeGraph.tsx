@@ -40,8 +40,17 @@ interface Satellite {
 // canvas is near 1:1 with the viewport, so nodes keep their real size,
 // and it shows fewer nodes to stay uncluttered.
 const LAYOUT = {
-  desktop: { W: 900, H: 460, R_INNER: 120, R_OUTER: 190, CENTER_R: 44, NODE_R: 28, MAX_CONTACTS: 8, MAX_SATELLITES: 12 },
-  mobile: { W: 480, H: 435, R_INNER: 105, R_OUTER: 155, CENTER_R: 46, NODE_R: 31, MAX_CONTACTS: 6, MAX_SATELLITES: 6 },
+  desktop: {
+    W: 900, H: 460, R_INNER: 120, R_OUTER: 190, CENTER_R: 44, NODE_R: 28,
+    MAX_CONTACTS: 8, MAX_SATELLITES: 12, ICON_FONT: 20, ICON_HOVER_FONT: 26, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
+  },
+  // 390 = exactly the iPhone-class viewport width, so the SVG renders 1:1
+  // and every font/radius below is what the user actually sees. No hover
+  // exists on touch — sizes are picked to be readable statically.
+  mobile: {
+    W: 390, H: 430, R_INNER: 98, R_OUTER: 150, CENTER_R: 42, NODE_R: 30,
+    MAX_CONTACTS: 6, MAX_SATELLITES: 6, ICON_FONT: 20, ICON_HOVER_FONT: 24, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
+  },
 };
 
 type Layout = (typeof LAYOUT)['desktop'];
@@ -679,7 +688,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 <text
                   x={sn.x}
                   y={isHovered ? sn.y + 6 : sn.y + 5}
-                  fontSize={isHovered ? 24 : 18}
+                  fontSize={isHovered ? dims.ICON_HOVER_FONT : dims.ICON_FONT}
                   textAnchor="middle"
                   pointerEvents="none"
                 >
@@ -688,7 +697,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 <text
                   x={sn.x}
                   y={isHovered ? sn.y + dims.NODE_R + 18 : sn.y + dims.NODE_R + 14}
-                  fontSize={isHovered ? 14 : 11}
+                  fontSize={isHovered ? dims.LABEL_HOVER_FONT : dims.LABEL_FONT}
                   fontWeight={isHovered ? 600 : undefined}
                   fill={isHovered ? '#0f172a' : '#1e293b'}
                   textAnchor="middle"
