@@ -79,7 +79,7 @@ const VITE_API_BASE: string = (() => {
 
 // ── Auth helper ────────────────────────────────────────
 
-import { clearSession, getAccessToken } from '../auth/storage';
+import { clearSession, getAccessToken, loadSession, refresh, saveSession } from '../auth/storage';
 
 function authHeaders(): Record<string, string> {
   const token = getAccessToken();
@@ -121,12 +121,26 @@ function buildUrl(baseUrl: string, path: string, method: string): string {
   return url;
 }
 
+// Set while a token refresh is in flight so parallel 401s wait on the
+// same rotation instead of stampeding the refresh endpoint.
+let refreshInFlight: Promise<unknown> | null = null;
+
+// Clears the session AND notifies the app (App.tsx listens) so the
+// TanStack Query cache — which holds the previous identity's data — is
+// dropped before the login screen renders.
+function sessionExpired(): void {
+  clearSession();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('weavine:session-expired'));
+  }
+}
+
 async function request<R>(
   baseUrl: string,
   method: string,
   path: string,
   body?: unknown,
-  reqOpts?: { unwrap?: boolean },
+  reqOpts?: { unwrap?: boolean; retried401?: boolean },
 ): Promise<R> {
   const unwrap = reqOpts?.unwrap !== false;
   const url = buildUrl(baseUrl, path, method);
@@ -140,24 +154,50 @@ async function request<R>(
 
   const resp = await fetch(url, opts);
 
-    if (!resp.ok) {
-      if (resp.status === 401 && typeof window !== 'undefined') {
-        clearSession();
-        // Only force-redirect when the user is on a route that
-        // actually requires a session. Public auth-bootstrap
-        // routes (/forgot-password, /reset-password) MUST stay
-        // visible even when the visitor is anonymous — otherwise
-        // the very first /api/auth/me probe on those pages
-        // bounces them straight back to /login.
-        if (!isPublicPathname(window.location.pathname)) {
-          const next = encodeURIComponent(window.location.pathname + window.location.search);
-          // SPA nav, not a full reload. See SearchPalette.tsx for the
-          // full explanation of why `window.location.assign()` blanks
-          // the Tauri production webview (no SPA history fallback).
-          window.history.pushState({}, '', `/login?next=${next}`);
-          window.dispatchEvent(new PopStateEvent('popstate'));
+  if (!resp.ok) {
+    // 401: one single-flight attempt to rotate the access token via the
+    // refresh token before declaring the session dead.
+    if (
+      resp.status === 401 &&
+      !reqOpts?.retried401 &&
+      typeof window !== 'undefined'
+    ) {
+      const session = loadSession();
+      if (session?.refresh_token) {
+        if (!refreshInFlight) {
+          refreshInFlight = refresh(session.refresh_token, baseUrl)
+            .then((s) => {
+              saveSession(s);
+              return s;
+            })
+            .finally(() => {
+              refreshInFlight = null;
+            });
         }
+        await refreshInFlight.catch(() => {
+          throw new Error('refresh failed');
+        });
+        return request<R>(baseUrl, method, path, body, { ...reqOpts, retried401: true });
       }
+    }
+
+    if (resp.status === 401 && typeof window !== 'undefined') {
+      sessionExpired();
+      // Only force-redirect when the user is on a route that actually
+      // requires a session. Public auth-bootstrap routes
+      // (/forgot-password, /reset-password) MUST stay visible even when
+      // the visitor is anonymous — otherwise the very first
+      // /api/auth/me probe on those pages bounces them to /login.
+      if (!isPublicPathname(window.location.pathname)) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        // SPA nav, not a full reload. See SearchPalette.tsx for the
+        // full explanation of why `window.location.assign()` blanks the
+        // Tauri production webview (no SPA history fallback).
+        window.history.pushState({}, '', `/login?next=${next}`);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+    }
+
     let msg: string;
     try {
       msg = await resp.text();
@@ -618,7 +658,7 @@ export class HttpAdapter implements PRMAdapter {
       const token = getAccessToken();
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      console.log('[avatar-upload] fetch start: kind=', input.kind, 'owner_type=', input.owner_type, 'owner_id=', input.owner_id, 'mime=', input.mime, 'bytes=', input.bytes.byteLength, 'token=', token ? `present(${token.slice(0, 12)}…)` : 'MISSING');
+      console.log('[avatar-upload] fetch start: kind=', input.kind, 'owner_type=', input.owner_type, 'owner_id=', input.owner_id, 'mime=', input.mime, 'bytes=', input.bytes.byteLength, 'token=', token ? 'present' : 'MISSING');
       const resp = await fetch(
         buildUrl(this.baseUrl, '/api/media', 'POST'),
         { method: 'POST', headers, body: form },
@@ -631,7 +671,7 @@ export class HttpAdapter implements PRMAdapter {
         throw new Error(`POST /api/media: ${resp.status} ${resp.statusText} — ${msg}`);
       }
       const data = (await resp.json()) as MediaItem;
-      console.log('[avatar-upload] fetch ok, media=', data);
+
       return data;
     },
 

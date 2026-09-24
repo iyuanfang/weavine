@@ -62,6 +62,13 @@ function ReminderPoller() {
 export function Providers({ children }: { children: ReactNode }) {
   const adapter = useMemo<PRMAdapter>(() => createDefaultAdapter(), []);
   const queryClient = useMemo(() => createWebQueryClient(), []);
+  // Any session teardown (logout, 401 bounce) must drop the query cache —
+  // it holds the previous identity's data.
+  useEffect(() => {
+    const clear = () => queryClient.clear();
+    window.addEventListener('weavine:session-expired', clear);
+    return () => window.removeEventListener('weavine:session-expired', clear);
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

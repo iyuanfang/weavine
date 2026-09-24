@@ -16,6 +16,26 @@ pub struct AvatarResult {
     pub data_url: String,
 }
 
+/// Guards every `data_dir().join(key)` against traversal: keys come from
+/// the DB (and can arrive via cloud sync), so a crafted
+/// `..\..`/absolute value must not escape the media dir.
+fn safe_media_path(key: &str) -> Result<PathBuf, String> {
+    if key.is_empty()
+        || key.starts_with('/')
+        || key.starts_with("\\")
+        || key.contains("\\")
+        || key.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
+        return Err(format!("unsafe media key: {key}"));
+    }
+    let path = data_dir()?.join(key);
+    let root = data_dir()?;
+    if !path.starts_with(&root) {
+        return Err(format!("unsafe media key: {key}"));
+    }
+    Ok(path)
+}
+
 pub(crate) fn data_dir() -> Result<PathBuf, String> {
     let base = media_base_dir();
     fs::create_dir_all(&base).map_err(|e| format!("create {}: {e}", base.display()))?;
@@ -346,7 +366,7 @@ pub fn get_avatar(
         .ok();
     let Some((filename,)) = row else { return Ok(None) };
     // The Media.filename column stores the full storage_key (see upsert_media).
-    let path = data_dir()?.join(&filename);
+    let path = safe_media_path(&filename)?;
     let bytes = fs::read(&path).map_err(|e| e.to_string())?;
     let mime = match path.extension().and_then(|s| s.to_str()) {
         Some("png") => "image/png",
@@ -378,7 +398,7 @@ pub fn delete_avatar(
         )
         .ok();
     let Some((storage_key,)) = row else { return Ok(()) };
-    let path = data_dir()?.join(&storage_key);
+    let path = safe_media_path(&storage_key)?;
     let _ = fs::remove_file(&path);
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     conn.execute(
@@ -437,7 +457,7 @@ pub fn get_media_data_url(
         )
         .ok();
     let Some((storage_key, mime)) = row else { return Ok(None) };
-    let path = data_dir()?.join(&storage_key);
+    let path = safe_media_path(&storage_key)?;
     let bytes = fs::read(&path).map_err(|e| e.to_string())?;
     Ok(Some(format!(
         "data:{};base64,{}",
@@ -461,7 +481,7 @@ pub fn delete_media(
         )
         .ok();
     let Some((storage_key,)) = row else { return Ok(()) };
-    let path = data_dir()?.join(&storage_key);
+    let path = safe_media_path(&storage_key)?;
     let _ = fs::remove_file(&path);
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     conn.execute(

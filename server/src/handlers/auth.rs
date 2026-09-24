@@ -175,20 +175,30 @@ fn now_epoch() -> i64 {
         .as_secs() as i64
 }
 
-fn blake_hash(s: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut h = DefaultHasher::new();
-    s.hash(&mut h);
-    format!("{:016x}", h.finish())
+fn token_hash(s: &str) -> String {
+    // HMAC-SHA256 under WEAVINE_MASTER_KEY. The old DefaultHasher-based
+    // blake_hash was a 64-bit unsalted NON-cryptographic hash — a DB leak
+    // made refresh/reset tokens trivially recoverable.
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = HmacSha256::new_from_slice(crate::api_key_crypto::master_key_bytes())
+        .expect("HMAC accepts any key length");
+    mac.update(s.as_bytes());
+    let out = mac.finalize().into_bytes();
+    out.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 async fn lookup_api_key(
     raw_key: &str,
     pool: &PgPool,
 ) -> Result<String, (StatusCode, String)> {
+    // Cap Argon2 verifications per request: each verify is ~100 ms of CPU,
+    // so unbounded row scanning lets N keys pin the core. 25 covers every
+    // realistic key count; the full fix (prefix column + migration) is
+    // tracked separately.
     let rows: Vec<(String, String)> =
-        sqlx::query_as("SELECT user_id, key_hash FROM api_key WHERE revoked_at IS NULL")
+        sqlx::query_as("SELECT user_id, key_hash FROM api_key WHERE revoked_at IS NULL LIMIT 25")
             .fetch_all(pool)
             .await
             .map_err(|e| {
@@ -462,7 +472,7 @@ async fn issue_refresh_token(
         .take(64)
         .map(char::from)
         .collect();
-    let token_hash = blake_hash(&raw);
+    let token_hash = token_hash(&raw);
     let id = uuid::Uuid::new_v4().to_string();
     let expires_at = (Utc::now() + Duration::seconds(REFRESH_TOKEN_TTL_SECS as i64))
         .format("%Y-%m-%d %H:%M:%S")
@@ -558,7 +568,7 @@ pub async fn register(
         .take(64)
         .map(char::from)
         .collect();
-    let token_hash = blake_hash(&raw);
+    let token_hash = token_hash(&raw);
     let expires_at = (Utc::now() + Duration::seconds(REFRESH_TOKEN_TTL_SECS as i64))
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
@@ -672,7 +682,7 @@ sqlx::query(
         .take(64)
         .map(char::from)
         .collect();
-    let token_hash = blake_hash(&raw);
+    let token_hash = token_hash(&raw);
     let expires_at = (Utc::now() + Duration::seconds(REFRESH_TOKEN_TTL_SECS as i64))
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
@@ -710,7 +720,7 @@ pub async fn refresh(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<RefreshBody>,
 ) -> Result<Json<AuthSession>, (StatusCode, String)> {
-    let token_hash = blake_hash(&body.refresh_token);
+    let token_hash = token_hash(&body.refresh_token);
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
     let row: Option<(String, String, String, Option<String>)> = sqlx::query_as(
@@ -735,6 +745,21 @@ pub async fn refresh(
         return Err((StatusCode::UNAUTHORIZED, "设备已被吊销".into()));
     }
 
+    // Rotation: revoke the presented refresh token so a stolen token can't
+    // be reused after the client refreshes. The new token was issued below.
+    let revoked = sqlx::query(
+        "UPDATE refresh_token SET revoked_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL",
+    )
+    .bind(&token_hash)
+    .bind(&now)
+    .execute(&*pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .rows_affected();
+    if revoked == 0 {
+        return Err((StatusCode::UNAUTHORIZED, "refresh token 无效或已过期".into()));
+    }
+
     let access = issue_access_token(&user_id.to_string(), &email, &device_id.to_string())?;
     let refresh = issue_refresh_token(&pool, &user_id, &device_id).await?;
     Ok(Json(AuthSession {
@@ -751,7 +776,7 @@ pub async fn logout(
     State(pool): State<Arc<PgPool>>,
     Json(body): Json<LogoutBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    let token_hash = blake_hash(&body.refresh_token);
+    let token_hash = token_hash(&body.refresh_token);
     let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let changed = sqlx::query(
         "UPDATE refresh_token SET revoked_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL",
@@ -918,7 +943,7 @@ pub async fn forgot_password(
             StdDuration::from_secs(60 * 60),
         ) {
             let raw = random_reset_token();
-            let token_hash = blake_hash(&raw);
+            let token_hash = token_hash(&raw);
             let id = uuid::Uuid::new_v4().to_string();
             let now = Utc::now();
             // RFC 3339 / ISO 8601 with `Z` suffix — lexicographically
@@ -993,7 +1018,7 @@ pub async fn reset_password(
         return Err((StatusCode::BAD_REQUEST, "token 不能为空".into()));
     }
 
-    let token_hash = blake_hash(&body.token);
+    let token_hash = token_hash(&body.token);
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
     let row: Option<(String, String, String)> = sqlx::query_as(
@@ -1075,10 +1100,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blake_hash_is_stable() {
-        assert_eq!(blake_hash("hello").len(), 16);
-        assert_eq!(blake_hash("hello"), blake_hash("hello"));
-        assert_ne!(blake_hash("hello"), blake_hash("Hello"));
+    fn token_hash_is_stable() {
+        assert_eq!(token_hash("hello").len(), 64);
+        assert_eq!(token_hash("hello"), token_hash("hello"));
+        assert_ne!(token_hash("hello"), token_hash("Hello"));
     }
 
     #[test]

@@ -209,8 +209,9 @@ pub async fn delete(
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sqlx::query("DELETE FROM project_contact WHERE project_id = $1")
+    sqlx::query("DELETE FROM project_contact WHERE project_id = $1 AND user_id = $2")
         .bind(&id)
+        .bind(&auth)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

@@ -278,8 +278,8 @@ pub async fn update(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if let Some(tag_ids) = body.get("tag_ids").and_then(|v| v.as_array()) {
-        let _ = sqlx::query("DELETE FROM contact_tag WHERE contact_id = $1")
-            .bind(&id).execute(&mut *tx).await;
+        let _ = sqlx::query("DELETE FROM contact_tag WHERE contact_id = $1 AND user_id = $2")
+            .bind(&id).bind(&auth).execute(&mut *tx).await;
         for tv in tag_ids {
             if let Some(tid) = tv.as_str() {
                 let ctid = uuid::Uuid::new_v4().to_string();
@@ -321,8 +321,9 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let _ = sqlx::query("DELETE FROM contact_tag WHERE contact_id = $1")
+    let _ = sqlx::query("DELETE FROM contact_tag WHERE contact_id = $1 AND user_id = $2")
         .bind(&id)
+        .bind(&auth)
         .execute(&mut *tx)
         .await;
     sqlx::query(

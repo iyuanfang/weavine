@@ -72,15 +72,25 @@ pub async fn cloud_logout() -> Result<(), String> {
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn cloud_sync_now() -> Result<sync::SyncResult, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+pub async fn cloud_sync_now(app: AppHandle) -> Result<sync::SyncResult, String> {
+    let result: sync::SyncResult = tauri::async_runtime::spawn_blocking(move || -> Result<sync::SyncResult, String> {
         let mut conn = open_db().map_err(|e| e.to_string())?;
         let rt = new_current_thread_runtime().map_err(|e| e.to_string())?;
-        rt.block_on(sync::sync_once(&mut conn))
-            .map_err(|e| e.to_string())
+        let result: sync::SyncResult = rt
+            .block_on(sync::sync_once(&mut conn))
+            .map_err(|e| e.to_string())?;
+        // Pulled Reminder rows arrive without a scheduled notification task;
+        // re-arm every still-pending reminder after each pull.
+        if result.pulled > 0 {
+            if let Ok(pending) = crate::business::reminder::list_pending(&conn) {
+                super::notification::catch_up(&app, &pending);
+            }
+        }
+        Ok(result)
     })
     .await
-    .map_err(|e| format!("sync thread panicked: {e}"))?
+    .map_err(|e| format!("sync thread panicked: {e}"))??;
+    Ok(result)
 }
 
 /// Clear the push watermark so the next sync re-pushes every local row.

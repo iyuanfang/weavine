@@ -33,6 +33,7 @@ jsonwebtoken = "9"
 rand = "0.8"
 aes-gcm = "0.10"
 base64 = "0.22"
+hmac = "0.12"
 sha2 = "0.10"
 # Card-OCR sidecar transport (http://127.0.0.1 — no TLS feature needed)
 reqwest = { version = "0.12", default-features = false, features = ["json"] }

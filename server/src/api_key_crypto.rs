@@ -13,7 +13,7 @@ fn tracing_warn(msg: &str) {
     eprintln!("WARN: {msg}");
 }
 
-fn master_key_bytes() -> &'static [u8; 32] {
+pub fn master_key_bytes() -> &'static [u8; 32] {
     static KEY: OnceLock<[u8; 32]> = OnceLock::new();
     KEY.get_or_init(|| {
         let raw: String = match std::env::var("WEAVINE_MASTER_KEY") {

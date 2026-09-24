@@ -56,6 +56,12 @@ export function clearSession(): void {
   ls_.removeItem(ACCESS_KEY);
   ls_.removeItem(REFRESH_KEY);
   ls_.removeItem(USER_KEY);
+  // App.tsx listens and drops the TanStack Query cache — otherwise a
+  // login as a different user renders the previous identity's cached
+  // data until refetches land.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('weavine:session-expired'));
+  }
 }
 
 export function getAccessToken(): string | null {

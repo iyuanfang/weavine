@@ -97,13 +97,12 @@ pub fn schedule_for_reminder(app: &AppHandle, r: &crate::models::Reminder) {
 }
 
 pub fn startup_catch_up(app: &AppHandle, db: &crate::db::Database) {
-    use crate::business::reminder;
     let pending = {
         let conn = match db.conn.lock() {
             Ok(g) => g,
             Err(_) => return,
         };
-        match reminder::list_pending(&conn) {
+        match crate::business::reminder::list_pending(&conn) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("[notification] startup list_pending failed: {e}");
@@ -111,8 +110,15 @@ pub fn startup_catch_up(app: &AppHandle, db: &crate::db::Database) {
             }
         }
     };
+    catch_up(app, &pending);
+}
+
+/// (Re)schedule every still-pending reminder — used at startup AND after a
+/// cloud-sync pull, whose Reminder rows would otherwise never get a
+/// scheduled notification task.
+pub fn catch_up(app: &AppHandle, pending: &[crate::models::Reminder]) {
     eprintln!("[notification] catch-up scheduling {} reminders", pending.len());
     for r in pending {
-        schedule_for_reminder(app, &r);
+        schedule_for_reminder(app, r);
     }
 }
