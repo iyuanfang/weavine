@@ -110,14 +110,14 @@ export function ContactEdit() {
 
   if (contactQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载联系人失败: {String(contactQuery.error)}</div>
       </div>
     );
   }
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader
         title="编辑联系人"
       />

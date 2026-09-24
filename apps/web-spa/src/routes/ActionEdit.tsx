@@ -122,7 +122,7 @@ export function ActionEdit() {
 
   if (actionQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载待办失败: {String(actionQuery.error)}</div>
       </div>
     );
@@ -133,7 +133,7 @@ export function ActionEdit() {
     : null;
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader title="编辑待办" />
 
       {linkedProject && (

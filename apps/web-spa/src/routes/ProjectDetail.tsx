@@ -194,7 +194,7 @@ export function ProjectDetail() {
   if (projectQuery.isLoading) return <div className="loading">加载中</div>;
   if (projectQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">
           加载项目失败: {String(projectQuery.error)}
         </div>
@@ -225,7 +225,7 @@ export function ProjectDetail() {
       }));
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <DetailHeaderCard
         icon={<EntityIconBadge>📁</EntityIconBadge>}
         title={project.title}

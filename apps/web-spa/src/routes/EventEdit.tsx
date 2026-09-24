@@ -130,7 +130,7 @@ export function EventEdit() {
 
   if (eventQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载日程失败: {String(eventQuery.error)}</div>
       </div>
     );
@@ -142,7 +142,7 @@ export function EventEdit() {
     : null;
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHeader title="编辑日程" />
 
       {linkedProject && (

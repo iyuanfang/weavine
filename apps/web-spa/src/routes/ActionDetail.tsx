@@ -117,7 +117,7 @@ export function ActionDetail() {
 
   if (actionQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载待办失败: {String(actionQuery.error)}</div>
       </div>
     );
@@ -130,7 +130,7 @@ export function ActionDetail() {
   const isDone = action.status === 'done';
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <DetailHeaderCard
         icon={<EntityIconBadge>{isDone ? '✅' : '📌'}</EntityIconBadge>}
         title={

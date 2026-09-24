@@ -87,7 +87,7 @@ export function EventDetail() {
 
   if (eventQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载日程失败: {String(eventQuery.error)}</div>
       </div>
     );
@@ -98,7 +98,7 @@ export function EventDetail() {
   const end = event.end_at ? new Date(event.end_at) : null;
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <DetailHeaderCard
         icon={<EntityIconBadge>📅</EntityIconBadge>}
         title={event.title}

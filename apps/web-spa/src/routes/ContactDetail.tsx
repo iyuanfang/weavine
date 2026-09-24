@@ -149,7 +149,7 @@ export function ContactDetail() {
 
   if (contactQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载联系人失败: {String(contactQuery.error)}</div>
       </div>
     );
@@ -224,7 +224,7 @@ export function ContactDetail() {
     interactionsQuery.isLoading;
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <DetailHeaderCard
         icon={
           <div

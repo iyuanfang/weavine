@@ -71,14 +71,14 @@ export function ProjectEdit() {
 
   if (projectQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载项目失败: {String(projectQuery.error)}</div>
       </div>
     );
   }
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <div className="page-header">
         <h1 className="page-title">编辑项目</h1>
       </div>

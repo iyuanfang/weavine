@@ -162,7 +162,7 @@ export function InteractionDetail() {
 
   if (interactionQuery.isError) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载互动失败: {String(interactionQuery.error)}</div>
       </div>
     );
@@ -177,7 +177,7 @@ export function InteractionDetail() {
   const backLabel = from === '/today' ? '← 今天' : contact ? '← 联系人' : '← 联系人列表';
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <DetailHeaderCard
         icon={<EntityIconBadge>💬</EntityIconBadge>}
         title={formatDateTime(new Date(interaction.occurred_at))}

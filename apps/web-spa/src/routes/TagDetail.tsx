@@ -51,7 +51,7 @@ export function TagDetail() {
   if (tagsQuery.isError || contactsQuery.isError) {
     const err = tagsQuery.error ?? contactsQuery.error;
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="error-banner">加载失败: {String(err)}</div>
       </div>
     );
@@ -59,7 +59,7 @@ export function TagDetail() {
 
   if (!currentTag) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <div className="empty-state">
           <h3 className="empty-state__title">标签不存在</h3>
           <Link to="/tags" className="btn btn-primary" style={{ marginTop: 8 }}>
@@ -75,7 +75,7 @@ export function TagDetail() {
   const color = tagColor(currentTag);
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <DetailHeaderCard
         icon={
           <EntityIconBadge background={color} color="#fff">

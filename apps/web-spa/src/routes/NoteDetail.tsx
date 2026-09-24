@@ -847,10 +847,10 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
     return `已保存 ${Math.round(ago / 60)} 分钟前`;
   })();
 
-  if (note === undefined) return <div className="page">加载中…</div>;
+  if (note === undefined) return <div className="page page--wide">加载中…</div>;
   if (note === null) {
     return (
-      <div className="page">
+      <div className="page page--wide">
         <p>笔记不存在或已被删除。</p>
         <button type="button" className="btn" onClick={() => navigate('/notes')}>
           返回列表
