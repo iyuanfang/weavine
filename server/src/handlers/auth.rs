@@ -63,7 +63,7 @@ pub const OCR_VOICE_RL_WINDOW: StdDuration = StdDuration::from_secs(60);
 /// Shared zero-friction service key for the OCR/STT endpoints (feature
 /// `ocr`/`stt`). Loaded from `WV_SERVICE_KEY` once at startup by
 /// `init_service_key`; if unset, a random key is generated and logged.
-pub static SERVICE_KEY: OnceLock<String> = OnceLock::new();
+pub static SERVICE_KEYS: OnceLock<Vec<String>> = OnceLock::new();
 
 /// Synthetic user id returned for service-account requests. Not a real
 /// `user_account` row — OCR/voice handlers only check auth, never write.
@@ -278,8 +278,16 @@ pub async fn extract_auth_with_device(
 /// Load the shared service key from `WV_SERVICE_KEY`, or generate a random one
 /// and log it once. Call once from `main` before serving requests.
 pub fn init_service_key() {
+    // Comma-separated list: lets a rotation window keep the previous key
+    // valid alongside the new one (embedded keys in shipped APKs outlive
+    // server-side rotations).
     let key = match std::env::var("WV_SERVICE_KEY") {
-        Ok(v) if !v.trim().is_empty() => v.trim().to_string(),
+        Ok(v) if !v.trim().is_empty() => v
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>(),
         _ => {
             let generated: String = rand::thread_rng()
                 .sample_iter(&Alphanumeric)
@@ -291,10 +299,10 @@ pub fn init_service_key() {
             eprintln!("[service-key]   {generated}");
             eprintln!("[service-key] Set WV_SERVICE_KEY in the environment to make it stable.");
             eprintln!("[service-key] ==============================================");
-            generated
+            vec![generated]
         }
     };
-    SERVICE_KEY.set(key).expect("SERVICE_KEY already initialized");
+    SERVICE_KEYS.set(key).expect("SERVICE_KEYS already initialized");
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -322,17 +330,24 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 /// - `Err(401)` — an `X-Service-Key` header was present but did not match.
 pub fn extract_auth_with_service(headers: &HeaderMap) -> Result<Option<String>, (StatusCode, String)> {
     if let Some(raw) = headers.get("x-service-key").and_then(|v| v.to_str().ok()) {
-        let expected = SERVICE_KEY
+        let keys = SERVICE_KEYS
             .get()
             .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "service key not loaded".to_string()))?;
-        if constant_time_eq(raw.as_bytes(), expected.as_bytes()) {
+        if keys.iter().any(|k| constant_time_eq(raw.as_bytes(), k.as_bytes())) {
             return Ok(Some(SERVICE_USER_ID.to_string()));
         }
-        return Err((StatusCode::UNAUTHORIZED, "service key 无效".to_string()));
+        // Stale embedded keys are a REAL scenario: APKs compiled with an old
+        // WV_SERVICE_KEY keep presenting it forever. Hard-failing here would
+        // lock out those installs even when they also carry a perfectly
+        // valid X-Device-Key / JWT. Treat a mismatch as "no service
+        // credential" and let the caller fall back to normal auth.
+        eprintln!("[auth] mismatched X-Service-Key presented; falling back to user auth");
+        return Ok(None);
     }
     if let Some(token) = extract_bearer(headers) {
-        if let Some(expected) = SERVICE_KEY.get() {
-            if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
+        if SERVICE_KEYS.get().map_or(false, |ks| {
+            ks.iter().any(|k| constant_time_eq(token.as_bytes(), k.as_bytes()))
+        }) {
                 return Ok(Some(SERVICE_USER_ID.to_string()));
             }
         }
@@ -550,7 +565,9 @@ pub async fn register(
 
     sqlx::query(
         "INSERT INTO devices (id, user_id, name, os, app_version, last_seen_at, created_at) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7) \
+         ON CONFLICT (id) DO UPDATE SET user_id = $2, name = $3, os = $4, \
+         app_version = $5, last_seen_at = $6, revoked_at = NULL",
     )
     .bind(&device_id)
     .bind(&user_id)

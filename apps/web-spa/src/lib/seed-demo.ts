@@ -1,10 +1,15 @@
 import type { PRMAdapter } from './adapter/types';
 
-// First-run demo data: a brand-new user opens an empty graph, which is the
-// most discouraging moment of the product. Seed one sample contact (plus the
-// common tags), one sample todo and one sample event so the home page has
-// something to show and the user can immediately try voice capture
-// ("体验 Weavine 语音功能") against real rows.
+// First-run demo data — EXACTLY this scenario, nothing more:
+//   联系人 张三
+//   联系人 李四
+//   待办   体验 Weavine 语音功能
+//   日程   明天晚上和张三吃饭（关联张三）
+//   笔记   和张三交流记录（关联张三，内容：和张三讨论了同学聚会事宜）
+//   项目   同学聚会筹备（成员：张三）
+//
+// Deliberately minimal: every seeded row is one the user may want to
+// delete, so we keep the count as low as the showcase allows.
 //
 // Runs at most once per user: guarded by a localStorage flag AND an
 // empty-workspace check, so an existing user who clears localStorage never
@@ -12,8 +17,7 @@ import type { PRMAdapter } from './adapter/types';
 
 const SEED_FLAG_PREFIX = 'weavine:seeded:';
 
-export const SEED_TAG_NAMES = ['同学', '同事', '朋友'] as const;
-export const SEED_CONTACT_NICKNAME = '王小明';
+export const SEED_CONTACT_NICKNAME = '张三';
 
 export async function seedDemoDataIfEmpty(
   adapter: PRMAdapter,
@@ -32,31 +36,13 @@ export async function seedDemoDataIfEmpty(
     return false;
   }
 
-  // Tags: create the common ones, reuse if the names already exist.
-  const existingTags = await adapter.tags.list(userId).catch(() => []);
-  const tagIds: string[] = [];
-  for (const name of SEED_TAG_NAMES) {
-    const found = existingTags.find((t) => t.name === name);
-    if (found) {
-      tagIds.push(found.id);
-    } else {
-      try {
-        const t = await adapter.tags.create({ user_id: userId, name });
-        tagIds.push(t.id);
-      } catch {
-        // Tag creation is cosmetic — never block seeding on it.
-      }
-    }
-  }
-
-  const contact = await adapter.contacts.create({
+  const zhangsan = await adapter.contacts.create({
     user_id: userId,
     nickname: SEED_CONTACT_NICKNAME,
-    name: '王小明',
-    company: '示例科技',
-    title: '产品经理',
-    importance: 'medium',
-    tag_ids: tagIds.length > 0 ? tagIds : null,
+  });
+  await adapter.contacts.create({
+    user_id: userId,
+    nickname: '李四',
   });
 
   // Todo due this evening — nudge the user to try voice capture.
@@ -74,20 +60,38 @@ export async function seedDemoDataIfEmpty(
     due_at: tonight.toISOString(),
   });
 
-  // Sample meeting tomorrow 10:00 with the seed contact.
-  const tomorrow10 = new Date();
-  tomorrow10.setDate(tomorrow10.getDate() + 1);
-  tomorrow10.setHours(10, 0, 0, 0);
-  const tomorrow11 = new Date(tomorrow10.getTime() + 60 * 60_000);
+  // Dinner tomorrow evening with 张三.
+  const tomorrowDinner = new Date();
+  tomorrowDinner.setDate(tomorrowDinner.getDate() + 1);
+  tomorrowDinner.setHours(19, 0, 0, 0);
+  const dinnerEnd = new Date(tomorrowDinner.getTime() + 2 * 60 * 60_000);
   await adapter.events.create({
     user_id: userId,
-    title: `和${SEED_CONTACT_NICKNAME}开会`,
-    type: 'meeting',
-    start_at: tomorrow10.toISOString(),
-    end_at: tomorrow11.toISOString(),
-    location: '线上会议',
-    participant_contact_ids: [contact.id],
+    title: '明天晚上和张三吃饭',
+    type: '聚餐',
+    start_at: tomorrowDinner.toISOString(),
+    end_at: dinnerEnd.toISOString(),
+    participant_contact_ids: [zhangsan.id],
   });
+
+  // Note linked to 张三.
+  await adapter.notes.create(userId, {
+    title: '和张三交流记录',
+    body: '和张三讨论了同学聚会事宜。',
+    entity_links: [{ entity_type: 'contact', entity_id: zhangsan.id }],
+  });
+
+  // Project with 张三 as a member.
+  const project = await adapter.projects.create({
+    user_id: userId,
+    title: '同学聚会筹备',
+    template: 'default',
+  });
+  try {
+    await adapter.projectContacts.add(project.id, zhangsan.id);
+  } catch {
+    // Member linking is cosmetic — the project itself still seeds.
+  }
 
   localStorage.setItem(flagKey, '1');
   return true;

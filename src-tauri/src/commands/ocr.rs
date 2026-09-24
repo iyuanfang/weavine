@@ -71,17 +71,23 @@ pub async fn extract_card(
 
     let url = format!("{}/api/cards/extract", server_url.trim_end_matches('/'));
     let mut req = reqwest::Client::new().post(&url);
+    // Logged-in users send their JWT; anonymous installs send the device
+    // key (ALWAYS registered+sent — never gated on service key presence,
+    // which can go stale when the embedded WV_SERVICE_KEY outlives the
+    // server's actual key). The service key rides along as a hint.
+    let logged_in = user_token.is_some();
     if let Some(tok) = user_token {
         req = req.bearer_auth(tok);
-    } else if !service_key.is_empty() {
-        req = req
-            .header("X-Service-Key", &service_key)
-            .bearer_auth(&service_key);
     } else {
         let k = crate::install_id::ensure_device_key_registered(&server_url)
             .await
-            .ok_or_else(|| "未登录云端".to_string())?;
+            .ok_or_else(|| "无法注册设备，请检查网络".to_string())?;
         req = req.header("X-Device-Key", k);
+    }
+    if !logged_in && !service_key.is_empty() {
+        req = req
+            .header("X-Service-Key", &service_key)
+            .bearer_auth(&service_key);
     }
 
     let install_id = crate::install_id::get_or_create();

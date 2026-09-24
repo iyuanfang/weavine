@@ -46,15 +46,17 @@ pub async fn recognize_voice(
     let mut req = reqwest::Client::new()
         .post(&url)
         .multipart(form);
+    // ALWAYS register + send the anonymous device key: it works for logged
+    //-out users and keeps working when an embedded service key goes stale
+    // (the server prefers X-Device-Key over a mismatched X-Service-Key).
+    let device_key = crate::install_id::ensure_device_key_registered(&server_url)
+        .await
+        .ok_or_else(|| "无法注册设备，请检查网络".to_string())?;
+    req = req.header("X-Device-Key", &device_key);
     if !service_key.is_empty() {
         req = req
             .header("X-Service-Key", &service_key)
             .bearer_auth(&service_key);
-    } else {
-        let k = crate::install_id::ensure_device_key_registered(&server_url)
-            .await
-            .ok_or_else(|| "未登录云端".to_string())?;
-        req = req.header("X-Device-Key", k);
     }
     req = req
         .header("X-Install-Id", crate::install_id::get_or_create())

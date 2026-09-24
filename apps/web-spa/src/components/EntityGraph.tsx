@@ -22,9 +22,9 @@ const LAYOUT_DESKTOP: GraphLayout = {
 // and every font/radius below is what the user actually sees (no hover
 // exists on touch — sizes must read statically).
 const LAYOUT_MOBILE: GraphLayout = {
-  W: 390, H: 470, CX: 195, CY: 235,
-  R_INNER: 48, R_OUTER: 132, NODE_R: 28, CENTER_R: 40,
-  ringSpacing: 44, minSpacing: 58, jitter: 20,
+  W: 360, H: 470, CX: 180, CY: 235,
+  R_INNER: 45, R_OUTER: 120, NODE_R: 28, CENTER_R: 40,
+  ringSpacing: 42, minSpacing: 56, jitter: 18,
   ICON_FONT: 22, LABEL_FONT: 13,
 };
 
@@ -210,7 +210,9 @@ function computeLayout(L: GraphLayout, others: EntityGraphNode[]): LayoutResult 
      * N=1..4 use cardinal positions for maximum horizontal spread;
      * N=5..8 use even angular distribution starting at 12 o'clock.
      */
-    const r = 200;
+    // Mobile canvas is 390 wide — the old hardcoded 200 put nodes at
+    // x = 195+200 = 395, off the right edge. Use the layout's outer radius.
+    const r = L.R_OUTER;
     for (let i = 0; i < others.length; i++) {
       const angle = (() => {
         const n = others.length;

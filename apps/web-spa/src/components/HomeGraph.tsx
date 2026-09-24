@@ -48,7 +48,7 @@ const LAYOUT = {
   // and every font/radius below is what the user actually sees. No hover
   // exists on touch — sizes are picked to be readable statically.
   mobile: {
-    W: 390, H: 450, R_INNER: 98, R_OUTER: 150, CENTER_R: 42, NODE_R: 30,
+    W: 360, H: 430, R_INNER: 95, R_OUTER: 135, CENTER_R: 40, NODE_R: 28,
     MAX_CONTACTS: 6, MAX_SATELLITES: 6, ICON_FONT: 20, ICON_HOVER_FONT: 24, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
   },
 };

@@ -34,14 +34,20 @@ pub fn master_key_bytes() -> &'static [u8; 32] {
         let decoded = B64
             .decode(raw.as_bytes())
             .unwrap_or_else(|_| raw.as_bytes().to_vec());
-        if decoded.len() != 32 {
-            panic!(
-                "WEAVINE_MASTER_KEY must decode to exactly 32 bytes (got {})",
-                decoded.len()
-            );
-        }
         let mut k = [0u8; 32];
-        k.copy_from_slice(&decoded);
+        if decoded.len() == 32 {
+            k.copy_from_slice(&decoded);
+        } else {
+            // Misconfigured value (e.g. a raw hex string): derive a 32-byte
+            // key deterministically instead of panicking at request time.
+            tracing_warn(&format!(
+                "WEAVINE_MASTER_KEY decoded to {} bytes (want 32); deriving via SHA-256 of the raw value.",
+                decoded.len()
+            ));
+            let mut h = Sha256::new();
+            h.update(raw.as_bytes());
+            k.copy_from_slice(&h.finalize());
+        }
         k
     })
 }
