@@ -41,14 +41,14 @@ interface Satellite {
 // and it shows fewer nodes to stay uncluttered.
 const LAYOUT = {
   desktop: {
-    W: 900, H: 460, R_INNER: 120, R_OUTER: 190, CENTER_R: 44, NODE_R: 28,
+    W: 900, H: 500, R_INNER: 120, R_OUTER: 190, CENTER_R: 44, NODE_R: 28,
     MAX_CONTACTS: 8, MAX_SATELLITES: 12, ICON_FONT: 20, ICON_HOVER_FONT: 26, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
   },
   // 390 = exactly the iPhone-class viewport width, so the SVG renders 1:1
   // and every font/radius below is what the user actually sees. No hover
   // exists on touch — sizes are picked to be readable statically.
   mobile: {
-    W: 390, H: 430, R_INNER: 98, R_OUTER: 150, CENTER_R: 42, NODE_R: 30,
+    W: 390, H: 450, R_INNER: 98, R_OUTER: 150, CENTER_R: 42, NODE_R: 30,
     MAX_CONTACTS: 6, MAX_SATELLITES: 6, ICON_FONT: 20, ICON_HOVER_FONT: 24, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
   },
 };
@@ -264,8 +264,10 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
 
     const satelliteNodes = [
       ...(() => {
-        // Spread satellites sharing the same anchor contact symmetrically
-        // (-1, 0, +1 …) so their labels don't stack.
+        // Satellites sharing an anchor contact fan symmetrically around it
+        // at 0.5-rad steps (a label is ~90 px wide, which at R_OUTER is
+        // ≈0.49 rad of chord) AND alternate between two radii, so labels
+        // never stack on top of each other.
         const anchorCounters = new Map<string, number>();
         return attachedSatellites.map((s) => {
           const anchor = s.linkedContactIds.find((cid) => contactAngleById.has(cid));
@@ -273,8 +275,9 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
           const idx = anchorCounters.get(key) ?? 0;
           anchorCounters.set(key, idx + 1);
           const base = anchor !== undefined ? contactAngleById.get(anchor)! : 0;
-          const fan = (idx - 1) * 0.34;
-          return { s, ...polar(dims, dims.R_OUTER, base + fan) };
+          const fan = (idx - 1) * 0.5;
+          const r = idx % 2 === 1 ? dims.R_OUTER + 26 : dims.R_OUTER;
+          return { s, ...polar(dims, r, base + fan) };
         });
       })(),
       ...orbitSatellites.map((s, i) => {
@@ -282,7 +285,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
           (2 * Math.PI * i) / Math.max(orbitSatellites.length, 1) -
           Math.PI / 2 +
           Math.PI / Math.max(orbitSatellites.length, 1);
-        return { s, ...polar(dims, dims.R_OUTER + 14, angle) };
+        return { s, ...polar(dims, dims.R_OUTER + 50, angle) };
       }),
     ];
 
