@@ -137,9 +137,11 @@ const onNeighborOpen = useCallback(
       const rest = (ev.participants ?? [])
         .map((p) => p.contact_id)
         .filter((cid) => cid !== contactId);
+      // Server PUT skips participant_contact_ids when the JSON value is
+      // null — clearing the list requires an explicit [].
       await adapter.events.update({
         id: eventId,
-        participant_contact_ids: rest.length > 0 ? rest : null,
+        participant_contact_ids: rest,
         contact_id: rest[0] ?? null,
       });
     },
