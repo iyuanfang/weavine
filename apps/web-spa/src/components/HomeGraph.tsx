@@ -215,7 +215,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         kind: 'event',
         label: e.title,
         linkedContactIds: e.contact_id ? [e.contact_id] : [],
-        href: `/graph/event/${e.id}`,
+        href: `/events/${e.id}?tab=graph`,
       });
     }
     for (const a of openActions) {
@@ -224,7 +224,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         kind: 'action',
         label: a.title,
         linkedContactIds: a.contact_id ? [a.contact_id] : [],
-        href: `/graph/action/${a.id}`,
+        href: `/actions/${a.id}?tab=graph`,
       });
     }
     for (const p of activeProjects) {
@@ -235,7 +235,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         label: p.title,
         linkedContactIds: members.slice(0, 3),
         extraContacts: Math.max(0, members.length - 3),
-        href: `/graph/project/${p.id}`,
+        href: `/projects/${p.id}?tab=graph`,
       });
     }
 
@@ -750,7 +750,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
                 style={{ cursor: 'pointer', transition: 'transform 180ms ease' }}
                 onMouseEnter={() => setHoveredKey(key)}
                 onMouseLeave={() => setHoveredKey((cur) => (cur === key ? null : cur))}
-                onClick={() => navigate(`/graph/contact/${n.contact.id}`)}
+                onClick={() => navigate(`/contacts/${n.contact.id}?tab=graph`)}
               >
                 <title>{n.contact.nickname} 的关系图</title>
                 <circle cx={n.x} cy={n.y} r={dims.NODE_R + 6} fill="transparent" />

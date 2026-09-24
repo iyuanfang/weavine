@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ALL_TYPES, GRAPH_NODE_CAP, TYPE_META, type GraphCenter } from './EntityGraph';
 import { GraphQuickCreateModal, creatableForCenter, type CreateKind } from './GraphQuickCreateModal';
@@ -246,6 +246,10 @@ const onNeighborOpen = useCallback(
 
       {(bare || activeTab === 'graph') && (
         <section className="section" style={{ marginTop: 0 }}>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>
+            路径: <Link to="/today" style={{ color: 'inherit' }}>🏠 我的人脉网</Link>
+            {' › '}{TYPE_META[center.type].icon} {graphQuery.data?.nodes.find((n) => n.is_center)?.label ?? ''}
+          </div>
           <div
             style={{
               display: 'flex',
