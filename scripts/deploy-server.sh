@@ -25,13 +25,6 @@ BIN_REMOTE=$REPO_REMOTE/target/release/weavine-server
 SERVICE_NAME=weavine-server
 APP_BASE_URL=${APP_BASE_URL:-https://www.weavine.com}
 
-RSYNC_SRC=(
-    Cargo.toml Cargo.lock
-    server
-    src-tauri/src src-tauri/Cargo.toml src-tauri/build.rs src-tauri/vendor
-    apps/web-spa/src
-)
-
 main() {
     if [ "${1:-}" = "--verify-only" ]; then
         verify
@@ -41,8 +34,19 @@ main() {
 }
 
 deploy() {
-    echo "═══ 1. rsync sources → $PROD:$REPO_REMOTE (never touches .env.production) ═══"
-    rsync -a --chmod=D755,F644 "${RSYNC_SRC[@]}" "$PROD:$REPO_REMOTE/"
+    echo "═══ 1. pack + ship sources → $PROD:$REPO_REMOTE (never touches .env.production) ═══"
+    # tar over ssh, NOT rsync: rsync from /mnt/d (drvfs) has silently skipped
+    # changed files (checksum/mtime confusion), leaving prod on stale code.
+    local tarball
+    tarball="/tmp/weavine-src-$(date +%s).tar.gz"
+    (cd "$(dirname "$0")/.." && tar czf "$tarball" \
+        Cargo.toml Cargo.lock \
+        server \
+        src-tauri/src src-tauri/Cargo.toml src-tauri/build.rs src-tauri/vendor \
+        apps/web-spa/src)
+    scp -o StrictHostKeyChecking=accept-new "$tarball" "$PROD:/tmp/weavine-src.tar.gz"
+    $SSH "cd $REPO_REMOTE && tar xzf /tmp/weavine-src.tar.gz && rm -f /tmp/weavine-src.tar.gz"
+    rm -f "$tarball"
 
     echo
     echo "═══ 2. build on prod (memory-safe release profile) ═══"
