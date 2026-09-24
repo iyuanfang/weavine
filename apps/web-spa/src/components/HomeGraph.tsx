@@ -289,6 +289,91 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
       }),
     ];
 
+    // ── Collision relaxation ────────────────────────────────
+    // Initial polar placement can overlap labels (several satellites fanned
+    // around one contact). Treat every node+label as a box and run a few
+    // passes pushing overlapping boxes apart along their smallest axis,
+    // then clamp everything inside the canvas. 我 is immovable.
+    const CX = dims.W / 2;
+    const CY = dims.H / 2;
+    const halfWOf = (label: string): number =>
+      Math.max(dims.NODE_R, (label.length * dims.LABEL_FONT * 0.62 + 8) / 2);
+    const halfH = dims.NODE_R + 12; // circle + label underneath
+    const PAD = 4;
+    type Box = { id: string; x: number; y: number; halfW: number; fixed: boolean };
+    const boxes: Box[] = [
+      { id: 'me', x: CX, y: CY, halfW: dims.CENTER_R, fixed: true },
+      ...contactNodes.map((n) => ({
+        id: `c:${n.contact.id}`,
+        x: n.x,
+        y: n.y,
+        halfW: halfWOf(truncate(n.contact.nickname, 8)),
+        fixed: false,
+      })),
+      ...satelliteNodes.map((sn) => ({
+        id: sn.s.id,
+        x: sn.x,
+        y: sn.y,
+        halfW: halfWOf(sn.s.label.slice(0, 14)),
+        fixed: false,
+      })),
+    ];
+    for (let pass = 0; pass < 80; pass++) {
+      let moved = false;
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const a = boxes[i];
+          const b = boxes[j];
+          if (a.fixed && b.fixed) continue;
+          // Box centers sit 6px below the node center (label hangs below).
+          const dx = b.x - a.x;
+          const dy = b.y + 6 - (a.y + 6);
+          const ox = a.halfW + b.halfW - Math.abs(dx);
+          const oy = halfH * 2 - Math.abs(dy);
+          if (ox <= 0 || oy <= 0) continue;
+          // Push apart along the axis of least overlap.
+          if (ox * halfH < oy * a.halfW) {
+            const push = (dx >= 0 ? ox : -ox) / 2;
+            if (!a.fixed) a.x -= push;
+            if (!b.fixed) b.x += push;
+            moved = true;
+          } else {
+            const push = (dy >= 0 ? oy : -oy) / 2;
+            if (!a.fixed) a.y -= push;
+            if (!b.fixed) b.y += push;
+            moved = true;
+          }
+        }
+      }
+      for (const it of boxes) {
+        if (it.fixed) continue;
+        const clampedX = Math.min(dims.W - it.halfW - PAD, Math.max(it.halfW + PAD, it.x));
+        const clampedY = Math.min(dims.H - halfH - PAD, Math.max(halfH + PAD, it.y));
+        if (clampedX !== it.x || clampedY !== it.y) {
+          it.x = clampedX;
+          it.y = clampedY;
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    for (const it of boxes) {
+      if (it.id === 'me') continue;
+      if (it.id.startsWith('c:')) {
+        const cn = contactNodes.find((n) => `c:${n.contact.id}` === it.id);
+        if (cn) {
+          cn.x = it.x;
+          cn.y = it.y;
+        }
+      } else {
+        const sn = satelliteNodes.find((n) => n.s.id === it.id);
+        if (sn) {
+          sn.x = it.x;
+          sn.y = it.y;
+        }
+      }
+    }
+
     return { contactNodes, satelliteNodes };
   }, [contacts, events, actions, activeProjects, projectMembersQuery.data, dims]);
 
