@@ -19,6 +19,8 @@ export interface GraphQuickNoteFormProps {
   onClose: () => void;
   onCreated: (id: string) => void;
   onCancel: () => void;
+  /** Override the default '创建并关联' submit text. */
+  submitLabel?: string;
 }
 
 export function GraphQuickNoteForm({
@@ -26,6 +28,7 @@ export function GraphQuickNoteForm({
   onClose,
   onCreated,
   onCancel,
+  submitLabel,
 }: GraphQuickNoteFormProps) {
   const adapter = useAdapter();
   const userId = useUserId();
@@ -103,7 +106,7 @@ export function GraphQuickNoteForm({
           disabled={mutation.isPending}
           style={{ opacity: mutation.isPending ? 0.6 : 1 }}
         >
-          {mutation.isPending ? '创建中…' : '创建并关联'}
+          {mutation.isPending ? '创建中…' : (submitLabel ?? '创建并关联')}
         </button>
       </div>
     </form>

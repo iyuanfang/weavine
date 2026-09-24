@@ -250,20 +250,36 @@ fn chrono_parse(s: &str, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
 }
 
 fn match_contact(s: &str, contacts: &[Contact]) -> Option<(String, f32)> {
-    let matcher = SkimMatcherV2::default();
+    // Voice transcripts arrive in unpredictable case ("leo" for a contact
+    // saved as "Leo"), so both the substring check and the fuzzy matcher
+    // run case-insensitively.
+    let matcher = SkimMatcherV2::default().ignore_case();
+    let lower_s = s.to_lowercase();
     let mut best: Option<(String, f32)> = None;
     for c in contacts {
         let candidates = [c.name.as_deref().unwrap_or(""), c.nickname.as_str()];
         for cand in candidates.iter().filter(|x| !x.is_empty()) {
+            let lower_cand = cand.to_lowercase();
             if let Some(score) = matcher.fuzzy_match(s, cand) {
                 let normalized = (score as f32 / 100.0).clamp(0.0, 1.0);
                 if best.as_ref().map_or(true, |(_, s)| normalized > *s) {
                     best = Some((c.id.clone(), normalized));
                 }
             }
-            if s.contains(cand) {
+            if lower_s.contains(&lower_cand) {
                 best = Some((c.id.clone(), 1.0));
                 break;
+            }
+            // Text token that is a PREFIX of the candidate: contact "KK林"
+            // spoken as "KK" — the transcript only carries part of the name.
+            // ASCII-letter tokens of ≥2 chars count; scored just under exact.
+            for word in lower_s.split(|c: char| !c.is_ascii_alphanumeric()) {
+                if word.len() >= 2 && lower_cand.starts_with(word) {
+                    if best.as_ref().map_or(true, |(_, sc)| *sc < 0.9) {
+                        best = Some((c.id.clone(), 0.9));
+                    }
+                    break;
+                }
             }
         }
         if let Some(phone) = &c.phone {
