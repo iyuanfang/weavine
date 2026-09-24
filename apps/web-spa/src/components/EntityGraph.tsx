@@ -17,9 +17,9 @@ const LAYOUT_DESKTOP: GraphLayout = {
   ringSpacing: 80, minSpacing: 100, jitter: 40,
 };
 const LAYOUT_MOBILE: GraphLayout = {
-  W: 480, H: 640, CX: 240, CY: 320,
-  R_INNER: 60, R_OUTER: 160, NODE_R: 26, CENTER_R: 40,
-  ringSpacing: 55, minSpacing: 68, jitter: 26,
+  W: 480, H: 470, CX: 240, CY: 235,
+  R_INNER: 55, R_OUTER: 148, NODE_R: 26, CENTER_R: 40,
+  ringSpacing: 50, minSpacing: 66, jitter: 24,
 };
 
 function useGraphLayout(): GraphLayout {
