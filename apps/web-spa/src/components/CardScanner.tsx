@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { isTauri } from '../lib/adapter';
 import { getAccessToken } from '../lib/auth/storage';
+import { getDeviceKey, getOrCreateInstallId, osStr, platformStr } from '../lib/install-id';
 
 export interface ScannedFields {
   name?: string | null;
@@ -57,7 +58,14 @@ async function callExtract(imageBase64: string): Promise<ScanResult> {
   const blob = new Blob([bytes], { type: mime });
   const form = new FormData();
   form.append('file', blob, 'card.png');
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    // Anonymous installs have no JWT — the server accepts X-Device-Key
+    // (minted by /api/activation/ping on first launch) for these endpoints.
+    'X-Install-Id': getOrCreateInstallId(),
+    'X-Client-Platform': platformStr(),
+    'X-Client-OS': osStr(),
+    'X-Device-Key': getDeviceKey() ?? '',
+  };
   const token = getAccessToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const resp = await fetch('/api/cards/extract', {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { isTauri } from '../lib/adapter';
 import { getAccessToken } from '../lib/auth/storage';
+import { getDeviceKey, getOrCreateInstallId, osStr, platformStr } from '../lib/install-id';
 import { parseWechatProfile, type WechatProfile } from '../lib/wechat-import';
 
 export interface WechatFields {
@@ -55,7 +56,14 @@ async function ocrImage(dataUrl: string): Promise<OcrResponse> {
   const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
   const form = new FormData();
   form.append('file', new Blob([bytes], { type: m[1] }), 'wechat.png');
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    // Anonymous installs have no JWT — the server accepts X-Device-Key
+    // (minted by /api/activation/ping on first launch) for these endpoints.
+    'X-Install-Id': getOrCreateInstallId(),
+    'X-Client-Platform': platformStr(),
+    'X-Client-OS': osStr(),
+    'X-Device-Key': getDeviceKey() ?? '',
+  };
   const token = getAccessToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const resp = await fetch('/api/cards/extract', {
