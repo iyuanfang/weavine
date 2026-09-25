@@ -749,6 +749,63 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         </div>
       )}
 
+      {(() => {
+        // Mobile: one row of icon-only chips (labels + bulk buttons don't
+        // fit a 360px viewport — they wrapped to three lines).
+        if (isMobile) {
+          return (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px 0',
+                overflowX: 'auto',
+              }}
+              data-testid="home-graph-filters"
+            >
+              {SAT_TYPES.map((t) => {
+                const meta = TYPE_META[t];
+                const checked = visibleTypes.has(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    title={meta.label}
+                    aria-label={`${meta.label}${checked ? '（显示中）' : '（已隐藏）'}`}
+                    aria-pressed={checked}
+                    data-testid={`home-graph-filter-${t}`}
+                    onClick={() =>
+                      setVisibleTypes((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(t)) next.delete(t);
+                        else next.add(t);
+                        return next;
+                      })
+                    }
+                    style={{
+                      flexShrink: 0,
+                      width: 40,
+                      height: 34,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 17,
+                      border: `1.5px solid ${checked ? meta.color : '#e2e8f0'}`,
+                      borderRadius: 8,
+                      background: checked ? `${meta.color}10` : '#fff',
+                      opacity: checked ? 1 : 0.45,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {meta.icon}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        }
+        return (
       <div
         style={{
           display: 'flex',
@@ -817,6 +874,8 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
           );
         })}
       </div>
+        );
+      })()}
 
       {hasContent ? (
         <svg
