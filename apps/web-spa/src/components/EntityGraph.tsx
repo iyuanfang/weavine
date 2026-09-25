@@ -91,9 +91,9 @@ export interface EntityGraphProps {
    * callback unlinks the neighbor from the center — it must never delete
    * the entity itself.
    */
-  onUnlink?: (n: EntityGraphNode) => void;
+  onDelete?: (n: EntityGraphNode) => void;
   /** Optional: whether a neighbor's edge can be unlinked (derived edges can't). */
-  canUnlink?: (n: EntityGraphNode) => boolean;
+  canDelete?: (n: EntityGraphNode) => boolean;
   /** Optional: right-click / long-press on a neighbor opens a menu at screen coords. */
   onNodeMenu?: (n: EntityGraphNode, at: { x: number; y: number }) => void;
   /** Render only the SVG (no error/loading chrome). Used by inline tab. */
@@ -106,8 +106,8 @@ export function EntityGraph({
   visibleTypes,
   onNeighborOpen,
   onQuickCreate,
-  onUnlink,
-  canUnlink,
+  onDelete,
+  canDelete,
   onNodeMenu,
   bare,
 }: EntityGraphProps) {
@@ -143,8 +143,8 @@ export function EntityGraph({
       data={data}
       onNeighborOpen={onNeighborOpen}
       onQuickCreate={onQuickCreate}
-      onUnlink={onUnlink}
-      canUnlink={canUnlink}
+      onDelete={onDelete}
+      canDelete={canDelete}
       onNodeMenu={onNodeMenu}
     />
   );
@@ -347,8 +347,8 @@ interface HoverableNodeProps {
   onNeighborOpen: (n: EntityGraphNode) => void;
   onHoverEnter: (key: string) => void;
   onHoverLeave: (key: string) => void;
-  onUnlink?: (n: EntityGraphNode) => void;
-  canUnlink?: (n: EntityGraphNode) => boolean;
+  onDelete?: (n: EntityGraphNode) => void;
+  canDelete?: (n: EntityGraphNode) => boolean;
   onNodeMenu?: (n: EntityGraphNode, at: { x: number; y: number }) => void;
 }
 
@@ -368,12 +368,12 @@ const HoverableNode = memo(function HoverableNode({
   onNeighborOpen,
   onHoverEnter,
   onHoverLeave,
-  onUnlink,
-  canUnlink,
+  onDelete,
+  canDelete,
   onNodeMenu,
 }: HoverableNodeProps) {
   const key = `${node.entity_type}:${node.id}`;
-  const unlinkable = !!(onUnlink && canUnlink?.(node));
+  const deletable = !!(onDelete && canDelete?.(node));
   const longPressRef = useRef<number | null>(null);
 
   const clearLongPress = () => {
@@ -443,16 +443,16 @@ const HoverableNode = memo(function HoverableNode({
       >
         {truncate(node.label, isHovered ? 18 : 14)}
       </text>
-      {isHovered && unlinkable && (
+      {isHovered && deletable && (
         <g
-          data-testid={`graph-unlink-${node.entity_type}-${node.id}`}
+          data-testid={`graph-delete-${node.entity_type}-${node.id}`}
           style={{ cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();
-            onUnlink?.(node);
+            onDelete?.(node);
           }}
         >
-          <title>断开与中心实体的关联（不删除该{meta.label}）</title>
+          <title>删除该{meta.label}（软删除，可恢复）</title>
           <circle
             cx={x + L.NODE_R - 2}
             cy={y - L.NODE_R - 2}
@@ -482,12 +482,12 @@ interface GraphSvgProps {
   data: EntityGraphResponse & { hidden_count: number; total_neighbors: number };
   onNeighborOpen: (n: EntityGraphNode) => void;
   onQuickCreate?: () => void;
-  onUnlink?: (n: EntityGraphNode) => void;
-  canUnlink?: (n: EntityGraphNode) => boolean;
+  onDelete?: (n: EntityGraphNode) => void;
+  canDelete?: (n: EntityGraphNode) => boolean;
   onNodeMenu?: (n: EntityGraphNode, at: { x: number; y: number }) => void;
 }
 
-function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, onNodeMenu }: GraphSvgProps) {
+function GraphSvg({ data, onNeighborOpen, onQuickCreate, onDelete, canDelete, onNodeMenu }: GraphSvgProps) {
   const L = useGraphLayout();
   const center = useMemo(() => data.nodes.find((n) => n.is_center), [data]);
   const centerType = center?.entity_type;
@@ -635,8 +635,8 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
                   onNeighborOpen={onNeighborOpen}
                   onHoverEnter={onHoverEnter}
                   onHoverLeave={onHoverLeave}
-                  onUnlink={onUnlink}
-                  canUnlink={canUnlink}
+                  onDelete={onDelete}
+                  canDelete={canDelete}
                   onNodeMenu={onNodeMenu}
                 />
               );
@@ -663,8 +663,8 @@ function GraphSvg({ data, onNeighborOpen, onQuickCreate, onUnlink, canUnlink, on
                   onNeighborOpen={onNeighborOpen}
                   onHoverEnter={onHoverEnter}
                   onHoverLeave={onHoverLeave}
-                  onUnlink={onUnlink}
-                  canUnlink={canUnlink}
+                  onDelete={onDelete}
+                  canDelete={canDelete}
                   onNodeMenu={onNodeMenu}
                 />
               );

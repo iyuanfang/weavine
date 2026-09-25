@@ -10,8 +10,9 @@ import { GraphQuickNoteForm } from './GraphQuickNoteForm';
 import { GraphQuickEventForm } from './GraphQuickEventForm';
 import { GraphQuickInteractionForm } from './GraphQuickInteractionForm';
 import { TYPE_META } from './EntityGraph';
+import { GraphFilterRow } from './GraphFilterRow';
 import { nextReminderIn } from '../lib/keepInTouch';
-import type { Action, Contact, Event, Interaction, Project } from '../lib/adapter/types';
+import type { Action, Contact, EntityGraphNodeType, Event, Interaction, Project } from '../lib/adapter/types';
 
 // Home-page "me-centered" relationship graph. Unlike EntityGraph (which is
 // anchored on one entity and walks its neighbours), the home graph places a
@@ -82,18 +83,6 @@ const meKindBtnStyle: React.CSSProperties = {
   gap: 10,
   fontSize: 14,
 };
-
-function bulkBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    padding: '3px 8px',
-    fontSize: 12,
-    border: '1px solid #e2e8f0',
-    borderRadius: 4,
-    background: disabled ? '#f1f5f9' : '#fff',
-    color: disabled ? '#94a3b8' : '#475569',
-    cursor: disabled ? 'default' : 'pointer',
-  };
-}
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
@@ -190,7 +179,7 @@ interface Props {
   preparing?: boolean;
 }
 
-const SAT_TYPES = ['contact', 'event', 'action', 'project', 'note', 'interaction'] as const;
+const SAT_TYPES: readonly EntityGraphNodeType[] = ['contact', 'event', 'action', 'project', 'note', 'interaction'];
 
 export function HomeGraph({ contacts, events, actions, projects, notes, interactions, preparing }: Props) {
   const navigate = useNavigate();
@@ -202,7 +191,7 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<Satellite | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
-  const [visibleTypes, setVisibleTypes] = useState<ReadonlySet<string>>(new Set(SAT_TYPES));
+  const [visibleTypes, setVisibleTypes] = useState<ReadonlySet<EntityGraphNodeType>>(new Set(SAT_TYPES));
   const [meCreateKind, setMeCreateKind] = useState<
     'contact' | 'action' | 'interaction' | 'event' | 'note' | null
   >(null);
@@ -235,7 +224,7 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
     enabled: activeProjects.length > 0,
   });
 
-  const typeVisible = (kind: string): boolean => visibleTypes.has(kind);
+  const typeVisible = (kind: EntityGraphNodeType): boolean => visibleTypes.has(kind);
 
   const nodes = useMemo(() => {
     const pickedContacts = typeVisible('contact')
@@ -449,7 +438,15 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
     }
   };
 
-  const hasContent = nodes.contactNodes.length > 0 || nodes.satelliteNodes.length > 0;
+  // The graph (and 我) always renders for any user with data — even when
+  // every type is filtered out, 我 stays as the anchor.
+  const nothingAtAll =
+    contacts.length === 0 &&
+    events.length === 0 &&
+    actions.length === 0 &&
+    projects.length === 0 &&
+    notes.length === 0 &&
+    interactions.length === 0;
   const hiddenContacts = Math.max(0, contacts.length - dims.MAX_CONTACTS);
 
   return (
@@ -493,11 +490,12 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            className="section__view-all"
+            className="btn btn-primary"
+            style={{ padding: '5px 12px', fontSize: 'var(--text-sm)' }}
             data-testid="home-graph-add"
             onClick={() => setMeCreateOpen(true)}
           >
-            ＋ 添加
+            ＋ 新建
           </button>
         </div>
       </div>
@@ -749,135 +747,14 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         </div>
       )}
 
-      {(() => {
-        // Mobile: one row of icon-only chips (labels + bulk buttons don't
-        // fit a 360px viewport — they wrapped to three lines).
-        if (isMobile) {
-          return (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '8px 14px 0',
-                overflowX: 'auto',
-              }}
-              data-testid="home-graph-filters"
-            >
-              {SAT_TYPES.map((t) => {
-                const meta = TYPE_META[t];
-                const checked = visibleTypes.has(t);
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    title={meta.label}
-                    aria-label={`${meta.label}${checked ? '（显示中）' : '（已隐藏）'}`}
-                    aria-pressed={checked}
-                    data-testid={`home-graph-filter-${t}`}
-                    onClick={() =>
-                      setVisibleTypes((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(t)) next.delete(t);
-                        else next.add(t);
-                        return next;
-                      })
-                    }
-                    style={{
-                      flexShrink: 0,
-                      width: 40,
-                      height: 34,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 17,
-                      border: `1.5px solid ${checked ? meta.color : '#e2e8f0'}`,
-                      borderRadius: 8,
-                      background: checked ? `${meta.color}10` : '#fff',
-                      opacity: checked ? 1 : 0.45,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {meta.icon}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        }
-        return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 8,
-          padding: '8px 14px 0',
-        }}
-        data-testid="home-graph-filters"
-      >
-        <span style={{ fontSize: 12, color: '#64748b' }}>筛选类型:</span>
-        <button
-          type="button"
-          data-testid="home-graph-filter-all"
-          onClick={() => setVisibleTypes(new Set(SAT_TYPES))}
-          disabled={visibleTypes.size === SAT_TYPES.length}
-          style={bulkBtnStyle(visibleTypes.size === SAT_TYPES.length)}
-        >
-          全选
-        </button>
-        <button
-          type="button"
-          data-testid="home-graph-filter-none"
-          onClick={() => setVisibleTypes(new Set())}
-          disabled={visibleTypes.size === 0}
-          style={bulkBtnStyle(visibleTypes.size === 0)}
-        >
-          全不选
-        </button>
-        {SAT_TYPES.map((t) => {
-          const meta = TYPE_META[t];
-          const checked = visibleTypes.has(t);
-          return (
-            <label
-              key={t}
-              data-testid={`home-graph-filter-${t}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 8px',
-                border: `1px solid ${checked ? meta.color : '#e2e8f0'}`,
-                borderRadius: 6,
-                background: checked ? `${meta.color}10` : '#fff',
-                fontSize: 13,
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() =>
-                  setVisibleTypes((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(t)) next.delete(t);
-                    else next.add(t);
-                    return next;
-                  })
-                }
-                style={{ margin: 0 }}
-              />
-              <span>{meta.icon}</span>
-              <span>{meta.label}</span>
-            </label>
-          );
-        })}
-      </div>
-        );
-      })()}
+      <GraphFilterRow
+        types={SAT_TYPES}
+        visible={visibleTypes}
+        onChange={setVisibleTypes}
+        testIdPrefix="home-graph"
+      />
 
-      {hasContent ? (
+      {!nothingAtAll ? (
         <svg
           viewBox={`0 0 ${dims.W} ${dims.H}`}
           role="img"

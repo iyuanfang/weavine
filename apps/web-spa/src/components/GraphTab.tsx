@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ALL_TYPES, GRAPH_NODE_CAP, TYPE_META, type GraphCenter } from './EntityGraph';
 import { GraphQuickCreateModal, creatableForCenter, type CreateKind } from './GraphQuickCreateModal';
+import { GraphFilterRow } from './GraphFilterRow';
 import { emit } from '../lib/telemetry';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
@@ -41,6 +42,7 @@ export function GraphTab({
   const [tabHovered, setTabHovered] = useState(false);
   const [menu, setMenu] = useState<{ node: EntityGraphNode; x: number; y: number } | null>(null);
   const [unlinking, setUnlinking] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<EntityGraphNode | null>(null);
 
   const adapter = useAdapter();
   const userId = useUserId();
@@ -93,24 +95,12 @@ const onNeighborOpen = useCallback(
     [center.type, creatable],
   );
 
-  // ── Unlink (断开关联) ────────────────────────────────────
-  // Every edge is backed by a real relation (FK or link table) except
-  // event↔action, which is derived through interactions — that pair gets no
-  // minus. Unlinking NEVER deletes the entity.
-  const canUnlinkNode = useCallback(
-    (n: EntityGraphNode) => {
-      const pair = `${center.type}:${n.entity_type}`;
-      return [
-        'contact:event', 'contact:action', 'contact:project', 'contact:note', 'contact:interaction',
-        'project:contact', 'project:event', 'project:action', 'project:note',
-        'event:contact', 'event:interaction', 'event:note',
-        'action:contact', 'action:interaction', 'action:note',
-        'interaction:contact', 'interaction:event', 'interaction:action', 'interaction:note',
-        'note:contact', 'note:project', 'note:event', 'note:action', 'note:interaction',
-      ].includes(pair);
-    },
-    [center.type],
-  );
+  // ── Delete (软删除) ──────────────────────────────────────
+  // The hover − badge deletes the NEIGHBOR entity outright (server-side
+  // soft delete via deleted_at; recoverable once a trash feature ships).
+  // Deliberate unlink (keep entity, drop edge) still exists in the
+  // right-click node menu.
+  const canDeleteNode = useCallback(() => true, []);
 
   const removeNoteLink = useCallback(
     async (uid: string, noteId: string, entityType: string, entityId: string) => {
@@ -198,6 +188,30 @@ const onNeighborOpen = useCallback(
     [adapter, center.id, center.type, queryClient, removeEventParticipant, removeNoteLink, unlinking, userId],
   );
 
+  const deleteNeighbor = useCallback(
+    async (n: EntityGraphNode) => {
+      const callers: Record<string, (id: string) => Promise<unknown>> = {
+        contact: (id) => adapter.contacts.delete(id),
+        project: (id) => adapter.projects.delete(id),
+        event: (id) => adapter.events.delete(id),
+        action: (id) => adapter.actions.delete(id),
+        note: (id) => adapter.notes.delete(userId!, id),
+        interaction: (id) => adapter.interactions.delete(id),
+      };
+      const fn = callers[n.entity_type];
+      if (!fn) throw new Error(`不支持删除 ${n.entity_type}`);
+      await fn(n.id);
+      queryClient.invalidateQueries({ queryKey: ['entity-graph'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['actions'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['interactions'] });
+    },
+    [adapter, queryClient, userId],
+  );
+
   const onNodeMenu = useCallback(
     (node: EntityGraphNode, at: { x: number; y: number }) => setMenu({ node, x: at.x, y: at.y }),
     [],
@@ -259,65 +273,14 @@ const onNeighborOpen = useCallback(
               marginBottom: 8,
             }}
           >
-            {availableTypes.size > 1 && (
-              <>
-                <span style={{ fontSize: 12, color: '#64748b' }}>筛选类型:</span>
-                <button
-                  type="button"
-                  data-testid={`${center.type}-filter-all`}
-                  onClick={() => setVisibleTypes(new Set(ALL_TYPES))}
-                  disabled={visibleTypes.size === ALL_TYPES.length}
-                  style={bulkBtnStyle(visibleTypes.size === ALL_TYPES.length)}
-                >
-                  全选
-                </button>
-                <button
-                  type="button"
-                  data-testid={`${center.type}-filter-none`}
-                  onClick={() => setVisibleTypes(new Set())}
-                  disabled={visibleTypes.size === 0}
-                  style={bulkBtnStyle(visibleTypes.size === 0)}
-                >
-                  全不选
-                </button>
-              </>
+            {availableTypes.size > 0 && (
+              <GraphFilterRow
+                types={ALL_TYPES.filter((t) => availableTypes.has(t))}
+                visible={visibleTypes}
+                onChange={setVisibleTypes}
+                testIdPrefix={center.type}
+              />
             )}
-            {ALL_TYPES.filter((t) => availableTypes.has(t)).map((t) => {
-              const meta = TYPE_META[t];
-              const checked = visibleTypes.has(t);
-              return (
-                <label
-                  key={t}
-                  data-testid={`${center.type}-filter-${t}`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '4px 8px',
-                    border: `1px solid ${checked ? meta.color : '#e2e8f0'}`,
-                    borderRadius: 6,
-                    background: checked ? `${meta.color}10` : '#fff',
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => {
-                      const next = new Set(visibleTypes);
-                      if (e.target.checked) next.add(t);
-                      else next.delete(t);
-                      setVisibleTypes(next);
-                    }}
-                    style={{ margin: 0 }}
-                  />
-                  <span>{meta.icon}</span>
-                  <span>{meta.label}</span>
-                </label>
-              );
-            })}
             {effectiveCreatable.length > 0 && (
               <button
                 type="button"
@@ -337,11 +300,68 @@ const onNeighborOpen = useCallback(
               visibleTypes={visibleTypes}
               onNeighborOpen={onNeighborOpen}
               onQuickCreate={effectiveCreatable.length > 0 ? handleQuickCreate : undefined}
-              onUnlink={unlinkNeighbor}
-              canUnlink={canUnlinkNode}
+              onDelete={(n) => setConfirmDelete(n)}
+              canDelete={canDeleteNode}
               onNodeMenu={onNodeMenu}
             />
           </Suspense>
+          {confirmDelete && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              data-testid="graph-delete-confirm"
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(15, 23, 42, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: 16,
+              }}
+              onClick={() => setConfirmDelete(null)}
+            >
+              <div
+                style={{
+                  background: '#fff',
+                  borderRadius: 10,
+                  padding: 20,
+                  maxWidth: 400,
+                  width: '100%',
+                  boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+                  删除{TYPE_META[confirmDelete.entity_type].label}「{confirmDelete.label}」？
+                </h3>
+                <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+                  确认后将从人脉网中删除（软删除）。此操作不可轻易恢复。
+                </p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    data-testid="graph-delete-confirm-ok"
+                    style={{ background: '#ef4444', borderColor: '#ef4444' }}
+                    onClick={() => {
+                      const n = confirmDelete;
+                      setConfirmDelete(null);
+                      void deleteNeighbor(n).catch((e) =>
+                        alert(`删除失败：${e instanceof Error ? e.message : String(e)}`),
+                      );
+                    }}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {showEmptyCta && (
             <div
               style={{
@@ -370,7 +390,7 @@ const onNeighborOpen = useCallback(
           <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
             单击节点 = 查看该节点的关系图。
             {effectiveCreatable.length > 0 && '点击 + 新建按钮即可在此添加关联实体。'}
-            悬停节点点 − 断开关联（不删除实体）；右键 / 长按节点打开操作菜单。
+            悬停节点点 − 删除该实体（软删除）；右键 / 长按节点可断开关联或打开详情。
             超过 {GRAPH_NODE_CAP} 个节点的关联会被截断。
           </div>
         </section>
@@ -380,7 +400,7 @@ const onNeighborOpen = useCallback(
         <GraphNodeMenu
           node={menu.node}
           at={{ x: menu.x, y: menu.y }}
-          canUnlink={canUnlinkNode(menu.node)}
+          canUnlink={true}
           unlinking={unlinking}
           onOpenDetail={() => {
             setMenu(null);
@@ -529,18 +549,6 @@ function tabStyle(active: boolean): React.CSSProperties {
     cursor: 'pointer',
     fontSize: 14,
     marginBottom: -1,
-  };
-}
-
-function bulkBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    padding: '3px 8px',
-    fontSize: 12,
-    border: '1px solid #e2e8f0',
-    borderRadius: 4,
-    background: disabled ? '#f1f5f9' : '#fff',
-    color: disabled ? '#94a3b8' : '#475569',
-    cursor: disabled ? 'default' : 'pointer',
   };
 }
 
