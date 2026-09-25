@@ -26,8 +26,11 @@ interface OcrResponse {
 // Shared with CardScanner: phone photos are 3-8 MB, the API caps at 10 MB,
 // and PaddleOCR is faster on smaller inputs.
 const MAX_OCR_SIZE = 10 * 1024 * 1024;
-const DOWNSAMPLE_SIZE = 2 * 1024 * 1024;
-const DOWNSAMPLE_MAX_W = 1600;
+// Always re-encode phone screenshots: originals are 3-8 MB and large uploads
+// get reset by mobile networks mid-flight ("Failed to fetch"). 1400px wide
+// JPEG q0.82 is plenty for the fixed-template OCR.
+const DOWNSAMPLE_MAX_W = 1400;
+const JPEG_QUALITY = 0.82;
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -62,10 +65,10 @@ async function ocrImage(dataUrl: string): Promise<OcrResponse> {
     headers,
   });
   if (!resp.ok) {
-    const body = await resp.text();
     if (resp.status === 413) throw new Error('图片过大，请压缩到 10MB 以下');
     if (resp.status === 408 || resp.status === 504) throw new Error('OCR 处理超时，请重试');
-    throw new Error(`OCR 失败: ${resp.status} ${body.slice(0, 120)}`);
+    if (resp.status === 401) throw new Error('登录已过期，请刷新页面后重试');
+    throw new Error(`OCR 失败 (${resp.status})：网络不稳定或图片过大，请重试`);
   }
   return resp.json();
 }
@@ -74,27 +77,25 @@ function downsample(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      if (img.width <= DOWNSAMPLE_MAX_W) {
-        resolve(file);
-        return;
-      }
-      const scale = DOWNSAMPLE_MAX_W / img.width;
+      const scale = Math.min(1, DOWNSAMPLE_MAX_W / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
       const canvas = document.createElement('canvas');
-      canvas.width = DOWNSAMPLE_MAX_W;
-      canvas.height = Math.round(img.height * scale);
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         reject(new Error('canvas unavailable'));
         return;
       }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob(
         (blob) =>
           blob
-            ? resolve(new File([blob], file.name, { type: file.type }))
+            ? resolve(new File([blob], 'wechat.jpg', { type: 'image/jpeg' }))
             : reject(new Error('downsample failed')),
-        file.type,
-        0.85,
+        'image/jpeg',
+        JPEG_QUALITY,
       );
     };
     img.onerror = () => reject(new Error('image load failed'));
@@ -115,7 +116,7 @@ export function WechatScanner({ onApply, disabled }: Props) {
       setError('图片过大，请压缩到 10MB 以下');
       return;
     }
-    const processed = file.size > DOWNSAMPLE_SIZE ? await downsample(file) : file;
+    const processed = await downsample(file);
     const dataUrl = await readAsDataUrl(processed);
     setPreview(dataUrl);
     setBusy(true);

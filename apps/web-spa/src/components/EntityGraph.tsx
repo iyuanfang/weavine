@@ -373,6 +373,10 @@ const HoverableNode = memo(function HoverableNode({
   onNodeMenu,
 }: HoverableNodeProps) {
   const key = `${node.entity_type}:${node.id}`;
+  // Touch devices have no hover — the delete badge is always visible there.
+  const [touchMode] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches,
+  );
   const deletable = !!(onDelete && canDelete?.(node));
   const longPressRef = useRef<number | null>(null);
 
@@ -443,7 +447,7 @@ const HoverableNode = memo(function HoverableNode({
       >
         {truncate(node.label, isHovered ? 18 : 14)}
       </text>
-      {isHovered && deletable && (
+      {(isHovered || touchMode) && deletable && (
         <g
           data-testid={`graph-delete-${node.entity_type}-${node.id}`}
           style={{ cursor: 'pointer' }}
