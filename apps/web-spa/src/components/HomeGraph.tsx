@@ -11,7 +11,7 @@ import { GraphQuickEventForm } from './GraphQuickEventForm';
 import { GraphQuickInteractionForm } from './GraphQuickInteractionForm';
 import { TYPE_META } from './EntityGraph';
 import { nextReminderIn } from '../lib/keepInTouch';
-import type { Action, Contact, Event, Project } from '../lib/adapter/types';
+import type { Action, Contact, Event, Interaction, Project } from '../lib/adapter/types';
 
 // Home-page "me-centered" relationship graph. Unlike EntityGraph (which is
 // anchored on one entity and walks its neighbours), the home graph places a
@@ -26,7 +26,7 @@ import type { Action, Contact, Event, Project } from '../lib/adapter/types';
 
 interface Satellite {
   id: string;
-  kind: 'event' | 'action' | 'project';
+  kind: 'event' | 'action' | 'project' | 'note' | 'interaction';
   label: string;
   /** Contacts this satellite is tied to (event participant / action owner / project members, capped). */
   linkedContactIds: string[];
@@ -42,14 +42,14 @@ interface Satellite {
 const LAYOUT = {
   desktop: {
     W: 900, H: 500, R_INNER: 120, R_OUTER: 190, CENTER_R: 44, NODE_R: 28,
-    MAX_CONTACTS: 8, MAX_SATELLITES: 12, ICON_FONT: 20, ICON_HOVER_FONT: 26, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
+    MAX_CONTACTS: 8, MAX_SATELLITES: 14, ICON_FONT: 20, ICON_HOVER_FONT: 26, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
   },
   // 390 = exactly the iPhone-class viewport width, so the SVG renders 1:1
   // and every font/radius below is what the user actually sees. No hover
   // exists on touch — sizes are picked to be readable statically.
   mobile: {
     W: 360, H: 430, R_INNER: 95, R_OUTER: 135, CENTER_R: 40, NODE_R: 28,
-    MAX_CONTACTS: 6, MAX_SATELLITES: 6, ICON_FONT: 20, ICON_HOVER_FONT: 24, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
+    MAX_CONTACTS: 6, MAX_SATELLITES: 8, ICON_FONT: 20, ICON_HOVER_FONT: 24, LABEL_FONT: 13, LABEL_HOVER_FONT: 15,
   },
 };
 
@@ -161,14 +161,26 @@ function sortContactsForHome(
   });
 }
 
+export interface HomeNote {
+  id: string;
+  title: string;
+  linkedContactIds: string[];
+}
+
 interface Props {
   contacts: Contact[];
   events: Event[];
   actions: Action[];
   projects: Project[];
+  notes: HomeNote[];
+  interactions: Interaction[];
+  /** True while first-run demo data is being created. */
+  preparing?: boolean;
 }
 
-export function HomeGraph({ contacts, events, actions, projects }: Props) {
+const SAT_TYPES = ['contact', 'event', 'action', 'project', 'note', 'interaction'] as const;
+
+export function HomeGraph({ contacts, events, actions, projects, notes, interactions, preparing }: Props) {
   const navigate = useNavigate();
   const adapter = useAdapter();
   const queryClient = useQueryClient();
@@ -178,6 +190,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<Satellite | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
+  const [visibleTypes, setVisibleTypes] = useState<ReadonlySet<string>>(new Set(SAT_TYPES));
   const [meCreateKind, setMeCreateKind] = useState<
     'contact' | 'action' | 'interaction' | 'event' | 'note' | null
   >(null);
@@ -210,13 +223,35 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
     enabled: activeProjects.length > 0,
   });
 
+  const typeVisible = (kind: string): boolean => visibleTypes.has(kind);
+
   const nodes = useMemo(() => {
-    const pickedContacts = sortContactsForHome(contacts, events, actions).slice(0, dims.MAX_CONTACTS);
+    const pickedContacts = typeVisible('contact')
+      ? sortContactsForHome(contacts, events, actions).slice(0, dims.MAX_CONTACTS)
+      : [];
     const contactIds = new Set(pickedContacts.map((c) => c.id));
 
     const openActions = actions.filter((a) => a.status !== 'done');
 
     const satellites: Satellite[] = [];
+    for (const n of notes) {
+      satellites.push({
+        id: `note:${n.id}`,
+        kind: 'note',
+        label: n.title,
+        linkedContactIds: n.linkedContactIds,
+        href: `/notes/${n.id}?tab=graph`,
+      });
+    }
+    for (const i of interactions) {
+      satellites.push({
+        id: `interaction:${i.id}`,
+        kind: 'interaction',
+        label: i.summary,
+        linkedContactIds: i.contact_id ? [i.contact_id] : [],
+        href: `/interactions/${i.id}?tab=graph`,
+      });
+    }
     for (const e of events) {
       satellites.push({
         id: `event:${e.id}`,
@@ -247,7 +282,9 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
       });
     }
 
-    const pickedSatellites = satellites.slice(0, dims.MAX_SATELLITES);
+    const pickedSatellites = satellites
+      .filter((s) => typeVisible(s.kind))
+      .slice(0, dims.MAX_SATELLITES);
     const attachedSatellites = pickedSatellites.filter((s) =>
       s.linkedContactIds.some((cid) => contactIds.has(cid)),
     );
@@ -375,7 +412,7 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
     }
 
     return { contactNodes, satelliteNodes };
-  }, [contacts, events, actions, activeProjects, projectMembersQuery.data, dims]);
+  }, [contacts, events, actions, activeProjects, projectMembersQuery.data, dims, notes, interactions, visibleTypes]);
 
   // − badge: deletes the entity outright (server soft-deletes via
   // deleted_at). The confirm dialog is the only guard against mis-taps.
@@ -700,6 +737,51 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         </div>
       )}
 
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
+          padding: '8px 14px 0',
+        }}
+        data-testid="home-graph-filters"
+      >
+        {SAT_TYPES.map((t) => {
+          const meta = TYPE_META[t];
+          const on = visibleTypes.has(t);
+          return (
+            <button
+              key={t}
+              type="button"
+              data-testid={`home-graph-filter-${t}`}
+              onClick={() =>
+                setVisibleTypes((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(t)) next.delete(t);
+                  else next.add(t);
+                  return next;
+                })
+              }
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                border: `1px solid ${on ? meta.color : '#e2e8f0'}`,
+                borderRadius: 6,
+                background: on ? `${meta.color}10` : '#fff',
+                color: on ? '#1e293b' : '#94a3b8',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              <span>{meta.icon}</span>
+              <span>{meta.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {hasContent ? (
         <svg
           viewBox={`0 0 ${dims.W} ${dims.H}`}
@@ -933,8 +1015,12 @@ export function HomeGraph({ contacts, events, actions, projects }: Props) {
         </svg>
       ) : (
         <div className="empty-state" style={{ padding: '36px 16px' }}>
-          <h3 className="empty-state__title">你的关系网还是空的</h3>
-          <p className="empty-state__hint">添加第一个联系人，开始编织你的人脉</p>
+          <h3 className="empty-state__title">
+            {preparing ? '⏳ 正在准备示例数据…' : '你的关系网还是空的'}
+          </h3>
+          <p className="empty-state__hint">
+            {preparing ? '首次进入会自动创建几个示例，马上就好' : '添加第一个联系人，开始编织你的人脉'}
+          </p>
         </div>
       )}
     </div>

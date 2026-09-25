@@ -17,12 +17,25 @@ import type { PRMAdapter } from './adapter/types';
 
 const SEED_FLAG_PREFIX = 'weavine:seeded:';
 
+// StrictMode runs effects twice in dev; without this shared promise both
+// runs would pass the empty-workspace check and create duplicate contacts.
+let inFlight: Promise<boolean> | null = null;
+
 export const SEED_CONTACT_NICKNAME = '张三';
 
-export async function seedDemoDataIfEmpty(
+export function seedDemoDataIfEmpty(
   adapter: PRMAdapter,
   userId: string,
 ): Promise<boolean> {
+  if (!inFlight) {
+    inFlight = seedOnce(adapter, userId).finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+}
+
+async function seedOnce(adapter: PRMAdapter, userId: string): Promise<boolean> {
   const flagKey = `${SEED_FLAG_PREFIX}${userId}`;
   if (localStorage.getItem(flagKey)) return false;
 
@@ -40,10 +53,21 @@ export async function seedDemoDataIfEmpty(
     user_id: userId,
     nickname: SEED_CONTACT_NICKNAME,
   });
-  await adapter.contacts.create({
+  const lisi = await adapter.contacts.create({
     user_id: userId,
     nickname: '李四',
   });
+
+  // Every step is best-effort: one failed create must not abort the rest
+  // (a half-seeded workspace used to stay half-seeded forever because the
+  // flag was only set at the very end).
+  const step = async (fn: () => Promise<unknown>): Promise<void> => {
+    try {
+      await fn();
+    } catch (e) {
+      console.warn('[seed] step failed:', e);
+    }
+  };
 
   // Todo due this evening — nudge the user to try voice capture.
   const tonight = new Date();
@@ -52,46 +76,64 @@ export async function seedDemoDataIfEmpty(
     tonight.setDate(tonight.getDate() + 1);
     tonight.setHours(10, 0, 0, 0);
   }
-  await adapter.actions.create({
-    user_id: userId,
-    title: '体验 Weavine 语音功能',
-    status: 'inbox',
-    priority: 1,
-    due_at: tonight.toISOString(),
-  });
+  await step(() =>
+    adapter.actions.create({
+      user_id: userId,
+      title: '体验 Weavine 语音功能',
+      status: 'inbox',
+      priority: 1,
+      due_at: tonight.toISOString(),
+    }),
+  );
 
   // Dinner tomorrow evening with 张三.
   const tomorrowDinner = new Date();
   tomorrowDinner.setDate(tomorrowDinner.getDate() + 1);
   tomorrowDinner.setHours(19, 0, 0, 0);
   const dinnerEnd = new Date(tomorrowDinner.getTime() + 2 * 60 * 60_000);
-  await adapter.events.create({
-    user_id: userId,
-    title: '明天晚上和张三吃饭',
-    type: '聚餐',
-    start_at: tomorrowDinner.toISOString(),
-    end_at: dinnerEnd.toISOString(),
-    participant_contact_ids: [zhangsan.id],
-  });
+  await step(() =>
+    adapter.events.create({
+      user_id: userId,
+      title: '明天晚上和张三吃饭',
+      type: '聚餐',
+      start_at: tomorrowDinner.toISOString(),
+      end_at: dinnerEnd.toISOString(),
+      participant_contact_ids: [zhangsan.id],
+    }),
+  );
 
   // Note linked to 张三.
-  await adapter.notes.create(userId, {
-    title: '和张三交流记录',
-    body: '和张三讨论了同学聚会事宜。',
-    entity_links: [{ entity_type: 'contact', entity_id: zhangsan.id }],
-  });
+  await step(() =>
+    adapter.notes.create(userId, {
+      title: '和张三交流记录',
+      body: '和张三讨论了同学聚会事宜。',
+      entity_links: [{ entity_type: 'contact', entity_id: zhangsan.id }],
+    }),
+  );
+
+  // Interaction with 李四 (yesterday's phone call).
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setHours(18, 0, 0, 0);
+  await step(() =>
+    adapter.interactions.create({
+      user_id: userId,
+      contact_id: lisi.id,
+      occurred_at: yesterday.toISOString(),
+      channel: '电话',
+      summary: '昨天电话沟通',
+    }),
+  );
 
   // Project with 张三 as a member.
-  const project = await adapter.projects.create({
-    user_id: userId,
-    title: '同学聚会筹备',
-    template: 'default',
-  });
-  try {
+  await step(async () => {
+    const project = await adapter.projects.create({
+      user_id: userId,
+      title: '同学聚会筹备',
+      template: 'default',
+    });
     await adapter.projectContacts.add(project.id, zhangsan.id);
-  } catch {
-    // Member linking is cosmetic — the project itself still seeds.
-  }
+  });
 
   localStorage.setItem(flagKey, '1');
   return true;

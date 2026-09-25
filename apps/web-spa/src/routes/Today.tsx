@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -69,18 +69,18 @@ export function TodayPage() {
   const userId = useUserId();
   const queryClient = useQueryClient();
   const quickCapture = useQuickCapture();
-  const seedRanRef = useRef(false);
+  const [seeding, setSeeding] = useState(true);
 
   // First-run demo data. Runs before the feeds below; if it seeds anything
   // the queries are invalidated so the graph/stream show it immediately.
   useEffect(() => {
-    if (!userId || seedRanRef.current) return;
-    seedRanRef.current = true;
+    if (!userId) return;
     seedDemoDataIfEmpty(adapter, userId)
       .then((seeded) => {
         if (seeded) queryClient.invalidateQueries();
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setSeeding(false));
   }, [adapter, userId, queryClient]);
 
   const actionsQuery = useQuery({
@@ -129,6 +129,31 @@ export function TodayPage() {
         sort_by: 'last_interaction_at',
         limit: 200,
       }),
+    enabled: Boolean(userId),
+  });
+
+  const notesQuery = useQuery({
+    queryKey: ['notes', userId, 'for-home-graph'],
+    queryFn: async () => {
+      const r = await adapter.notes.list(userId!);
+      const top = r.items.slice(0, 5);
+      return Promise.all(
+        top.map(async (n) => {
+          try {
+            const links = await adapter.notes.listEntityLinks(userId!, n.id);
+            return {
+              id: n.id,
+              title: n.title,
+              linkedContactIds: links
+                .filter((l) => l.entity_type === 'contact')
+                .map((l) => l.entity_id),
+            };
+          } catch {
+            return { id: n.id, title: n.title, linkedContactIds: [] as string[] };
+          }
+        }),
+      );
+    },
     enabled: Boolean(userId),
   });
 
@@ -222,7 +247,7 @@ export function TodayPage() {
               day: 'numeric',
               weekday: 'long',
             })}
-            · 编织你遇见的每一个人
+            · 编织你遇见的人脉
           </p>
         </div>
       </div>
@@ -247,7 +272,7 @@ export function TodayPage() {
       >
         <span style={{ fontSize: 'var(--text-lg)' }}>🎤</span>
         <span style={{ flex: 1, fontSize: 'var(--text-base)' }}>
-          今天见了谁？说一句话，或点这里打字…
+          今天见了谁？语音或输入…
         </span>
         <span
           className="text-xs text-muted"
@@ -267,6 +292,9 @@ export function TodayPage() {
             events={eventsQuery.data ?? []}
             actions={actionsQuery.data ?? []}
             projects={projectsQuery.data ?? []}
+            notes={notesQuery.data ?? []}
+            interactions={interactionsQuery.data ?? []}
+            preparing={seeding}
           />
         </div>
       )}
