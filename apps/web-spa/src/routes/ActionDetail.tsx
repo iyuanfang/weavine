@@ -176,7 +176,7 @@ export function ActionDetail() {
                   opacity: completeMutation.isPending ? 0.6 : 1,
                 }}
               >
-                {completeMutation.isPending ? '完成中…' : '✓ 标记完成'}
+                {completeMutation.isPending ? '完成中…' : '✓ 完成'}
               </button>
             )}
             {isDone && (
@@ -187,7 +187,7 @@ export function ActionDetail() {
                 className="btn btn-secondary"
                 style={{ opacity: completeMutation.isPending ? 0.6 : 1 }}
               >
-                {completeMutation.isPending ? '处理中…' : '↺ 重新打开'}
+                {completeMutation.isPending ? '处理中…' : '↺ 重开'}
               </button>
             )}
             <Link

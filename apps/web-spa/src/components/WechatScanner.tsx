@@ -159,7 +159,7 @@ export function WechatScanner({ onApply, disabled }: Props) {
     >
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
         <label className="btn btn-secondary" style={{ cursor: 'pointer', flexShrink: 0 }}>
-          {preview ? '换一张' : '💬 详情页'}
+          {preview ? '换一张' : '💬 微信截图'}
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
@@ -172,6 +172,11 @@ export function WechatScanner({ onApply, disabled }: Props) {
             }}
           />
         </label>
+        {!preview && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--muted)', flexShrink: 0 }}>
+            详情页
+          </div>
+        )}
       </div>
 
       {busy && <div style={{ marginTop: 8, fontSize: 'var(--text-sm)' }}>识别中…</div>}
