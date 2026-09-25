@@ -108,7 +108,7 @@ export function ContactNew() {
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
           <CardScanner onApply={applyScanned} />
           <WechatScanner onApply={applyWechat} />
         </div>
