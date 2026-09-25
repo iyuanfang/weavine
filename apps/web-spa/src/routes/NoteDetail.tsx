@@ -170,7 +170,7 @@ const NOTE_TEMPLATES: { id: string; icon: string; title: string; body: string }[
 ];
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { useAdapter } from '../lib/adapter';
+import { useAdapter, isTauri } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { MarkdownView } from '../components/MarkdownView';
 import { MarkdownEditor, EditorToolbar } from '../components/MarkdownEditor';
@@ -808,30 +808,37 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
     navigate(fromParam || '/notes');
   };
 
-  const onCopyMarkdown = async () => {
-    if (!note) return;
-    const title = draftTitle.trim() || '（无标题）';
-    const md = `# ${title}\n\n${draftBody}`;
-    try {
-      await navigator.clipboard.writeText(md);
-      setSaveStatus('saved');
-      setLastSavedAt(Date.now());
-      window.setTimeout(() => setSaveStatus('idle'), 1500);
-    } catch {
-      window.prompt('复制失败，手动复制：', md);
-    }
-  };
 
   const onExportMd = async () => {
     if (!note || !userId) return;
+    const safeTitle = (draftTitle.trim() || 'note').replace(/[\\/:*?"<>|]/g, '_');
+    if (isTauri) {
+      // Desktop: native save dialog + mtime round-trip (re-import fast path).
+      try {
+        await persist({ force: true });
+        const defaultName = `${safeTitle}.md`;
+        const target = await adapter.md.saveDialog(defaultName);
+        if (!target) return;
+        await adapter.md.exportNoteAsMd(userId, note.id, target);
+        window.alert(`已导出到:\n${target}\n\n文件 mtime 已设为笔记 imported_at，下次导入库走快速路径。`);
+      } catch (e) {
+        window.alert(`导出失败: ${String(e)}`);
+      }
+      return;
+    }
+    // Web: no filesystem access — download the markdown as a file.
     try {
       await persist({ force: true });
-      const safeTitle = (draftTitle.trim() || 'note').replace(/[\\/:*?"<>|]/g, '_');
-      const defaultName = `${safeTitle}.md`;
-      const target = await adapter.md.saveDialog(defaultName);
-      if (!target) return;
-      await adapter.md.exportNoteAsMd(userId, note.id, target);
-      window.alert(`已导出到:\n${target}\n\n文件 mtime 已设为笔记 imported_at，下次导入库走快速路径。`);
+      const md = `# ${draftTitle.trim() || '（无标题）'}\n\n${draftBody}`;
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeTitle}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (e) {
       window.alert(`导出失败: ${String(e)}`);
     }
@@ -901,25 +908,10 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={onCopyMarkdown}
-              title="复制 Markdown 源码到剪贴板"
-            >
-              复制 MD
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
               onClick={onExportMd}
-              title="导出为本地 .md 文件；文件 mtime = imported_at，下次导入走快速路径"
+              title={isTauri ? '导出为本地 .md 文件' : '下载为 .md 文件'}
             >
-              导出 .md
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => navigate(`/notes/new?clone_from=${id}`)}
-            >
-              克隆
+              导出文件
             </button>
             <button type="button" className="btn btn-danger" onClick={onDelete}>
               删除
