@@ -6,6 +6,7 @@ import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { TagPicker } from '../components/TagPicker';
 import { CardScanner, type ScannedFields } from '../components/CardScanner';
+import { WechatScanner, type WechatFields } from '../components/WechatScanner';
 import {
   DEFAULT_IMPORTANCE,
   IMPORTANCE_OPTIONS,
@@ -61,6 +62,33 @@ export function ContactNew() {
     return <div className="loading">正在加载用户…</div>;
   }
 
+  const applyWechat = async (f: WechatFields) => {
+    if (f.nickname) setNickname(f.nickname);
+    if (f.name) setName(f.name);
+    if (f.wechat) setWechat(f.wechat);
+    if (f.phone) setPhone(f.phone);
+    if (f.address) setAddress(f.address);
+    // WeChat tags: reuse existing tags by name, create the missing ones.
+    if (f.tags.length > 0) {
+      try {
+        const existing = await adapter.tags.list(userId!);
+        const ids = [...selectedTagIds];
+        for (const name of f.tags) {
+          const found = existing.find((t) => t.name === name);
+          if (found) {
+            if (!ids.includes(found.id)) ids.push(found.id);
+          } else {
+            const t = await adapter.tags.create({ user_id: userId!, name });
+            ids.push(t.id);
+          }
+        }
+        setSelectedTagIds(ids);
+      } catch {
+        // Tag sync is best-effort — the profile fields are already applied.
+      }
+    }
+  };
+
   const applyScanned = (f: ScannedFields) => {
     if (f.name) setName(f.name);
     if (f.company) setCompany(f.company);
@@ -80,7 +108,13 @@ export function ContactNew() {
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <CardScanner onApply={applyScanned} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+          <CardScanner onApply={applyScanned} />
+          <WechatScanner onApply={applyWechat} />
+        </div>
+          <WechatScanner onApply={applyWechat} />
+        </div>
       </div>
 
       {createMutation.isError && (

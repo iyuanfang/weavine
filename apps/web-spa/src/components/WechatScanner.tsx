@@ -1,0 +1,198 @@
+import { useState } from 'react';
+
+import { isTauri } from '../lib/adapter';
+import { getAccessToken } from '../lib/auth/storage';
+import { parseWechatProfile, type WechatProfile } from '../lib/wechat-import';
+
+export interface WechatFields {
+  nickname: string | null;
+  name: string | null;
+  wechat: string | null;
+  phone: string | null;
+  address: string | null;
+  tags: string[];
+}
+
+interface Props {
+  onApply: (fields: WechatFields) => void;
+  disabled?: boolean;
+}
+
+interface OcrResponse {
+  raw_text: string;
+  avg_confidence: number;
+}
+
+// Shared with CardScanner: phone photos are 3-8 MB, the API caps at 10 MB,
+// and PaddleOCR is faster on smaller inputs.
+const MAX_OCR_SIZE = 10 * 1024 * 1024;
+const DOWNSAMPLE_SIZE = 2 * 1024 * 1024;
+const DOWNSAMPLE_MAX_W = 1600;
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+async function ocrImage(dataUrl: string): Promise<OcrResponse> {
+  const strip = (s: string) => {
+    const i = s.indexOf(',');
+    return i >= 0 ? s.slice(i + 1) : s;
+  };
+  if (isTauri) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<OcrResponse>('extract_card', { image_base64: strip(dataUrl) });
+  }
+  const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if (!m) throw new Error('invalid data URL');
+  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type: m[1] }), 'wechat.png');
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const resp = await fetch('/api/cards/extract', {
+    method: 'POST',
+    body: form,
+    credentials: 'include',
+    headers,
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    if (resp.status === 413) throw new Error('图片过大，请压缩到 10MB 以下');
+    if (resp.status === 408 || resp.status === 504) throw new Error('OCR 处理超时，请重试');
+    throw new Error(`OCR 失败: ${resp.status} ${body.slice(0, 120)}`);
+  }
+  return resp.json();
+}
+
+function downsample(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      if (img.width <= DOWNSAMPLE_MAX_W) {
+        resolve(file);
+        return;
+      }
+      const scale = DOWNSAMPLE_MAX_W / img.width;
+      const canvas = document.createElement('canvas');
+      canvas.width = DOWNSAMPLE_MAX_W;
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) =>
+          blob
+            ? resolve(new File([blob], file.name, { type: file.type }))
+            : reject(new Error('downsample failed')),
+        file.type,
+        0.85,
+      );
+    };
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+export function WechatScanner({ onApply, disabled }: Props) {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [parsed, setParsed] = useState<WechatProfile | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onPick = async (file: File) => {
+    setError(null);
+    setParsed(null);
+    if (file.size > MAX_OCR_SIZE) {
+      setError('图片过大，请压缩到 10MB 以下');
+      return;
+    }
+    const processed = file.size > DOWNSAMPLE_SIZE ? await downsample(file) : file;
+    const dataUrl = await readAsDataUrl(processed);
+    setPreview(dataUrl);
+    setBusy(true);
+    try {
+      const r = await ocrImage(dataUrl);
+      const profile = parseWechatProfile(r.raw_text);
+      if (!profile) {
+        setError('未识别出微信资料页——请上传「联系人详情页」截图（含 微信号/昵称 的那页）');
+        return;
+      }
+      setParsed(profile);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const apply = () => {
+    if (!parsed) return;
+    onApply({
+      nickname: parsed.nickname,
+      name: parsed.name,
+      wechat: parsed.wechat,
+      phone: parsed.phone,
+      address: parsed.address,
+      tags: parsed.tags,
+    });
+  };
+
+  return (
+    <div
+      style={{
+        border: '1px dashed var(--border)',
+        borderRadius: 8,
+        padding: 12,
+        background: 'var(--surface)',
+        opacity: disabled ? 0.6 : 1,
+        pointerEvents: disabled ? 'none' : 'auto',
+      }}
+    >
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <label className="btn btn-secondary" style={{ cursor: 'pointer', flexShrink: 0 }}>
+          {preview ? '换一张' : '💬 详情页'}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            data-testid="wechat-scanner-input"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void onPick(f);
+              e.currentTarget.value = '';
+            }}
+          />
+        </label>
+      </div>
+
+      {busy && <div style={{ marginTop: 8, fontSize: 'var(--text-sm)' }}>识别中…</div>}
+      {error && (
+        <div style={{ marginTop: 8, fontSize: 'var(--text-sm)', color: 'var(--danger)' }}>{error}</div>
+      )}
+      {parsed && (
+        <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', lineHeight: 1.7 }}>
+            {parsed.nickname && <div>备注: {parsed.nickname}</div>}
+            {parsed.name && <div>昵称: {parsed.name}</div>}
+            {parsed.wechat && <div>微信号: {parsed.wechat}</div>}
+            {parsed.phone && <div>电话: {parsed.phone}</div>}
+            {parsed.address && <div>地区: {parsed.address}</div>}
+            {parsed.tags.length > 0 && <div>标签: {parsed.tags.join('、')}</div>}
+          </div>
+          <button type="button" className="btn btn-primary" onClick={apply} style={{ flexShrink: 0 }}>
+            填入表单
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
