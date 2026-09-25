@@ -39,15 +39,17 @@ export function DetailHeaderCard({
         rowGap: 12,
       }}
     >
-      {icon}
-      <div className="detail-header-card__info" style={{ flex: 1, minWidth: 0 }}>
-        <div className="cluster cluster--loose">
-          <h1 className="page-title" style={{ margin: 0 }}>
-            {title}
-          </h1>
-          {badges}
+      <div className="detail-header-card__identity">
+        {icon}
+        <div className="detail-header-card__info" style={{ flex: 1, minWidth: 0 }}>
+          <div className="cluster cluster--loose">
+            <h1 className="page-title" style={{ margin: 0 }}>
+              {title}
+            </h1>
+            {badges}
+          </div>
+          {meta && <div style={{ marginTop: 8 }}>{meta}</div>}
         </div>
-        {meta && <div style={{ marginTop: 8 }}>{meta}</div>}
       </div>
       {actions && (
         <div

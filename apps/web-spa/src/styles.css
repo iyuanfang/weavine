@@ -3110,27 +3110,52 @@ textarea.input-base {
   }
 }
 
-/* ── Detail header card: stacked layout on phones ─────────────
-   The horizontal icon|info|actions row is fine on wide screens but
-   on a 360-390px phone the actions squeeze the info block until
-   meta text (dates, tags) wraps character-by-character. Stack:
-   row 1 = icon + title + badges, row 2 = meta, row 3 = actions. */
+/* ── Detail header card ───────────────────────────────────────
+   Desktop: one row — icon | info (flex:1) | actions.
+   Phones: icon+info stay on row 1, actions drop to their own
+   full-width row so they never squeeze the meta text. */
+.detail-header-card .detail-header-card__identity {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
 @media (max-width: 640px) {
   .detail-header-card {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
+  /* icon stays beside the title/meta — only the actions drop to their own
+     full-width row (buttons stretch evenly) */
+  .detail-header-card .detail-header-card__identity {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+  }
   .detail-header-card .detail-header-card__actions {
     width: 100%;
     flex-wrap: wrap;
   }
   .detail-header-card .detail-header-card__actions > * {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
+    min-width: 0;
   }
   .detail-header-card .avatar {
     width: 44px;
     height: 44px;
     font-size: 20px;
+  }
+  /* long titles wrap instead of overflowing the card edge */
+  .detail-header-card .page-title {
+    font-size: var(--text-xl);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+  }
+  .detail-header-card .btn {
+    white-space: nowrap;
   }
 }
