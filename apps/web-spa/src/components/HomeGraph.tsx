@@ -83,6 +83,18 @@ const meKindBtnStyle: React.CSSProperties = {
   fontSize: 14,
 };
 
+function bulkBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '3px 8px',
+    fontSize: 12,
+    border: '1px solid #e2e8f0',
+    borderRadius: 4,
+    background: disabled ? '#f1f5f9' : '#fff',
+    color: disabled ? '#94a3b8' : '#475569',
+    cursor: disabled ? 'default' : 'pointer',
+  };
+}
+
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
@@ -740,44 +752,68 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
       <div
         style={{
           display: 'flex',
+          alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 6,
+          gap: 8,
           padding: '8px 14px 0',
         }}
         data-testid="home-graph-filters"
       >
+        <span style={{ fontSize: 12, color: '#64748b' }}>筛选类型:</span>
+        <button
+          type="button"
+          data-testid="home-graph-filter-all"
+          onClick={() => setVisibleTypes(new Set(SAT_TYPES))}
+          disabled={visibleTypes.size === SAT_TYPES.length}
+          style={bulkBtnStyle(visibleTypes.size === SAT_TYPES.length)}
+        >
+          全选
+        </button>
+        <button
+          type="button"
+          data-testid="home-graph-filter-none"
+          onClick={() => setVisibleTypes(new Set())}
+          disabled={visibleTypes.size === 0}
+          style={bulkBtnStyle(visibleTypes.size === 0)}
+        >
+          全不选
+        </button>
         {SAT_TYPES.map((t) => {
           const meta = TYPE_META[t];
-          const on = visibleTypes.has(t);
+          const checked = visibleTypes.has(t);
           return (
-            <button
+            <label
               key={t}
-              type="button"
               data-testid={`home-graph-filter-${t}`}
-              onClick={() =>
-                setVisibleTypes((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(t)) next.delete(t);
-                  else next.add(t);
-                  return next;
-                })
-              }
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 4,
-                padding: '3px 8px',
-                border: `1px solid ${on ? meta.color : '#e2e8f0'}`,
+                padding: '4px 8px',
+                border: `1px solid ${checked ? meta.color : '#e2e8f0'}`,
                 borderRadius: 6,
-                background: on ? `${meta.color}10` : '#fff',
-                color: on ? '#1e293b' : '#94a3b8',
-                fontSize: 12,
+                background: checked ? `${meta.color}10` : '#fff',
+                fontSize: 13,
                 cursor: 'pointer',
+                userSelect: 'none',
               }}
             >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() =>
+                  setVisibleTypes((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(t)) next.delete(t);
+                    else next.add(t);
+                    return next;
+                  })
+                }
+                style={{ margin: 0 }}
+              />
               <span>{meta.icon}</span>
               <span>{meta.label}</span>
-            </button>
+            </label>
           );
         })}
       </div>
