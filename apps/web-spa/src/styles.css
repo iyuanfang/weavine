@@ -3128,25 +3128,31 @@ textarea.input-base {
     gap: 10px;
   }
   /* icon stays beside the title/meta — only the actions drop to their own
-     full-width row (buttons stretch evenly) */
+     full-width row. Actions are 4 equal-width buttons; identity is left-
+     aligned (icon top-aligned with the title). */
   .detail-header-card .detail-header-card__identity {
     display: flex;
     gap: 12px;
-    align-items: center;
+    align-items: flex-start;
     min-width: 0;
-  }
-  .detail-header-card .detail-header-card__actions {
     width: 100%;
-    flex-wrap: wrap;
-  }
-  .detail-header-card .detail-header-card__actions > * {
-    flex: 0 1 auto;
-    min-width: 0;
   }
   .detail-header-card .avatar {
     width: 44px;
     height: 44px;
     font-size: 20px;
+    flex-shrink: 0;
+  }
+  .detail-header-card .detail-header-card__actions {
+    width: 100%;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+  .detail-header-card .detail-header-card__actions .btn {
+    white-space: nowrap;
+    padding-left: 4px;
+    padding-right: 4px;
   }
   /* long titles wrap instead of overflowing the card edge */
   .detail-header-card .page-title {
