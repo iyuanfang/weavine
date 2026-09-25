@@ -138,28 +138,52 @@ test.describe.serial('graph operations', () => {
     await page.context().close();
   });
 
-  test('hover minus unlinks contact from event without deleting the contact', async ({ browser }) => {
+  test('hover minus deletes the contact entity after confirm (soft delete)', async ({ browser }) => {
     const page = await newPage(browser);
     await openGraph(page, 'event', event.id);
-    const node = page.locator(`[data-testid="graph-node-contact-${bob.id}"]`);
+    // Fully self-contained: a throwaway event + throwaway contact (dave),
+    // so the shared seed rows survive untouched for the later serial tests.
+    const dave = await api.post(`${SERVER_BASE}/api/contacts`, {
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      data: { user_id: session.user_id, nickname: 'Dave' },
+    }).then((r: any) => r.json());
+    const daveEvent = await api.post(`${SERVER_BASE}/api/events`, {
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      data: {
+        user_id: session.user_id,
+        title: 'DeleteMe Event',
+        type: '会议',
+        start_at: new Date(Date.now() + 86400000).toISOString(),
+        contact_id: dave.id,
+        participant_contact_ids: [dave.id],
+      },
+    }).then((r: any) => r.json());
+
+    const page2 = await newPage(browser);
+    await openGraph(page2, 'event', daveEvent.id);
+    const node = page2.locator(`[data-testid="graph-node-contact-${dave.id}"]`);
+    await expect(node).toBeVisible({ timeout: 15000 });
     await node.hover();
-    const minus = page.locator(`[data-testid="graph-unlink-contact-${bob.id}"]`);
+    const minus = page2.locator(`[data-testid="graph-delete-contact-${dave.id}"]`);
     await expect(minus).toBeVisible();
     await minus.click();
 
-    await expect(page.locator(`[data-testid="graph-node-contact-${bob.id}"]`)).toHaveCount(0, { timeout: 15000 });
+    // confirm dialog guards the delete
+    const dlg = page2.locator('[data-testid="graph-delete-confirm"]');
+    await expect(dlg).toBeVisible();
+    await page2.locator('[data-testid="graph-delete-confirm-ok"]').click();
 
-    // entity survives; edge gone
-    const ev: any = await apiGet(api, session.access_token, `/api/events/${event.id}`);
-    expect(ev.participants.map((p: any) => p.contact_id)).not.toContain(bob.id);
-    const bobAfter = await api.get(`${SERVER_BASE}/api/contacts/${bob.id}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    expect(bobAfter.status()).toBe(200);
+    await expect(page2.locator(`[data-testid="graph-node-contact-${dave.id}"]`)).toHaveCount(0, { timeout: 15000 });
+
+    // entity is soft-deleted: gone from the contacts list (GET by id still
+    // resolves the row — deletion is recoverable once a trash ships)
+    const list = await apiGet(api, session.access_token, `/api/contacts?limit=200`);
+    expect(list.items.map((c: any) => c.id)).not.toContain(dave.id);
+    await page2.context().close();
     await page.context().close();
   });
 
-  test('derived event↔action edge has no minus', async ({ browser }) => {
+  test('derived event↔action edge also offers delete', async ({ browser }) => {
     const h = { Authorization: `Bearer ${session.access_token}` };
     // link action to event through an interaction so the event graph shows the action
     const i = await api.post(`${SERVER_BASE}/api/interactions`, {
@@ -181,7 +205,8 @@ test.describe.serial('graph operations', () => {
     const node = page.locator(`[data-testid="graph-node-action-${action.id}"]`);
     await expect(node).toBeVisible({ timeout: 15000 });
     await node.hover();
-    await expect(page.locator(`[data-testid="graph-unlink-action-${action.id}"]`)).toHaveCount(0);
+    // delete semantics: every neighbor carries a delete badge now
+    await expect(page.locator(`[data-testid="graph-delete-action-${action.id}"]`)).toBeVisible();
 
     // cleanup interaction so later tests see a stable graph
     await api.delete(`${SERVER_BASE}/api/interactions/${interaction.id}`, {
@@ -207,22 +232,28 @@ test.describe.serial('graph operations', () => {
   });
 
   test('event detail page: add participants via picker modal and remove via chip', async ({ browser }) => {
+    // Erin: a fresh contact NOT yet a participant (the picker excludes
+    // existing participants — see excludeIds in EventDetail).
+    const erin = await api.post(`${SERVER_BASE}/api/contacts`, {
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      data: { user_id: session.user_id, nickname: 'Erin' },
+    }).then((r: any) => r.json());
     const page = await newPage(browser);
     await page.goto(`${SPA_BASE}/events/${event.id}`);
     await expect(page.getByText('基本信息')).toBeVisible({ timeout: 15000 });
 
     await page.locator('[data-testid="event-add-participant"]').click();
     await expect(page.locator('[data-testid="contact-pick-or-create"]')).toBeVisible();
-    await page.locator(`[data-testid="pick-contact-${bob.id}"]`).click();
+    await page.locator(`[data-testid="pick-contact-${erin.id}"]`).click();
     await page.locator('[data-testid="contact-pick-confirm"]').click();
 
     // chip appears (event detail re-fetches after update)
-    await expect(page.locator('[data-testid="event-participant"]', { hasText: 'Bob' })).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[data-testid="event-participant"]', { hasText: 'Erin' })).toBeVisible({ timeout: 15000 });
 
-    // remove Bob again via the chip's ×
-    const bobChip = page.locator('span', { has: page.locator(`[data-testid="event-participant"]`) }).filter({ hasText: 'Bob' });
-    await bobChip.locator('button[title="移除参与者"]').click();
-    await expect(page.locator('[data-testid="event-participant"]', { hasText: 'Bob' })).toHaveCount(0, { timeout: 15000 });
+    // remove Erin again via the chip's ×
+    const erinChip = page.locator('span', { has: page.locator(`[data-testid="event-participant"]`) }).filter({ hasText: 'Erin' });
+    await erinChip.locator('button[title="移除参与者"]').click();
+    await expect(page.locator('[data-testid="event-participant"]', { hasText: 'Erin' })).toHaveCount(0, { timeout: 15000 });
     await page.context().close();
   });
 

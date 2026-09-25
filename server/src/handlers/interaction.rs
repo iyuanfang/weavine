@@ -149,6 +149,9 @@ pub async fn update(
             params.push(v.to_string()); idx += 1;
         }
     }
+    if sets.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "没有需要更新的字段".into()));
+    }
     let sql = format!("UPDATE interaction SET {} WHERE id = ${} AND user_id = ${}", sets.join(", "), idx, idx + 1);
     let mut q = sqlx::query(&sql);
     for p in &params { q = q.bind(p); }

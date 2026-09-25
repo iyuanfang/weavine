@@ -102,6 +102,28 @@ pub async fn add(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Both parents must belong to the caller — otherwise the link row is
+    // created under this user's id while pointing at foreign entities.
+    let project_ok: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM project WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(&project_id)
+    .bind(&auth)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let contact_ok: Option<(String,)> = sqlx::query_as(
+        "SELECT id FROM contact WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(&contact_id)
+    .bind(&auth)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if project_ok.is_none() || contact_ok.is_none() {
+        return Err((StatusCode::NOT_FOUND, "项目或联系人不存在".into()));
+    }
+
     sqlx::query(
         "INSERT INTO project_contact (user_id, project_id, contact_id, role, added_at) \
          VALUES ($1,$2,$3,$4,$5) ON CONFLICT (project_id, contact_id) DO UPDATE SET role = EXCLUDED.role",

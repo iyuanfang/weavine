@@ -288,7 +288,7 @@ export function ContactDetail() {
               className="btn btn-secondary"
               style={{ opacity: avatarUploading ? 0.6 : 1 }}
             >
-              {avatarUploading ? '上传中…' : '更换头像'}
+              {avatarUploading ? '上传中…' : '头像'}
             </button>
             <Link
               to={`/contacts/${id}/edit?from=${encodeURIComponent(fromParam || `/contacts/${id}`)}`}
