@@ -95,7 +95,7 @@ const onNeighborOpen = useCallback(
     [center.type, creatable],
   );
 
-  // ── Delete (软删除) ──────────────────────────────────────
+  // ── Delete ──────────────────────────────────────────────
   // The hover − badge deletes the NEIGHBOR entity outright (server-side
   // soft delete via deleted_at; recoverable once a trash feature ships).
   // Deliberate unlink (keep entity, drop edge) still exists in the
@@ -390,7 +390,7 @@ const onNeighborOpen = useCallback(
           <div style={{ marginTop: 12, fontSize: 12, color: '#64748b' }}>
             单击节点 = 查看该节点的关系图。
             {effectiveCreatable.length > 0 && '点击 + 新建按钮即可在此添加关联实体。'}
-            悬停节点点 − 删除该实体（软删除）；右键 / 长按节点可断开关联或打开详情。
+            悬停节点点 − 删除该实体；右键 / 长按节点可断开关联或打开详情。
             超过 {GRAPH_NODE_CAP} 个节点的关联会被截断。
           </div>
         </section>
