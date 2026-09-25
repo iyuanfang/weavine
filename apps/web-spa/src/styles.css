@@ -3109,3 +3109,28 @@ textarea.input-base {
     margin-top: 14px;
   }
 }
+
+/* ── Detail header card: stacked layout on phones ─────────────
+   The horizontal icon|info|actions row is fine on wide screens but
+   on a 360-390px phone the actions squeeze the info block until
+   meta text (dates, tags) wraps character-by-character. Stack:
+   row 1 = icon + title + badges, row 2 = meta, row 3 = actions. */
+@media (max-width: 640px) {
+  .detail-header-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .detail-header-card .detail-header-card__actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .detail-header-card .detail-header-card__actions > * {
+    flex: 1 1 auto;
+  }
+  .detail-header-card .avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+}

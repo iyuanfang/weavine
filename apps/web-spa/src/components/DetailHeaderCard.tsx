@@ -28,7 +28,7 @@ export function DetailHeaderCard({
 }) {
   return (
     <div
-      className="card"
+      className="card detail-header-card"
       style={{
         padding: '12px 16px',
         marginBottom: 16,
@@ -40,7 +40,7 @@ export function DetailHeaderCard({
       }}
     >
       {icon}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="detail-header-card__info" style={{ flex: 1, minWidth: 0 }}>
         <div className="cluster cluster--loose">
           <h1 className="page-title" style={{ margin: 0 }}>
             {title}
@@ -50,7 +50,10 @@ export function DetailHeaderCard({
         {meta && <div style={{ marginTop: 8 }}>{meta}</div>}
       </div>
       {actions && (
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}>
+        <div
+          className="detail-header-card__actions"
+          style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', rowGap: 8 }}
+        >
           {actions}
         </div>
       )}
