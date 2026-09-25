@@ -529,7 +529,7 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-              删除{confirmTarget.kind === 'event' ? '日程' : confirmTarget.kind === 'action' ? '待办' : '项目'}「{confirmTarget.label}」？
+              删除{TYPE_META[confirmTarget.kind].label}「{confirmTarget.label}」？
             </h3>
             <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
               确认后将从人脉网中删除。此操作不可恢复。

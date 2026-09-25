@@ -456,7 +456,7 @@ const HoverableNode = memo(function HoverableNode({
             onDelete?.(node);
           }}
         >
-          <title>删除该{meta.label}（软删除，可恢复）</title>
+          <title>删除</title>
           <circle
             cx={x + L.NODE_R - 2}
             cy={y - L.NODE_R - 2}
