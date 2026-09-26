@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { isTauri } from '../lib/adapter';
 import { getAccessToken } from '../lib/auth/storage';
 import { getDeviceKey, getOrCreateInstallId, osStr, platformStr } from '../lib/install-id';
-import { parseWechatProfile, type WechatProfile } from '../lib/wechat-import';
+import { parseWechatProfile } from '../lib/wechat-import';
 
 export interface WechatFields {
   nickname: string | null;
@@ -29,10 +29,9 @@ interface OcrResponse {
 const MAX_OCR_SIZE = 10 * 1024 * 1024;
 // Always re-encode phone screenshots: originals are 3-8 MB and large uploads
 // get reset by mobile networks mid-flight ("Failed to fetch"). 1400px wide
-// JPEG qJPEG_QUALITY is plenty for the fixed-template OCR.
+// JPEG q65 is plenty for the fixed-template OCR.
 const DOWNSAMPLE_MAX_W = 600;
 const JPEG_QUALITY = 0.65;
-const JPEG_QUALITY = JPEG_QUALITY;
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -114,13 +113,11 @@ function downsample(file: File): Promise<File> {
 
 export function WechatScanner({ onApply, disabled }: Props) {
   const [preview, setPreview] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<WechatProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onPick = async (file: File) => {
     setError(null);
-    setParsed(null);
     if (file.size > MAX_OCR_SIZE) {
       setError('图片过大，请压缩到 10MB 以下');
       return;
@@ -136,24 +133,21 @@ export function WechatScanner({ onApply, disabled }: Props) {
         setError('未识别出微信资料页——请上传「联系人详情页」截图（含 微信号/昵称 的那页）');
         return;
       }
-      setParsed(profile);
+      // Apply the OCR result to the parent form immediately — no manual
+      // confirm step. The user can edit or clear fields afterwards.
+      onApply({
+        nickname: profile.nickname,
+        name: profile.name,
+        wechat: profile.wechat,
+        phone: profile.phone,
+        address: profile.address,
+        tags: profile.tags,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
-  };
-
-  const apply = () => {
-    if (!parsed) return;
-    onApply({
-      nickname: parsed.nickname,
-      name: parsed.name,
-      wechat: parsed.wechat,
-      phone: parsed.phone,
-      address: parsed.address,
-      tags: parsed.tags,
-    });
   };
 
   return (
@@ -193,21 +187,7 @@ export function WechatScanner({ onApply, disabled }: Props) {
       {error && (
         <div style={{ marginTop: 8, fontSize: 'var(--text-sm)', color: 'var(--danger)' }}>{error}</div>
       )}
-      {parsed && (
-        <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 'var(--text-sm)', lineHeight: 1.7 }}>
-            {parsed.nickname && <div>备注: {parsed.nickname}</div>}
-            {parsed.name && <div>昵称: {parsed.name}</div>}
-            {parsed.wechat && <div>微信号: {parsed.wechat}</div>}
-            {parsed.phone && <div>电话: {parsed.phone}</div>}
-            {parsed.address && <div>地区: {parsed.address}</div>}
-            {parsed.tags.length > 0 && <div>标签: {parsed.tags.join('、')}</div>}
-          </div>
-          <button type="button" className="btn btn-primary" onClick={apply} style={{ flexShrink: 0 }}>
-            填入表单
-          </button>
-        </div>
-      )}
+
     </div>
   );
 }

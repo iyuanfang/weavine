@@ -137,23 +137,21 @@ export function CardScanner({ onApply, disabled }: Props) {
     try {
       const r = await callExtract(dataUrl);
       setResult(r);
+      // Apply the OCR result to the parent form immediately — no manual
+      // confirm step. The user can edit or clear fields afterwards.
+      onApply({
+        name: r.fields.name,
+        company: r.fields.company,
+        title: r.fields.title,
+        email: r.fields.email,
+        phone: r.fields.phone ?? [],
+        address: r.fields.address,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
-  };
-
-  const apply = () => {
-    if (!result) return;
-    onApply({
-      name: result.fields.name,
-      company: result.fields.company,
-      title: result.fields.title,
-      email: result.fields.email,
-      phone: result.fields.phone ?? [],
-      address: result.fields.address,
-    });
   };
 
   return (
@@ -243,15 +241,6 @@ export function CardScanner({ onApply, disabled }: Props) {
             );
           })()}
           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={apply}
-              disabled={busy}
-              data-testid="card-scanner-apply"
-            >
-              应用到表单
-            </button>
             <details style={{ fontSize: 'var(--text-sm)' }}>
               <summary style={{ cursor: 'pointer', color: 'var(--muted)' }}>
                 查看原始文本
