@@ -1,10 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
-import { checkAndInstallDesktopUpdate, fetchLatestDesktopUpdate } from '../lib/app-updater';
+import { checkAndInstallDesktopUpdate, fetchLatestAndroidVersion, fetchLatestDesktopUpdate } from '../lib/app-updater';
 import { useUserId } from '../lib/auth';
 import type {
   ArchiveSummary,
@@ -508,33 +508,80 @@ function DesktopUpdateCard({
 // Android-only: link to GitHub releases page so users can grab the latest
 // APK manually. Desktop users get their installers from the same page
 // outside the app, so no in-app UI is needed.
+// Android-only: in-app update check. Fetches latest-android.json,
+// downloads the new APK and hands it to the Android package installer
+// (requires REQUEST_INSTALL_PACKAGES).
 function AndroidSideloadHint() {
+  const [updateState, setUpdateState] = useState<
+    'idle' | 'checking' | 'downloading' | 'ready' | 'error'
+  >('idle');
+  const [apkUrl, setApkUrl] = useState<string | null>(null);
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
-  const openReleasesPage = useCallback(async () => {
-    const url = 'https://github.com/iyuanfang/weavine/releases/latest';
+
+  const checkForUpdate = async () => {
+    setUpdateState('checking');
     try {
-      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-        const { openUrl } = await import('@tauri-apps/plugin-opener');
-        await openUrl(url, 'browser');
+      const version = await fetchLatestAndroidVersion();
+      if (!version) {
+        setUpdateState('error');
         return;
       }
-    } catch {}
-    window.open(url, '_blank', 'noopener');
-  }, []);
+      setLatestVersion(version);
+      setApkUrl(`https://www.weavine.com/downloads/v${version}/Weavine_arm64-release_cloud.apk`);
+      setUpdateState('ready');
+    } catch {
+      setUpdateState('error');
+    }
+  };
+
+  const downloadAndInstall = async () => {
+    if (!apkUrl) return;
+    setUpdateState('downloading');
+    try {
+      const resp = await fetch(apkUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Weavine_${latestVersion}.apk`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setUpdateState('ready');
+    } catch (e) {
+      alert(`下载失败: ${e instanceof Error ? e.message : String(e)}`);
+      setUpdateState('ready');
+    }
+  };
+
   if (!isAndroid) return null;
   return (
-    <div style={{ marginTop: 16 }}>
-      <h3 style={{ margin: '0 0 8px', fontSize: 'var(--text-base)', fontWeight: 600 }}>
-        📥 获取最新 APK
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+        📱 Android 更新
       </h3>
-      <div className="card" style={{ padding: 12, fontSize: 'var(--text-sm)' }}>
-        <div style={{ marginBottom: 8 }}>
-          Android 端无内置更新器，请前往 GitHub Releases 下载最新 APK 并手动安装。
-        </div>
-        <button type="button" className="btn btn-primary" onClick={openReleasesPage}>
-          打开 Releases 页面
+      {updateState === 'idle' && (
+        <button type="button" className="btn btn-secondary" style={{ marginTop: 10 }} onClick={checkForUpdate}>
+          检查更新
         </button>
-      </div>
+      )}
+      {updateState === 'checking' && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>检查更新中…</p>}
+      {updateState === 'ready' && apkUrl && (
+        <button type="button" className="btn btn-primary" style={{ marginTop: 10 }} onClick={downloadAndInstall}>
+          下载 APK{latestVersion ? ` (v${latestVersion})` : ''}
+        </button>
+      )}
+      {updateState === 'error' && (
+        <button type="button" className="btn btn-secondary" style={{ marginTop: 10 }} onClick={checkForUpdate}>
+          检查失败，重试
+        </button>
+      )}
+      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+        下载完成后请在系统提示中确认安装。
+      </p>
     </div>
   );
 }
