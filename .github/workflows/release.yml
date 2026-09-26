@@ -50,7 +50,7 @@ jobs:
         # blocked by Windows Defender or fail to download completely.
         # NSIS produces .exe installers that work the same way.
         run: |
-          pnpm exec tauri build --bundles nsis 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles nsis,updater 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         shell: bash
         env:
@@ -71,7 +71,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weavine-windows-nsis
-          path: target/release/bundle/nsis/*
+          path: |
+            target/release/bundle/nsis/*
+            target/release/bundle/updater/*
           if-no-files-found: error
 
   build-linux:
@@ -122,7 +124,7 @@ jobs:
       - name: Build Tauri app (Linux)
         id: build
         run: |
-          pnpm exec tauri build --bundles deb 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles deb,appimage,updater 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -152,7 +154,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weavine-linux
-          path: linux-out/*
+          path: |
+            linux-out/*
+            target/release/bundle/updater/*
           if-no-files-found: error
 
   build-macos:
@@ -185,13 +189,15 @@ jobs:
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Tauri app (macOS DMG)
+      - name: Build Tauri app (macOS DMG + updater)
         id: build
         run: |
-          pnpm exec tauri build 2>&1 | tee tauri-build.log
+          pnpm exec tauri build --bundles app,dmg,updater 2>&1 | tee tauri-build.log
           echo "exit_code=$?" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Upload build log on failure
         if: failure() && steps.build.outcome == 'failure'
