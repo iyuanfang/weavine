@@ -5,6 +5,7 @@ import { isTauri } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
 import { clearSession } from '../lib/auth/storage';
 import { useQuickCapture, useGlobalSearch } from '../App';
+import { UpdateBanner } from './UpdateBanner';
 import { BottomNav } from './BottomNav';
 
 const navItems = [
@@ -195,6 +196,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="app-shell__main">
+        <UpdateBanner />
 
         {children}
       </main>
