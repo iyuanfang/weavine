@@ -81,15 +81,13 @@ pub fn list(
 
 pub fn create(conn: &Connection, input: &CreateReminderInput) -> rusqlite::Result<Reminder> {
     let id = Uuid::new_v4().to_string();
-    let now = chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string();
+    let now = crate::business::lww_now();
     let kind_str = input.kind.unwrap_or_default().to_string();
 
     conn.execute(
         "INSERT INTO Reminder \
-         (id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, invitation_token, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7, ?8)",
+         (id, user_id, contact_id, event_id, trigger_at, kind, dispatched, dismissed, invitation_token, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 0, ?7, ?8, ?9)",
         rusqlite::params![
             &id,
             &input.user_id,
@@ -98,6 +96,7 @@ pub fn create(conn: &Connection, input: &CreateReminderInput) -> rusqlite::Resul
             &input.trigger_at,
             &kind_str,
             &input.invitation_token,
+            &now,
             &now,
         ],
     )?;
@@ -136,6 +135,14 @@ pub fn update(conn: &Connection, input: &UpdateReminderInput) -> rusqlite::Resul
         param_idx += 1;
     }
 
+    // Always bump: `updated_at` is the push watermark's only cue, so a
+    // reschedule or a dismiss that did not move it would never be uploaded.
+    // (This also guarantees a non-empty SET list — the function has no
+    // empty-`set_clauses` guard.)
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
+    params.push(Box::new(crate::business::lww_now()));
+    param_idx += 1;
+
     sql.push_str(&set_clauses.join(", "));
     sql.push_str(&format!(" WHERE id = ?{}", param_idx));
     params.push(Box::new(input.id.clone()));
@@ -154,9 +161,11 @@ pub fn update(conn: &Connection, input: &UpdateReminderInput) -> rusqlite::Resul
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    let now = chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string();
+    let now = crate::business::lww_now();
+    // `updated_at` must move with the tombstone: `reminder` is now in
+    // `UPDATED_AT_TABLES`, so a delete that left the column below the push
+    // watermark would never be delivered and other devices would keep the
+    // reminder.
     conn.execute(
         "UPDATE Reminder SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
         rusqlite::params![&now, id],
@@ -165,9 +174,10 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 }
 
 pub fn dismiss(conn: &Connection, id: &str) -> rusqlite::Result<()> {
+    let now = crate::business::lww_now();
     conn.execute(
-        "UPDATE Reminder SET dismissed = 1 WHERE id = ?1",
-        rusqlite::params![id],
+        "UPDATE Reminder SET dismissed = 1, updated_at = ?2 WHERE id = ?1",
+        rusqlite::params![id, &now],
     )?;
     Ok(())
 }
@@ -186,8 +196,8 @@ pub fn claim_due_reminders(conn: &Connection) -> rusqlite::Result<Vec<Reminder>>
         .collect();
     for r in &reminders {
         conn.execute(
-            "UPDATE Reminder SET dispatched = 1 WHERE id = ?1",
-            rusqlite::params![r.id],
+            "UPDATE Reminder SET dispatched = 1, updated_at = ?2 WHERE id = ?1",
+            rusqlite::params![r.id, &now],
         )?;
     }
     Ok(reminders)
@@ -216,11 +226,11 @@ pub fn sync_event_reminder(conn: &Connection, event: &crate::models::Event) -> r
     let trigger = start - chrono::Duration::minutes(lead);
     let trigger_str = trigger.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let id = format!("auto-rem-{}", event.id);
-    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let now = crate::business::lww_now();
     conn.execute(
-        "INSERT INTO Reminder (id, user_id, event_id, trigger_at, kind, dispatched, dismissed, created_at) \
-         VALUES (?1, ?2, ?3, ?4, 'time', 0, 0, ?5)",
-        rusqlite::params![&id, &event.user_id, &event.id, &trigger_str, &now],
+        "INSERT INTO Reminder (id, user_id, event_id, trigger_at, kind, dispatched, dismissed, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, 'time', 0, 0, ?5, ?6)",
+        rusqlite::params![&id, &event.user_id, &event.id, &trigger_str, &now, &now],
     )?;
     let reminder = conn.query_row(
         &format!("SELECT {REMINDER_COLS} FROM Reminder{REMINDER_JOIN} WHERE Reminder.id = ?1"),

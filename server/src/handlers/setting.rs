@@ -15,6 +15,13 @@ pub struct ListParams {
     pub user_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct DeleteParams {
+    pub user_id: Option<String>,
+    /// The setting to remove. **Required** — see `delete`.
+    pub key: Option<String>,
+}
+
 pub async fn list(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
@@ -82,11 +89,33 @@ pub async fn upsert(
     Ok(Json(row))
 }
 
+/// Delete one setting.
+///
+/// Scoped to `key` on purpose. The handler used to run
+/// `DELETE FROM setting WHERE user_id = $1` — every key the user had — from a
+/// request whose only caller passes a single key (the web adapter sends
+/// `DELETE /api/settings?user_id=…&key=…`). Nothing calls it yet, so no data was
+/// lost, but the next caller would have found out the hard way: this is the same
+/// table the archive-retention override lives in, so a stray "clear my theme
+/// preference" would silently reset retention to the default — and that setting
+/// drives a hard delete.
+///
+/// A missing `key` is a 400 rather than "delete everything": there is no
+/// legitimate bulk-wipe use for this route, and refusing is recoverable while a
+/// wipe is not. (`user_id` is ignored either way — the account always comes from
+/// the bearer token, never from the query string.)
 pub async fn delete(
     headers: HeaderMap,
     State(pool): State<Arc<PgPool>>,
+    Query(q): Query<DeleteParams>,
 ) -> Result<Json<()>, (StatusCode, String)> {
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
+
+    let key = q.key.as_deref().map(str::trim).filter(|k| !k.is_empty());
+    let key = key.ok_or((
+        StatusCode::BAD_REQUEST,
+        "`key` is required — this route deletes one setting, not all of them".to_string(),
+    ))?;
 
     let mut tx = pool
         .begin()
@@ -99,8 +128,9 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("DELETE FROM setting WHERE user_id = $1")
+    sqlx::query("DELETE FROM setting WHERE user_id = $1 AND key = $2")
         .bind(&auth)
+        .bind(key)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

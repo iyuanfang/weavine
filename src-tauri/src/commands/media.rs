@@ -228,8 +228,12 @@ fn upsert_media(
         .ok();
     let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     if let Some((id,)) = existing {
+        // `bytes_uploaded_at = NULL` because the binary changed: the server
+        // holds the previous one and must be told about this one. The upload
+        // itself happens off the UI thread (see `upload_avatar`).
         conn.execute(
-            "UPDATE \"Media\" SET mime=?1, size_bytes=?2, sha256=?3, filename=?4, storage_key=?5, updated_at=?6 \
+            "UPDATE \"Media\" SET mime=?1, size_bytes=?2, sha256=?3, filename=?4, storage_key=?5, updated_at=?6, \
+             deleted_at=NULL, bytes_uploaded_at=NULL \
              WHERE id=?7",
             params![mime, size, sha, filename, storage_key, &now, &id],
         )
@@ -281,9 +285,7 @@ pub async fn upload_avatar(
     let sha = sha256_hex(&bytes);
     let ext = ext_from_mime(&mime);
     let (_path, storage_key) = write_avatar_file(&user_id, &contact_id, ext, &bytes)?;
-    // Scope the connection guard: the server byte upload below must not hold
-    // the std Mutex across .await.
-    let (media, server_url, access_token) = {
+    let media = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let media = upsert_media(
             &conn,
@@ -305,44 +307,25 @@ pub async fn upload_avatar(
             params![&storage_key, &mime, &now, &contact_id],
         )
         .map_err(|e| e.to_string())?;
-        // Sync config for the server upload below (offline-first: either may
-        // be absent when the device is not linked to a cloud account).
-        let server_url = crate::sync::config::get(&conn, crate::sync::config::KEY_SERVER_URL)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-        let access_token = crate::sync::config::get(&conn, crate::sync::config::KEY_ACCESS_TOKEN)
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-        (media, server_url, access_token)
+        media
     };
-    // Push the avatar BYTES to the server. Sync carries only media metadata
-    // (avatar rows are excluded from push — a pushed local storage_key would
-    // overwrite the server-authoritative one via the sync_contact_avatar
-    // trigger and break the avatar on every other device). The server
-    // upserts on (user_id, kind, owner_type, owner_id) and the trigger
-    // mirrors the pointer onto contact. Best-effort: local display already
-    // works; a failed upload is retried on the next avatar change.
-    if !server_url.is_empty() && !access_token.is_empty() {
-        let filename = format!("avatar.{ext}");
-        if let Err(e) = crate::sync::api::upload_media_bytes(
-            &server_url,
-            &access_token,
-            "avatar",
-            "contact",
-            &contact_id,
-            &mime,
-            &filename,
-            bytes.clone(),
-        )
-        .await
-        {
-            eprintln!(
-                "[avatar] server byte upload failed (retried on next avatar change): {e}"
-            );
-        }
-    }
+
+    // The server byte upload runs in the background — this command must not wait
+    // on the network. Local display already works from the file just written, and
+    // an avatar that has to travel to the user's other devices is not worth
+    // freezing the UI for up to the client's 30 s timeout when the server is
+    // slow or unreachable.
+    //
+    // The upload is driven by `Media.bytes_uploaded_at` (NULL = not yet on the
+    // server, set by `upsert_media` above), so nothing is lost if this kick dies
+    // with the process: the periodic sync runs the same pass and retries. The
+    // upload is separate from row sync because sync carries only media metadata
+    // — pushing the metadata row would overwrite the server-authoritative
+    // storage_key with a desktop-local path, and the server's
+    // sync_contact_avatar trigger would mirror that broken key onto the contact.
+    #[cfg(feature = "tauri")]
+    crate::sync::spawn_pending_avatar_upload();
+
     Ok(AvatarResult {
         media,
         data_url: data_url,
@@ -359,7 +342,7 @@ pub fn get_avatar(
     let row: Option<(String,)> = conn
         .query_row(
             "SELECT filename FROM \"Media\" WHERE user_id=?1 AND kind='avatar' \
-             AND owner_type='contact' AND owner_id=?2",
+             AND owner_type='contact' AND owner_id=?2 AND deleted_at IS NULL",
             params![&user_id, &contact_id],
             |r| Ok((r.get(0)?,)),
         )
@@ -400,9 +383,16 @@ pub fn delete_avatar(
     let Some((storage_key,)) = row else { return Ok(()) };
     let path = safe_media_path(&storage_key)?;
     let _ = fs::remove_file(&path);
-    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let now = crate::business::lww_now();
+    // `updated_at` has to move with the tombstone. `media` is in
+    // `UPDATED_AT_TABLES`, so the push filter is `WHERE updated_at > <watermark>`
+    // — a delete that left the column at its upload-time value would sit below
+    // the watermark and never be selected, and the avatar would stay alive on
+    // every other device with no error anywhere. `deleted_at` is only in
+    // `push_columns("media")` so that a tombstone *can* travel; this is what
+    // makes it eligible to.
     conn.execute(
-        "UPDATE \"Media\" SET deleted_at = ?1 WHERE user_id=?2 \
+        "UPDATE \"Media\" SET deleted_at = ?1, updated_at = ?1 WHERE user_id=?2 \
          AND kind='avatar' AND owner_type='contact' AND owner_id=?3",
         params![&now, &user_id, &contact_id],
     )
@@ -483,9 +473,11 @@ pub fn delete_media(
     let Some((storage_key,)) = row else { return Ok(()) };
     let path = safe_media_path(&storage_key)?;
     let _ = fs::remove_file(&path);
-    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+    let now = crate::business::lww_now();
+    // See `delete_avatar`: the tombstone is only deliverable if it also advances
+    // `updated_at`, which is the push filter's only cue.
     conn.execute(
-        "UPDATE \"Media\" SET deleted_at = ?1 WHERE id=?2",
+        "UPDATE \"Media\" SET deleted_at = ?1, updated_at = ?1 WHERE id=?2",
         params![&now, &media_id],
     )
     .map_err(|e| e.to_string())?;

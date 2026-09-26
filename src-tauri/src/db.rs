@@ -2,6 +2,25 @@ use rusqlite::{Connection, OpenFlags, Result};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+/// Pragmas every connection to the on-disk database must set.
+///
+/// `busy_timeout` is the one that is easy to omit and expensive to omit: WAL
+/// admits a single writer at a time and rusqlite's default timeout is zero, so
+/// a connection that finds the write lock held fails **immediately** with
+/// `SQLITE_BUSY` ("database is locked") instead of waiting its turn.
+///
+/// That is not a rare interleaving any more. The sync thread runs cycles on its
+/// own connection, and since 2026-09-26 the app also kicks a cycle ~2 s after
+/// every local write, so a UI write and a sync write now overlap as a matter of
+/// course. Without a timeout the loser of that race surfaces to the user as a
+/// spurious error on a perfectly valid write.
+///
+/// Every ad-hoc on-disk connection must use this constant too — see
+/// `sync::spawn_periodic`, `sync::spawn_pending_avatar_upload` and
+/// `commands::sync::open_db`.
+pub(crate) const CONN_PRAGMAS: &str =
+    "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;";
+
 pub struct Database {
     pub conn: Mutex<Connection>,
 }
@@ -11,7 +30,7 @@ impl Database {
         let db_path = get_db_path();
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
         let conn = Connection::open_with_flags(&db_path, flags)?;
-        let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;");
+        let _ = conn.execute_batch(CONN_PRAGMAS);
         crate::migration::run(&conn)?;
         Ok(Database {
             conn: Mutex::new(conn),

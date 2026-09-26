@@ -239,8 +239,8 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
         let created_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         conn.execute(
             "INSERT INTO Interaction \
-             (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
-             VALUES (?1, ?2, ?3, NULL, ?4, ?5, NULL, ?6, 'archive', ?4, ?7)",
+             (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, NULL, ?4, ?5, NULL, ?6, 'archive', ?4, ?7, ?7)",
             rusqlite::params![
                 &iid,
                 &event_user_id,
@@ -268,13 +268,15 @@ pub fn update(conn: &Connection, input: &UpdateEventInput) -> rusqlite::Result<E
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    let now = chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string();
+    let now = crate::business::lww_now();
     conn.execute(
         "UPDATE Event SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
         rusqlite::params![&now, id],
     )?;
+    // Cascade the tombstone to the event's reminders, moving `updated_at` with
+    // it. Both tables carry the column now, and both are in
+    // `UPDATED_AT_TABLES` — a reminder tombstone that did not advance the
+    // column would sit below the push watermark and never be delivered.
     conn.execute(
         "UPDATE Reminder SET deleted_at = ?1, updated_at = ?1 WHERE event_id = ?2 AND deleted_at IS NULL",
         rusqlite::params![&now, id],

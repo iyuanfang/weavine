@@ -3,6 +3,13 @@
 > 版本：**v1.2（产品蓝图合并版）** ｜ 整理日期：2026-08-07
 > **最近更新（2026-08-27 · v1.3.6/v1.3.7 落地）**：新增 §11.7「md 文件编辑器 + 显式『导入库』架构定稿」——三桌面版（Windows / Linux / macOS）打开本地 `.md` 仅作纯编辑器（保存只写文件、不写库、不参与云端同步）；仅「导入库」显式桥接进 `Note` 表 + `EntityLink` 体系（可关联联系人/待办/日程、随库同步、记来源路径+时间，`imported_from` 路径不上云——服务端 drop 防泄露）；库笔记可导出 `.md`；三平台安装注册 `.md` 默认打开程序（Windows WiX / macOS `Info.plist` UTI / Linux `.desktop` MimeType）+ `tauri-plugin-single-instance` 处理冷启动 argv。新增需求 #40。
 > **最近更新（2026-08-28 · v1.3.10 落地，§11.7 增量）**：**OS 文件关联扩展到 docx / pdf / txt / html / htm / xlsx / pptx** —— §11.7 v1.3.6/v1.3.7 仅注册 `.md`；v1.3.10 新增这 6 类（Windows MSI / macOS UTI / Linux .desktop 三平台同步），前端契约不变（`open-md-from-argv` / `MdEditor` 既有转换流程）。commit `86cb08c` / tag `v1.3.10`。详见 §11.7.12。
+> **最近更新（2026-09-26 · v1.6.2 同步专项收口 + §15 归档生命周期）**：(1) **§2.3 更新为 F1–F9 已落地** —— **F7 快照端点** `POST /api/sync/snapshot`（新设备/落后设备不再从 revision 0 重放整条变更日志 → 同时解决"已归档待办被大量拉下来"+ 首同步从分钟级降到秒级）、**F8 change-log 触发器 no-op 守卫**（`to_jsonb(NEW) IS NOT DISTINCT FROM to_jsonb(OLD)` 的 UPDATE 不记日志 —— 这是"越同步越慢"的真凶：`tag`/`interaction`/`reminder`/junction 两端都无 `updated_at` → 客户端每周期全量重推 → 服务端无条件 upsert → 每周期给日志灌一遍全表）、**F9 junction 冲突键按"对"**（客户端每次现生成 UUID vs 服务端 `ON CONFLICT (id)` → 永不冲突 → 每轮被降级成 conflict 噪音）、push 水位不再被单行钉死 + 定向重试退避、pull 分页 200→1000。(2) **新增 §15 归档数据生命周期：自动清理**（用户要求"已归档太多一直累积"）—— 硬删 `action`/`project`/`event`/`note`/`contact`，`setting.archive_retention_days` 可逐用户覆盖（0=永久保留）；走触发器故 DELETE 同步到各端。**保留期与覆盖范围同日二次拍板修正，见下一条。**(3) 顺带修掉 5 处"写不存在的列"导致**删除功能整体失效**的缺陷（客户端 `Media.deleted_at`、`Interaction.updated_at`、`Reminder.updated_at`×2；服务端 `tag.updated_at`）。(4) 头像上传两个 P1：`/api/media` 挂 20MB body 上限（此前吃 axum 默认 2MB → 手机大图必 413）、`upload_avatar` 改后台异步（原 await 上传 → 服务端不可达时 UI 卡到 30s 超时）。**双端 `cargo check` 通过，客户端 lib 测试 63 passed。代码在 `D:\work\weavine`，尚未提交。**
+
+> **最近更新（2026-09-26 二次拍板 · 归档保留期 30 天 + contact 纳入 + spec 副本合并）**：(1) **§15 保留期由 90 天下调为 30 天**（`ARCHIVE_RETENTION_DAYS`），**`contact` 纳入清理范围**（与其它表同一保留期；互动历史因 `interaction.contact_id` 是 `ON DELETE SET NULL` 而**不受影响**）。(2) 清理补齐**两个时钟**（`archived_at` 到期 **+ 墓碑 `deleted_at` 到期**）与**多态引用孤儿清理**（`note_entity` / `media` —— 二者无外键、PG 无法级联；不清理则反链悬空、头像字节（`media.blob`）永不释放）。(3) **修掉同步热路径上的第 6 处"写不存在的列"**：客户端 `sync/mod.rs::apply_change` 的 DELETE 分支对 `Tag` / `Interaction` / `Reminder`（本地表**均无 `updated_at`**）写 `updated_at` → 拉取到这三类 DELETE 时**中断整个 pull 事务**，一条被删的提醒就能让该设备此后所有变更**静默**同步不进来。现按 `UPDATED_AT_TABLES` 白名单分支 + 回归测试 `pull_delete_on_tables_without_updated_at_does_not_crash`。**这是 contact 纳入清理的前置项** —— 每个到期联系人都 CASCADE 出一批 reminder DELETE。(4) **§11.8「全局搜索架构定稿」（2026-08-24 拍板）整节合并回本文档**（该节原仅存于工作区副本，且与本文档 §11.7「md 编辑器」编号冲突，故顺延为 §11.8）；同步吸收副本独有的 §11.5.1–11.5.3（`install_activation` 字段表 / headers 契约 / 鉴权优先级）与 §11.6.1–11.6.4（分层架构表 / SenseVoice 模型细节 / ModelScope 下载源 / Android 打包风险）。**工作区残留副本自本日起归档、不再维护。**
+
+> **最近更新（2026-09-26 三次拍板 · §16 同步增量化 LWW 补全）**：收掉 push 侧最后一块浪费。`tag` / `interaction` / `reminder` 三张表此前**每 30 分钟无条件全量上传**（`push_all` 对不在 `UPDATED_AT_TABLES` 内的 kind 生成的查询无时间过滤 → 只按 `user_id` 全选），是日常同步上行流量的主体。本次为两端补齐 `updated_at TEXT`、全部 16 处写入点改用统一的 `business::lww_now()`、两端纳入 `UPDATED_AT_TABLES`，push 从此只推真实变更。**效果**：无改动时上行接近 0（原先每轮约 1MB 量级，取决于 `interaction` 行数）；配合 F8 后 pull 下行归零，一个 30 分钟周期从「上下行各一份全量」降到「只有变更」。**两条硬约束**：(1) 客户端必须回填哨兵值 `1970-01-01T00:00:00.000Z` —— 留 NULL 会让存量行永不被选中 → **静默停同步**；服务端则**留 NULL**（NULL = 无版本信息，直接接受客户端值）。(2) **服务端必须先上线** —— 新客户端的 SET 子句会引用该列，表里没有则 Postgres 拒绝整条语句、push 500；反方向无需协调，旧客户端不带该字段仍被接受、可自行节奏升级。**过程中新加的守卫测试抓到一处既有隐患**：`migration.rs` 里「扩展 `Interaction.source` CHECK」的重建字面量跑在加列循环**之后**，会把刚加的列再次重建掉 —— 已修该字面量并在 `run` 末尾加幂等兜底。**客户端 67 passed / 服务端 31 passed（各 5 failed，均为既有环境问题，与基线一致）。代码在 `D:\work\weavine`，尚未提交。详见 §16。**
+
+> **最近更新（2026-09-26 三次拍板续 · §17 同步回声与触发时机）**：补掉两块与数据量无关的浪费。(1) **回声过滤** —— `sync_once` 先 push 后 pull，而 pull 原先不排除发起方自己，于是本设备刚推上去的 N 条被自己原样拉回、逐行走 `apply_change`；F8 的 no-op 守卫只挡「重复推送再产生日志」，**挡不住「首次推送的日志被自己拉回来」**。现 pull 请求带上 `device_id`，服务端加 `AND ($4::text IS NULL OR device_id IS NULL OR device_id <> $4)` —— 两个 `IS NULL` 分支都必需：定时任务（`archive_purge`）产生的 DELETE 没有设备身份，必须送达每台设备，否则客户端下次 push 会把行复活；旧客户端不传该字段则退化为原行为，**两端可任意次序上线**。(2) **写入后 debounce 触发同步** —— 此前只有设置页能手动同步，上行时机完全由本设备 30 分钟的定时器决定，跨设备最坏要 2 × 30 分钟才可见（与传输量无关，纯触发机制）。现 `spawn_periodic` 的 `sleep` 换成可唤醒的 `Condvar` 等待（`std` 原语 —— 等待者是普通线程，`tokio` 的通知器不可达），新增命令 `cloud_request_sync`（**只唤醒、不同步执行**，否则会与后台线程抢 SQLite 文件并重复推送），前端在 `MutationCache.onSuccess` 一处挂钩、debounce 2 秒触发（所有写入都走 mutation，故一处即覆盖全部调用点）。**双端 `cargo check` + 前端 `tsc --noEmit` 通过；客户端 67 passed / 服务端 34 passed（failed 均为既有环境问题，与基线一致）。代码在 `D:\work\weavine`，尚未提交。详见 §17。**
 
 > **产品蓝图（唯一权威）**：本文档是 Weavine 的**唯一产品蓝图**。所有需求设计、状态调整、平台策略、中国特性、技术债均回写此处，不再创建独立 spec 文件。文档结构一旦建立保持稳定，后续只追加章节、不重排结构。
 > **维护约定（living spec）**：本文档为活文档。每次需求变动须回写本节并更新上方「最近更新」日期；对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下，与 spec 编号（#1–#20）一一对应，便于持续跟踪。
@@ -11,8 +18,9 @@
 >
 > - 《Weavine 产品优化需求文档》（2026-08-06，产品规划视角，12 项需求 + 优先级）
 > - 《Weavine 代码审查报告》（2026-08-06，代码现实视角，架构 + 同步根因 + 偏差）
->   代码路径：`/home/yf/workspace/opencode/weavine`（WSL，与 MarketAI 同目录）
->   **2026-08-09 合并说明**：本文档（工作区维护版）与项目根目录 `Weavine-产品需求Spec.md`（8/9 15:07）已对齐统一。项目根目录版原标「✅ 全部落地」，经代码复核（git HEAD `912c7d4`，含 8/9 下午 `f16fe2a` #4 图谱 / `7491e1d` #3 事件多人 UI / `d0fa495`·`912c7d4` #1 头像 / `d9c6e1e` #5 / `7a9bafa` #12 F6 等提交）确认该判断基本成立；项目根目录版漏记的 §5.7 同步白名单断链（P0）已标注并于 2026-08-09 修复闭环。
+>   代码路径：**`D:\work\weavine`**（Windows 原生；2026-09-26 从 WSL `/home/yf/workspace/opencode/weavine` 迁出，WSL 旧路径已废弃）
+>   **2026-09-26 单源说明（已收口）**：本文档（项目根目录版）为**唯一权威**。工作区残留副本 `C:\Users\admin\WorkBuddy\2026-08-06-09-52-21\Weavine-产品需求Spec.md` 自 2026-08-27 起分叉（保留了 §4/§5/§13 的旧 bug 列表结构、缺 §11.6/§11.7/§14/§15），**已于 2026-09-26 按其独有内容合并回本文档后归档**（合并项：§11.8 全局搜索整节、§11.5.1–11.5.3、§11.6.1–11.6.4、§8 的 #47）。副本的 §4（同步性能优化专项）/ §5（技术债）/ §13（代码巡检 quick wins）**按用户决定不再并入** —— 这三节的标题已被标记为「已删除」，本 spec 只承载需求、架构与拍板，bug 修复纪要归 review 报告与记忆，不进 spec。
+>   **2026-08-09 合并说明**：项目根目录 `Weavine-产品需求Spec.md` 与当时的"工作区维护版"已对齐统一。项目根目录版原标「✅ 全部落地」，经代码复核（git HEAD `912c7d4`，含 8/9 下午 `f16fe2a` #4 图谱 / `7491e1d` #3 事件多人 UI / `d0fa495`·`912c7d4` #1 头像 / `d9c6e1e` #5 / `7a9bafa` #12 F6 等提交）确认该判断基本成立；原漏记的 §5.7 同步白名单断链（P0）已标注并于 2026-08-09 修复闭环。
 
 ---
 
@@ -70,7 +78,20 @@
 
 **结论**：多人关系底座（#3）与关系图谱（#4）均已完成；§5.7 同步白名单断链已修复，跨端同步闭环。
 
-### 2.3 同步 —— F1–F6 已落地，§5.7 白名单断链已修复（见 §4 专项 / §5.7）
+### 2.3 同步 —— F1–F21 已落地（v1.6.2，2026-09-27 五轮收口）
+
+- **F1–F6**（服务端 LWW 用 `>`、客户端增量 push、pull 事务化、服务端单事务、日志 prune、推送分片）已落地。
+- **F7 快照端点** `POST /api/sync/snapshot`：新设备 / 落后设备**不再从 revision 0 重放整条变更日志**，改拉每表当前态（keyset 分页 `WHERE id > cursor ORDER BY id`，跳过已归档）。这同时解决了"已归档待办被大量拉下来"。游标取 `current_revision()` = `GREATEST(MAX(sync_change_log.server_revision), sync_meta.pruned_through_revision)`——⚠️ **不可用 `sync_manifest.server_revision`，该列从未被写过，永远是 0**。旧服务端无此端点时客户端自动回退日志重放。
+- **F8 change-log 触发器 no-op 守卫**：`to_jsonb(NEW) IS NOT DISTINCT FROM to_jsonb(OLD)` 的 UPDATE 不再记日志、不消耗 revision。这是"越同步越慢"的真凶——`tag` / `interaction` / `reminder` / 全部 junction 表**两端都没有 `updated_at`**，且客户端对无 `updated_at` 的表生成的 push SQL 没有时间过滤 → **每周期全量重推**，服务端无可比较字段 → 无条件 upsert，此前每周期为每行灌一条 change_log。
+- **F9 junction 冲突键**：客户端 junction 行本地无 `id` 列，`add_junction_id` **每次推送现生成 UUID**，而服务端冲突键是 `ON CONFLICT (id)` → 永不冲突 → 每轮撞唯一索引被 `is_data_conflict_error` 降级成 conflict。改为按"对"：`contact_tag → (contact_id, tag_id)`、`project_contact → (project_id, contact_id)`。
+- **push 水位**不再被单个永久失败行钉死（否则每轮全量重推）→ 无条件推进 + 本机专用表 `SyncPushRetries` 定向重试（按主键、退避 1m/5m/15m/1h/6h、上限 6 次）。
+- **pull 分页** 200 → 1000（服务端上限），串行往返降 5 倍。
+- **F10 三张热表补 LWW 列（2026-09-26 三次拍板，收口 F8 剩下的另一半）**：`tag` / `interaction` / `reminder` 此前**每 30 分钟无条件全量上传**（F8 只止住了日志膨胀，push 侧没动），是日常同步上行的主体。现两端补齐 `updated_at`、16 处写入点统一走 `business::lww_now()`、两端纳入 `UPDATED_AT_TABLES` → **无改动时上行接近 0**。两条硬约束：backfill 哨兵值两端语义**刻意相反**（客户端填 `1970-01-01T00:00:00.000Z`、服务端留 NULL），且**服务端必须先上线**（新客户端的 SET 子句会引用该列，缺列则整条语句被 Postgres 拒绝、push 500；反方向无需协调）。旧客户端 payload 缺该字段时按「无 LWW 信息」接受——**不能**用空串做默认值，否则旧客户端的三类写入全部被拒且**静默**停同步。**junction 四表仍不做**：它们缺的是删除传播而非 `updated_at`（见 §16.6）。新守卫测试 `column_lists_agree_with_real_schema` 在此过程中抓到 `migration.rs`「CHECK 重建字面量跑在加列循环**之后** → 把刚加的列又重建掉」的既有隐患。详见 §16。
+- **（历史记录）该债当初为何未动**：改增量需两端加列 + 加入 `UPDATED_AT_TABLES` + 所有写入点（含软删）维护该列；⚠️ 只加列表不维护列会让 NULL 永远推不上去（静默丢数据）。F10 正是把这三点做完，并以「`run` 末尾幂等兜底 + 双向守卫测试」兜住该风险。
+- **F11 pull 排除来源设备（回声过滤，2026-09-26 三次拍板续）**：`sync_once` 同轮先 push 后 pull，而 pull 不排除发起方自己 → 本设备刚推的 N 条被自己拉回、逐行走 `apply_change`。`sync_change_log.device_id` **一直有值**（服务端各 handler 都 `set_config` 了），只是 pull 没用。现带上并按 `AND ($4::text IS NULL OR device_id IS NULL OR device_id <> $4)` 过滤：`device_id IS NULL` 保住**定时任务产生的变更**（`archive_purge` 无请求上下文 → 它的 DELETE 的 device_id 为 NULL，**必须**送达每台设备，否则客户端下次 push 把行复活）与存量行；`$4::text IS NULL` 让旧客户端的请求退化为全拉，**两端可任意次序上线**。详见 §17.1。
+- **F12 写入后 debounce 触发同步（2026-09-26 三次拍板续）**：上行时机此前完全由本设备 30 分钟定时器决定（「上轮拉到过数据」只加快**下行**的追赶），跨设备最坏 2 × 30 分钟才可见 —— 与传输量无关，纯触发机制，也是"量降下来了还是感觉慢"的原因。现 `spawn_periodic` 的 `sleep` 换成可唤醒等待（`std::sync::Condvar`；等待者是普通 `std::thread`，故 `tokio::sync::Notify` 不可达），新增 `sync::request_sync()` + 命令 `cloud_request_sync`（**只唤醒、不同步执行** —— 前端直接跑 `cloud_sync_now` 会与后台线程抢同一个 SQLite 文件并重复推送），前端挂 `MutationCache.onSuccess` + debounce 2 秒（所有写入都走 mutation，一处即覆盖全部调用点；也避免批量操作连发几十次触发）。详见 §17.2。
+- **F13–F17 第四轮 review 修复（2026-09-26）**：① **F13** `delete_avatar` / `delete_media` 只写 `deleted_at` 不推进 `updated_at` → 墓碑永远落在 push 水位之下 → **头像/附件删除静默不上行**（`media ∈ UPDATED_AT_TABLES`，过滤条件是 `updated_at > 水位`；把 `deleted_at` 加进 `push_columns` 只让它**有能力**传输，`updated_at` 才让它**有资格**被选中）。② **F14** `wait_for_kick` 未在等待**前**消费标志位，而 `Condvar::wait_timeout` 不检查它 → 「同步进行中到达的唤醒」被吞掉，稳态下（pulled=0）退回 30 分钟等待，F12 的一半价值失效。③ **F15** 全仓无 `busy_timeout`（rusqlite 默认 0），WAL 单写者下第二个写者立即 `SQLITE_BUSY`；F12 让「写入后 2 秒起跑同步」成为常态 → 4 个磁盘连接统一 `CONN_PRAGMAS`（含 `busy_timeout=5000`）。④ **F16** `push_columns("contact")` 漏 `archived_at` → 联系人归档状态**两端各自半死**（服务端清理谓词以该列为键，永无值可达）；守卫测试由"只查 `project`"改为对真实迁移断言**所有**带该列的表。⑤ **F17** `DELETE /api/settings` **不按 key 限定**会清空用户全部设置（`archive_retention_days` 就在这张表里，而它驱动硬删）。另建立**墓碑写入核对清单**（写 `deleted_at` 的表若在 `UPDATED_AT_TABLES` 内必须同时推进 `updated_at`；客户端 11 处已全部合规）。详见 §18。
+- **F18–F21 第五轮 review：租户隔离（归属校验）审计（2026-09-27）**：形状统一 —— handler 的**主**语句带 `AND user_id`、命中 0 行时**不报错**地继续执行，于是**次级**写入照常落库，直到最后的响应查询才发现找不到行并返回 404（**写已经提交**）。① **F18** `event::update` / `event::delete` 是同一文件里**仅有的两个**没调 `authorize_event` 的 handler（其余 4 个都调了）→ `UPDATE event SET contact_id`、`UPDATE reminder SET deleted_at`（均无 `user_id`）以及 `upsert_event_reminder` 按 `invitation_token` 查/改（该 token 可猜、不跨用户唯一）都能落到他人行上；reminder 墓碑会经 `sync_change_log` 同步到对方所有设备。② **F19** `tag::update` 尾读无 `user_id` → 写是空操作、响应却返回**对方的标签数据**（200）。③ **F20** `contact_tag.tag_id` 的 FK **不含用户维度**，而插入前不校验 tag 归属、两处读标签的 JOIN 也不带 `user_id` → 可把他人的 tag 挂到自己联系人上并让它**渲染进自己的界面**，且该 junction 行会带着"自己的 user_id + 对方的 tag_id"进入同步流。④ **F21** `log_requests`（**鉴权前**的全局中间件）与 `serve_file`（`/files/*key` 公开路由）把请求行 / key **原样**写日志，无界。修法一律是**让语句自限定**（每条次级语句各自补 `user_id`，`sync_main_participant` 直接加 `user_id` 参数）而不只是补一道门 —— 这一族连续三轮都是"依赖远处的门"引起的。另加**两条源码扫描守卫测试**（写语句必须含 `user_id`；按主键的 `SELECT` 同样，例外须写理由）并带下界断言防假绿。详见 §19。
 
 ---
 
@@ -492,6 +513,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 | #18 | 引荐洞察                | P2  | ⬜    |
 | #19 | 机会看板                | P3  | ⬜    |
 | #20 | AI 教练 + 消息起草        | P3  | ⬜    |
+| #47 | 全局搜索入口（复用现有 search command + `/search` 页） | P1  | 🟡 后端 `business/search.rs` + `commands/search.rs`、前端 `Search.tsx` 均已就绪，但 UI 无任何入口（孤儿页）；待按 §11.8 加常驻 🔍 入口（桌面侧栏框 / 移动 BottomNav 按钮 / 可选 `/` 快捷键），**⌘K 仍留 QuickCapture** |
 
 ---
 
@@ -698,12 +720,55 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 - ❌ 用户行为分析（点击流 / 浏览路径）——不是产品定位，留给外部 BI 工具。
 - ❌ 推送通知到达率统计——后续若接 server 推送再排。
 - ❌ 多 server 端聚合——单租户定位无需。
+- ❌ 删除 `install_activation` 行（用户卸载 App）——只是 `last_seen_at` 不再更新，30 天后可清理。
+
+### 11.5.1 数据模型（`install_activation` 表，migration `20260814000001` + `20260820000001`）
+
+| 字段 | 类型 | 用途 |
+|---|---|---|
+| `install_id` | TEXT PK | 客户端生成 UUID v4 |
+| `first_seen_at` / `last_seen_at` | TEXT | ISO8601 UTC |
+| `app_version` | TEXT | `"1.0.4"` |
+| `os` | TEXT | `"darwin"` / `"windows"` / `"linux"` / `"android"` |
+| `platform` | TEXT CHECK (`desktop\|android\|web`) | 运行时类型 |
+| `last_ip_hash` | TEXT | `SHA-256(JWT_SECRET \|\| ip)`，**原始 IP 不存** |
+| `call_count` / `last_event` | INTEGER / TEXT | OCR / voice 调用计数 + 最近一次事件类型 |
+| `device_key` | TEXT UNIQUE partial idx | server-minted 32-char hex，替代共享 `WV_SERVICE_KEY` |
+| `plan` / `daily_ocr_count` / `daily_voice_count` / `daily_reset_at` / `revoked_at` | 预留给 quota 体系 | **v1.0.9 部分启用**：FREE 100/天，TRIAL 50/天，PRO 不限；仅匿名 `device_key` 路径走 quota，登录用户 / `SERVICE_KEY` 不限。常量见 `server/src/handlers/activation.rs` |
+
+### 11.5.2 客户端 → server headers（每次 cloud 调用）
+
+```
+X-Device-Key:      <32-char hex>          // server 验证 install_activation.device_key
+X-Install-Id:      <UUID v4>              // record_activation_hook 用
+X-Client-Platform: desktop|android|web    // 进程检测
+X-Client-OS:       <os name string>
+X-App-Version:     <weavine version>
+```
+
+### 11.5.3 鉴权优先级（取代 v1.0.2 的 `extract_auth`）
+
+```
+extract_endpoint_auth() -> EndpointAuth
+  = AnonymousDevice { install_id }  // X-Device-Key 命中 install_activation.device_key
+  | User { user_id, device_id }     // JWT 或 API key 有效
+  | ServiceKey                      // X-Service-Key == WV_SERVICE_KEY (dev / CI only)
+```
+
+顺序：`X-Device-Key` → `Authorization: Bearer …` / `X-Api-Key` → `X-Service-Key`。
+
+匿名用户调 OCR / voice 不需要登录，server 通过 `device_key` 知道是哪个 install。`register()` / `login()` 后同一 `install_id` 变成 `devices.id`，所以 `JOIN install_activation ON install_id = devices.id` 直接得到"一个用户 N 个设备"的漏斗。
+
+**拍板溯源（2026-08-14 brainstorming）**：
+
+- **Q1 怎么识别"同一用户多端"？** → `install_id` 同时作为 `devices.id` PK，登录时合并。
+- **Q2 OCR / voice 是否走同一套？** → 是，server 端 `record_activation_hook` 同源。
+- **Q3 是否仍需 `WV_SERVICE_KEY`？** → 仅作 dev / CI / 单元测试 fallback，prod 客户端走 `device_key`。
+- **Q4 quota 怎么落？** → `install_activation.daily_ocr_count` / `daily_voice_count` + `daily_reset_at`；**v1.0.9 部分启用**（同 §11.5.1）。
 
 ---
 
-*本文档（工作区维护版）与项目根目录 `Weavine-产品需求Spec.md` 已合并统一（2026-08-09）：以本文档为真相源，吸收项目根目录版「✅ 全部落地」的代码复查结论（git HEAD `4b701e4`，含 §5.7 同步白名单修复），并保留本文档独有的中国市场原则（§11）、#13–#20、排除每日摘要、§10 平台策略，以及 §5.7 同步白名单断链（P0）记录（已于 2026-08-09 修复）。对应的 weavine 子待办统一挂在项目 `Weavine`（`a119f2d7-4b87-4ce9-ac4b-015ab75ea257`）下。*
-
-*2026-08-09 追加：本文档升格为 **产品蓝图**（v1.1），锁定为唯一权威需求来源；§3.5「快速捕获与节奏中枢」子系统设计（合并 #13 / #14 / #15，跨端 Ctrl+K + Android 语音 + 节奏提醒，亲密 14 / 重要 45）已批准，进入 Phase 2.5 实施。所有后续需求、状态调整、平台策略、中国特性、技术债均回写本文档，不再创建独立 spec 文件。拍板溯源详见 §7.1。*
+*文档合并溯源：本节内容原为「工作区维护版」独有，2026-08-09 与项目根目录版对齐时并入。**2026-09-26 起项目根目录版为唯一权威**，工作区滞留副本已按其独有内容合并回本文档后归档（详见文档头部「合并来源」）。*
 
 ---
 
@@ -720,25 +785,60 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 **模型拍板**：SenseVoice int8（中英日韩粤，达摩院，~239MB）作主档，whisper tiny（~75MB）作低端机兜底。首次使用按需下载，不打进 APK；下载源用国内 ModelScope 魔搭社区避免 GitHub releases 被墙。
 
+### 11.6.1 分层架构（按端能力选最稳）
+
+| 端 | 主路径 | 兜底 | 理由 |
+| --- | --- | --- | --- |
+| **Web** | Web Speech API（国内实测可用：Safari 走 Apple 后端 / Chrome 代理直连 Google） | 服务端 whisper REST `/voice` | 零成本、准；墙内 / 不支持浏览器回退服务端（修 #46） |
+| **Desktop（Win/Mac/Linux）** | sherpa-onnx 端上（Rust command，离线、零服务端成本、无 Google 依赖） | 服务端 whisper | Tauri 原生壳能跑端上；比 Web Speech 更贴 offline-first |
+| **Android** | 同一套 Rust 核心（编译 android target）端上 sherpa-onnx | 服务端 whisper | 国行无 GMS，无法用 Web Speech / 原生 `SpeechRecognizer` |
+| **统一** | — | 服务端 whisper **始终保留** | 长录音 / 噪声 / 低端机 / 模型未下载时降级 |
+
+> 演进溯源：D3（2026-08-09）原定 Android 走 `tauri-plugin-android-speechrecognition` 原生 plugin；v1.0.19 起实施演进为 **sherpa-onnx 端上 ASR**（国行无 GMS、原生 `SpeechRecognizer` 不可用）。本表为当前权威结论。
+
+### 11.6.2 ASR 模型拍板：SenseVoice int8 主档 + whisper tiny 兜底
+
+- **主档模型**：`sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17`（阿里达摩院，非自回归 CTC，中英日韩粤自动检测）。
+  - 中文准确率、标点、ITN 数字归一化（「一百二」→「120」）显著优于 Whisper tiny；推理更快；附赠情感 / 音频事件标签。
+  - 启用 `use_itn=true` 提升落库文本质量。
+- **低端机兜底**：≤ 3 GB RAM 设备跑 239 MB 模型有压力 → 保留 whisper tiny（75 MB）作低档 fallback。
+- **体积 / 内存代价**：SenseVoice int8 ~239 MB、运行内存 ~400 MB；首次使用**按需下载**，不打进 APK。
+- **许可证**：FunASR Model License v1.1（免费可用，商用需保留署名 / 声明）。
+
+### 11.6.3 模型下载源（国内）
+
+- **国内源 = 魔搭社区 ModelScope（modelscope.cn）**，避免 GitHub releases 被墙。
+- 推荐仓库（sherpa-onnx 转换版，weavine 用此）：`Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17`（含 `model.int8.onnx` 239 MB + `tokens.txt`）。
+- 下载方式（任选）：
+  - 单文件直链：`https://modelscope.cn/models/Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/master/model.int8.onnx` + 同目录 `tokens.txt`
+  - `git clone https://www.modelscope.cn/Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.git`
+  - ModelScope SDK：`snapshot_download('Mr7Cat/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17')`
+- **约束**：sherpa-onnx 要求 `model.int8.onnx` 与 `tokens.txt` **同目录**；下载逻辑写进 `voice_local.rs` 模型配置，落 App 私有目录。
+
+### 11.6.4 已知风险
+
+- **Android `gen/` 目录在 gitignore 内** → `MainActivity.kt` 等**手写**的 Android 源文件没有版本保护，历史上已因误删导致过一次"build 成功但打开即闪退"（manifest 引用 `.MainActivity` 但源码缺失 → `ClassNotFoundException`）。建议在仓库留副本 + 构建脚本拷贝，或 `git add -f`。
+- 同一坑的第二种表现：sherpa 的 3 个 `.so`（`libsherpa-onnx-c-api.so` / `libonnxruntime.so` / `libc++_shared.so`）若因 `build.rs` 拷贝目录错位没打进 APK，`Rust.kt` 启动时 `loadLibrary` 失败 → 同样闪退。改动 Android 打包链路时须一并复验这两点。
+
 **不在范围**：
 
 - ❌ iOS（等 #10 远期，证书成本高）。
 - ❌ 服务端推送通道（Web Push / FCM / APNs）——客户端轮询足够 P0 验证。
 
-### 11.7 md 文件编辑器 + 显式「导入库」架构定稿（2026-08-26 拍板）
+## 11.7 md 文件编辑器 + 显式「导入库」架构定稿（2026-08-26 拍板）
 
 > 背景：用户提出让 weavine 也能打开/编辑本地 `.md` 文件，以扩大使用范围、提高打开频次与粘性。经三轮讨论收敛为如下 v3 模型（2026-08-26）。
 
 **一句话定位**：**Windows / Linux / macOS 三桌面版**同时是本地 `.md` 编辑器；打开/编辑任意 `.md` **只读写文件、不写库、不参与云端同步**。只有当用户显式点「导入库」时，才把当前文件内容作为一条笔记复制进 weavine 笔记库（可关联、可同步）。Web 与移动端不在本期。
 
-#### 11.7.1 三态模型（关键，彻底规避双副本分歧）
+### 11.7.1 三态模型（关键，彻底规避双副本分歧）
 - **编辑器态（打开外部 `.md`）**：纯文件编辑。保存（Ctrl+S）= 仅写回原文件。不创建/更新任何库记录，不触发 sync。
 - **库笔记态（导入后）**：成为 `Note` 表 + `EntityLink` 体系内的一等公民笔记，可关联联系人/项目/待办/日程/互动，随库同步。
 - **导入是显式桥接（一次性快照语义）**：「导入库」把**当前文件内容**复制进库，并记 `imported_from`（原路径）+ `imported_at`（时间）作为来源留痕。导入后文件再被外部改动**不影响**库副本（库是 canonical，文件是 source 快照）。
 
 > 为什么不做"保存时同时写文件和库"：那会让"文件"和"库"成为同一笔记的两个副本，各自可独立改动 → 双副本分歧（mtime 对账 / 静默覆盖）。v3 用"编辑器态完全不碰库"彻底规避，且无跨设备文件冲突（文件本就不入同步）。
 
-#### 11.7.2 重导入语义（Re-import）
+### 11.7.2 重导入语义（Re-import）
 对同一路径再次「导入库」（已存在 `imported_from` 命中）时：
 - **快速路径**：若文件 mtime ≤ 该 note 的 `imported_at`（文件没被外部改动过），自动跳过、toast 提示「该文件已是最新，无需重导」；
 - **冲突路径**：若文件 mtime > `imported_at`（外部改过了），**弹选择框**：
@@ -749,12 +849,12 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 > 不做静默覆盖——重导入是少数必须打扰用户的时刻，避免用户工作被静默丢失。
 > 此语义让 §11.7.7 的「导出 `.md`」自然闭环：导出时**显式用 `setFileTimes` 将文件 mtime 设为 `note.imported_at`**，使其再次被 weavine 重导时 mtime ≤ imported_at → 走快速路径（「已是最新」），无摩擦。若平台/FS 不支持改 mtime，则回退为正常弹选择框，不影响正确性。
 
-#### 11.7.3 隐私、信任与编码
+### 11.7.3 隐私、信任与编码
 - 打开任意 `.md` ≠ 把文件交给 weavine；未点「导入库」前，文件内容不出本机、不上云。契合 §11.1「数据主权」叙事，避免"打开即同步"的惊吓感。
 - **编码策略**（国内用户为重要使用场景）：读时自动嗅探 UTF-8 / UTF-8 BOM（自动剥）/ GBK / GB18030；写回统一 UTF-8 无 BOM；不可表示字符 → 弹"无法保存"明确错误，不静默吞漏。
 - **不监听文件外部改动**：关闭时若检测到 mtime > 打开时 mtime → 弹「磁盘已变化」三选项（重新加载 / 保留我的修改 / 取消关闭）。
 
-#### 11.7.4 三平台分发杠杆（顶级漏斗入口）
+### 11.7.4 三平台分发杠杆（顶级漏斗入口）
 
 | 平台 | 注册机制 |
 |---|---|
@@ -764,7 +864,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 资源管理器 / Finder / Nautilus 双击 `.md` → weavine 以纯编辑器打开（无上传惊吓）→ 用爽后按需「导入库」。这是 web/Android 做不到的顶级漏斗入口。冷启动 argv 通过 `tauri-plugin-single-instance` 转发到首实例（避免双击闪退或开多进程）。
 
-#### 11.7.5 文件大小策略
+### 11.7.5 文件大小策略
 
 | 大小 | 编辑器态（打开/编辑/保存文件） | 「导入库」 |
 |---|---|---|
@@ -774,13 +874,13 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 > 编辑态不限制（只碰本地文件、不占云端）；「导入库」1 MB 阈值——避免单条 note 撑大 SQLite + 拖慢同步。
 
-#### 11.7.6 编辑器 MVP UX
+### 11.7.6 编辑器 MVP UX
 
 **做**：编辑/预览分屏、主题跟随系统设置、自动保存**关闭（避免悄悄写用户文件）、脏标记 + 未保存拦截、行号/查找替换/字数统计、编辑器态隐藏关系面板（避免干扰"只想写个字"的用户，导入后才出现关联能力）。
 
 **不做**：协同编辑、AI 补全、Vim mode、表格可视化、宏、插件；wikilink `[[xxx]]` 解析（保留原文以备未来升级为可选功能）。
 
-#### 11.7.7 导入即关联 + 导出闭环
+### 11.7.7 导入即关联 + 导出闭环
 - 「导入库」时弹 `EntityPicker`，并按正文 `@人名` 自动建议关联——把外来文件挂上关系网（weavine 相对 Typora / VS Code 的差异化）。
 - 库内笔记支持「导出 `.md` 文件」回到磁盘形成闭环（数据可携）。导出文件**不含 frontmatter**——保留纯 markdown，未来若做双向同步可平滑升级。
 - **重导入语义**（避免静默覆盖）：
@@ -788,25 +888,25 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
   - 冲突路径：文件 mtime > `imported_at` → 弹三选项（**更新已有笔记** / **跳过** / **作为新笔记导入**）。
 - 导出 `.md` 时显式用 `setFileTimes` 把文件 mtime 设为 `imported_at`，让重导时走快速路径（若 FS 不支持改 mtime 则回退弹选择框）。
 
-#### 11.7.8 最近文件（Recent files）
+### 11.7.8 最近文件（Recent files）
 - 本地 LRU 10 条 `{path, last_opened_at}`，不跨设备同步（路径无意义）。
 
-#### 11.7.9 数据模型（私有字段不上云）
+### 11.7.9 数据模型（私有字段不上云）
 
 - 桌面 SQLite `Note` 表新增 `imported_from TEXT` + `imported_at TEXT`——编辑器态导入的来源路径与时间留痕。
 - 服务端 Postgres `note` 表**不加**这两列——本机路径上云泄露用户文件系统布局、跨设备无意义；sync translate 显式 drop。
 
-#### 11.7.10 平台范围
+### 11.7.10 平台范围
 - **本期范围**：Windows / Linux / macOS 三桌面端均支持 `.md` 编辑 + 导入库 + 导出 `.md` + 文件关联注册 + 最近文件。三平台共用同一编辑器实现，差异仅在 bundle 元数据。
 - **不在本期**：Web、移动端（库内已存在的笔记在 web/移动端已有能力可查看）。
 
-#### 11.7.11 不在范围（明确）
+### 11.7.11 不在范围（明确）
 - 不做"保存双写文件+库"——彻底规避双副本分歧。
 - 不把外部文件路径纳入云端同步（`imported_from` 在 server drop）。
 - 不做协同编辑、外部编辑器插件、AI 补全、Vim mode、表格可视化。
 - 不支持 `.markdown` / `.mdown` / `.mkd` 等扩展名变体（仅 `.md`，覆盖 99% 用例；变体可后续再加）。
 
-#### 11.7.12 OS 文件关联扩展到 docx / pdf / txt / html / htm / xlsx / pptx（v1.3.10，commit `86cb08c` / tag `v1.3.10`）
+### 11.7.12 OS 文件关联扩展到 docx / pdf / txt / html / htm / xlsx / pptx（v1.3.10，commit `86cb08c` / tag `v1.3.10`）
 
 **需求**：§11.7 v1.3.6/v1.3.7 仅把 `.md` 注册为 OS 文件关联格式（Windows WiX ProgID / macOS `Info.plist` UTI / Linux `.desktop` MimeType）。本期扩展关联范围到 `md / docx / pdf / txt / html / htm / xlsx / pptx` 共 7 种——weavine 已能通过 `convert_external_file` 把后 6 类转 Markdown 编辑，OS 双击或「打开方式」应能找到并启动 weavine（漏斗断点：用户先开 weavine 再从应用内"打开文件"对话框）。
 
@@ -816,7 +916,7 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 
 ---
 
-#### 11.7.13 转换崩溃根治：独立进程隔离（sidecar，修复 v1.3.10 仍崩溃）
+### 11.7.13 转换崩溃根治：独立进程隔离（sidecar，修复 v1.3.10 仍崩溃）
 
 **现象**：Windows 下从应用内「📂 打开」选 `.docx`（或 `.pdf` 等）时，weavine 直接 crash 退出。
 
@@ -838,6 +938,47 @@ Phase 5  中国特性深化   #16 通话导入 → #17 会议简报 → #18 引�
 **验证状态**：代码已落地（main.rs / convert.rs / App.tsx / Cargo.toml），待 opencode `cargo build` 编译确认。`windows-sys` feature 名 `Win32_Foundation` 需编译核对。
 
 **回归点**：双击 `.docx` / `.pdf` 应打开转换后的 Markdown 编辑器且 app 不崩；故意喂畸形大 docx 时 app 仍存活、仅提示"无法解析"。
+
+---
+
+## 11.8 全局搜索架构定稿（2026-08-24 拍板）
+
+> **状态**：已拍板，待实施（跟踪编号 #47，见 §8）。
+>
+> **合并来源**：本节原为「工作区维护版」独有，2026-09-26 合并回本文档（该副本的 §11.7 与本节的 §11.7「md 文件编辑器」编号冲突，故此处顺延为 §11.8）。
+
+### 11.8.1 现状（重要前置发现）
+
+- 后端 `business/search.rs` + `commands/search.rs`：**跨联系人 / 互动 / 日程 / 待办 / 项目 5 类实体的 LIKE 搜索**，已就绪。
+- 前端 `Search.tsx`：完整的分页结果页（按类型分组、归档开关），已写好。
+- **但 UI 中无任何入口**：全代码搜索下来，BottomNav 的 4 个主标签 + MoreSheet（projects / tags / archive / settings）均无链接到 `/search` → 是「孤儿页」，功能完备却进不去。
+- 结论：痛点不是「没有搜索」，而是「没有入口、且不想为它再加菜单项」。
+
+### 11.8.2 拍板原则
+
+- **⌘K / Ctrl+K 保留给 QuickCapture**（说一句话 → 解析成新记录 = **写**）。已核实 `App.tsx:66` 的 `useGlobalShortcut('k', setQuickOpen)` + Tauri 系统级 `ctrl-k-pressed` 绑定。搜索**不抢 ⌘K、不共用输入框**——写 / 读语义相反（QuickCapture 把文字当「要解析的新记录」，搜索当「查询词」），无法兼得。
+- **不新增菜单项**：入口挂在常驻控件上，不扩 BottomNav 主标签、不塞 MoreSheet。
+
+### 11.8.3 入口设计（不增菜单）
+
+| 端 | 入口 | 说明 |
+|---|---|---|
+| **桌面** | 左侧栏顶部常驻 🔍 输入框 | 点开即筛 / 展开浮层；不依赖快捷键，永远可见 |
+| **移动** | BottomNav 加 🔍 图标按钮 | 当作「动作」而非「页面菜单」→ 打开 `/search` 页或浮层 |
+| **可选快捷键** | `/`（单斜杠，GitHub / Gmail 风格）聚焦搜索框 | 与 ⌘K 不冲突；加守卫「当前焦点不在输入框内才触发」 |
+
+**⌘K = 记（写），🔍 / `/` = 找（读）**：两个独立入口，正好对应「记 vs 找」，不该合并。
+
+### 11.8.4 形态（两期，避免过度）
+
+- **一期（低成本、高价值）**：把现有 `search` command 包进浮层 / 侧栏框，键盘流 `↑↓` / `↵` / `Esc`，结果按类型分组（联系人 / 互动 / 日程 / 待办 / 项目，带图标 + 标题 + 副信息）；「查看全部结果 →」跳现有 `/search` 页复用。几乎只是 UI 搬运 + 事件监听。
+- **二期（差异化 = AI 关系教练 ④ 自然语言查询）**：同浮层加 NL 模式——「上月展会认识、还没二次联系的」→ 服务端 LLM 翻译成结构化查询，跑已捕获的数据。依赖记录质量（GIGO），放二期。
+
+### 11.8.5 与既有决策的一致性
+
+- §7.1「Ctrl+K 范围 = 创建为主；**拒绝** 全局搜索 + 命令面板 + 主题切换」→ **本拍板不推翻**：搜索不并入 Ctrl+K 命令面板，而是独立的「读取」表面。
+- §3.5.8「❌ 全局搜索 / 命令面板扩展（仅创建 + 跳转联系人详情）」→ 指该 §3.5 计划**不捆绑**搜索；搜索现作为独立已拍板特性（本条），不属该计划范围。
+- 关联：#47（功能跟踪）、AI 关系教练 ④（§12 #20）。
 
 ---
 
@@ -1095,3 +1236,302 @@ v1.2 在 Action `status=done` / Event 结束时即时写 Interaction，导致同
 
 - **Q19 v1.3.1 是否要补 Server 侧 archive 钩子**（保证 cloud 用户归档后云端也有 Interaction）？→ 用户拍板。
 - **Q20 `auto_log.rs` 是保留（仅 bump contact）还是彻底删掉**？当前保留，用户可能想彻底关掉。→ 用户拍板。
+
+---
+
+## 15. 归档数据生命周期：自动清理（2026-09-26 拍板并落地，v1.6.2；同日二次拍板：默认 30 天 + contact 纳入）
+
+### 15.1 动机
+
+归档不是删除。归档的待办 / 项目 / 日程 / 笔记 / 联系人会**永久留在库里**，而且因为每次变更都进 `sync_change_log`，它还会被反复投递给每一台设备。用户反馈「已归档太多，一直累积下去」——归档语义若不设终点，数据与日志都会无界增长。
+
+### 15.2 拍板
+
+| 项 | 决定 |
+| --- | --- |
+| 清理方式 | **硬删**（不是再补一层软删）。走正常 `sync_log_change()` 触发器，因此 `op='DELETE'` 会**同步到所有端**——只在服务端删会让客户端下次 push 把行复活 |
+| 默认保留期 | **30 天**（`ARCHIVE_RETENTION_DAYS`）。初版定为 90 天，2026-09-26 二次拍板下调为 30 天 |
+| 逐用户覆盖 | 同步的 `setting.archive_retention_days`；**`0` 或负数 = 永久保留**；解析失败回落默认值（不因一个用户的脏设置中断整轮清理）。**【2026-09-26 §18 补充】下限 7 天**（`MIN_RETENTION_DAYS`）—— 该值驱动的是不可撤销的硬删，而它是 `setting` 表里的自由文本、任何客户端都能改，`30` 敲成 `3` 会提前毁掉一个月的历史。可达性：`POST /api/settings/upsert`（无 key 白名单）**已可用**，两端 UI 尚未提供 |
+| 覆盖范围 | `action` / `project` / `event` / `note` / **`contact`**。⚠️ **【2026-09-26 §18 澄清】`contact` 目前是惰性条款**：列、快照过滤（§18 的 F16 补齐）、清理谓词都在，但**没有任何入口能把一个联系人置为已归档**（服务端 handler / web `Archive.tsx` / 桌面 `archive.rs` 都只认 Action / Event / Project） |
+| 清理的两个时钟 | ① `archived_at < cutoff`（归档到期）；② `deleted_at < cutoff`（**墓碑到期**）。客户端只做软删，墓碑一旦传播完成就既不可见也不可编辑，留着只会堆积；扫掉它同时收掉"删除后又被客户端 push 回来"的残留 |
+| 多态引用清理 | `note_entity`（`entity_type`/`entity_id`）与 `media`（`owner_type`/`owner_id`）**没有外键**，PG 无法级联 → 单独扫孤儿；否则反链指向已不存在的人，头像字节（`media.blob`）永不释放——而字节正是清理要回收的空间 |
+| 调度 | 启动后 10 min 首跑，之后每 6 h（`ARCHIVE_PURGE_INTERVAL_SECS`） |
+| 安全边界 | 只删满足上述两个时钟之一的行；`archived_at` / `deleted_at` 的**字符串格式必须与全栈 Z 格式一致**（`%Y-%m-%dT%H:%M:%S%.3fZ`），否则比较会静默失效（永不清理或一次清光） |
+
+**级联**：删父行会级联到有外键的子行（project → project_contact、event → reminder、**contact → contact_tag / project_contact / reminder**），这些写入同样触发触发器，因此一并传播。
+
+**互动历史刻意保留**：`interaction.contact_id` / `event.contact_id` / `action.contact_id` 都是 `ON DELETE SET NULL` —— 联系人被清理时**只断开关联，不删记录**。"和谁吃过饭"这段历史是本产品的核心资产，它的价值不因联系人行消失而消失。清理一个 30 天前归档的联系人，代价是失去他的标签、项目成员关系与提醒，**不是**失去与他的互动记录。
+
+### 15.3 连带修复
+
+归档清理依赖「删除能传播」，而清理（尤其把 contact 纳入后必然触发的 `contact → reminder` 级联）暴露出**删除根本无法执行**的缺陷（已修）：
+
+1. **客户端本地 `Reminder` / `Interaction` 表没有 `updated_at` 列**，但 `reminder::delete` / `event::delete`（连带删提醒）/ `interaction::delete` 都在写它 → SQLite 报 `no such column: updated_at`，**删提醒 / 删事件 / 删互动一律失败**；服务端 `handlers/tag.rs` 的删标签同样写了 PG `tag` 表上不存在的 `updated_at` → 必 500。这些表都不在 `UPDATED_AT_TABLES` 内，墓碑由 `deleted_at` 承载即可，故直接去掉该列写入。**⚠️ 这条结论的成立前提已被同日后续的 §16 改动推翻**：`tag` / `interaction` / `reminder` 已补上 `updated_at` 并纳入 `UPDATED_AT_TABLES`，现在这三处的删除**必须**同时写 `deleted_at` 与 `updated_at` —— 否则墓碑的时间戳会低于 push 水位，删除根本传不出去（即 §16.4 的连带修复之一）。
+2. **同步热路径同类缺陷（本次新修）**：`sync/mod.rs::apply_change` 的 DELETE 分支对所有非 junction 表一律写 `"deleted_at" = ?, "updated_at" = ?`。但 `Tag` / `Interaction` / `Reminder` 本地表**没有 `updated_at`** → 拉取到这三类 DELETE 时直接报错并**中断整个 pull 事务**：一条被删的提醒，会让该设备之后所有变更都同步不进来（且是静默的——只有日志里有）。现按 `UPDATED_AT_TABLES` 白名单决定是否写该列，并补回归测试（§16 落地后该测试改名为 `pull_delete_marks_tombstone_and_bumps_updated_at`，断言同时覆盖「墓碑落地」与「`updated_at` 随之推进」两半）。**这条对本次改动是前置项**：contact 纳入清理后，每个到期联系人都 CASCADE 出一批 reminder DELETE，不修则客户端 pull 必崩。
+
+> 教训：`UPDATED_AT_TABLES` 既是 push 的时间过滤依据，也必须是"这张表有没有 `updated_at`"的唯一真相源。任何按表名动态拼列的地方都要先问它一句。
+
+### 15.4 拍板记录（2026-09-26）
+
+- **Q21 保留期默认 90 天是否合适**？→ **拍板：30 天**。归档是"中转站"不是"冷库"；真要长期留存的东西不应走归档路径。
+- **Q22 清理是否需要用户可见的提示**？→ **未拍板，维持静默硬删**。`setting.archive_retention_days` 已可逐用户覆盖（写库即生效），设置页说明留待后续。
+- **Q23 是否给 contact 一条更保守的路径**（永久保留 + 手动批量清理）？→ **拍板：contact 也纳入清理**，与其它表同一保留期。理由：归档满 30 天的联系人对用户已不在工作集内，留着会让其标签关联、项目成员关系与提醒永远活着。互动历史因 `SET NULL` 不受影响（见 §15.2）。
+
+### 15.5 遗留（已知未做）
+
+- **客户端本地墓碑不参与本 sweep**：服务端删除经 pull 传播，但客户端自身的软删行会留在本地 SQLite 里。影响面远小于服务端（本地库小、不外传），若要清理需在客户端加同样的时间窗口，且**窗口不能早于服务端**——否则离线设备会把已删行 push 回服务端，形成来回。
+- **服务端不会主动通知"某行即将被清理"**：客户端只能通过 DELETE 变更感知。若某设备离线超过 30 天（清理已发生）且超过 `CHANGE_LOG_TTL_DAYS`（90 天，变更日志已剪），则靠快照 bootstrap 的墓碑（`TOMBSTONE_KINDS` 的 8 类）恢复一致性——两个窗口的先后关系（30 < 90）是这套设计成立的前提，调整任一项时须一并复核。
+
+---
+
+## 16. 同步增量化：LWW 补全（2026-09-26 拍板并落地）
+
+### 16.1 问题：F8 只止住了「越同步越慢」，没止住「一直慢」
+
+§2.3 的 F8（change-log no-op 守卫）解决的是**日志无限膨胀**那一半；push 侧那一半原封未动。
+
+`push_all` 对不在 `UPDATED_AT_TABLES` 内的 kind 生成的查询**没有时间过滤**（只有 `WHERE user_id = ?`），于是 `tag` / `interaction` / `reminder` 三张表**每轮无条件全量上传**——每 30 分钟一次，与「这轮有没有改动」完全无关。`interaction` 是随使用持续累积的表，因此每轮成本随数据量线性上升。
+
+叠加当时「服务端每行无条件 upsert + 触发器每行记一条日志」的旧行为，每轮上行还≈下行（变更日志会原样回灌给同一台设备，因为 `pull` 的 `WHERE user_id = $1 AND server_revision > $2` **不排除来源设备**）。**F8 之后 pull 的下行已接近归零，但上行原样保留** —— 这就是本节要收掉的部分。
+
+### 16.2 拍板
+
+| 项 | 决定 |
+| --- | --- |
+| 新增 LWW 列 | `tag` / `interaction` / `reminder`，两端各加 `updated_at TEXT`，并纳入两端 `UPDATED_AT_TABLES` |
+| 四张 junction 表 | **明确不做**（见 §16.6 第 1 条）：它们缺的不是 `updated_at` 而是**删除传播**。给它们加 `updated_at` 只能省流量、却会掩盖更严重的语义缺陷；且一旦某个写入点漏维护，行会**永远推不上去**（比现状更糟） |
+| backfill 哨兵值 | `1970-01-01T00:00:00.000Z`，两端语义**刻意相反**：客户端用它填存量行（让 `updated_at > ''` 成立，保证升级后这些行仍可被选中推送）；服务端**留 NULL**（NULL = 无版本信息 → LWW 分支直接接受客户端值）。若客户端不留值，存量行会因 NULL 永不入选而**静默停同步** |
+| 时间格式 | 唯一来源 `business::lww_now()`（RFC3339 + 3 位毫秒 + `Z`）。**禁止**用 SQLite `CURRENT_TIMESTAMP`——它产出 `2026-09-26 19:30:00`（无 `T`、无时区），服务端 `normalize_lww_timestamp` 解析不了，比较会退化为按字节比（空格 `0x20` < `T` `0x54`），导致**客户端永远赢**、与先后顺序无关 |
+| 旧客户端兼容 | 服务端把「payload 缺 `updated_at` 字段」判定为**无 LWW 信息 → 直接接受**。**不能**默认成空串：`""` 输给任何真实时间戳，会让所有未升级客户端的 tag/interaction/reminder 写入全部被拒，且该设备**静默**停同步这三类 |
+
+### 16.3 上线次序（硬要求：服务端必须先发）
+
+push 的 `SET` 子句由 payload 自身的 key 生成，因此新客户端会产出 `updated_at = EXCLUDED.updated_at`。若服务端表还没有该列，PostgreSQL 会拒绝**整条语句**（`column "updated_at" of relation "tag" does not exist`）→ push 直接 500。
+
+> 这里容易猜错：`jsonb_populate_record` **本身会忽略**未知字段，真正让次序变成硬要求的是那条**显式写出的 SET 子句**引用了该列。
+
+反方向无需协调：旧客户端不带该字段，服务端接受、且**不会清掉**已有值（SET 子句不含它）。因此客户端可以按自己的节奏升级。
+
+### 16.4 连带修复
+
+1. **本项目 schema 存在多套定义，且重建顺序会吃掉新列。** `migration.rs` 除 `SCHEMA_SQL` 外，`migrate_legacy_columns` 的 `rebuild!` 字面量与「扩展 `Interaction.source` CHECK」的字面量各自重复了一份表结构；而**后者跑在加列循环之后** → 刚加上的列立刻被它用旧字面量重建掉。已修该字面量（含 `INSERT … SELECT` 的列清单，避免丢值），并在 `migration::run` **末尾**加「最后防线」：幂等 re-assert 这三列 + backfill，使最终状态与「哪次重建跑过」无关，同时修复已被旧版本重建过的库。
+2. **`interaction::update` / `reminder::update` 缺空 SET 保护**：无字段变更时会生成 `UPDATE X SET  WHERE id = ?1`（语法错误）。加入 `updated_at` bump 后 SET 列表恒定非空，顺带堵住。
+3. **`record_push_retry` 的适用范围自动收窄**：这三类此前依赖「每轮全量重推」隐式重试被拒的行，现在改为按主键 + 退避重试（与其它 LWW kind 一致）。
+
+### 16.5 守卫测试（本次的防复发设计）
+
+| 测试 | 位置 | 作用 |
+| --- | --- | --- |
+| `column_lists_agree_with_real_schema` | 客户端 | 对**真实 migration** 跑一遍，断言 `push_columns` 每一列都存在于对应表；并双向断言 `UPDATED_AT_TABLES` ↔「表是否真有该列」。**本次实际抓到了 §16.4 第 1 条的「重建丢列」缺陷**——若只用手工 fixture，这个 bug 会直接进生产 |
+| `updated_at_tables_is_the_expected_set` | 客户端 | 钉住清单内容；清单变化时测试失败，强制去同步服务端镜像 |
+| `migration_backfills_updated_at_on_predating_rows` | 客户端 | 用「已是旧结构且已有数据」的表跑迁移，断言不留 NULL（这是「静默停同步」的唯一护栏） |
+| `updated_at_tables_are_real_sync_tables` | 服务端 | 防表名拼写错。服务端这份清单存的是**表名**（不是 kind），而 `contains()` 拼错只返回 false、**不报错**，表现是静默退回全量重推 |
+
+### 16.6 遗留（本次刻意未做）
+
+1. **junction 表的删除不传播**：`ContactTag` / `ProjectContact` 本地是复合主键、无 `id` 也无软删列，删除走 `DELETE FROM …` —— 行没了，push 就选不到它，服务端完全不知情，多设备下该关联会**复活**。修它需要引入软删语义（改查询过滤 + 复合键处理），应与 `updated_at` 一起设计，而不是拆开做。
+2. **`reminder::sync_event_reminder` 用硬删**（`DELETE FROM Reminder WHERE event_id = ?1 AND kind = 'time'`），绕过 `deleted_at`，与 `event::delete` 的软删语义不一致 → 服务端会残留孤儿提醒，且删除无法传播。
+3. **push 水位依赖客户端时钟**：时钟超前的设备会把水位推到未来，使之后时间戳更早的真实变更推不上去。既有问题（现有 7 张 LWW 表同样如此），非本次引入。
+
+---
+
+## 17. 同步回声与触发时机（2026-09-26 三次拍板续，已落地）
+
+§16 把**传输量**压下去了，但同步还有两块与数据量无关的浪费：一块是每次写入都会产生的**回声**，一块是**触发时机**决定的传播延迟。
+
+### 17.1 回声：no-op 守卫只关掉了一半
+
+`sync_once` 在**同一次循环里先 push 后 pull**，而 pull 的查询**不排除发起方自己**：
+
+```sql
+WHERE user_id = $1 AND server_revision > $2      -- 原先没有 device_id 条件
+```
+
+本设备这一轮 push 上去的 N 条，紧接着被自己原样拉回来，逐行走一遍 `apply_change`。
+
+`sync_change_log` 其实**有 `device_id` 列**，服务端每个写入 handler 也都用 `set_config('app.current_device_id', $1, true)` 如实填了它 —— 数据齐备，只是 pull 没用上。
+
+> **与 F8 的关系要说准**：no-op 守卫挡的是「重复推送在同一行上再产生一条日志」，**挡不住「首次推送产生的那条日志被自己拉回来」**。所以 §16 之后稳态（无写入）下行的确≈0，但**每次有写入的那一轮，必然跟着一轮等量的下行回声**。
+
+**拍板**：pull 请求带上 `device_id`，服务端 SQL 加 `AND ($4::text IS NULL OR device_id IS NULL OR device_id <> $4)`。两个 `IS NULL` 分支都是必需的，删任一个都会出事：
+
+| 子句 | 为什么不能省 |
+| --- | --- |
+| `device_id IS NULL` | **定时任务产生的变更没有设备身份**：`archive_purge` 不在请求上下文里跑，`app.current_device_id` 未设置，它发出的 DELETE 的 `device_id` 就是 NULL。这些删除**必须**送到每一台设备 —— 漏掉就会让客户端下次 push 把行复活（正是 §15 反复强调的那条）。该列存在之前的存量行同理 |
+| `$4::text IS NULL` | 旧客户端不传这个字段 → 条件恒真 → 退化为原行为（全拉）。**两端可任意次序上线**，无需协调，也不需要旧客户端"先忍着" |
+
+客户端在设备号为空（尚未注册的新装）时同样不发送该字段。
+
+### 17.2 触发时机：本地写入最坏两个周期才跨设备可见
+
+同步线程的循环是「同步一轮 → 睡」。醒来的条件只有两个：睡满 **30 分钟**（`spawn_periodic(_, 1800)` 的 `interval`），或者**上一轮拉到过数据**（那时改睡 **30 秒**，连续追几轮）。
+
+问题在于后者**只作用于下行**：**上行的时机永远由本设备自己的定时器决定**。于是
+
+> 手机记一条互动 → 手机等自己下一次醒来才上传（最坏 30 min）→ 电脑再等自己下一次醒来才拉到（最坏再来 30 min）→ **最坏 60 分钟**。
+
+这跟传输量无关，纯粹是触发机制 —— 也解释了为什么"同步量明明降下来了，还是感觉慢"。此前同步只能从**设置页手动点**（`cloud_sync_now`），任何业务写入之后都不触发同步。
+
+**拍板：写入后 debounce 触发。**
+
+- **Rust**：`spawn_periodic` 的 `std::thread::sleep` 换成可被打断的 `wait_for_kick`（`std::sync::Condvar` + `bool` 标志）。刻意用 `std` 原语而非 `tokio::sync::Notify`：等待者是一个普通 `std::thread`（自带 runtime），拿不到 tokio 的通知器。新增 `sync::request_sync()`，调用可合并 —— 连发 N 次只唤醒一次。
+- **命令**：`cloud_request_sync`，**只做唤醒、不同步执行**。⚠️ 若让前端直接跑 `cloud_sync_now`，它会与后台线程**抢同一个 SQLite 文件**，并可能把同一批行**重复推送**。
+- **前端**：`createWebQueryClient()` 挂 `MutationCache.onSuccess` → debounce **2 秒** → `invoke('cloud_request_sync')`。**所有写入都经过 mutation，因此一处挂钩即覆盖全部调用点**，不会随着新 mutation 增加而漏掉。选 debounce 而非逐次触发，是因为批量操作（批量归档 / 导入）会连发几十个 mutation，逐个触发等于把刚省下的上行又还回去。浏览器模式（HTTP adapter 直连服务端、没有本地库）直接跳过。
+- 失败一律静默：服务端不可达不代表写入失败，周期同步仍会兜住；把错误抛给调用方会让一次成功的保存看起来像坏了。
+
+### 17.3 已评估但暂缓（非本次范围）
+
+| 项 | 现状 | 影响 |
+| --- | --- | --- |
+| `prune_change_log` | 按 `changed_at` 删，而**该列没有任何索引**（现有索引是 `(user_id, server_revision)` / `(user_id, table_name, server_revision)`） | 每小时全表扫**全库最大的表** |
+| `archive_purge` | `WHERE user_id=? AND ((archived_at IS NOT NULL AND archived_at<?) OR (deleted_at IS NOT NULL AND deleted_at<?))`；`note.archived_at` **无索引**、五张表的 `deleted_at` **全无索引**、`OR` 本身也易让索引失效 | 每 6 小时扫 5 张表 |
+| `get_token` | 每轮先打一次 `api::manifest` 只为探活 token | 每轮多一次往返（可直接尝试、401 再刷新） |
+
+> 用户判断：当前痛点（同步慢、归档被反复拉下来）已在 §15–§17 解决，索引属"量级尚未到瓶颈"的优化，留待数据量真正上来再做。
+
+---
+
+## 18. 第四轮 review：三个缺陷修复 + 墓碑写入审计（2026-09-26 已落地）
+
+复查对象是 §15–§17 的**全部未提交改动**（20 个文件修改 / +2337 行）。找到 3 个会造成**静默失效**的缺陷并当场修复，另有 6 项记录在案待拍板。
+
+### 18.1 已修复（F13–F17）
+
+**F13 头像 / 附件删除的墓碑推不出去 —— 静默，最严重**
+
+`commands/media.rs` 的 `delete_avatar`（:387）与 `delete_media`（:470）都只写 `deleted_at`，**不推进 `updated_at`**。
+
+`media` 在 `UPDATED_AT_TABLES` 内，push 的过滤条件就是 `WHERE updated_at > <水位>`；墓碑的 `updated_at` 仍是上传时的旧值 → **永远选不中 → 头像删除永远不上行**，其它设备一直显示旧头像，且**两端都不报错**。
+
+这正是 §16 反复强调的陷阱：把 `deleted_at` 加进 `push_columns("media")` 只让它**有能力**传输，`updated_at` 才是让它**有资格**被选中（`translate.rs` 当时的注释已经把这条因果写对了，只是漏了写入点）。
+
+修法：两处改为 `SET deleted_at = ?1, updated_at = ?1`，并用 `business::lww_now()` 取代内联格式串。
+
+**F14 `wait_for_kick` 会吞掉「同步进行中到达」的唤醒 —— F12 的一半价值失效**
+
+`Condvar::wait_timeout` **不检查**已经设置的标志位。若 `request_sync()` 在同步线程**正跑一轮**时到达，`notify_one` 无人接收（通知丢失），但 `pending` 已置位；随后线程进入 `wait_for_kick` 仍会**睡满整个间隔**。
+
+稳态（F11 回声过滤后 `pulled = 0`）的间隔是 **30 分钟**，不是 30 秒 —— 也就是说，恰好是"紧接着一次同步之后发生的写入"（最常见的一类）会退回原始的 30 分钟延迟，而 F12 要解决的正是这个。
+
+修法：等待**前**先消费标志位。新增守卫测试 `wait_for_kick_consumes_a_kick_that_arrived_before_the_wait`（旧实现在该测试上会睡 30 s 并断言失败）。
+
+**F15 SQLite 连接补 `busy_timeout` —— F12 把并发面放大了**
+
+全仓**没有任何一处** `busy_timeout`（rusqlite 默认 0 ms）。WAL 只允许单写者，第二个写者**立即**拿到 `SQLITE_BUSY`（用户可见的 "database is locked"）。
+
+磁盘上共有 4 个连接：主连接（`db.rs`）、周期同步线程、头像上传线程、`commands::sync::open_db`。F12 让「写入后约 2 秒起跑一轮同步」成为常态 → UI 写与同步写重叠从偶发变成常规。
+
+修法：`db.rs` 新增 `CONN_PRAGMAS = "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;"`，4 个连接点统一引用。
+
+**F16 `push_columns("contact")` 漏 `archived_at` —— 联系人归档状态根本不参与同步**
+
+`contact.archived_at` 在**两端都有列**（客户端 `migration.rs` 的 `archive_cols`；服务端迁移 `20260826000001`），但 `push_columns("contact")` 的列表里**从来没有它**。而 event / action / project / note 四个其它可归档类型都在各自列表里 —— `contact` 是唯一的例外。
+
+后果是双重的：① 桌面端（若有入口）归档一个联系人，服务端**永远不知道**，服务端 UI 继续显示为活跃；② 服务端 `archive_purge` 的 contact 谓词**永远不成立** —— 它完全以 `archived_at` 为键，而没有任何一侧能把值送达。这不是"某个功能没做完"，而是**同一个字段在两端各自半死**。
+
+修法：列表补 `archived_at`。**更重要的是把守卫测试补成通用的**：原来的 `push_columns_includes_archived_at` 只断言 `project` 一个 kind（这正是 `contact` 漏网的原因），已删除；改由 `column_lists_agree_with_real_schema` 对**真实迁移**断言"凡本地表有 `archived_at` 的 kind，其 `push_columns` 必须含该列"。
+
+> ⚠️ 顺带暴露出一个**产品级空洞**（见 §18.4）：`contact` 的归档**没有任何入口** —— 服务端 `handlers/contact.rs` 完全不提 `archived_at`，web SPA 的 `Archive.tsx` 只认 `Action | Event | Project`，桌面端 `archive.rs` / `archive_sweep.rs` 同样只碰这三张表。所以 §15 拍的"contact 纳入清理"目前是**惰性条款**：列在、谓词在、清理逻辑在，但没有任何路径能把一个联系人置为已归档。F16 把同步链路补齐了，入口仍需单独立项。
+
+**F17 `DELETE /api/settings` 会删掉用户的全部设置**
+
+`handlers/setting.rs::delete` 执行的是 `DELETE FROM setting WHERE user_id = $1` —— **不按 key 限定**。而唯一的调用方（web adapter）发的是 `DELETE /api/settings?user_id=…&key=…`，**带了 key**。方法名、调用方、路由三者都指向"删一条"，实现却是"清空全部"。
+
+目前无调用点，所以**尚未丢过数据**；但风险实打实：`setting` 表正是归档保留期覆盖（`archive_retention_days`）所在之处，将来一个"清掉我的主题偏好"就会把保留期**静默重置回默认值**，而那个值驱动的是**硬删**。
+
+修法：按 `user_id + key` 限定删除；缺 `key` 返回 **400** 而不是"删全部"（此路由没有合理的批量清空用途，拒绝可恢复、清空不可恢复）。`user_id` 本来就只从 bearer token 取，查询串里的值一律忽略。
+
+### 18.2 墓碑写入审计（本次建立的核对清单）
+> **规则**：凡写 `deleted_at` 的语句，若该表在 `UPDATED_AT_TABLES` 内，**必须同时推进 `updated_at`**；否则墓碑永远落在水位之下 → **静默停同步**（不报错、不冲突、就是传不动）。
+
+审计结果（修复后）：客户端 11 处写 `deleted_at` 的 UPDATE，**11/11 均带 `updated_at`** —— Action / Contact / Event / Event→Reminder 级联 / Interaction / Note / Project / Reminder / Tag / Media(×2)。
+
+服务端**刻意不对称**：只有 `contact` / `project` / `event` / `action` 的 REST delete 同时写 `updated_at = now()`；`interaction`（:188）/ `reminder`（:182）/ `tag`（:158）只写 `deleted_at`。**这是可接受的，且不要"顺手补齐"**：服务端不按 `updated_at` 过滤，变更靠 change_log 传播；补了反而会让客户端离线期间对同一行的推送被判成 `server has newer updated_at`，产生冲突噪音。墓碑本身已由 upsert 的 `COALESCE(EXCLUDED.deleted_at, <table>.deleted_at)` 保护，复活不了。
+
+### 18.3 二次拍板并落地（原"记录在案"六项）
+
+以下六项在 §18 首轮报告后由用户一次性拍板全部落地。
+
+| # | 项 | 落地内容 |
+| --- | --- | --- |
+| 1 | `ARCHIVED_AT_TABLES` 漏 `contact` | 已加 `contact`。逻辑：新设备不该先把已归档联系人拉下来，再由清理在 30 天后删掉 —— 真正的成本不是那一行，而是它背后 `contact → contact_tag / project_contact / reminder` 的级联。新增守卫测试 `archived_filter_tables_are_a_subset_of_purgeable_tables`，把"快照跳过的表"与"保留期会清的表"钉成子集关系（本轮正是这两张清单各自演化出了漂移） |
+| 2 | `bootstrap_from_snapshot` 404 回退可致死循环 | 返回值由 `0` 哨兵改为 **`Option<i64>`**（`0` 本身是合法游标，调用方无法区分"从 0 开始"与"没有该端点"），`pull_all` 增加 `snapshot_unavailable` 闸门：一旦确认端点不存在，**剪枝恢复分支不再重试**，改为记一条明确的日志后继续读还能读到的变更日志。触发条件在正常部署下不可能（建表迁移与路由同版本上线），但故障形态是后台线程无限打服务端，值一个 bool |
+| 3 | `archive_retention_days` 无写入方 | 澄清：**API 层本来就可达**（`POST /api/settings/upsert` 不设 key 白名单），缺的是 UI。本轮先补**安全边界**：新增纯函数 `effective_retention` + `MIN_RETENTION_DAYS = 7` 下限（`0`/负数仍 = 永久），解析失败回落默认值；生效时打日志（保留期驱动硬删，日志要能解释"为什么少了 40 行"）。守卫测试 `retention_override_is_floor_and_fallback_safe`。**UI 入口待单独立项** |
+| 4 | junction 索引形状不匹配 | 新增迁移 **`20260926000004_snapshot_junction_indexes.sql`**：丢弃 `idx_contact_tag_user_live` / `idx_project_contact_user_live`（建在复合键上，能过滤不能供 `id` 序），改建 `(user_id, id) WHERE deleted_at IS NULL`，与 `snapshot` 的谓词逐字对齐。（不能改 `...000001`：迁移一旦被 sqlx 记录校验和，编辑它会让之后每次启动报 checksum mismatch） |
+| 5 | 服务端 `now()` 与 `now_str()` 格式混用 | **10 处**全部改为 `now_str()`（action / contact / event ×2 / interaction / project / reminder / tag / media ×2，比首轮统计的 8 处多出 media 的 2 处）。理由写进代码注释：这些列是 TEXT，比较方式一律是字符串比较，而 `now()` 序列化成 `2026-09-26 13:37:06.123456+00`，同日会排在客户端 `...T...Z` 之下 → `archive_purge` **提前约 1 天**判过期。`tag.rs` / `interaction.rs` / `reminder.rs` 的过时注释（"该表没有 `updated_at`"）一并改写为"刻意不推进 `updated_at` 及其理由" |
+| 6 | `push` 冲突分支不 `RELEASE SAVEPOINT` | 已补。`ROLLBACK TO` 会保留 savepoint 定义（可复用性正来源于此），不释放则一次请求内按冲突行数累积，最多 `PUSH_CHUNK_SIZE` 个 |
+
+**额外发现（见 §18.1 的 F16 / F17）**：核查第 3 项可达性时，顺带查出 `push_columns("contact")` 漏 `archived_at`，以及 `DELETE /api/settings` 不按 key 限定会清空全部设置。两项均已修复。
+
+### 18.4 遗留（本轮明确不做）
+
+| 项 | 现状 | 说明 |
+| --- | --- | --- |
+| **contact 归档入口** | 列 / 快照过滤 / 清理谓词**三者齐备，独缺入口**：服务端 `handlers/contact.rs` 不提 `archived_at`，web `Archive.tsx` 只认 `Action \| Event \| Project`，桌面 `archive.rs` / `archive_sweep.rs` 同样只碰这三张表 | §15 的"contact 纳入清理"因此是**惰性条款**。要么补入口（三端 + `push_columns`，F16 已就绪），要么把 `contact` 移出 `PURGEABLE_TABLES` 以免误导。**待产品拍板** |
+| 保留期 UI | 值可经 `POST /api/settings/upsert` 设置，两端均无界面 | 服务端安全边界（7 天下限 + 日志）已就位，可以安全地开 UI |
+| 五个带 `archived_at` 的 kind 的快照索引 | `snapshot` 的谓词是 `(deleted_at IS NOT NULL OR archived_at IS NULL)`，与其 `(user_id, id) WHERE deleted_at IS NULL` 偏索引谓词不匹配 | 仍会退化为排序。与 §17.3 的索引族同批，等数据量真正上来再做 |
+| `archive_purge` 的 `users_with_candidates` | 对 5 张表做 `EXISTS` 全表扫，`archived_at`/`deleted_at` 无索引 | 每 6 小时一次的后台任务，同 §17.3 处理 |
+
+### 18.5 验证
+
+- 客户端 `cargo test -p weavine --lib`：**67 passed / 5 failed**（5 个失败全部是 Windows 环境的既有失败：`data_dir` 走 `%APPDATA%` 而非测试沙箱 ×2，以及 3 个既有用例）。F14 的新守卫测试通过；`column_lists_agree_with_real_schema` 在加入 `archived_at` 通用断言后通过。
+- `cargo test -p weavine-server --bins`：**36 passed / 5 failed**（基线 34/5，**+2 = 本轮两个新守卫测试全部通过**；5 个 failed 仍为本地测试库权限问题）。
+- `cargo check -p weavine -p weavine-server` 通过（仅既有 warning）。
+- 上线次序更新：迁移由 3 个变 **4 个**（新增 `20260926000004_snapshot_junction_indexes.sql`）→ 先跑迁移 → **服务端先发**（F17 改了 `DELETE /api/settings` 的契约：旧调用方本就带 `key`，无需客户端配合）→ 客户端后发。F13–F17 无新增列，双端可任意次序。
+
+
+## 19. 第五轮 review：租户隔离（归属校验）审计（2026-09-27 已落地）
+
+复查对象是一份外部 agent 报告点名的 5 处"缺 `user_id` 过滤"。**逐条核对后结论是：3 处成立、2 处是误报，而报告漏掉了同一族里危害最大的部分**——报告把 `create` 路径（`id` 是本次请求刚生成的 UUID，`WHERE id = $1` 只可能命中自己刚插入的行）和 `update` / `delete` 路径（`id` 来自 URL）混为一谈。真正的缺陷全部集中在后者。
+
+### 19.1 缺陷族：只守第一条语句，次级写入不设防
+
+共同形状：handler 的**主**语句写了 `AND user_id = $n`，命中 0 行时**不报错**、继续执行；于是所有**次级**写入（改关联、改派生字段、插日志行）照常落库，直到最后的响应查询才发现找不到行并返回 404 —— **写已经提交了**。所以它不报警、不回滚、不留痕，只有出现第二个用户才暴露。
+
+| 编号 | 位置 | 类型 | 具体后果 |
+| --- | --- | --- | --- |
+| **F18** | `event::update` / `event::delete` **未调用 `authorize_event`**（同一文件里 `add_participant` / `set_participant_role` / `remove_participant` / `list_participants` 都调了，只有这两个 WebDAV 式 CRUD 漏了） | **跨用户写** | ① `UPDATE event SET contact_id=... WHERE id=$3`（无 `user_id`）→ 改他人事件的关联联系人，并推进 `updated_at` → 经 LWW 覆盖对方的设备；② `UPDATE reminder SET deleted_at=... WHERE event_id=$1`（无 `user_id`）→ **静默软删他人提醒**，墓碑写入 `sync_change_log` 后会同步到对方所有设备；③ `upsert_event_reminder` 按 `invitation_token` 查行 —— 该 token 是 `event:{id}:{lead}` 拼出来的，**不是秘密也不跨用户唯一**，配合 `SELECT id FROM reminder WHERE invitation_token=$1` / `UPDATE reminder ... WHERE id=$5` 可改写他人提醒行 |
+| **F19** | `tag::update` 尾读 `SELECT ... FROM tag WHERE id = $1` 无 `user_id` | **跨用户读** | `UPDATE` 被 `user_id` 挡住（0 行），但响应查询不挡 → `PUT /api/tags/{他人 id}` 返回 **200 + 对方的 `name` / `color` / `created_at`**。**写是空操作、响应在泄露**，两者都不报错 |
+| **F20** | `contact::create` / `contact::update` 插入 `contact_tag` 前不校验 tag 归属 | **跨用户挂载 + 信息泄露** | `contact_tag` 的约束是 `tag_id REFERENCES tag(id) ON DELETE CASCADE`，**`tag_id` 上没有用户维度**（`user_id` 只是冗余的归属列），所以请求体里的任意 `tag_id` 都能挂上。后果不止是一条脏数据：`contact::get` / `contact::list` 取标签的 JOIN 同样不带 `user_id` 谓词 → **对方的标签名与颜色会渲染进自己的联系人详情**；而且这行 junction 会带着 `user_id=自己 / tag_id=对方` 进入同步流，指向本机从未见过的 tag |
+| **F21** | `log_requests`（**鉴权之前**的全局中间件，main.rs）+ `serve_file`（`/files/*key` 公开路由，无鉴权） | **日志放大** | 每个请求写一行 stderr，URI / key **原样**写入。请求行由 hyper 接收，上限是数百 KB → 一次请求换来等量磁盘写入，是匿名调用者少数能让服务端做的事之一 |
+
+### 19.2 核查后**不成立**的 3 项（记录在案，避免重复上报）
+
+| 报告条目 | 核查结果 |
+| --- | --- |
+| `tag.rs:79`（create 的尾读） | **不可利用**。`id` 是本次请求内 `Uuid::new_v4()` 刚生成的，`WHERE id = $1` 只可能命中这一行。仍补了 `user_id`，因为它是 update 尾读的复制模板，两处保持同形才不会漂移 |
+| `event.rs:265 / 292`（create 内） | **不可利用**，理由同上（`create` 的 `id` 是刚生成的）。仍补了 `user_id`，让"handler 里没有不限定归属的写语句"成为可机械检查的性质 |
+| `auth.rs:333` 错误日志未限流 | **该行不是日志**，是 `let keys = SERVICE_KEYS.get()...`。`auth.rs` 里唯一的每请求日志在 **:344**（`mismatched X-Service-Key`），而它只被 ocr / voice 调用，这两处**限流在鉴权之前** → 每 IP 每窗口有硬上限，刷不动。真正的无界日志是 F21 的位置 |
+| "`event.rs` update 路径的 400 空 body 检查是否真在" | **不存在任何空 body 检查**，也不检查 `rows_affected`。`old` 读不到时用 `(None, "", None)` 兜底并**继续往下走** —— 这正是 F18 能成立的原因，而不是一个需要确认的边界 |
+
+### 19.3 修法：把"依赖远处的门"改成"语句自限定"
+
+`event` 的两个 handler 都加了 `authorize_event(&mut *tx, &id, &auth, true)`（`FOR UPDATE`，非本人 403、不存在/已删 404），但**没有停在这里**：一处门只能证明它之后**当前**的代码是安全的，而这一族 bug 连续三轮都是"有人加了一条新语句忘了它离门有多远"。所以每条次级语句也各自补上了 `user_id`：
+
+- `event.rs`：`UPDATE event SET contact_id`（2 处）、`UPDATE reminder`、`DELETE FROM reminder`（2 处）、`upsert_event_reminder` 内部的 2 个 `SELECT` + 1 个 `UPDATE`、`sync_main_participant` 的 `SELECT` + `UPDATE`（**并给它加了 `user_id` 参数**，两个调用点都在鉴权之后，签名里带上它就不需要任何例外清单）。
+- `tag.rs`：两处尾读。
+- `contact.rs`：新增 `owned_tag_ids(executor, user_id, ids)` —— 一次 `SELECT id FROM tag WHERE user_id = $1 AND deleted_at IS NULL AND id = ANY($2)` 把请求体里的 tag 过滤成本人持有的，再插入；两处读标签的 JOIN 补 `AND t.user_id = ct.user_id`。**写法对齐 `project_contact::create`**（它本来就先校验两侧归属再插入，是这三轮里唯一没出问题的写入点）。
+- `media.rs`：删除语句补 `user_id`（该处原本已有一道显式的 owner `SELECT` + 403，只是语句本身不自限定）。
+
+**行为变更**：`PUT / DELETE /api/events/{他人 id}` 由「404 但已经把次级写入落库」变成「**403 且不写任何东西**」；`PUT /api/tags/{他人 id}` 由「200 + 对方数据」变成「404」。`/api/events/{不存在 id}` 仍是 404，只是不再落库。均为修正，无客户端需要配合。
+
+### 19.4 新增守卫测试（两条，纯文本扫描，不需要数据库）
+
+`handlers/mod.rs` 里加了源码扫描型守卫 —— 这一族已经连续三轮产出缺陷，而每次都是**同一种形状**，值得用机器钉住：
+
+1. `writes_to_owned_tables_name_user_id`：handler 层每一条 `UPDATE` / `DELETE FROM` 必须出现 `user_id`，否则报出语句原文。例外走 `SCOPE_EXEMPT`（**必须写理由**，键为「文件名 + 语句片段」）：`activation`（`install_id` 本身即匿名设备凭证）、`auth` × 4（`devices` 的 id 来自待刷新的 access token；`refresh_token` 按 `token_hash` 限定，token 即凭证；`user_account` / `password_reset_token` 的 id 来自已消费的 reset token）、`sync`（`sync_change_log` 是服务端内部复制日志，不是用户内容）。
+2. `reads_by_primary_key_name_user_id`：`SELECT ... WHERE id = $n` 形式的按主键查询同样必须出现 `user_id`（F19 就是这一类）。例外 2 条，均为"id 来自已消费的令牌"。
+3. 两条测试都带**下界断言**（写语句 ≥ 40、按主键读 ≥ 5）：扫描器一旦失效就会立刻失败，而不是"扫到 0 条、全部通过"地假绿。
+
+诚实标注：扫描的是**写下来的 SQL 文本**，`format!` 拼出来的语句只能检查其字面部分（插值进去的只有表名/列名，不含值）；它也不覆盖"读"的其他形态（非主键谓词）——那部分仍靠各 kind 的查询模板约束。
+
+另加 `log_truncation_clamps_and_stays_on_char_boundaries`：请求日志按 256 字符截断，且必须切在 char 边界上（`中` 是 3 字节，切 7 会退到 6）。
+
+### 19.5 验证
+
+- `cargo test -p weavine-server --bins`：**39 passed / 5 failed**（基线 36/5，**+3 = 本轮三个新测试全部通过**；5 个 failed 仍是本地测试库权限问题，与本轮无关）。
+- `cargo check -p weavine -p weavine-server` 通过（仅既有 warning）。
+- 全仓复核：扫描器对 `server/src/handlers/*.rs` 的复核结果只剩 7 条 `SCOPE_EXEMPT` 命中的语句，读侧只剩 2 条 `READ_SCOPE_EXEMPT` 命中 —— **没有任何未登记的例外**。
+- **不需要新迁移、不涉及客户端**：纯服务端改写 + 一处日志截断，与既有上线次序（先跑 4 个迁移 → 服务端先发 → 客户端后发）无耦合，可单独发。
+
+

@@ -152,6 +152,12 @@ pub async fn serve_file(
         "gif" => "image/gif",
         _ => "application/octet-stream",
     };
-    eprintln!("[serve-file] GET key={key} mime={mime}");
+    // `key` arrives from a public route (no auth on `/files/*`) and is otherwise
+    // only length-checked by the validator above, so clamp it before logging —
+    // same reasoning as `log_requests`.
+    eprintln!(
+        "[serve-file] GET key={} mime={mime}",
+        crate::truncate_for_log(&key, crate::LOG_URI_MAX_CHARS)
+    );
     storage.get_response(&StorageKey(key), mime).await
 }

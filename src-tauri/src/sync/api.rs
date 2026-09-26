@@ -50,6 +50,16 @@ pub struct ManifestResp {
 pub struct PullReq {
     pub since_revision: i64,
     pub limit: Option<i64>,
+    /// Device asking for changes. The server skips rows this same device
+    /// authored, since it already holds them — it wrote them. `sync_once`
+    /// pushes and pulls in one cycle, so without this every upload comes
+    /// straight back and is replayed through `apply_change` row by row.
+    ///
+    /// `skip_serializing_if` keeps the body byte-identical to the pre-2026-09-26
+    /// request when there is no device to name, so an older server parses it
+    /// unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -57,6 +67,31 @@ pub struct PullResp {
     pub rows: Vec<ChangeRow>,
     pub latest_revision: i64,
     pub has_more: bool,
+    /// Highest revision the server has already pruned out of the change log.
+    ///
+    /// If our cursor sits below this, the changelog has a hole we can never
+    /// read, so the incremental stream cannot bring us up to date — we have to
+    /// bootstrap from `snapshot` instead. Older servers don't send the field,
+    /// hence the `serde(default)`.
+    #[serde(default)]
+    pub pruned_through_revision: i64,
+}
+
+#[derive(Serialize)]
+pub struct SnapshotReq {
+    pub kind: String,
+    pub cursor: Option<String>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Deserialize)]
+pub struct SnapshotResp {
+    pub kind: String,
+    pub rows: Vec<Value>,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+    /// The server's change-log head, sampled before the first row was read.
+    pub server_revision: i64,
 }
 
 #[derive(Deserialize)]
@@ -238,11 +273,17 @@ pub async fn manifest(
 }
 
 /// POST /api/sync/pull
+///
+/// `device_id` names this device so the server can leave out the changes it
+/// authored itself — see `PullReq::device_id`. Pass `None` when the local
+/// install has no device id yet; the server then serves everything, which is
+/// the pre-2026-09-26 behaviour.
 pub async fn pull(
     server_url: &str,
     access_token: &str,
     since_revision: i64,
     limit: i64,
+    device_id: Option<&str>,
 ) -> anyhow::Result<PullResp> {
     let c = client()?;
     let resp = c
@@ -251,6 +292,7 @@ pub async fn pull(
         .json(&PullReq {
             since_revision,
             limit: Some(limit),
+            device_id: device_id.map(|s| s.to_string()),
         })
         .send()
         .await?;
@@ -285,4 +327,39 @@ pub async fn push(
         return Err(anyhow::anyhow!("push failed ({}): {}", status, text));
     }
     Ok(resp.json::<PushResp>().await?)
+}
+
+/// POST /api/sync/snapshot — one page of current state for a single entity kind.
+///
+/// Used instead of replaying the changelog from revision 0: the log holds one
+/// row per historical edit, so `since_revision = 0` costs O(edits ever made)
+/// while the snapshot costs O(rows). On a real account that is the difference
+/// between minutes and seconds for a first sync on a phone.
+pub async fn snapshot(
+    server_url: &str,
+    access_token: &str,
+    kind: &str,
+    cursor: Option<String>,
+    limit: i64,
+) -> anyhow::Result<SnapshotResp> {
+    let c = client()?;
+    let resp = c
+        .post(format!(
+            "{}/api/sync/snapshot",
+            server_url.trim_end_matches('/')
+        ))
+        .bearer_auth(access_token)
+        .json(&SnapshotReq {
+            kind: kind.to_string(),
+            cursor,
+            limit: Some(limit),
+        })
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!("snapshot failed ({}): {}", status, text));
+    }
+    Ok(resp.json::<SnapshotResp>().await?)
 }

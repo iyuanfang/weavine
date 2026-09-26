@@ -8,6 +8,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use weavine_lib::models::Event;
 
 /// Compute the RFC3339 trigger time for an event reminder:
@@ -33,6 +34,12 @@ fn compute_trigger_at(start_at: &str, lead_minutes: i64) -> Option<String> {
 /// stable across server and client so both sides converge on one row.
 /// On UPDATE the existing row is reused (dispatch history preserved);
 /// when the lead is removed the matching reminder is deleted.
+///
+/// `invitation_token` is *not* a secret and is not unique across users: it is
+/// derived from the event id and the lead minutes, so any caller who supplies
+/// the same pair produces the same string. Every statement here therefore
+/// carries `user_id` explicitly — a lookup by token alone would hand the
+/// caller somebody else's reminder row.
 async fn upsert_event_reminder(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     user_id: &str,
@@ -45,8 +52,9 @@ async fn upsert_event_reminder(
     if lead_minutes <= 0 {
         if let Some(old) = old_lead_minutes.filter(|&l| l > 0) {
             let old_token = format!("event:{event_id}:{old}");
-            sqlx::query("DELETE FROM reminder WHERE invitation_token = $1")
+            sqlx::query("DELETE FROM reminder WHERE invitation_token = $1 AND user_id = $2")
                 .bind(&old_token)
+                .bind(user_id)
                 .execute(&mut **tx)
                 .await?;
         }
@@ -63,9 +71,11 @@ async fn upsert_event_reminder(
 
     let existing: Option<String> = if let Some(ot) = &old_token {
         sqlx::query_scalar(
-            "SELECT id FROM reminder WHERE invitation_token = $1 AND deleted_at IS NULL LIMIT 1",
+            "SELECT id FROM reminder WHERE invitation_token = $1 AND user_id = $2 \
+             AND deleted_at IS NULL LIMIT 1",
         )
         .bind(ot)
+        .bind(user_id)
         .fetch_optional(&mut **tx)
         .await?
     } else {
@@ -73,9 +83,11 @@ async fn upsert_event_reminder(
     };
     let existing: Option<String> = if existing.is_none() {
         sqlx::query_scalar(
-            "SELECT id FROM reminder WHERE invitation_token = $1 AND deleted_at IS NULL LIMIT 1",
+            "SELECT id FROM reminder WHERE invitation_token = $1 AND user_id = $2 \
+             AND deleted_at IS NULL LIMIT 1",
         )
         .bind(&new_token)
+        .bind(user_id)
         .fetch_optional(&mut **tx)
         .await?
     } else {
@@ -86,13 +98,14 @@ async fn upsert_event_reminder(
         Some(rid) => {
             sqlx::query(
                 "UPDATE reminder SET trigger_at = $1, invitation_token = $2, contact_id = $3, event_id = $4 \
-                 WHERE id = $5",
+                 WHERE id = $5 AND user_id = $6",
             )
             .bind(&trigger_at)
             .bind(&new_token)
             .bind(contact_id)
             .bind(event_id)
             .bind(&rid)
+            .bind(user_id)
             .execute(&mut **tx)
             .await?;
         }
@@ -261,11 +274,12 @@ pub async fn create(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
         sqlx::query(
-            "UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3"
+            "UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3 AND user_id=$4"
         )
         .bind(&participant_ids[0])
         .bind(&now)
         .bind(&id)
+        .bind(&auth)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -342,6 +356,20 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Ownership gate, once, before anything else in this handler.
+    //
+    // The primary UPDATE below is `WHERE id = $n AND user_id = $m`, so for a
+    // foreign (or already soft-deleted) id it silently matches zero rows — and
+    // the handler kept going anyway: it re-wrote `event.contact_id`, upserted a
+    // reminder looked up by a *guessable* `invitation_token`, and inserted an
+    // interaction, only to return 404 at the very end from the response query.
+    // Writes had already committed by then. Gating here (FOR UPDATE, so the row
+    // cannot be deleted underneath us) makes every statement below touch only
+    // the caller's own row. Same helper the participant endpoints already use.
+    authorize_event(&mut *tx, &id, &auth, true).await?;
+
+    // Guaranteed to find the row: `authorize_event` just proved it exists, is
+    // not soft-deleted and belongs to `auth`.
     let old: Option<(Option<i64>, String, Option<String>)> = sqlx::query_as(
         // Cast reminder_lead_minutes to BIGINT so sqlx can decode it into
         // Option<i64>. The Rust Event struct uses i64 (matching EVENT_SELECT's
@@ -432,11 +460,12 @@ pub async fn update(
         // When the participant list is cleared, contact_id must become SQL
         // NULL — binding "" (the default) violates the contact foreign key
         // and 500s the whole update.
-        sqlx::query("UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3")
-            .bind(new_first.cloned())
-            .bind(&now)
-            .bind(&id)
-            .execute(&mut *tx)
+        sqlx::query("UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3 AND user_id=$4")
+        .bind(new_first.cloned())
+        .bind(&now)
+        .bind(&id)
+        .bind(&auth)
+        .execute(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
@@ -451,9 +480,10 @@ pub async fn update(
         let effective_lead = if lead_present { new_lead } else { old_lead };
         let effective_start = new_start_at.unwrap_or(&old_start_at);
         let contact_id: Option<String> = sqlx::query_as::<_, (Option<String>,)>(
-            "SELECT contact_id FROM event WHERE id = $1",
+            "SELECT contact_id FROM event WHERE id = $1 AND user_id = $2",
         )
         .bind(&id)
+        .bind(&auth)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -475,8 +505,12 @@ pub async fn update(
             _ => {
                 if let Some(old) = old_lead.filter(|&l| l > 0) {
                     let old_token = format!("event:{id}:{old}");
-                    sqlx::query("DELETE FROM reminder WHERE invitation_token = $1")
+                    // `user_id` pin for the same reason as in
+                    // `upsert_event_reminder`: the token is derived from the
+                    // event id and is not unique across users.
+                    sqlx::query("DELETE FROM reminder WHERE invitation_token = $1 AND user_id = $2")
                         .bind(&old_token)
+                        .bind(&auth)
                         .execute(&mut *tx)
                         .await
                         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -494,9 +528,10 @@ pub async fn update(
     if was_unarchived {
         if let Some(archived_at) = new_archived_at {
             let post: (String, Option<String>, String) = sqlx::query_as(
-                "SELECT contact_id, end_at, title FROM event WHERE id = $1",
+                "SELECT contact_id, end_at, title FROM event WHERE id = $1 AND user_id = $2",
             )
             .bind(&id)
+            .bind(&auth)
             .fetch_one(&mut *tx)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -568,14 +603,29 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("UPDATE event SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
-        .bind(&id).bind(&auth)
+    // Same gate as `update`. Without it the `event` UPDATE below matched zero
+    // rows for a foreign id while the `reminder` tombstone right after it went
+    // through — and a reminder tombstone is not cosmetic: it is written to
+    // `sync_change_log`, so it propagates to the victim's devices and their
+    // reminder disappears.
+    authorize_event(&mut *tx, &id, &auth, true).await?;
+
+    // `now_str()` rather than SQL `now()` — see the note in `handlers::action`.
+    let now = now_str();
+    sqlx::query("UPDATE event SET deleted_at = $3, updated_at = $3 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
+        .bind(&id).bind(&auth).bind(&now)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    // reminder table has no updated_at column (only created_at + server_revision);
-    // the trigger already bumps server_revision on UPDATE, so no extra timestamp needed.
-    sqlx::query("UPDATE reminder SET deleted_at = now() WHERE event_id = $1 AND deleted_at IS NULL")
+    // `reminder.updated_at` is deliberately *not* bumped, even though the column
+    // exists since migration 20260926000003: the client compares `updated_at`
+    // before upserting, so a server-side bump would make every offline client's
+    // re-push of this reminder look stale and surface as a `server has newer
+    // updated_at` conflict. The tombstone is protected on the upsert side by
+    // `deleted_at = COALESCE(EXCLUDED.deleted_at, reminder.deleted_at)`.
+    sqlx::query("UPDATE reminder SET deleted_at = $3 WHERE event_id = $1 AND user_id = $2 AND deleted_at IS NULL")
         .bind(&id)
+        .bind(&auth)
+        .bind(&now)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -659,22 +709,32 @@ async fn fetch_participants_for_events(
     Ok(out)
 }
 
+/// Point `event.contact_id` at the first participant.
+///
+/// Takes `user_id` so the `UPDATE` is self-scoped. Callers already gate on
+/// `authorize_event`, but a statement that can only ever touch the caller's row
+/// is the invariant worth holding — the gate is one line away from being skipped
+/// (it was, in `update` and `delete`) and this helper writes `contact_id` on the
+/// primary row, which then travels to every device through LWW.
 async fn sync_main_participant(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: &str,
     event_id: &str,
 ) -> Result<(), sqlx::Error> {
     let first: Option<(String,)> = sqlx::query_as(
         "SELECT to_id FROM entity_links \
-         WHERE from_type='event' AND from_id=$1 AND relation_type='participated' \
+         WHERE user_id=$1 AND from_type='event' AND from_id=$2 AND relation_type='participated' \
          ORDER BY created_at ASC LIMIT 1"
     )
+    .bind(user_id)
     .bind(event_id)
     .fetch_optional(&mut **tx)
     .await?;
-    sqlx::query("UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3")
+    sqlx::query("UPDATE event SET contact_id=$1, updated_at=$2 WHERE id=$3 AND user_id=$4")
         .bind(first.map(|(c,)| c))
         .bind(super::now_str())
         .bind(event_id)
+        .bind(user_id)
         .execute(&mut **tx)
         .await?;
     Ok(())
@@ -746,7 +806,7 @@ pub async fn add_participant(
     .bind(&role)
     .execute(&mut *tx).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sync_main_participant(&mut tx, &event_id).await
+    sync_main_participant(&mut tx, &auth, &event_id).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -801,7 +861,7 @@ pub async fn remove_participant(
     .bind(&contact_id)
     .execute(&mut *tx).await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sync_main_participant(&mut tx, &event_id).await
+    sync_main_participant(&mut tx, &auth, &event_id).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     tx.commit().await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

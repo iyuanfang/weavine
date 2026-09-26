@@ -233,8 +233,8 @@ pub fn update(conn: &Connection, input: &UpdateActionInput) -> rusqlite::Result<
         let iid = Uuid::new_v4().to_string();
         conn.execute(
             "INSERT INTO Interaction \
-             (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
-             VALUES (?1, ?2, ?3, ?4, NULL, ?5, NULL, ?6, 'archive', ?4, ?7)",
+             (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, NULL, ?5, NULL, ?6, 'archive', ?4, ?7, ?7)",
             rusqlite::params![
                 &iid,
                 &action_user_id,

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
+import { checkAndInstallDesktopUpdate, fetchLatestDesktopUpdate } from '../lib/app-updater';
 import { useUserId } from '../lib/auth';
 import type {
   ArchiveSummary,
@@ -198,6 +199,29 @@ function CloudSyncPanel() {
   const adapter = useAdapter();
   const queryClient = useQueryClient();
   const isTauriRuntime = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const [updateState, setUpdateState] = useState<'idle' | 'checking' | 'downloading' | 'latest' | 'error'>('idle');
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const checkForUpdate = async () => {
+    if (!isTauriRuntime || updateState === 'checking' || updateState === 'downloading') return;
+    setUpdateState('checking');
+    setUpdateError(null);
+    try {
+      const latest = await fetchLatestDesktopUpdate();
+      const current = import.meta.env.APP_VERSION;
+      if (latest && latest.version !== current) {
+        setUpdateState('downloading');
+        const r = await checkAndInstallDesktopUpdate();
+        if (r.status === 'up-to-date') setUpdateState('latest');
+        // 'installed' → app relaunches itself
+      } else {
+        setUpdateState('latest');
+      }
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : String(e));
+      setUpdateState('error');
+    }
+  };
 
   const statusQuery = useQuery({
     queryKey: ['cloud-status'],
@@ -433,6 +457,50 @@ function CloudSyncPanel() {
       )}
 
       <AndroidSideloadHint />
+      <DesktopUpdateCard
+        state={updateState}
+        error={updateError}
+        onCheck={checkForUpdate}
+      />
+    </div>
+  );
+}
+
+function DesktopUpdateCard({
+  state,
+  error,
+  onCheck,
+}: {
+  state: 'idle' | 'checking' | 'downloading' | 'latest' | 'error';
+  error: string | null;
+  onCheck: () => void;
+}) {
+  const isTauriRuntime = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  if (!isTauriRuntime) return null;
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+        🔄 软件更新
+      </h3>
+      {state === 'checking' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>检查更新中…</p>
+      )}
+      {state === 'downloading' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>下载更新中…完成后自动重启</p>
+      )}
+      {state === 'latest' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>已是最新版本</p>
+      )}
+      {state === 'error' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--danger)', margin: '8px 0 0' }}>
+          检查更新失败：{error}
+        </p>
+      )}
+      {(state === 'idle' || state === 'error') && (
+        <button type="button" className="btn btn-secondary" style={{ marginTop: 10 }} onClick={onCheck}>
+          检查更新
+        </button>
+      )}
     </div>
   );
 }

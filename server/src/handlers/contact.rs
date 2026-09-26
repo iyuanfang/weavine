@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use weavine_lib::models::Contact;
 
 const MAX_PAGE_SIZE: i64 = 200;
@@ -41,6 +42,36 @@ fn parse_cursor(cursor: &str) -> Option<(String, String)> {
         return None;
     }
     Some((updated_at, id.to_string()))
+}
+
+/// Keep only the tag ids that exist, are not deleted, and belong to `user_id`.
+///
+/// `contact_tag` has no user dimension on `tag_id` — the constraint is
+/// `tag_id REFERENCES tag(id) ON DELETE CASCADE` and `user_id` is only a
+/// denormalised owner column — so a `tag_id` taken straight from the request
+/// body links across users without complaint. The damage is not limited to a bad
+/// row: the contact read paths below join `tag` without an owner predicate, so
+/// the other user's tag name and colour would render inside this contact, and
+/// the junction row enters the sync stream claiming `user_id = caller` while
+/// pointing at a tag the caller's devices have never seen.
+///
+/// Ownership therefore has to be checked here or not at all. Same shape as
+/// `project_contact::create`, which validates both sides before inserting.
+async fn owned_tag_ids(
+    executor: impl sqlx::PgExecutor<'_>,
+    user_id: &str,
+    ids: Vec<String>,
+) -> Result<Vec<String>, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    sqlx::query_scalar::<_, String>(
+        "SELECT id FROM tag WHERE user_id = $1 AND deleted_at IS NULL AND id = ANY($2)",
+    )
+    .bind(user_id)
+    .bind(ids)
+    .fetch_all(executor)
+    .await
 }
 
 pub async fn list(
@@ -89,7 +120,8 @@ pub async fn list(
     for contact in rows {
         let tags = sqlx::query_as::<_, weavine_lib::models::Tag>(
             "SELECT t.id, t.user_id, t.name, t.color, t.created_at \
-             FROM tag t JOIN contact_tag ct ON ct.tag_id = t.id WHERE ct.contact_id = $1",
+             FROM tag t JOIN contact_tag ct ON ct.tag_id = t.id \
+             WHERE ct.contact_id = $1 AND t.user_id = ct.user_id",
         )
         .bind(&contact.id)
         .fetch_all(&*pool)
@@ -128,7 +160,8 @@ pub async fn get(
 
     contact.tags = sqlx::query_as(
         "SELECT t.id, t.user_id, t.name, t.color, t.created_at \
-         FROM tag t JOIN contact_tag ct ON ct.tag_id = t.id WHERE ct.contact_id = $1",
+         FROM tag t JOIN contact_tag ct ON ct.tag_id = t.id \
+         WHERE ct.contact_id = $1 AND t.user_id = ct.user_id",
     )
     .bind(&id)
     .fetch_all(&*pool)
@@ -145,7 +178,16 @@ pub async fn create(
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let now = super::now_str();
-    let tag_ids = body.get("tag_ids").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let tag_ids = owned_tag_ids(
+        &*pool,
+        &auth,
+        body.get("tag_ids")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default(),
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut tx = pool
         .begin()
@@ -188,20 +230,18 @@ pub async fn create(
         }
     })?;
 
-    for tv in &tag_ids {
-        if let Some(tid) = tv.as_str() {
-            let ctid = uuid::Uuid::new_v4().to_string();
-            let _ = sqlx::query(
-                "INSERT INTO contact_tag (id, user_id, contact_id, tag_id) VALUES ($1, $2, $3, $4) \
-                 ON CONFLICT (contact_id, tag_id) DO NOTHING",
-            )
-            .bind(&ctid)
-            .bind(&auth)
-            .bind(&id)
-            .bind(tid)
-            .execute(&mut *tx)
-            .await;
-        }
+    for tid in &tag_ids {
+        let ctid = uuid::Uuid::new_v4().to_string();
+        let _ = sqlx::query(
+            "INSERT INTO contact_tag (id, user_id, contact_id, tag_id) VALUES ($1, $2, $3, $4) \
+             ON CONFLICT (contact_id, tag_id) DO NOTHING",
+        )
+        .bind(&ctid)
+        .bind(&auth)
+        .bind(&id)
+        .bind(tid)
+        .execute(&mut *tx)
+        .await;
     }
 
     tx.commit()
@@ -219,6 +259,24 @@ pub async fn update(
 ) -> Result<Json<Contact>, (StatusCode, String)> {
     let (auth, device_id) = extract_auth_with_device(&headers, pool.as_ref()).await?;
     let now = super::now_str();
+
+    // Resolve the requested tags to the caller's own *before* opening the write
+    // transaction. `tag_ids` is optional here (absent = leave the existing links
+    // untouched), but whatever is present must be filtered — see `owned_tag_ids`.
+    let tag_ids: Option<Vec<String>> = match body.get("tag_ids").and_then(|v| v.as_array()) {
+        Some(arr) => {
+            let requested: Vec<String> = arr
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect();
+            Some(
+                owned_tag_ids(&*pool, &auth, requested)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+            )
+        }
+        None => None,
+    };
 
     let mut tx = pool
         .begin()
@@ -277,23 +335,21 @@ pub async fn update(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if let Some(tag_ids) = body.get("tag_ids").and_then(|v| v.as_array()) {
+    if let Some(tag_ids) = &tag_ids {
         let _ = sqlx::query("DELETE FROM contact_tag WHERE contact_id = $1 AND user_id = $2")
             .bind(&id).bind(&auth).execute(&mut *tx).await;
-        for tv in tag_ids {
-            if let Some(tid) = tv.as_str() {
-                let ctid = uuid::Uuid::new_v4().to_string();
-                let _ = sqlx::query(
-                    "INSERT INTO contact_tag (id, user_id, contact_id, tag_id) VALUES ($1, $2, $3, $4) \
-                     ON CONFLICT (contact_id, tag_id) DO NOTHING",
-                )
-                .bind(&ctid)
-                .bind(&auth)
-                .bind(&id)
-                .bind(tid)
-                .execute(&mut *tx)
-                .await;
-            }
+        for tid in tag_ids {
+            let ctid = uuid::Uuid::new_v4().to_string();
+            let _ = sqlx::query(
+                "INSERT INTO contact_tag (id, user_id, contact_id, tag_id) VALUES ($1, $2, $3, $4) \
+                 ON CONFLICT (contact_id, tag_id) DO NOTHING",
+            )
+            .bind(&ctid)
+            .bind(&auth)
+            .bind(&id)
+            .bind(tid)
+            .execute(&mut *tx)
+            .await;
         }
     }
 
@@ -326,12 +382,15 @@ pub async fn delete(
         .bind(&auth)
         .execute(&mut *tx)
         .await;
+    // `now_str()` rather than SQL `now()` — see the note in `handlers::action`.
+    let now = now_str();
     sqlx::query(
-        "UPDATE contact SET deleted_at = now(), updated_at = now() \
+        "UPDATE contact SET deleted_at = $3, updated_at = $3 \
          WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(&id)
     .bind(&auth)
+    .bind(&now)
     .execute(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

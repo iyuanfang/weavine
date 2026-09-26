@@ -28,6 +28,18 @@ mod reminder_dispatcher;
 const CHANGE_LOG_TTL_DAYS: i64 = 90;
 const CHANGE_LOG_PRUNE_INTERVAL_SECS: u64 = 3600;
 
+/// Archived (and tombstoned) rows older than this are hard-deleted and the
+/// delete syncs out. Overridable per user via the `archive_retention_days`
+/// setting (`0` = keep archived rows forever). See handlers::archive_purge.
+const ARCHIVE_RETENTION_DAYS: i64 = 30;
+const ARCHIVE_PURGE_INTERVAL_SECS: u64 = 6 * 3600;
+
+/// Avatar/attachment uploads are real photos, not thumbnails: a modern phone
+/// JPEG is 3-8 MB. Axum's default body limit is 2 MB, so without an explicit
+/// limit here every large avatar upload fails with 413 before the handler even
+/// runs.
+const MEDIA_BODY_LIMIT_BYTES: usize = 20 * 1024 * 1024;
+
 #[tokio::main]
 async fn main() {
     let migrate_only = std::env::var("MIGRATE_ONLY").is_ok() || std::env::args().any(|a| a == "--migrate-only");
@@ -59,6 +71,7 @@ async fn main() {
     let storage: Arc<dyn Storage> = Arc::new(LocalFsStorage::new(storage_root));
 
     spawn_change_log_pruner(pool.clone());
+    spawn_archive_purger(pool.clone());
     keep_in_touch_server::spawn_keep_in_touch_scheduler(pool.clone());
     reminder_dispatcher::spawn_reminder_dispatcher(pool.clone());
 
@@ -73,6 +86,15 @@ async fn main() {
     // In-process rate limiter for password-reset endpoints.
     handlers::auth::init_password_reset_rate_limiter();
     handlers::auth::init_ocr_voice_rate_limiter();
+
+    // Media gets its own router purely to carry a body limit — axum's
+    // DefaultBodyLimit is per-route, and the 2 MB default rejects a
+    // phone-camera avatar before the handler sees it.
+    let media = Router::new()
+        .route("/api/media", post(handlers::media::upload).get(handlers::media::list_by_owner))
+        .route("/api/media/:id", get(handlers::media::get_by_id).delete(handlers::media::delete))
+        .route("/api/media/:id/blob", get(handlers::media::get_blob))
+        .layer(axum::extract::DefaultBodyLimit::max(MEDIA_BODY_LIMIT_BYTES));
 
     let api = Router::new()
         .route("/api/health", get(|| async { "OK" }))
@@ -112,9 +134,6 @@ async fn main() {
         .route("/api/projects/:id", get(handlers::project::get).put(handlers::project::update).delete(handlers::project::delete))
         .route("/api/projects/:id/contacts", get(handlers::project_contact::list).post(handlers::project_contact::add))
         .route("/api/projects/:id/contacts/:contact_id", delete(handlers::project_contact::remove))
-        .route("/api/media", post(handlers::media::upload).get(handlers::media::list_by_owner))
-        .route("/api/media/:id", get(handlers::media::get_by_id).delete(handlers::media::delete))
-        .route("/api/media/:id/blob", get(handlers::media::get_blob))
         // Interactions
         .route("/api/interactions", get(handlers::interaction::list).post(handlers::interaction::create))
         .route("/api/interactions/:id", get(handlers::interaction::get).put(handlers::interaction::update).delete(handlers::interaction::delete))
@@ -144,8 +163,12 @@ async fn main() {
         .route("/api/sync/manifest", post(handlers::sync::manifest))
         .route("/api/sync/push", post(handlers::sync::push))
         .route("/api/sync/pull", post(handlers::sync::pull))
+        // First-sync / recovery bootstrap: current state per table, so a
+        // device with no usable cursor does not replay the whole changelog.
+        .route("/api/sync/snapshot", post(handlers::sync::snapshot))
         // Quick capture (Ctrl+K parser)
         .route("/api/quick/parse", post(handlers::quick::parse))
+        .merge(media)
         .layer(SetResponseHeaderLayer::if_not_present(
             CACHE_CONTROL,
             HeaderValue::from_static("no-store"),
@@ -213,12 +236,62 @@ async fn run_prune(pool: &PgPool) {
     }
 }
 
+/// Archived rows never leave the tables on their own, and each one also keeps
+/// a change-log entry alive. Sweep them out on a timer (the delete propagates
+/// to every device through the sync trigger).
+fn spawn_archive_purger(pool: Arc<PgPool>) {
+    tokio::spawn(async move {
+        // Start well after boot: the pruner and reminder dispatcher are
+        // already doing work, and this sweep is never urgent.
+        tokio::time::sleep(Duration::from_secs(600)).await;
+        run_archive_purge(&pool).await;
+        let mut ticker = tokio::time::interval(Duration::from_secs(ARCHIVE_PURGE_INTERVAL_SECS));
+        ticker.tick().await;
+        loop {
+            ticker.tick().await;
+            run_archive_purge(&pool).await;
+        }
+    });
+}
+
+async fn run_archive_purge(pool: &PgPool) {
+    match handlers::archive_purge::purge_archived_rows(pool, ARCHIVE_RETENTION_DAYS).await {
+        Ok(0) => {}
+        Ok(n) => println!("[archive-purge] deleted {n} archived row(s) older than {ARCHIVE_RETENTION_DAYS} days"),
+        Err(e) => eprintln!("[archive-purge] error: {e}"),
+    }
+}
+
+/// Longest request URI echoed into the log. See `truncate_for_log`.
+const LOG_URI_MAX_CHARS: usize = 256;
+
+/// Clamp request-controlled text before it reaches the log, on a char boundary.
+///
+/// The request line (and the `*key` segment of `/files/*`) is attacker-supplied
+/// and arrives *before* any auth, so writing a log line is one of the few things
+/// an anonymous caller can make the server do. hyper accepts a request line in
+/// the hundreds of kilobytes, so every byte of query string becomes a byte of
+/// stderr — free amplification against the disk. 256 chars keeps every real
+/// route+query readable while bounding a line to a few hundred bytes.
+pub fn truncate_for_log(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// Log every incoming request (method + path) BEFORE auth runs, so we can
 /// see requests that fail with 401 at the auth layer (which never reach the
-/// handler-level logs in media.rs / storage.rs).
+/// handler-level logs in media.rs / storage.rs). The URI is clamped — see
+/// `truncate_for_log`.
 async fn log_requests(req: Request<axum::body::Body>, next: Next) -> Response {
     let method = req.method().clone();
-    let uri = req.uri().clone();
-    eprintln!("[req] {method} {uri}");
+    let target = req.uri().to_string();
+    let target = truncate_for_log(&target, LOG_URI_MAX_CHARS);
+    eprintln!("[req] {method} {target}");
     next.run(req).await
 }

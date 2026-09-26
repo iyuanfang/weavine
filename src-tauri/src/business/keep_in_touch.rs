@@ -104,8 +104,8 @@ pub fn schedule_for_contact_tx(
 
     tx.execute(
         "INSERT INTO Reminder \
-         (id, user_id, contact_id, trigger_at, kind, dispatched, dismissed, created_at) \
-         VALUES (?1, ?2, ?3, ?4, 'keep_in_touch', 0, 0, ?5)",
+         (id, user_id, contact_id, trigger_at, kind, dispatched, dismissed, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, 'keep_in_touch', 0, 0, ?5, ?5)",
         rusqlite::params![&id, &user_id, contact_id, &trigger_at, &now],
     )?;
 

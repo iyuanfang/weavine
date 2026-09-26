@@ -8,6 +8,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use weavine_lib::models::Action;
 
 const ACTION_SELECT: &str = "SELECT a.id, a.user_id, a.title, a.status, a.priority::BIGINT AS priority, a.category, a.due_at, \
@@ -242,8 +243,16 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("UPDATE action SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
-        .bind(&id).bind(&auth)
+    // `now_str()` rather than SQL `now()`: these columns are TEXT and every
+    // comparison against them is a plain string compare (the client's push
+    // watermark, and `archive_purge`'s retention cutoff). `now()` serializes as
+    // `2026-09-26 13:37:06.123456+00` — space separator, microseconds, no `Z` —
+    // so on the same calendar day it sorts *below* every client-written
+    // `2026-09-26T...Z` value and the row would be treated as ~1 day older than
+    // it is. See `business::lww_now` on the client for the other half.
+    let now = now_str();
+    sqlx::query("UPDATE action SET deleted_at = $3, updated_at = $3 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
+        .bind(&id).bind(&auth).bind(&now)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

@@ -76,9 +76,7 @@ pub fn list(
 
 pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Result<Interaction> {
     let id = Uuid::new_v4().to_string();
-    let now = chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string();
+    let now = crate::business::lww_now();
 
     // Use a transaction so the Interaction INSERT and Contact bump are atomic.
     // new_unchecked is required because create() receives &Connection, not &mut.
@@ -86,8 +84,8 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
 
     tx.execute(
         "INSERT INTO Interaction \
-         (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'manual', NULL, ?9)",
+         (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'manual', NULL, ?9, ?10)",
         rusqlite::params![
             &id,
             &input.user_id,
@@ -97,6 +95,7 @@ pub fn create(conn: &Connection, input: &CreateInteractionInput) -> rusqlite::Re
             &input.occurred_at,
             &input.channel,
             &input.summary,
+            &now,
             &now,
         ],
     )?;
@@ -171,6 +170,14 @@ pub fn update(conn: &Connection, input: &UpdateInteractionInput) -> rusqlite::Re
         param_idx += 1;
     }
 
+    // Bumping `updated_at` unconditionally also fixes a latent crash: this
+    // function has no empty-`set_clauses` guard, so a call with no fields to
+    // change previously rendered `UPDATE Interaction SET  WHERE id = ?1` — a
+    // syntax error. There is now always at least one assignment.
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
+    params.push(Box::new(crate::business::lww_now()));
+    param_idx += 1;
+
     sql.push_str(&set_clauses.join(", "));
     sql.push_str(&format!(" WHERE id = ?{}", param_idx));
     params.push(Box::new(input.id.clone()));
@@ -189,9 +196,12 @@ pub fn update(conn: &Connection, input: &UpdateInteractionInput) -> rusqlite::Re
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    let now = chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string();
+    let now = crate::business::lww_now();
+    // `updated_at` moves with the tombstone. Unlike before 2026-09-26 this
+    // column exists (see migration.rs) and `interaction` is in
+    // `UPDATED_AT_TABLES`, so a delete that left the column stale would sit
+    // below the push watermark and the tombstone would never be delivered —
+    // other devices would keep showing a deleted interaction.
     conn.execute(
         "UPDATE Interaction SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
         rusqlite::params![&now, id],

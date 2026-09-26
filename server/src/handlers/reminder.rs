@@ -8,6 +8,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use weavine_lib::models::Reminder;
 
 const REMINDER_SELECT: &str = "SELECT r.id, r.user_id, r.contact_id, r.event_id, r.trigger_at, r.kind, r.dispatched, r.dismissed, r.invitation_token, r.created_at, r.deleted_at, \
@@ -177,10 +178,16 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // reminder table has no updated_at column (only created_at + server_revision);
-    // the trigger already bumps server_revision on UPDATE, so no extra timestamp needed.
-    sqlx::query("UPDATE reminder SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
-        .bind(&id).bind(&auth)
+    // `deleted_at` alone, deliberately. `updated_at` exists since migration
+    // 20260926000003, but bumping it server-side makes every offline client's
+    // re-push of this reminder look stale and turn into a `server has newer
+    // updated_at` conflict; the tombstone is preserved by the upsert's
+    // `COALESCE(EXCLUDED.deleted_at, reminder.deleted_at)` instead.
+    //
+    // `now_str()` rather than SQL `now()` — see the note in `handlers::action`.
+    let now = now_str();
+    sqlx::query("UPDATE reminder SET deleted_at = $3 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
+        .bind(&id).bind(&auth).bind(&now)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

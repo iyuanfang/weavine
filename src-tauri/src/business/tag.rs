@@ -30,10 +30,11 @@ pub fn list(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<Tag>> {
 pub fn create(conn: &Connection, input: &CreateTagInput) -> rusqlite::Result<Tag> {
     let id = Uuid::new_v4().to_string();
     let color = color_for(&input.name);
+    let now = crate::business::lww_now();
 
     conn.execute(
-        "INSERT INTO Tag (id, user_id, name, color) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![&id, &input.user_id, &input.name, &color],
+        "INSERT INTO Tag (id, user_id, name, color, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![&id, &input.user_id, &input.name, &color, &now],
     )?;
 
     conn.query_row(
@@ -67,6 +68,14 @@ pub fn update(conn: &Connection, input: &UpdateTagInput) -> rusqlite::Result<Tag
         );
     }
 
+    // Always bump `updated_at`, even when the caller only renamed the tag:
+    // the push watermark (`updated_at > <last pushed>`) is the only thing that
+    // makes this row eligible for upload, so an edit that leaves the column
+    // untouched never reaches the server.
+    set_clauses.push(format!("updated_at = ?{}", param_idx));
+    params.push(Box::new(crate::business::lww_now()));
+    param_idx += 1;
+
     sql.push_str(&set_clauses.join(", "));
     sql.push_str(&format!(" WHERE id = ?{}", param_idx));
     params.push(Box::new(input.id.clone()));
@@ -85,11 +94,9 @@ pub fn update(conn: &Connection, input: &UpdateTagInput) -> rusqlite::Result<Tag
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    let now = chrono::Utc::now()
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string();
+    let now = crate::business::lww_now();
     conn.execute(
-        "UPDATE Tag SET deleted_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        "UPDATE Tag SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
         rusqlite::params![&now, id],
     )?;
     Ok(())

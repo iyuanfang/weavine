@@ -18,6 +18,7 @@ export default defineConfig({
   base: isTauri ? './' : '/',
   define: {
     'import.meta.env.VITE_VOICE_MODE': JSON.stringify(voiceMode),
+    'import.meta.env.APP_VERSION': JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
   },
   server: {
     port: 5181,

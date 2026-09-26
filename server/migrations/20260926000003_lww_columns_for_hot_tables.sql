@@ -1,0 +1,57 @@
+-- LWW columns for the three tables that were pushed in full on every cycle.
+--
+-- `tag`, `interaction` and `reminder` had no `updated_at`, so the client's push
+-- could not filter them by time and re-uploaded every row on every cycle —
+-- roughly every 30 minutes, whether or not anything had changed. Each of those
+-- rows was then re-upserted server-side unconditionally: a write, a new row
+-- version, and (before the no-op guard in 20260926000002) another change-log
+-- entry. This was the largest remaining share of the sync round trip after the
+-- snapshot and no-op-guard work.
+--
+-- The client half of this change is in src-tauri: the columns on its SQLite
+-- tables, `business::lww_now` at every write site, and these kinds joining
+-- `UPDATED_AT_TABLES` in src-tauri/src/sync/translate.rs.
+--
+-- Two deliberate choices:
+--
+-- 1. The column is seeded NULL, *not* with the client's backfill sentinel.
+--    The push handler treats a NULL existing value as "no LWW information,
+--    accept what the client sent", so a device's first sync after upgrading is
+--    accepted wholesale. Once both sides hold the client's sentinel the
+--    comparison is *equal*, which the handler treats as "nothing to do" (no
+--    upsert, no conflict) rather than as a device losing a race. Seeding a real
+--    timestamp here would instead let whichever device upgraded first silently
+--    overwrite the other's data.
+--
+--    The rows that stay NULL are therefore not a bug: NULL is how the server
+--    says "nobody has given me a version yet".
+--
+-- 2. No index. These columns are never used to filter or sort server-side —
+--    only the change log's `server_revision` is. They exist purely so the
+--    client's `WHERE updated_at > <watermark>` is meaningful.
+--
+-- Backward compatibility, and why it is a hard constraint:
+-- clients built before this migration omit `updated_at` from their push
+-- payload entirely. The push handler must keep accepting those rows. It does so
+-- by treating a missing field as "no LWW information" rather than as the empty
+-- string — `"" < <any real timestamp>`, so the latter would reject every
+-- tag/interaction/reminder write from an old client and that device would stop
+-- syncing those three kinds with no visible error. See the
+-- `incoming_updated_at` branch in server/src/handlers/sync.rs.
+--
+-- Deploy order is a hard requirement: **server first**, and it is worth being
+-- precise about why, because the obvious guess is wrong.
+--
+-- The push path builds its SET clause from the payload's own keys, so a new
+-- client's payload yields `updated_at = EXCLUDED.updated_at`. Against a server
+-- whose table lacks that column, Postgres rejects the entire statement —
+-- `column "updated_at" of relation "tag" does not exist` — and the push returns
+-- 500. (`jsonb_populate_record` itself would have ignored the unknown field;
+-- it is the explicitly generated SET clause that names the column.)
+--
+-- The other direction needs no coordination: an old client pushes rows with no
+-- `updated_at` at all, the handler accepts them outright and leaves the stored
+-- value alone, so nothing regresses while clients upgrade at their own pace.
+ALTER TABLE tag         ADD COLUMN IF NOT EXISTS updated_at TEXT;
+ALTER TABLE interaction ADD COLUMN IF NOT EXISTS updated_at TEXT;
+ALTER TABLE reminder    ADD COLUMN IF NOT EXISTS updated_at TEXT;

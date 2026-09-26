@@ -8,6 +8,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use weavine_lib::models::Interaction;
 
 const INTERACTION_SELECT: &str = "SELECT i.id, i.user_id, i.contact_id, i.action_id, i.event_id, i.occurred_at, i.channel, i.summary, i.source, i.source_ref, i.created_at, \
@@ -183,10 +184,19 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Soft-delete tombstone for sync is deleted_at alone — the PG interaction
-    // table has no updated_at column (never has; see initial_schema.sql).
-    sqlx::query("UPDATE interaction SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
-        .bind(&id).bind(&auth)
+    // Soft-delete tombstone for sync: `deleted_at` alone. The column exists
+    // (`interaction` joined `UPDATED_AT_TABLES` on 2026-09-26), but bumping it
+    // here would be wrong — the client compares `updated_at` before upserting,
+    // so a server-side bump turns every offline client's re-push of this row
+    // into a `server has newer updated_at` conflict. The tombstone survives the
+    // upsert anyway via `deleted_at = COALESCE(EXCLUDED.deleted_at,
+    // interaction.deleted_at)`.
+    //
+    // `now_str()` rather than SQL `now()`: see the note in `handlers::action`
+    // (the two formats differ and these columns are compared as strings).
+    let now = now_str();
+    sqlx::query("UPDATE interaction SET deleted_at = $3 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
+        .bind(&id).bind(&auth).bind(&now)
         .execute(&mut *tx).await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

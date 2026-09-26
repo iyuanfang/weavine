@@ -51,8 +51,31 @@ pub const ENTITY_KINDS: &[&str] = &[
     "entity_link", "note_entity",
 ];
 
+/// Kinds whose SQLite table has an `updated_at` column, and therefore whose
+/// push is filtered by time (`WHERE updated_at > <watermark>`).
+///
+/// Being *on* this list is what makes a push incremental. Being *off* it —
+/// the previous state of `tag`, `interaction` and `reminder` — means
+/// `push_all` selects every row on every cycle with no time filter at all, so
+/// the client re-uploads its entire table (and the server re-upserts it) every
+/// 30 minutes whether or not anything changed. That is pure waste on both
+/// ends: it was the largest remaining share of the sync round trip.
+///
+/// Adding a kind here is only safe once **both** sides have the column *and*
+/// every local write path maintains it (see `business::lww_now`). A row that
+/// somehow keeps a NULL `updated_at` is never selected by the filter and can
+/// therefore never be pushed — a silent, permanent loss rather than a loud
+/// failure. The server migration that adds these columns deliberately leaves
+/// them NULL so that a client pushing the backfill sentinel is always
+/// accepted (see `LWW_SENTINEL`).
+///
+/// `interaction`/`reminder`/`tag` were added 2026-09-26. The four junction
+/// tables are still absent: they have no LWW column yet, and their deletes
+/// cannot be expressed by an `updated_at` watermark regardless (a deleted
+/// junction row simply stops being selected).
 pub const UPDATED_AT_TABLES: &[&str] = &[
     "contact", "project", "event", "action", "setting", "media", "note",
+    "tag", "interaction", "reminder",
 ];
 
 pub const JUNCTION_TABLES: &[&str] = &["contact_tag", "project_contact", "entity_link", "note_entity"];
@@ -162,15 +185,26 @@ pub fn default_zero_integer_columns(kind: &str) -> &'static [&'static str] {
 
 pub fn push_columns(kind: &str) -> &'static [&'static str] {
     match kind {
-        "contact" => &["id","user_id","nickname","name","company","title","address","email","phone","wechat","importance","last_interaction_at","created_at","updated_at","deleted_at"],
-        "tag" => &["id","user_id","name","color","created_at","deleted_at"],
+        // `archived_at` belongs here. The column exists on the desktop since the
+        // archive feature shipped (`migration.rs`'s `archive_cols`), and the
+        // server's `contact` has had it since 20260826000001 — but it was never
+        // in this list, so a contact archived on one side stayed live on the
+        // other, and the retention sweep (which keys on `archived_at`) could
+        // never see it at all. Every other archived-capable kind (event, action,
+        // project, note) already listed it; contact was the outlier.
+        "contact" => &["id","user_id","nickname","name","company","title","address","email","phone","wechat","importance","last_interaction_at","archived_at","created_at","updated_at","deleted_at"],
+        "tag" => &["id","user_id","name","color","created_at","updated_at","deleted_at"],
         "event" => &["id","user_id","title","event_type","start_at","end_at","location","reminder_lead_minutes","contact_id","project_id","archived_at","created_at","updated_at","deleted_at"],
         "action" => &["id","user_id","title","status","priority","category","due_at","contact_id","project_id","completed_at","archived_at","created_at","updated_at","deleted_at"],
-        "interaction" => &["id","user_id","contact_id","action_id","event_id","occurred_at","channel","summary","created_at","deleted_at"],
+        "interaction" => &["id","user_id","contact_id","action_id","event_id","occurred_at","channel","summary","created_at","updated_at","deleted_at"],
         "project" => &["id","user_id","title","template","stage","start_at","due_at","completed_at","archived_at","created_at","updated_at","deleted_at"],
-        "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","invitation_token","created_at","deleted_at"],
+        "reminder" => &["id","user_id","contact_id","event_id","trigger_at","kind","dispatched","dismissed","invitation_token","created_at","updated_at","deleted_at"],
         "setting" => &["id","user_id","key","value","updated_at"],
-        "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","storage_key","width","height","alt_text","created_at","updated_at"],
+        // `deleted_at` is what carries an avatar deletion to the server. Without
+        // it the push-time filter below could never see a tombstone, so the
+        // rows it was written to forward were always dropped and every other
+        // device kept showing a deleted avatar.
+        "media" => &["id","user_id","kind","owner_type","owner_id","mime","size_bytes","sha256","filename","storage_key","width","height","alt_text","created_at","updated_at","deleted_at"],
         "contact_tag" => &["user_id","contact_id","tag_id"],
         "project_contact" => &["user_id","project_id","contact_id","role","added_at"],
         "entity_link" => &["id","user_id","from_type","from_id","to_type","to_id","relation_type","role","label","created_at"],

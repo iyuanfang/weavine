@@ -10,6 +10,7 @@ use std::sync::Arc;
 use weavine_lib::models::Media;
 
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use super::storage::{Storage, StorageKey};
 
 #[derive(Debug, Deserialize)]
@@ -182,12 +183,17 @@ pub async fn upload(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // `now_str()` rather than the DDL default / SQL `now()`: `media.updated_at`
+    // is TEXT, and the client compares it (LWW) and lexicographically orders by
+    // it. `now()` serializes with a space separator, which sorts below the
+    // client's `...T...Z` form on the same day. See `handlers::action`.
+    let now = now_str();
     let row: Media = sqlx::query_as(
         "INSERT INTO media (user_id, kind, owner_type, owner_id, mime, size_bytes, storage_key, sha256, filename) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
          ON CONFLICT (user_id, kind, owner_type, owner_id) DO UPDATE SET \
             mime=EXCLUDED.mime, size_bytes=EXCLUDED.size_bytes, storage_key=EXCLUDED.storage_key, \
-            sha256=EXCLUDED.sha256, filename=EXCLUDED.filename, updated_at=now() \
+            sha256=EXCLUDED.sha256, filename=EXCLUDED.filename, updated_at=$10 \
          RETURNING id, user_id, kind, owner_type, owner_id, mime, size_bytes, storage_key, \
                    width, height, sha256, filename, alt_text, created_at, updated_at"
     )
@@ -200,6 +206,7 @@ pub async fn upload(
     .bind(&storage_key.0)
     .bind(&sha256)
     .bind(&filename)
+    .bind(&now)
     .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -279,8 +286,12 @@ pub async fn delete(
     if owner != auth {
         return Err((StatusCode::FORBIDDEN, "无权访问".into()));
     }
-    sqlx::query("UPDATE media SET deleted_at=now(), updated_at=now() WHERE id=$1")
+    // `now_str()` for both columns — see the note on the upload path above.
+    let now = now_str();
+    sqlx::query("UPDATE media SET deleted_at=$2, updated_at=$2 WHERE id=$1 AND user_id=$3")
         .bind(&id)
+        .bind(&now)
+        .bind(&auth)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

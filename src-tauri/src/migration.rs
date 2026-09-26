@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS "Tag" (
     "name" TEXT NOT NULL,
     "color" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TEXT,
     "deleted_at" TEXT
 );
 
@@ -136,6 +137,7 @@ CREATE TABLE IF NOT EXISTS "Interaction" (
     "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','action')),
     "source_ref" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TEXT,
     "deleted_at" TEXT
 );
 
@@ -150,6 +152,7 @@ CREATE TABLE IF NOT EXISTS "Reminder" (
     "dismissed" INTEGER NOT NULL DEFAULT 0,
     "invitation_token" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TEXT,
     "deleted_at" TEXT
 );
 
@@ -545,14 +548,38 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
         ("Media", "width", "INTEGER"),
         ("Media", "height", "INTEGER"),
         ("Media", "alt_text", "TEXT"),
+        // `delete_avatar` has always written `Media.deleted_at`, but the column
+        // was never created here — so deleting an avatar failed outright with
+        // "no such column", and (because `push_columns("media")` mirrored the
+        // same omission) avatar deletions could not sync either.
+        ("Media", "deleted_at", "TEXT"),
+        // Desktop-local bookkeeping for the avatar byte upload: NULL means "the
+        // binary is here but the server has not confirmed it". Deliberately not
+        // in `push_columns("media")` — it exists only on this device, and
+        // sending it would make the server's LWW comparison see a phantom
+        // change on every sync.
+        ("Media", "bytes_uploaded_at", "TEXT"),
     ];
     let kit_cols = [
         ("Contact", "keep_in_touch_cadence_days", "INTEGER"),
+    ];
+    // `updated_at` on the three tables that were previously pushed in full on
+    // every cycle. See `sync::translate::UPDATED_AT_TABLES` for why the column
+    // is what makes a push incremental. NOTE: `ALTER TABLE ADD COLUMN` cannot
+    // carry a non-constant default in SQLite, so a row inserted by a write path
+    // that forgets to set this column gets NULL — and NULL is never selected by
+    // `WHERE updated_at > watermark`, i.e. that row can never sync. Every local
+    // INSERT into these three tables must therefore pass `business::lww_now()`.
+    let lww_cols = [
+        ("Tag", "updated_at", "TEXT"),
+        ("Interaction", "updated_at", "TEXT"),
+        ("Reminder", "updated_at", "TEXT"),
     ];
     for (table, col, decl) in avatar_mirror_cols
         .iter()
         .chain(media_storage_cols.iter())
         .chain(kit_cols.iter())
+        .chain(lww_cols.iter())
     {
         let present: i64 = conn.query_row(
             "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?",
@@ -815,6 +842,13 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
     // ('manual','event','action') which originally came from auto_log.rs.
     // SQLite has no ALTER … DROP/ADD CONSTRAINT, so we detect the new value
     // by inspecting the CHECK text and skip if already present.
+    //
+    // WARNING: this block rebuilds the table from the DDL literal below, so
+    // that literal has to be kept byte-for-byte in step with SCHEMA_SQL. It runs
+    // *after* the column loop above, so any column missing here is dropped again
+    // immediately after the loop added it — which is exactly what happened to
+    // `updated_at` on the first attempt, and why `run` re-asserts the LWW
+    // columns at the end.
     let interaction_check_sql: Option<String> = conn
         .query_row(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='Interaction'",
@@ -829,6 +863,10 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
             // mirrored below. Indices are recreated via their own IF NOT EXISTS
             // guards at the top of this function — they survive the recreation
             // because we use the same names.
+            //
+            // `updated_at` is carried through the copy as well: the column loop
+            // above has already added it (and backfilled it), so the old table
+            // has a value to bring across.
             conn.execute_batch(
                 r#"
                 PRAGMA foreign_keys=OFF;
@@ -844,11 +882,12 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
                     "source" TEXT NOT NULL DEFAULT 'manual' CHECK("source" IN ('manual','event','action','archive')),
                     "source_ref" TEXT,
                     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updated_at" TEXT,
                     "deleted_at" TEXT
                 );
                 INSERT INTO "Interaction__new"
-                    (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, deleted_at)
-                SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, deleted_at
+                    (id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, updated_at, deleted_at)
+                SELECT id, user_id, contact_id, action_id, event_id, occurred_at, channel, summary, source, source_ref, created_at, updated_at, deleted_at
                 FROM "Interaction";
                 DROP TABLE "Interaction";
                 ALTER TABLE "Interaction__new" RENAME TO "Interaction";
@@ -856,6 +895,39 @@ pub fn run(conn: &Connection) -> Result<(), rusqlite::Error> {
                 "#,
             )?;
         }
+    }
+
+    // ── Last line of defence: the LWW columns ──
+    //
+    // Three separate places define this schema — `SCHEMA_SQL`, the legacy
+    // camelCase `rebuild!` literals, and the CHECK-extension literal just above
+    // — and only the first is authoritative. A rebuild that forgets a column
+    // silently produces a database whose table is missing it, and the symptom
+    // is remote from the cause: the push filter stops selecting those rows (they
+    // keep a NULL `updated_at` forever) and the table quietly stops syncing.
+    //
+    // Re-asserting here costs three `pragma_table_info` lookups and makes the
+    // end state independent of which rebuild ran. It also repairs databases that
+    // an older build already rebuilt into the column-less shape.
+    for table in ["Tag", "Interaction", "Reminder"] {
+        let present: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name='updated_at'",
+            rusqlite::params![table],
+            |r| r.get(0),
+        )?;
+        if present == 0 {
+            conn.execute(
+                &format!("ALTER TABLE \"{table}\" ADD COLUMN \"updated_at\" TEXT"),
+                [],
+            )?;
+        }
+        // Then backfill. A NULL here is not cosmetic: the push filter is
+        // `WHERE updated_at > <watermark>` and SQLite never returns a NULL from
+        // it, so the row would never be uploaded again — no error, no conflict.
+        conn.execute(
+            &format!("UPDATE \"{table}\" SET \"updated_at\" = ?1 WHERE \"updated_at\" IS NULL"),
+            rusqlite::params![crate::business::LWW_SENTINEL],
+        )?;
     }
 
     Ok(())

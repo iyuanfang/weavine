@@ -8,6 +8,7 @@ use serde_json::Value;
 use sqlx::PgPool;
 use std::sync::Arc;
 use super::auth::{extract_auth, extract_auth_with_device};
+use super::now_str;
 use weavine_lib::models::Project;
 
 #[derive(Deserialize)]
@@ -203,9 +204,12 @@ pub async fn delete(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    sqlx::query("UPDATE project SET deleted_at = now(), updated_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
+    // `now_str()` rather than SQL `now()` — see the note in `handlers::action`.
+    let now = now_str();
+    sqlx::query("UPDATE project SET deleted_at = $3, updated_at = $3 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL")
         .bind(&id)
         .bind(&auth)
+        .bind(&now)
         .execute(&mut *tx)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

@@ -93,6 +93,22 @@ pub async fn cloud_sync_now(app: AppHandle) -> Result<sync::SyncResult, String> 
     Ok(result)
 }
 
+/// Nudge the background sync thread to run a cycle now.
+///
+/// Called after local writes so a change leaves the device in seconds rather
+/// than waiting out the periodic interval — which is also what bounds how long
+/// until another device can see it. Without this the worst case is two full
+/// intervals (device A uploads on its next tick, device B downloads on its
+/// next tick after that).
+///
+/// Deliberately a wake-up and not an inline sync: the periodic thread owns its
+/// own connection and runtime, and running a cycle here as well would race it
+/// for the same SQLite file and could push the same rows twice.
+#[tauri::command(rename_all = "snake_case")]
+pub fn cloud_request_sync() {
+    sync::request_sync();
+}
+
 /// Clear the push watermark so the next sync re-pushes every local row.
 ///
 /// One-off repair for rows stranded by a rejected entity kind: push only
@@ -131,7 +147,7 @@ fn open_db() -> Result<rusqlite::Connection, String> {
         rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
     )
     .map_err(|e| e.to_string())?;
-    conn.execute_batch("PRAGMA foreign_keys=ON;")
+    conn.execute_batch(crate::db::CONN_PRAGMAS)
         .map_err(|e| e.to_string())?;
     Ok(conn)
 }
