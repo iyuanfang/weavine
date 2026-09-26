@@ -656,6 +656,8 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.AppImage
             artifacts/**/*.apk
+            artifacts/**/*.sig
+            artifacts/**/latest*.json
 
       - name: Upload release-debug.log on failure
         if: failure()
