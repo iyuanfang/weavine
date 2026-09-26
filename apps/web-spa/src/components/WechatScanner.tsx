@@ -30,7 +30,7 @@ const MAX_OCR_SIZE = 10 * 1024 * 1024;
 // Always re-encode phone screenshots: originals are 3-8 MB and large uploads
 // get reset by mobile networks mid-flight ("Failed to fetch"). 1400px wide
 // JPEG q0.82 is plenty for the fixed-template OCR.
-const DOWNSAMPLE_MAX_W = 1400;
+const DOWNSAMPLE_MAX_W = 1000;
 const JPEG_QUALITY = 0.82;
 
 function readAsDataUrl(file: File): Promise<string> {
