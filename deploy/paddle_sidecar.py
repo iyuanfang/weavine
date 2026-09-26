@@ -24,14 +24,29 @@ from paddleocr import PaddleOCR
 PORT = int(os.environ.get("PADDLE_SIDECAR_PORT", "3031"))
 LANG = os.environ.get("PADDLE_SIDECAR_LANG", "ch")
 
-print(f"[paddle-sidecar] loading PaddleOCR lang={LANG} ...", flush=True)
-ocr = PaddleOCR(
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=False,
-    use_textline_orientation=False,
-    enable_mkldnn=False,  # paddle 3.x onednn crash on some CPUs
-    lang=LANG,
-)
+# PP-OCRv5 mobile models are ~3× faster on CPU than the server defaults
+# with near-identical accuracy on the fixed-template WeChat profile pages
+# we OCR. Set PADDLE_SIDECAR_MODEL=server to fall back.
+MODEL_VARIANT = os.environ.get("PADDLE_SIDECAR_MODEL", "mobile")
+print(f"[paddle-sidecar] loading PaddleOCR lang={LANG} variant={MODEL_VARIANT} ...", flush=True)
+if MODEL_VARIANT == "mobile":
+    ocr = PaddleOCR(
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False,
+        enable_mkldnn=False,  # paddle 3.x onednn crash on some CPUs
+        text_detection_model_name="PP-OCRv5_mobile_det",
+        text_recognition_model_name="PP-OCRv5_mobile_rec",
+        lang=LANG,
+    )
+else:
+    ocr = PaddleOCR(
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False,
+        enable_mkldnn=False,  # paddle 3.x onednn crash on some CPUs
+        lang=LANG,
+    )
 lock = threading.Lock()
 print("[paddle-sidecar] model ready", flush=True)
 
