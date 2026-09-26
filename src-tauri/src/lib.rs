@@ -283,6 +283,10 @@ pub fn run() {
             // inside the webview's keydown listener (apps/web-spa/.../useGlobalShortcut.ts),
             // which only fires when the webview itself has focus.
             app.handle().plugin(tauri_plugin_notification::init())?;
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_process::init())?;
             // opener works on desktop + mobile (used for Android APK sideload)
             app.handle().plugin(tauri_plugin_opener::init())?;
             // .md file editor plugins are desktop-only (mobile WebView already
@@ -464,6 +468,7 @@ pub fn run() {
             commands::sync::cloud_login,
             commands::sync::cloud_logout,
             commands::sync::cloud_sync_now,
+            commands::sync::cloud_request_sync,
             commands::sync::cloud_sync_repair_repush,
             commands::sync::cloud_status,
             commands::archive::archive_sweep,

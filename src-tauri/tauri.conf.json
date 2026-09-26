@@ -24,7 +24,9 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     },
     "withGlobalTauri": false
@@ -48,8 +50,12 @@
     ],
     "windows": {
       "wix": {
-        "fragmentPaths": ["wix/preserve-data.wxs"],
-        "componentRefs": ["AppDataDir"]
+        "fragmentPaths": [
+          "wix/preserve-data.wxs"
+        ],
+        "componentRefs": [
+          "AppDataDir"
+        ]
       },
       "webviewInstallMode": {
         "type": "embedBootstrapper",
@@ -64,49 +70,65 @@
     },
     "fileAssociations": [
       {
-        "ext": ["md", "markdown"],
+        "ext": [
+          "md",
+          "markdown"
+        ],
         "name": "Markdown Document",
         "description": "Markdown document file",
         "role": "Editor",
         "mimeType": "text/markdown"
       },
       {
-        "ext": ["docx"],
+        "ext": [
+          "docx"
+        ],
         "name": "Word Document",
         "description": "Microsoft Word document (converted to Markdown for editing)",
         "role": "Editor",
         "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       },
       {
-        "ext": ["pdf"],
+        "ext": [
+          "pdf"
+        ],
         "name": "PDF Document",
         "description": "PDF document (text extracted to Markdown for editing)",
         "role": "Viewer",
         "mimeType": "application/pdf"
       },
       {
-        "ext": ["txt"],
+        "ext": [
+          "txt"
+        ],
         "name": "Plain Text",
         "description": "Plain text file (read-only, opens as Markdown)",
         "role": "Viewer",
         "mimeType": "text/plain"
       },
       {
-        "ext": ["html", "htm"],
+        "ext": [
+          "html",
+          "htm"
+        ],
         "name": "HTML Document",
         "description": "HTML file (converted to Markdown for editing)",
         "role": "Viewer",
         "mimeType": "text/html"
       },
       {
-        "ext": ["xlsx"],
+        "ext": [
+          "xlsx"
+        ],
         "name": "Excel Spreadsheet",
         "description": "Excel workbook (converted to Markdown table for editing)",
         "role": "Viewer",
         "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       },
       {
-        "ext": ["pptx"],
+        "ext": [
+          "pptx"
+        ],
         "name": "PowerPoint Presentation",
         "description": "PowerPoint slides (converted to Markdown for editing)",
         "role": "Viewer",
@@ -114,5 +136,12 @@
       }
     ]
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://www.weavine.com/downloads/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE3MEU5NEEwNjY2RDVFRDYKUldUV1htMW1vSlFPRi9Kd1hDQk44RW4zVTdZa3d6UHZXWUFYOEd6cmhPK2NtUVJscXM5TmFhV0QK"
+    }
+  }
 }
