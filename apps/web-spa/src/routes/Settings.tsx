@@ -505,12 +505,10 @@ function DesktopUpdateCard({
   );
 }
 
-// Android-only: link to GitHub releases page so users can grab the latest
-// APK manually. Desktop users get their installers from the same page
-// outside the app, so no in-app UI is needed.
-// Android-only: in-app update check. Fetches latest-android.json,
-// downloads the new APK and hands it to the Android package installer
-// (requires REQUEST_INSTALL_PACKAGES).
+// Android-only: in-app update check. Fetches latest-android.json and saves
+// the new APK to /Downloads via the WebView download API; the user taps the
+// file from the system file manager to trigger the package installer.
+// Desktop users get their updates via the Tauri updater plugin (silent).
 function AndroidSideloadHint() {
   const [updateState, setUpdateState] = useState<
     'idle' | 'checking' | 'downloading' | 'ready' | 'error'
