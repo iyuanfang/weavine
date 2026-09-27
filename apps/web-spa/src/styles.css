@@ -1856,6 +1856,13 @@ textarea.input-base {
 }
 
 @media (max-width: 640px) {
+  /* Today-mobile must not scroll at all — kill the shell scroll + bounce. */
+  .app-shell__main:has(.today-mobile) {
+    overflow: hidden;
+    overscroll-behavior: none;
+    padding: 0;
+  }
+
   /* Shell hamburger/drawer are hidden on phones; the Today page renders its
      own top bar (☰ + 🕸️) and dispatches weavine:open-drawer. BUT the drawer
      itself must stay reachable — re-enable the drawer aside + backdrop so the
@@ -2278,9 +2285,15 @@ textarea.input-base {
 
 /* ── Mobile single-screen home (Today page, ≤640px) ─────────── */
 .today-mobile {
+  /* Exactly one viewport minus the bottom nav — content is designed to fit,
+     and overflow:hidden plus overscroll-behavior:none kill any scrolling or
+     rubber-banding. */
+  height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  overscroll-behavior: none;
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
   padding: 0 0 calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -2288,7 +2301,7 @@ textarea.input-base {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px 0;
+  padding: 8px 14px 0;
 }
 
 .today-mobile__topbar-btn {
@@ -2306,31 +2319,31 @@ textarea.input-base {
 }
 
 .today-mobile__hero {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
-  padding: 0 24px;
+  padding: 8px 24px 12px;
   text-align: center;
 }
 
 .today-mobile__logo {
-  width: 56px;
-  height: 56px;
+  width: 40px;
+  height: 40px;
   opacity: 0.9;
 }
 
 .today-mobile__brand {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .today-mobile__hint {
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   color: #9ca3af;
 }
 
@@ -2339,7 +2352,7 @@ textarea.input-base {
   justify-content: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 0 24px 16px;
+  padding: 4px 24px 10px;
 }
 
 .today-mobile__chip {
@@ -2360,7 +2373,7 @@ textarea.input-base {
 }
 
 .today-mobile__spacer {
-  flex: 0 0 8px;
+  flex: 1 1 auto;
 }
 
 /* ── Mobile bottom input bar (text / hold-to-talk) ──────────── */

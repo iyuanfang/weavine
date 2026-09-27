@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
-import { MoreSheet } from './MoreSheet';
 import { TabIcon, type TabIconName } from './TabIcons';
 
 interface PrimaryTab {
@@ -26,44 +24,40 @@ function isFullScreenRoute(pathname: string): boolean {
 
 export function BottomNav() {
   const { pathname } = useLocation();
-  const [moreOpen, setMoreOpen] = useState(false);
   if (isFullScreenRoute(pathname)) return null;
   return (
-    <>
-      <nav className="bottom-nav" aria-label="主导航">
-        {primaryTabs.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.end}
-            className={({ isActive }) =>
-              isActive ? 'bottom-nav__tab bottom-nav__tab--active' : 'bottom-nav__tab'
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <span className="bottom-nav__icon" aria-hidden="true">
-                  <TabIcon name={tab.icon} active={isActive} />
-                </span>
-                <span className="bottom-nav__label">{tab.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-        <button
-          type="button"
-          className={`bottom-nav__tab ${moreOpen ? 'bottom-nav__tab--active' : ''}`}
-          onClick={() => setMoreOpen(true)}
-          aria-label="打开更多"
-          aria-expanded={moreOpen}
+    <nav className="bottom-nav" aria-label="主导航">
+      {primaryTabs.map((tab) => (
+        <NavLink
+          key={tab.to}
+          to={tab.to}
+          end={tab.end}
+          className={({ isActive }) =>
+            isActive ? 'bottom-nav__tab bottom-nav__tab--active' : 'bottom-nav__tab'
+          }
         >
-          <span className="bottom-nav__icon" aria-hidden="true">
-            <TabIcon name="more" active={moreOpen} />
-          </span>
-          <span className="bottom-nav__label">更多</span>
-        </button>
-      </nav>
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
-    </>
+          {({ isActive }) => (
+            <>
+              <span className="bottom-nav__icon" aria-hidden="true">
+                <TabIcon name={tab.icon} active={isActive} />
+              </span>
+              <span className="bottom-nav__label">{tab.label}</span>
+            </>
+          )}
+        </NavLink>
+      ))}
+      <button
+        type="button"
+        className="bottom-nav__tab"
+        onClick={() => window.dispatchEvent(new CustomEvent('weavine:open-drawer'))}
+        aria-label="打开更多"
+      >
+        <span className="bottom-nav__icon" aria-hidden="true">
+          <TabIcon name="more" active={false} />
+        </span>
+        <span className="bottom-nav__label">更多</span>
+      </button>
+    </nav>
   );
 }
+

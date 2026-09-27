@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 
 import { isTauri } from '../lib/adapter';
 import { useLocalUser } from '../lib/auth';
 import { clearSession } from '../lib/auth/storage';
+import { useAdapter } from '../lib/adapter';
 import { useQuickCapture, useGlobalSearch } from '../App';
 import { UpdateBanner } from './UpdateBanner';
 import { BottomNav } from './BottomNav';
@@ -20,6 +22,31 @@ const navItems = [
   { to: '/settings', label: '设置', icon: '⚙️' },
 ];
 
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const fn = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return mobile;
+}
+
+function timeAgo(iso: string, now: number): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const diff = now - t;
+  if (diff < 60_000) return '刚刚';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`;
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 function shortcutLabel(): string {
   return '\\';
 }
@@ -29,6 +56,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { open: openQuickCapture } = useQuickCapture();
   const { open: openSearch } = useGlobalSearch();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const adapter = useAdapter();
+  const userId = user?.id ?? '';
+  const [now] = useState(() => Date.now());
+
+  // 近期 mixed timeline for the mobile drawer (same content as the desktop
+  // drawer's nav, plus a time-ordered recent feed).
+  const actionsQuery = useQuery({
+    queryKey: ['drawer-actions', userId],
+    queryFn: () => adapter.actions.list({ user_id: userId, limit: 8 }),
+    enabled: isMobile && drawerOpen && !!userId,
+  });
+  const eventsQuery = useQuery({
+    queryKey: ['drawer-events', userId],
+    queryFn: () => adapter.events.list({ user_id: userId, limit: 8 }),
+    enabled: isMobile && drawerOpen && !!userId,
+  });
+  const interactionsQuery = useQuery({
+    queryKey: ['drawer-interactions', userId],
+    queryFn: () => adapter.interactions.list({ user_id: userId, limit: 8 }),
+    enabled: isMobile && drawerOpen && !!userId,
+  });
+  const notesQuery = useQuery({
+    queryKey: ['drawer-notes', userId],
+    queryFn: () => adapter.notes.list(userId, null),
+    enabled: isMobile && drawerOpen && !!userId,
+  });
+
+  const feed: Array<{ key: string; icon: string; title: string; timeLabel: string; occurredAt: number; done: boolean; to: string }> = [];
+  for (const a of actionsQuery.data ?? []) {
+    feed.push({ key: `a:${a.id}`, icon: '✅', title: a.title, timeLabel: timeAgo(a.updated_at, now), occurredAt: new Date(a.updated_at).getTime() || 0, done: a.status === 'done', to: `/actions/${a.id}?from=/today` });
+  }
+  for (const e of eventsQuery.data ?? []) {
+    feed.push({ key: `e:${e.id}`, icon: '📅', title: e.title, timeLabel: timeAgo(e.start_at, now), occurredAt: new Date(e.start_at).getTime() || 0, done: false, to: `/events/${e.id}?from=/today` });
+  }
+  for (const i of interactionsQuery.data ?? []) {
+    feed.push({ key: `i:${i.id}`, icon: '💬', title: i.summary, timeLabel: timeAgo(i.occurred_at, now), occurredAt: new Date(i.occurred_at).getTime() || 0, done: false, to: `/interactions/${i.id}?from=/today` });
+  }
+  for (const n of notesQuery.data?.items ?? []) {
+    feed.push({ key: `n:${n.id}`, icon: '📝', title: n.title, timeLabel: timeAgo(n.updated_at, now), occurredAt: new Date(n.updated_at).getTime() || 0, done: false, to: `/notes/${n.id}?from=/today` });
+  }
+  feed.sort((a, b) => b.occurredAt - a.occurredAt);
+  const recentFeed = feed.slice(0, 10);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof localStorage === 'undefined') return false;
     return localStorage.getItem('weavine:sidebar-collapsed') === '1';
@@ -107,6 +177,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {collapsed ? '»' : '«'}
       </button>
+
+      {isMobile && (
+        <button
+          type="button"
+          className="app-shell__menu-item app-shell__menu-item--quick"
+          onClick={() => {
+            openSearch();
+            setDrawerOpen(false);
+          }}
+        >
+          <span className="app-shell__menu-icon">🔍</span>
+          <span>搜索人脉、待办、笔记…</span>
+        </button>
+      )}
+
+      {isMobile && recentFeed.length > 0 && (
+        <div className="app-shell__drawer-section">
+          <div className="app-shell__drawer-section-title">近期</div>
+          {recentFeed.map((entry) => (
+            <NavLink
+              key={entry.key}
+              to={entry.to}
+              onClick={() => setDrawerOpen(false)}
+              className={({ isActive }) =>
+                isActive
+                  ? 'app-shell__menu-item app-shell__drawer-feed-row app-shell__menu-item--active'
+                  : 'app-shell__menu-item app-shell__drawer-feed-row'
+              }
+            >
+              <span className="app-shell__menu-icon">{entry.icon}</span>
+              <span className={`app-shell__drawer-feed-title${entry.done ? ' app-shell__drawer-feed-title--done' : ''}`}>
+                {entry.title}
+              </span>
+              <span className="app-shell__drawer-feed-time">{entry.timeLabel}</span>
+            </NavLink>
+          ))}
+        </div>
+      )}
 
       <nav className="app-shell__menu">
         <button
