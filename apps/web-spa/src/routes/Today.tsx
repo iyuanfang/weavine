@@ -295,6 +295,7 @@ export function TodayPage() {
         <div className="today-mobile__hero">
           <img src="/logo.svg" alt="" className="today-mobile__logo" />
           <div className="today-mobile__brand">织遇</div>
+          <div className="today-mobile__tagline">编织遇见的人脉</div>
           <div className="today-mobile__hints">
             <span>今天见了谁？</span>
             <span>明天要做什么？</span>

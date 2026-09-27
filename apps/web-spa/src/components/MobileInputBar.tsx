@@ -429,10 +429,33 @@ export function MobileInputBar({ onSaved }: Props) {
             aria-label={mode === 'text' ? '切换到按住说话' : '切换到键盘输入'}
             data-testid={mode === 'text' ? 'mobile-input-voice-toggle' : 'mobile-input-text-toggle'}
           >
-            {mode === 'text' ? '🎤' : '⌨️'}
+            {mode === 'text' ? <WaveIcon /> : <KeyboardIcon />}
           </button>
         )}
       </div>
     </div>
+  );
+}
+
+// WeChat-style voice icon: a mic-less sound-wave bubble. Stroke follows
+// currentColor so the button's green/gray states just work.
+function WaveIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 10v4" />
+      <path d="M8 7v10" />
+      <path d="M12 4.5v15" />
+      <path d="M16 7v10" />
+      <path d="M20 10v4" />
+    </svg>
+  );
+}
+
+function KeyboardIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+      <rect x="3" y="6.5" width="18" height="11" rx="2.5" />
+      <path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M6.5 13.5h.01M17 13.5h.01M9.5 13.5h5" />
+    </svg>
   );
 }

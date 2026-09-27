@@ -2429,6 +2429,12 @@ textarea.input-base {
   letter-spacing: 0.02em;
 }
 
+.today-mobile__tagline {
+  font-size: 15px;
+  color: #9ca3af;
+  margin-top: -2px;
+}
+
 .today-mobile__hint {
   font-size: var(--text-sm);
   color: #9ca3af;
