@@ -44,6 +44,7 @@ export function SettingsPage() {
         }
       />
 
+      <VersionCard />
       <CloudSyncPanel />
       <ArchivePanel />
       <BackupRestorePanel />
@@ -199,29 +200,6 @@ function CloudSyncPanel() {
   const adapter = useAdapter();
   const queryClient = useQueryClient();
   const isTauriRuntime = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-  const [updateState, setUpdateState] = useState<'idle' | 'checking' | 'downloading' | 'latest' | 'error'>('idle');
-  const [updateError, setUpdateError] = useState<string | null>(null);
-
-  const checkForUpdate = async () => {
-    if (!isTauriRuntime || updateState === 'checking' || updateState === 'downloading') return;
-    setUpdateState('checking');
-    setUpdateError(null);
-    try {
-      const latest = await fetchLatestDesktopUpdate();
-      const current = import.meta.env.APP_VERSION;
-      if (latest && latest.version !== current) {
-        setUpdateState('downloading');
-        const r = await checkAndInstallDesktopUpdate();
-        if (r.status === 'up-to-date') setUpdateState('latest');
-        // 'installed' → app relaunches itself
-      } else {
-        setUpdateState('latest');
-      }
-    } catch (e) {
-      setUpdateError(e instanceof Error ? e.message : String(e));
-      setUpdateState('error');
-    }
-  };
 
   const statusQuery = useQuery({
     queryKey: ['cloud-status'],
@@ -455,87 +433,91 @@ function CloudSyncPanel() {
           </div>
         </div>
       )}
-
-      <AndroidSideloadHint />
-      <DesktopUpdateCard
-        state={updateState}
-        error={updateError}
-        onCheck={checkForUpdate}
-      />
     </div>
   );
 }
 
-function DesktopUpdateCard({
-  state,
-  error,
-  onCheck,
-}: {
-  state: 'idle' | 'checking' | 'downloading' | 'latest' | 'error';
-  error: string | null;
-  onCheck: () => void;
-}) {
-  const isTauriRuntime = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-  if (!isTauriRuntime) return null;
-  return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
-        🔄 软件更新
-      </h3>
-      {state === 'checking' && (
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>检查更新中…</p>
-      )}
-      {state === 'downloading' && (
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>下载更新中…完成后自动重启</p>
-      )}
-      {state === 'latest' && (
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>已是最新版本</p>
-      )}
-      {state === 'error' && (
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--danger)', margin: '8px 0 0' }}>
-          检查更新失败：{error}
-        </p>
-      )}
-      {(state === 'idle' || state === 'error') && (
-        <button type="button" className="btn btn-secondary" style={{ marginTop: 10 }} onClick={onCheck}>
-          检查更新
-        </button>
-      )}
-    </div>
-  );
-}
+// Version + check-for-update card. Always rendered (web/Tauri/Android) so
+// users can see what version they're on and trigger an update. Action
+// branches by runtime:
+//   - Tauri (Win/macOS/Linux): Tauri updater plugin → silent download + relaunch
+//   - Android UA:             fetch latest-android.json → save APK to /Downloads
+//   - Web (any other browser): open the downloads landing page
+function VersionCard() {
+  const currentVersion = import.meta.env.APP_VERSION as string;
+  const isTauriRuntime =
+    typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const isAndroidRuntime =
+    typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
 
-// Android-only: in-app update check. Fetches latest-android.json and saves
-// the new APK to /Downloads via the WebView download API; the user taps the
-// file from the system file manager to trigger the package installer.
-// Desktop users get their updates via the Tauri updater plugin (silent).
-function AndroidSideloadHint() {
-  const [updateState, setUpdateState] = useState<
-    'idle' | 'checking' | 'downloading' | 'ready' | 'error'
-  >('idle');
-  const [apkUrl, setApkUrl] = useState<string | null>(null);
-  const [latestVersion, setLatestVersion] = useState<string | null>(null);
-  const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
-
-  const checkForUpdate = async () => {
-    setUpdateState('checking');
-    try {
-      const version = await fetchLatestAndroidVersion();
-      if (!version) {
-        setUpdateState('error');
-        return;
+  type Phase =
+    | { kind: 'idle' }
+    | { kind: 'checking' }
+    | { kind: 'latest' }
+    | { kind: 'error'; message: string }
+    | {
+        kind: 'ready-desktop';
+        latestVersion: string;
+        status: 'up-to-date' | 'installed' | 'downloading';
       }
-      setLatestVersion(version);
-      setApkUrl(`https://www.weavine.com/downloads/v${version}/Weavine_arm64-release_cloud.apk`);
-      setUpdateState('ready');
-    } catch {
-      setUpdateState('error');
+    | {
+        kind: 'ready-android';
+        latestVersion: string;
+        apkUrl: string;
+      }
+    | { kind: 'downloading-android'; latestVersion: string; apkUrl: string };
+  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+
+  const onCheck = async () => {
+    setPhase({ kind: 'checking' });
+    try {
+      if (isTauriRuntime) {
+        const latest = await fetchLatestDesktopUpdate();
+        if (!latest || latest.version === currentVersion) {
+          setPhase({ kind: 'latest' });
+          return;
+        }
+        setPhase({
+          kind: 'ready-desktop',
+          latestVersion: latest.version,
+          status: 'downloading',
+        });
+        const r = await checkAndInstallDesktopUpdate();
+        setPhase({
+          kind: 'ready-desktop',
+          latestVersion: latest.version,
+          status: r.status,
+        });
+      } else if (isAndroidRuntime) {
+        const version = await fetchLatestAndroidVersion();
+        if (!version || version === currentVersion) {
+          setPhase({ kind: 'latest' });
+          return;
+        }
+        setPhase({
+          kind: 'ready-android',
+          latestVersion: version,
+          apkUrl: `https://www.weavine.com/downloads/v${version}/Weavine_arm64-release_cloud.apk`,
+        });
+      } else {
+        // Web: the web-spa is itself the artifact — a "refresh" is the update.
+        // Pointing at the downloads landing lets the user grab the native
+        // installers if they want a real desktop/mobile client.
+        window.open('https://www.weavine.com/downloads', '_blank', 'noopener');
+        setPhase({ kind: 'idle' });
+      }
+    } catch (e) {
+      setPhase({
+        kind: 'error',
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   };
 
-  const downloadAndInstall = async () => {
-    if (!apkUrl) return;
-    setUpdateState('downloading');
+  const downloadAndroidApk = async () => {
+    if (phase.kind !== 'ready-android') return;
+    const { apkUrl, latestVersion } = phase;
+    setPhase({ kind: 'downloading-android', apkUrl, latestVersion });
     try {
       const resp = await fetch(apkUrl);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -548,38 +530,107 @@ function AndroidSideloadHint() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setUpdateState('ready');
+      setPhase({ kind: 'ready-android', apkUrl, latestVersion });
     } catch (e) {
-      alert(`下载失败: ${e instanceof Error ? e.message : String(e)}`);
-      setUpdateState('ready');
+      setPhase({
+        kind: 'error',
+        message: `下载失败: ${e instanceof Error ? e.message : String(e)}`,
+      });
     }
   };
 
-  if (!isAndroid) return null;
   return (
     <div className="card" style={{ marginBottom: 16 }}>
-      <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
-        📱 Android 更新
-      </h3>
-      {updateState === 'idle' && (
-        <button type="button" className="btn btn-secondary" style={{ marginTop: 10 }} onClick={checkForUpdate}>
-          检查更新
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          marginBottom: 8,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>
+          🔄 版本更新
+        </h3>
+        <span
+          style={{
+            fontSize: 'var(--text-sm)',
+            color: 'var(--text-muted)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          当前 v{currentVersion}
+        </span>
+      </div>
+
+      {phase.kind === 'checking' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+          检查更新中…
+        </p>
+      )}
+
+      {phase.kind === 'latest' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+          已是最新版本
+        </p>
+      )}
+
+      {phase.kind === 'error' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--danger)', margin: '8px 0 0' }}>
+          检查更新失败：{phase.message}
+        </p>
+      )}
+
+      {phase.kind === 'ready-desktop' && phase.status === 'downloading' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+          发现 v{phase.latestVersion}，下载中…完成后自动重启
+        </p>
+      )}
+
+      {phase.kind === 'ready-desktop' && phase.status === 'installed' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--accent, #059669)', margin: '8px 0 0' }}>
+          v{phase.latestVersion} 已安装，即将重启
+        </p>
+      )}
+
+      {phase.kind === 'ready-desktop' && phase.status === 'up-to-date' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+          已是最新版本
+        </p>
+      )}
+
+      {phase.kind === 'ready-android' && (
+        <>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 10 }}
+            onClick={downloadAndroidApk}
+          >
+            下载 v{phase.latestVersion} APK
+          </button>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+            下载完成后请在系统提示中确认安装。
+          </p>
+        </>
+      )}
+
+      {phase.kind === 'downloading-android' && (
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+          下载 v{phase.latestVersion} APK 中…
+        </p>
+      )}
+
+      {(phase.kind === 'idle' || phase.kind === 'error' || phase.kind === 'latest') && (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ marginTop: 10 }}
+          onClick={onCheck}
+        >
+          {phase.kind === 'error' ? '检查失败，重试' : '检查更新'}
         </button>
       )}
-      {updateState === 'checking' && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>检查更新中…</p>}
-      {updateState === 'ready' && apkUrl && (
-        <button type="button" className="btn btn-primary" style={{ marginTop: 10 }} onClick={downloadAndInstall}>
-          下载 APK{latestVersion ? ` (v${latestVersion})` : ''}
-        </button>
-      )}
-      {updateState === 'error' && (
-        <button type="button" className="btn btn-secondary" style={{ marginTop: 10 }} onClick={checkForUpdate}>
-          检查失败，重试
-        </button>
-      )}
-      <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
-        下载完成后请在系统提示中确认安装。
-      </p>
     </div>
   );
 }
