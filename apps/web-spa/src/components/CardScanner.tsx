@@ -1,8 +1,12 @@
 import { useState } from 'react';
 
-import { isTauri } from '../lib/adapter';
-import { getAccessToken } from '../lib/auth/storage';
-import { getDeviceKey, getOrCreateInstallId, osStr, platformStr } from '../lib/install-id';
+import {
+  MAX_OCR_SIZE,
+  type OcrResult,
+  callOcrExtract,
+  downsampleImage,
+  readFileAsDataUrl,
+} from '../lib/ocr-client';
 
 export interface ScannedFields {
   name?: string | null;
@@ -18,108 +22,12 @@ interface Props {
   disabled?: boolean;
 }
 
-interface ScanResult {
-  raw_text: string;
-  avg_confidence: number;
-  langs_actual: string[];
-  fields: ScannedFields;
-}
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
-}
-
-function stripDataUrlPrefix(s: string): string {
-  const i = s.indexOf(',');
-  return i >= 0 ? s.slice(i + 1) : s;
-}
-
-const MAX_OCR_SIZE = 10 * 1024 * 1024;
 const DOWNSAMPLE_SIZE = 2 * 1024 * 1024;
 const DOWNSAMPLE_MAX_W = 1600;
 
-async function callExtract(imageBase64: string): Promise<ScanResult> {
-  if (isTauri) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const r = await invoke<ScanResult>('extract_card', {
-      image_base64: stripDataUrlPrefix(imageBase64),
-    });
-    return r;
-  }
-  const m = imageBase64.match(/^data:([^;]+);base64,(.*)$/);
-  if (!m) throw new Error('invalid data URL');
-  const mime = m[1];
-  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
-  const blob = new Blob([bytes], { type: mime });
-  const form = new FormData();
-  form.append('file', blob, 'card.png');
-  const headers: Record<string, string> = {
-    // Anonymous installs have no JWT — the server accepts X-Device-Key
-    // (minted by /api/activation/ping on first launch) for these endpoints.
-    'X-Install-Id': getOrCreateInstallId(),
-    'X-Client-Platform': platformStr(),
-    'X-Client-OS': osStr(),
-    'X-Device-Key': getDeviceKey() ?? '',
-  };
-  const token = getAccessToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const resp = await fetch('/api/cards/extract', {
-    method: 'POST',
-    body: form,
-    credentials: 'include',
-    headers,
-  });
-  if (!resp.ok) {
-    const body = await resp.text();
-    if (resp.status === 413) {
-      throw new Error('图片过大，请压缩到 10MB 以下');
-    }
-    if (resp.status === 408 || resp.status === 504) {
-      throw new Error('OCR 处理超时，请上传更小的图片');
-    }
-    throw new Error(`ocr failed: ${resp.status} ${body}`);
-  }
-  return resp.json();
-}
-
-function downsample(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      if (img.width <= DOWNSAMPLE_MAX_W) {
-        resolve(file);
-        return;
-      }
-      const scale = DOWNSAMPLE_MAX_W / img.width;
-      const w = DOWNSAMPLE_MAX_W;
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('canvas unavailable')); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        (blob) => blob
-          ? resolve(new File([blob], file.name, { type: file.type }))
-          : reject(new Error('downsample failed')),
-        file.type,
-        0.85,
-      );
-    };
-    img.onerror = () => reject(new Error('image load failed'));
-    img.src = URL.createObjectURL(file);
-  });
-}
-
 export function CardScanner({ onApply, disabled }: Props) {
   const [preview, setPreview] = useState<string | null>(null);
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const [result, setResult] = useState<OcrResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,12 +38,17 @@ export function CardScanner({ onApply, disabled }: Props) {
       setError('图片过大，请压缩到 10MB 以下');
       return;
     }
-    const processed = file.size > DOWNSAMPLE_SIZE ? await downsample(file) : file;
-    const dataUrl = await readAsDataUrl(processed);
+    const processed = await downsampleImage(file, {
+      maxWidth: DOWNSAMPLE_MAX_W,
+      minBytes: DOWNSAMPLE_SIZE,
+      quality: 0.85,
+      mime: file.type,
+    });
+    const dataUrl = await readFileAsDataUrl(processed);
     setPreview(dataUrl);
     setBusy(true);
     try {
-      const r = await callExtract(dataUrl);
+      const r = await callOcrExtract(dataUrl, 'card.png');
       setResult(r);
       // Apply the OCR result to the parent form immediately — no manual
       // confirm step. The user can edit or clear fields afterwards.

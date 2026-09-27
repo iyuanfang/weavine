@@ -1,8 +1,11 @@
 import { useState } from 'react';
 
-import { isTauri } from '../lib/adapter';
-import { getAccessToken } from '../lib/auth/storage';
-import { getDeviceKey, getOrCreateInstallId, osStr, platformStr } from '../lib/install-id';
+import {
+  MAX_OCR_SIZE,
+  callOcrExtract,
+  downsampleImage,
+  readFileAsDataUrl,
+} from '../lib/ocr-client';
 import { parseWechatProfile } from '../lib/wechat-import';
 
 export interface WechatFields {
@@ -19,97 +22,11 @@ interface Props {
   disabled?: boolean;
 }
 
-interface OcrResponse {
-  raw_text: string;
-  avg_confidence: number;
-}
-
-// Shared with CardScanner: phone photos are 3-8 MB, the API caps at 10 MB,
-// and PaddleOCR is faster on smaller inputs.
-const MAX_OCR_SIZE = 10 * 1024 * 1024;
 // Always re-encode phone screenshots: originals are 3-8 MB and large uploads
-// get reset by mobile networks mid-flight ("Failed to fetch"). 1400px wide
+// get reset by mobile networks mid-flight ("Failed to fetch"). 600px wide
 // JPEG q65 is plenty for the fixed-template OCR.
 const DOWNSAMPLE_MAX_W = 600;
 const JPEG_QUALITY = 0.65;
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
-}
-
-async function ocrImage(dataUrl: string): Promise<OcrResponse> {
-  const strip = (s: string) => {
-    const i = s.indexOf(',');
-    return i >= 0 ? s.slice(i + 1) : s;
-  };
-  if (isTauri) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<OcrResponse>('extract_card', { image_base64: strip(dataUrl) });
-  }
-  const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
-  if (!m) throw new Error('invalid data URL');
-  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
-  const form = new FormData();
-  form.append('file', new Blob([bytes], { type: m[1] }), 'wechat.png');
-  const headers: Record<string, string> = {
-    // Anonymous installs have no JWT — the server accepts X-Device-Key
-    // (minted by /api/activation/ping on first launch) for these endpoints.
-    'X-Install-Id': getOrCreateInstallId(),
-    'X-Client-Platform': platformStr(),
-    'X-Client-OS': osStr(),
-    'X-Device-Key': getDeviceKey() ?? '',
-  };
-  const token = getAccessToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const resp = await fetch('/api/cards/extract', {
-    method: 'POST',
-    body: form,
-    credentials: 'include',
-    headers,
-  });
-  if (!resp.ok) {
-    if (resp.status === 413) throw new Error('图片过大，请压缩到 10MB 以下');
-    if (resp.status === 408 || resp.status === 504) throw new Error('OCR 处理超时，请重试');
-    if (resp.status === 401) throw new Error('登录已过期，请刷新页面后重试');
-    throw new Error(`OCR 失败 (${resp.status})：网络不稳定或图片过大，请重试`);
-  }
-  return resp.json();
-}
-
-function downsample(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, DOWNSAMPLE_MAX_W / img.width);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('canvas unavailable'));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        (blob) =>
-          blob
-            ? resolve(new File([blob], 'wechat.jpg', { type: 'image/jpeg' }))
-            : reject(new Error('downsample failed')),
-        'image/jpeg',
-        JPEG_QUALITY,
-      );
-    };
-    img.onerror = () => reject(new Error('image load failed'));
-    img.src = URL.createObjectURL(file);
-  });
-}
 
 export function WechatScanner({ onApply, disabled }: Props) {
   const [preview, setPreview] = useState<string | null>(null);
@@ -122,12 +39,16 @@ export function WechatScanner({ onApply, disabled }: Props) {
       setError('图片过大，请压缩到 10MB 以下');
       return;
     }
-    const processed = await downsample(file);
-    const dataUrl = await readAsDataUrl(processed);
+    const processed = await downsampleImage(file, {
+      maxWidth: DOWNSAMPLE_MAX_W,
+      quality: JPEG_QUALITY,
+      mime: 'image/jpeg',
+    });
+    const dataUrl = await readFileAsDataUrl(processed);
     setPreview(dataUrl);
     setBusy(true);
     try {
-      const r = await ocrImage(dataUrl);
+      const r = await callOcrExtract(dataUrl, 'wechat.png');
       const profile = parseWechatProfile(r.raw_text);
       if (!profile) {
         setError('未识别出微信资料页——请上传「联系人详情页」截图（含 微信号/昵称 的那页）');
