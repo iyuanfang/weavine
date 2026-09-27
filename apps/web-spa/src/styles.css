@@ -2430,8 +2430,9 @@ textarea.input-base {
 }
 
 .today-mobile__tagline {
-  font-size: 15px;
-  color: #9ca3af;
+  font-size: 13px;
+  color: #b6bdc9;
+  letter-spacing: 0.2em;
   margin-top: -2px;
 }
 
@@ -2446,6 +2447,7 @@ textarea.input-base {
   gap: 8px;
   font-size: 17px;
   color: #9ca3af;
+  margin-top: 14px;
 }
 
 .today-mobile__chips {
