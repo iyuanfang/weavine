@@ -242,9 +242,6 @@ export function TodayPage() {
   // + hint, status chips, and the fixed bottom input bar. Desktop keeps the
   // full dashboard below.
   if (isMobile) {
-    const overdueActions = todayDoActions.length;
-    const contactNudges = suggestedContacts.length;
-    const recentCount = recentInteractions.length;
     return (
       <div className="page today-mobile" data-testid="today-mobile">
         <div className="today-mobile__topbar">
