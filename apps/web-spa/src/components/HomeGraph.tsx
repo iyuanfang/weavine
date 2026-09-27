@@ -34,6 +34,12 @@ interface Satellite {
   /** Members beyond the edge cap (projects only) — shown as a +N badge. */
   extraContacts?: number;
   href: string;
+  /**
+   * Source row's `updated_at` (ISO 8601). Used to sort satellites so the
+   * most recently-touched event/todo gets the prime slot and is not crowded
+   * out by a long-tail of older notes/projects/interactions.
+   */
+  updatedAt: string;
 }
 
 // Desktop and mobile get separate canvases: a 390px phone scaling the
@@ -166,6 +172,8 @@ export interface HomeNote {
   id: string;
   title: string;
   linkedContactIds: string[];
+  /** Optional; used for newest-first sorting. Older callers don't supply it. */
+  updated_at?: string;
 }
 
 interface Props {
@@ -181,6 +189,14 @@ interface Props {
 
 const SAT_TYPES: readonly EntityGraphNodeType[] = ['contact', 'event', 'action', 'project', 'note', 'interaction'];
 
+// Default visible set on the home graph: events and todos only. They are the
+// two kinds the user is most likely to act on right now (next meeting, next
+// open todo) — the rest of the weave is one chip-toggle away, but loading
+// them by default crowds the home view out of its top slots and pushes the
+// "what do I do next?" nodes off the canvas. Contacts stay on because the
+// satellite fan anchors to them.
+const DEFAULT_VISIBLE: ReadonlySet<EntityGraphNodeType> = new Set(['contact', 'event', 'action']);
+
 export function HomeGraph({ contacts, events, actions, projects, notes, interactions, preparing }: Props) {
   const navigate = useNavigate();
   const adapter = useAdapter();
@@ -191,7 +207,7 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<Satellite | null>(null);
   const [meCreateOpen, setMeCreateOpen] = useState(false);
-  const [visibleTypes, setVisibleTypes] = useState<ReadonlySet<EntityGraphNodeType>>(new Set(SAT_TYPES));
+  const [visibleTypes, setVisibleTypes] = useState<ReadonlySet<EntityGraphNodeType>>(DEFAULT_VISIBLE);
   const [meCreateKind, setMeCreateKind] = useState<
     'contact' | 'action' | 'interaction' | 'event' | 'note' | null
   >(null);
@@ -242,6 +258,9 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         label: n.title,
         linkedContactIds: n.linkedContactIds,
         href: `/notes/${n.id}?tab=graph`,
+        // HomeNote may not always carry `updated_at` (older callers); fall
+        // back to '' so it sorts to the end of the list rather than crashing.
+        updatedAt: n.updated_at ?? '',
       });
     }
     for (const i of interactions) {
@@ -251,6 +270,10 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         label: i.summary,
         linkedContactIds: i.contact_id ? [i.contact_id] : [],
         href: `/interactions/${i.id}?tab=graph`,
+        // Interaction has no `updated_at` column; the row's clock is the
+        // `occurred_at` timestamp, which is what the user actually thinks of
+        // as "how recent is this contact-touch".
+        updatedAt: i.occurred_at,
       });
     }
     for (const e of events) {
@@ -260,6 +283,7 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         label: e.title,
         linkedContactIds: e.contact_id ? [e.contact_id] : [],
         href: `/events/${e.id}?tab=graph`,
+        updatedAt: e.updated_at,
       });
     }
     for (const a of openActions) {
@@ -269,6 +293,7 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         label: a.title,
         linkedContactIds: a.contact_id ? [a.contact_id] : [],
         href: `/actions/${a.id}?tab=graph`,
+        updatedAt: a.updated_at,
       });
     }
     for (const p of activeProjects) {
@@ -280,11 +305,20 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         linkedContactIds: members.slice(0, 3),
         extraContacts: Math.max(0, members.length - 3),
         href: `/projects/${p.id}?tab=graph`,
+        updatedAt: p.updated_at,
       });
     }
 
+    // Sort newest-first by `updated_at` so a recently-touched event or todo
+    // claims a slot before a long-tail note/project does. Then trim to the
+    // canvas's MAX_SATELLITES.
+    //
+    // `String#localeCompare` is wrong here: ISO 8601 (lexicographically
+    // ordered) is what we want, and `b.updatedAt.localeCompare(a.updatedAt)`
+    // gives that for free.
     const pickedSatellites = satellites
       .filter((s) => typeVisible(s.kind))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, dims.MAX_SATELLITES);
     const attachedSatellites = pickedSatellites.filter((s) =>
       s.linkedContactIds.some((cid) => contactIds.has(cid)),
