@@ -10,7 +10,6 @@ import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
 import { useQuickCapture } from '../App';
 import { useUserId } from '../lib/auth';
-import { seedDemoDataIfEmpty } from '../lib/seed-demo';
 import { nextReminderIn } from '../lib/keepInTouch';
 import type { Action, Event, Interaction, UpdateActionInput } from '../lib/adapter/types';
 
@@ -83,19 +82,8 @@ export function TodayPage() {
   const userId = useUserId();
   const queryClient = useQueryClient();
   const quickCapture = useQuickCapture();
-  const [seeding, setSeeding] = useState(true);
-
-  // First-run demo data. Runs before the feeds below; if it seeds anything
-  // the queries are invalidated so the graph/stream show it immediately.
-  useEffect(() => {
-    if (!userId) return;
-    seedDemoDataIfEmpty(adapter, userId)
-      .then((seeded) => {
-        if (seeded) queryClient.invalidateQueries();
-      })
-      .catch(() => {})
-      .finally(() => setSeeding(false));
-  }, [adapter, userId, queryClient]);
+  const isMobile = useIsMobile();
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
 
   const actionsQuery = useQuery({
     queryKey: ['actions', userId, 'all-for-today'],
@@ -186,8 +174,6 @@ export function TodayPage() {
     return <div className="loading">正在加载用户…</div>;
   }
 
-  const isMobile = useIsMobile();
-
   if (
     actionsQuery.isError ||
     eventsQuery.isError ||
@@ -273,47 +259,59 @@ export function TodayPage() {
           </button>
           <span style={{ flex: 1 }} />
           <Link
-            to="/graph-mobile"
+            to="/search"
             className="today-mobile__topbar-btn"
-            aria-label="关系图"
-            data-testid="today-mobile-graph"
+            aria-label="搜索"
+            data-testid="today-mobile-search"
           >
-            🕸️
+            🔍
           </Link>
+          <button
+            type="button"
+            className="today-mobile__topbar-btn"
+            onClick={() => setQuickMenuOpen((o) => !o)}
+            aria-label="快捷操作"
+            aria-expanded={quickMenuOpen}
+            data-testid="today-mobile-plus"
+          >
+            ⊕
+          </button>
         </div>
+
+        {quickMenuOpen && (
+          <>
+            <div className="today-mobile__quick-backdrop" onClick={() => setQuickMenuOpen(false)} aria-hidden="true" />
+            <div className="today-mobile__quick-menu" role="menu" data-testid="today-mobile-quick-menu">
+              <Link to="/contacts/new" className="today-mobile__quick-item" onClick={() => setQuickMenuOpen(false)}>
+                👤 新建联系人
+              </Link>
+              <Link to="/actions/new?from=/today" className="today-mobile__quick-item" onClick={() => setQuickMenuOpen(false)}>
+                ✅ 新建待办
+              </Link>
+              <Link to="/graph-mobile" className="today-mobile__quick-item" onClick={() => setQuickMenuOpen(false)}>
+                🕸️ 关系图
+              </Link>
+            </div>
+          </>
+        )}
 
         <div className="today-mobile__hero">
           <img src="/logo.svg" alt="" className="today-mobile__logo" />
           <div className="today-mobile__brand">织遇</div>
-          <div className="today-mobile__hint">今天见了谁？</div>
-        </div>
-
-        <div className="today-mobile__chips">
-          {overdueActions > 0 && (
-            <Link to="/actions?from=/today" className="today-mobile__chip" data-testid="today-mobile-chip-actions">
-              ✅ {overdueActions}
-            </Link>
-          )}
-          {contactNudges > 0 && (
-            <Link to="/contacts?from=/today" className="today-mobile__chip" data-testid="today-mobile-chip-contacts">
-              📞 {contactNudges}
-            </Link>
-          )}
-          {recentCount > 0 && (
-            <button
-              type="button"
-              className="today-mobile__chip"
-              data-testid="today-mobile-chip-interactions"
-              onClick={() => window.dispatchEvent(new CustomEvent('weavine:open-drawer'))}
-            >
-              💬 {recentCount}
-            </button>
-          )}
+          <div className="today-mobile__hints">
+            <span>今天见了谁？</span>
+            <span>明天要做什么？</span>
+            <span>哪些人脉需要维护？</span>
+          </div>
         </div>
 
         <div className="today-mobile__spacer" />
 
-        <MobileInputBar onOpenQuick={(t) => quickCapture.open(t)} />
+        <MobileInputBar
+          onSaved={() => {
+            queryClient.invalidateQueries();
+          }}
+        />
       </div>
     );
   }
@@ -377,7 +375,7 @@ export function TodayPage() {
             projects={projectsQuery.data ?? []}
             notes={notesQuery.data ?? []}
             interactions={interactionsQuery.data ?? []}
-            preparing={seeding}
+            preparing={false}
           />
         </div>
       )}

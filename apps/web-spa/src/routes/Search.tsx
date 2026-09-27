@@ -114,6 +114,11 @@ export function SearchPage() {
             ? `「${debouncedQuery}」共 ${totalCount} 条结果`
             : '跨联系人、互动、日程、待办、项目、笔记'
         }
+        back={
+          <Link to="/today" className="btn" aria-label="返回首页" data-testid="search-back">
+            ←
+          </Link>
+        }
       />
 
       <div className="card" style={{ marginBottom: 16 }}>

@@ -114,6 +114,11 @@ export function ActionNew() {
       <PageHeader
         title={linkedProject ? `为「${linkedProject.title}」新建待办` : '新建待办'}
         subtitle={linkedProject ? '关联到当前项目，便于在项目页追溯' : '一件具体的小事，最容易做完'}
+        back={
+          <button type="button" className="btn" onClick={() => navigate(-1)} aria-label="返回" data-testid="action-new-back">
+            ←
+          </button>
+        }
       />
 
       {linkedProject && (

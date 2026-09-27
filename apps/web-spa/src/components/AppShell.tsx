@@ -22,6 +22,9 @@ const navItems = [
   { to: '/settings', label: '设置', icon: '⚙️' },
 ];
 
+// Bottom-nav tabs — on mobile the drawer must not repeat these four.
+const MOBILE_TAB_PATHS = new Set(['/today', '/contacts', '/actions', '/calendar']);
+
 function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
@@ -138,21 +141,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const nav = (
     <>
-      <button
-        type="button"
-        className="app-shell__search"
-        onClick={() => {
-          openSearch();
-          setDrawerOpen(false);
-        }}
-        aria-label="搜索"
-      >
-        <span className="app-shell__search-icon" aria-hidden="true">
-          🔍
-        </span>
-        <span className="app-shell__search-text">搜索…</span>
-        <kbd className="app-shell__search-kbd">/</kbd>
-      </button>
+      {/* Search lives in the home top bar (🔍) on mobile — no drawer copy. */}
+      {!isMobile && (
+        <button
+          type="button"
+          className="app-shell__search"
+          onClick={() => {
+            openSearch();
+            setDrawerOpen(false);
+          }}
+          aria-label="搜索"
+        >
+          <span className="app-shell__search-icon" aria-hidden="true">
+            🔍
+          </span>
+          <span className="app-shell__search-text">搜索…</span>
+          <kbd className="app-shell__search-kbd">/</kbd>
+        </button>
+      )}
 
       <div className="app-shell__brand">
         <img src="/logo.svg" alt="Weavine" className="app-shell__brand-logo" />
@@ -178,20 +184,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {collapsed ? '»' : '«'}
       </button>
 
-      {isMobile && (
-        <button
-          type="button"
-          className="app-shell__menu-item app-shell__menu-item--quick"
-          onClick={() => {
-            openSearch();
-            setDrawerOpen(false);
-          }}
-        >
-          <span className="app-shell__menu-icon">🔍</span>
-          <span>搜索人脉、待办、笔记…</span>
-        </button>
-      )}
-
       {isMobile && recentFeed.length > 0 && (
         <div className="app-shell__drawer-section">
           <div className="app-shell__drawer-section-title">近期</div>
@@ -216,22 +208,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      {/* The full page directory lives in the drawer on ALL viewports — it
+          is the only entry point for 项目/标签/归档 etc. (the bottom nav
+          carries 今天/人脉/待办/日程 but not these). 近期 sits above it. */}
       <nav className="app-shell__menu">
-        <button
-          type="button"
-          className="app-shell__menu-item app-shell__menu-item--quick"
-          onClick={() => {
-            openQuickCapture('');
-            setDrawerOpen(false);
-          }}
-          title="快速记录"
-        >
-          <span className="app-shell__menu-icon">⚡</span>
-          <span>快速记录</span>
-          <kbd className="app-shell__menu-kbd">{shortcutLabel()}</kbd>
-        </button>
+        {!isMobile && (
+          <button
+            type="button"
+            className="app-shell__menu-item app-shell__menu-item--quick"
+            onClick={() => {
+              openQuickCapture('');
+              setDrawerOpen(false);
+            }}
+            title="快速记录"
+          >
+            <span className="app-shell__menu-icon">⚡</span>
+            <span>快速记录</span>
+            <kbd className="app-shell__menu-kbd">{shortcutLabel()}</kbd>
+          </button>
+        )}
 
-        {navItems.map((item) => (
+        {navItems
+          .filter((item) => !isMobile || !MOBILE_TAB_PATHS.has(item.to))
+          .map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

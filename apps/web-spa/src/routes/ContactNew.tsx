@@ -101,9 +101,20 @@ export function ContactNew() {
   return (
     <div className="page page--wide">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">新建联系人</h1>
-          <p className="page-subtitle">把一个最近见过的人加进你的人脉网络</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => navigate(-1)}
+            aria-label="返回"
+            data-testid="contact-new-back"
+          >
+            ←
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <h1 className="page-title">新建联系人</h1>
+            <p className="page-subtitle">把一个最近见过的人加进你的人脉网络</p>
+          </div>
         </div>
       </div>
 

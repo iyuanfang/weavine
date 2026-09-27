@@ -253,6 +253,47 @@ button:focus-visible {
   padding: 4px 10px;
 }
 
+/* Mobile drawer: 近期 timeline section */
+.app-shell__drawer-section {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 10px 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.app-shell__drawer-section-title {
+  padding: 6px 12px 4px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-transform: none;
+}
+
+.app-shell__drawer-feed-row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.app-shell__drawer-feed-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+}
+
+.app-shell__drawer-feed-title--done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.app-shell__drawer-feed-time {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
 .app-shell__menu-item {
   display: flex;
   align-items: center;
@@ -331,6 +372,13 @@ button:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.app-shell__user-settings {
+  flex-shrink: 0;
+  text-decoration: none;
+  font-size: 18px;
+  padding: 2px 4px;
 }
 
 .app-shell__user-logout {
@@ -2302,6 +2350,45 @@ textarea.input-base {
   align-items: center;
   gap: 8px;
   padding: 8px 14px 0;
+  position: relative;
+  z-index: 30;
+}
+
+/* ⊕ quick-action dropdown (WeChat-style) */
+.today-mobile__quick-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+}
+
+.today-mobile__quick-menu {
+  position: absolute;
+  top: 52px;
+  right: 14px;
+  z-index: 26;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+  display: flex;
+  flex-direction: column;
+}
+
+.today-mobile__quick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: var(--text, #111);
+  font-size: var(--text-base);
+  text-decoration: none;
+}
+
+.today-mobile__quick-item:active {
+  background: var(--accent-soft, #ecfdf5);
 }
 
 .today-mobile__topbar-btn {
@@ -2319,7 +2406,7 @@ textarea.input-base {
 }
 
 .today-mobile__hero {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2347,12 +2434,24 @@ textarea.input-base {
   color: #9ca3af;
 }
 
+.today-mobile__hints {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-sm);
+  color: #9ca3af;
+}
+
 .today-mobile__chips {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
   gap: 10px;
   padding: 4px 24px 10px;
+}
+
+.today-mobile .mobile-input-bar {
+  margin: 0 14px calc(10px + env(safe-area-inset-bottom, 0px));
 }
 
 .today-mobile__chip {
@@ -2374,6 +2473,7 @@ textarea.input-base {
 
 .today-mobile__spacer {
   flex: 1 1 auto;
+  max-height: 12vh;
 }
 
 /* ── Mobile bottom input bar (text / hold-to-talk) ──────────── */
@@ -2455,6 +2555,167 @@ textarea.input-base {
   bottom: calc(100% + 8px);
   text-align: center;
   color: var(--danger, #dc2626);
+  font-size: var(--text-sm);
+}
+
+.mobile-input-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Inline expanded textarea (active text mode) */
+.mobile-input-bar__textarea {
+  flex: 1;
+  resize: none;
+  padding: 10px 14px;
+  border: 1.5px solid var(--accent, #059669);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: var(--text, #111);
+  font-size: var(--text-base);
+  font-family: inherit;
+  line-height: 1.5;
+  min-height: 52px;
+}
+
+.mobile-input-bar__textarea:focus {
+  outline: none;
+}
+
+.mobile-input-bar__send {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent, #059669);
+  color: #fff;
+  font-size: var(--text-base);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.mobile-input-bar__send:disabled {
+  opacity: 0.45;
+}
+
+/* Parse preview floating above the bar — tap it (or hit 记录) to commit. */
+.mobile-input-bar__preview {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mobile-input-bar__preview-kind {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--accent, #059669);
+}
+
+.mobile-input-bar__preview-meta {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.mobile-input-bar__preview-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text, #111);
+}
+
+.mobile-input-bar__preview-go {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--accent, #059669);
+  color: #fff;
+  font-weight: 600;
+}
+
+.mobile-input-bar__preview-edit {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+  color: #6b7280;
+  font-size: var(--text-xs);
+}
+
+/* Expanded inline editor: type / time / contact, all editable */
+.mobile-input-bar__editor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+}
+
+.mobile-input-bar__editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-input-bar__editor-row--summary {
+  justify-content: space-between;
+}
+
+.mobile-input-bar__editor-select,
+.mobile-input-bar__editor-time {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text, #111);
+  font-size: var(--text-sm);
+  font-family: inherit;
+}
+
+.mobile-input-bar__editor-collapse {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.mobile-input-bar__submitted {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  text-align: center;
+  color: var(--accent, #059669);
   font-size: var(--text-sm);
 }
 
