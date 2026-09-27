@@ -1,36 +1,35 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
-import { useGlobalSearch } from '../App';
 import { MoreSheet } from './MoreSheet';
+import { TabIcon, type TabIconName } from './TabIcons';
 
-const primaryTabs = [
-  { to: '/today', label: '今天', icon: '🎯', end: true },
-  { to: '/contacts', label: '联系人', icon: '👥' },
-  { to: '/actions', label: '待办', icon: '✅' },
-  { to: '/calendar', label: '日程', icon: '📅' },
+interface PrimaryTab {
+  to: string;
+  label: string;
+  icon: TabIconName;
+  end: boolean;
+}
+
+const primaryTabs: PrimaryTab[] = [
+  { to: '/today', label: '今天', icon: 'today', end: true },
+  { to: '/contacts', label: '人脉', icon: 'contacts', end: false },
+  { to: '/actions', label: '待办', icon: 'actions', end: false },
+  { to: '/calendar', label: '日程', icon: 'calendar', end: false },
 ];
 
 function isFullScreenRoute(pathname: string): boolean {
   if (pathname.startsWith('/login')) return true;
+  if (pathname.startsWith('/graph-mobile')) return true;
   return false;
 }
 
 export function BottomNav() {
   const { pathname } = useLocation();
-  const { open: openSearch } = useGlobalSearch();
   const [moreOpen, setMoreOpen] = useState(false);
   if (isFullScreenRoute(pathname)) return null;
   return (
     <>
-      <button
-        type="button"
-        className="search-fab"
-        onClick={() => openSearch()}
-        aria-label="搜索"
-      >
-        🔍
-      </button>
       <nav className="bottom-nav" aria-label="主导航">
         {primaryTabs.map((tab) => (
           <NavLink
@@ -41,10 +40,14 @@ export function BottomNav() {
               isActive ? 'bottom-nav__tab bottom-nav__tab--active' : 'bottom-nav__tab'
             }
           >
-            <span className="bottom-nav__icon" aria-hidden="true">
-              {tab.icon}
-            </span>
-            <span className="bottom-nav__label">{tab.label}</span>
+            {({ isActive }) => (
+              <>
+                <span className="bottom-nav__icon" aria-hidden="true">
+                  <TabIcon name={tab.icon} active={isActive} />
+                </span>
+                <span className="bottom-nav__label">{tab.label}</span>
+              </>
+            )}
           </NavLink>
         ))}
         <button
@@ -55,7 +58,7 @@ export function BottomNav() {
           aria-expanded={moreOpen}
         >
           <span className="bottom-nav__icon" aria-hidden="true">
-            ⋯
+            <TabIcon name="more" active={moreOpen} />
           </span>
           <span className="bottom-nav__label">更多</span>
         </button>

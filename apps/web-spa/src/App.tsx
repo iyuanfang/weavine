@@ -11,7 +11,6 @@ import {
 } from 'react';
 
 import { QuickCapture } from './components/QuickCapture';
-import { QuickFab } from './components/QuickFab';
 import { SearchPalette } from './components/SearchPalette';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ReminderToastContainer, type ReminderToastItem } from './components/ReminderToast';
@@ -225,7 +224,6 @@ export function AppInner({ children }: { children?: ReactNode }) {
     <QuickCaptureContext.Provider value={quickApi}>
       <SearchContext.Provider value={searchApi}>
         <ErrorBoundary>{children}</ErrorBoundary>
-        <QuickFab onOpen={openQuick} />
         <ReminderToastContainer reminders={pendingReminders} onDismiss={dismissReminder} />
         {quickOpen && (
           <QuickCapture

@@ -1856,10 +1856,18 @@ textarea.input-base {
 }
 
 @media (max-width: 640px) {
-  .app-shell__hamburger,
-  .app-shell__nav--drawer,
-  .app-shell__backdrop {
+  /* Shell hamburger/drawer are hidden on phones; the Today page renders its
+     own top bar (☰ + 🕸️) and dispatches weavine:open-drawer. BUT the drawer
+     itself must stay reachable — re-enable the drawer aside + backdrop so the
+     event-driven open still shows the menu. */
+  .app-shell__hamburger {
     display: none;
+  }
+  .app-shell__nav--drawer {
+    display: flex;
+  }
+  .app-shell__backdrop {
+    display: block;
   }
 
   .app-shell {
@@ -1886,10 +1894,10 @@ textarea.input-base {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 3px;
     margin: 6px 4px;
     border-radius: 10px;
-    color: var(--muted, #666);
+    color: #9ca3af;
     text-decoration: none;
     font-size: 11px;
     line-height: 1;
@@ -1897,7 +1905,7 @@ textarea.input-base {
   }
 
   .bottom-nav__tab--active {
-    background: var(--accent-soft, #ecfdf5);
+    background: transparent;
     color: var(--accent, #059669);
     font-weight: 600;
   }
@@ -1905,6 +1913,11 @@ textarea.input-base {
   .bottom-nav__icon {
     font-size: 20px;
     line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
   }
 
   .bottom-nav__label {
@@ -2020,6 +2033,83 @@ textarea.input-base {
   .more-sheet__safe-area {
     flex-shrink: 0;
     height: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* ── Drawer upgrades: search / 近期 feed / account ── */
+  .more-sheet__search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 16px 4px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 10px;
+    background: #f3f4f6;
+    color: #9ca3af;
+    font-size: var(--text-sm);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .more-sheet__section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .more-sheet__section-title {
+    padding: 12px 20px 2px;
+    font-size: var(--text-xs);
+    color: #9ca3af;
+    flex-shrink: 0;
+  }
+
+  .more-sheet__list--feed {
+    flex: 0 0 auto;
+    overflow-y: visible;
+    padding: 0 0 4px;
+  }
+
+  .more-sheet__feed-row {
+    padding: 10px 20px;
+    gap: 10px;
+  }
+
+  .more-sheet__feed-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+  }
+
+  .more-sheet__feed-row--done .more-sheet__feed-title {
+    color: #9ca3af;
+    text-decoration: line-through;
+  }
+
+  .more-sheet__feed-time {
+    flex-shrink: 0;
+    color: #9ca3af;
+    font-size: var(--text-xs);
+  }
+
+  .more-sheet__account {
+    flex-shrink: 0;
+    padding: 10px 20px 14px;
+    border-top: 1px solid var(--border, rgba(0, 0, 0, 0.06));
+    color: #6b7280;
+    font-size: var(--text-sm);
+  }
+
+  .more-sheet__account-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -2181,32 +2271,205 @@ textarea.input-base {
   }
 }
 
-/* ── Mobile floating search button (action, not a nav tab) ── */
+/* Search moved into the mobile drawer — the floating FAB was removed. */
 .search-fab {
-  display: none;
+  display: none !important;
 }
-@media (max-width: 768px) {
-  .search-fab {
-    position: fixed;
-    right: 20px;
-    bottom: calc(var(--bottom-nav-height, 56px) + env(safe-area-inset-bottom, 0px) + 92px);
-    z-index: 99989;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    cursor: pointer;
-    background: var(--surface, #fff);
-    color: var(--accent, #8b5cf6);
-    font-size: 20px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
-  }
-  .search-fab:active {
-    transform: scale(0.94);
-  }
+
+/* ── Mobile single-screen home (Today page, ≤640px) ─────────── */
+.today-mobile {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
+  padding: 0 0 calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.today-mobile__topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+
+.today-mobile__topbar-btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text, #111);
+  font-size: 20px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.today-mobile__hero {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.today-mobile__logo {
+  width: 56px;
+  height: 56px;
+  opacity: 0.9;
+}
+
+.today-mobile__brand {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.today-mobile__hint {
+  font-size: var(--text-base);
+  color: #9ca3af;
+}
+
+.today-mobile__chips {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 24px 16px;
+}
+
+.today-mobile__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  color: var(--text, #111);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.today-mobile__chip:active {
+  background: var(--accent-soft, #ecfdf5);
+}
+
+.today-mobile__spacer {
+  flex: 0 0 8px;
+}
+
+/* ── Mobile bottom input bar (text / hold-to-talk) ──────────── */
+.mobile-input-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 14px;
+  padding: 0;
+  touch-action: none;
+}
+
+.mobile-input-bar__field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 13px 16px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: #9ca3af;
+  font-size: var(--text-base);
+  font-family: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.mobile-input-bar__mic {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-soft, #ecfdf5);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.mobile-input-bar__hold {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 16px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: var(--text, #111);
+  font-size: var(--text-base);
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mobile-input-bar__hold--active {
+  background: var(--accent-soft, #ecfdf5);
+  border-color: var(--accent, #059669);
+  color: var(--accent, #059669);
+}
+
+.mobile-input-bar__hold--cancel {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.mobile-input-bar__mic--keyboard {
+  background: #f3f4f6;
+}
+
+.mobile-input-bar__error {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  text-align: center;
+  color: var(--danger, #dc2626);
+  font-size: var(--text-sm);
+}
+
+/* ── Full-screen mobile graph ───────────────────────────────── */
+.mobile-graph {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--surface, #fff);
+}
+
+.mobile-graph__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 0;
+  flex-shrink: 0;
+}
+
+.mobile-graph__title {
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.mobile-graph__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .notes-list__items {

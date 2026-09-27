@@ -17,6 +17,7 @@ import { ContactNew } from './routes/ContactNew';
 import { ContactEdit } from './routes/ContactEdit';
 import { ContactDetail } from './routes/ContactDetail';
 import { GraphView } from './routes/GraphView';
+import { MobileGraphPage } from './routes/MobileGraphPage';
 import { Calendar } from './routes/Calendar';
 import { EventNew } from './routes/EventNew';
 import { EventEdit } from './routes/EventEdit';
@@ -96,6 +97,7 @@ export const routes: AppRoute[] = [
   { path: '/notes/:id', Component: NoteDetail, label: 'NoteDetail' },
   { path: '/md-editor', Component: MdEditor, label: 'MdEditor' },
   { path: '/graph/:entityType/:entityId', Component: GraphView, label: 'GraphView' },
+  { path: '/graph-mobile', Component: MobileGraphPage, label: 'MobileGraph' },
   // Catch-all 404. Without it an unknown path matches no route and React
   // Router renders nothing — a blank window with no way out. `/` is one such
   // path (it was removed so the marketing site can own it on web), which is

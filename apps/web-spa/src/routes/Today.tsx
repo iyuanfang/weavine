@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { ContactBadge } from '../components/ContactBadge';
 import { HomeGraph } from '../components/HomeGraph';
 import { InteractionSourceTag } from '../components/InteractionSourceTag';
+import { MobileInputBar } from '../components/MobileInputBar';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { useAdapter } from '../lib/adapter';
 import { useQuickCapture } from '../App';
@@ -48,6 +49,19 @@ function daysSinceLabel(iso: string | null | undefined): string {
 
 function formatDate(d: Date): string {
   return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric' });
+}
+
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const fn = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return mobile;
 }
 
 function relativeDueLabel(dueAt: Date, now: Date): string {
@@ -172,6 +186,8 @@ export function TodayPage() {
     return <div className="loading">正在加载用户…</div>;
   }
 
+  const isMobile = useIsMobile();
+
   if (
     actionsQuery.isError ||
     eventsQuery.isError ||
@@ -234,6 +250,73 @@ export function TodayPage() {
     .sort((a, b) => (a.r.days ?? 0) - (b.r.days ?? 0))
     .slice(0, 5)
     .map(({ c, r }) => ({ c, days: r.days! }));
+
+  // ── Mobile single-screen home ──────────────────────────────
+  // One viewport, no scrolling: top bar (drawer / full-screen graph), brand
+  // + hint, status chips, and the fixed bottom input bar. Desktop keeps the
+  // full dashboard below.
+  if (isMobile) {
+    const overdueActions = todayDoActions.length;
+    const contactNudges = suggestedContacts.length;
+    const recentCount = recentInteractions.length;
+    return (
+      <div className="page today-mobile" data-testid="today-mobile">
+        <div className="today-mobile__topbar">
+          <button
+            type="button"
+            className="today-mobile__topbar-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('weavine:open-drawer'))}
+            aria-label="打开菜单"
+            data-testid="today-mobile-drawer"
+          >
+            ☰
+          </button>
+          <span style={{ flex: 1 }} />
+          <Link
+            to="/graph-mobile"
+            className="today-mobile__topbar-btn"
+            aria-label="关系图"
+            data-testid="today-mobile-graph"
+          >
+            🕸️
+          </Link>
+        </div>
+
+        <div className="today-mobile__hero">
+          <img src="/logo.svg" alt="" className="today-mobile__logo" />
+          <div className="today-mobile__brand">织遇</div>
+          <div className="today-mobile__hint">今天见了谁？</div>
+        </div>
+
+        <div className="today-mobile__chips">
+          {overdueActions > 0 && (
+            <Link to="/actions?from=/today" className="today-mobile__chip" data-testid="today-mobile-chip-actions">
+              ✅ {overdueActions}
+            </Link>
+          )}
+          {contactNudges > 0 && (
+            <Link to="/contacts?from=/today" className="today-mobile__chip" data-testid="today-mobile-chip-contacts">
+              📞 {contactNudges}
+            </Link>
+          )}
+          {recentCount > 0 && (
+            <button
+              type="button"
+              className="today-mobile__chip"
+              data-testid="today-mobile-chip-interactions"
+              onClick={() => window.dispatchEvent(new CustomEvent('weavine:open-drawer'))}
+            >
+              💬 {recentCount}
+            </button>
+          )}
+        </div>
+
+        <div className="today-mobile__spacer" />
+
+        <MobileInputBar onOpenQuick={(t) => quickCapture.open(t)} />
+      </div>
+    );
+  }
 
   return (
     <div className="page page--wide">

@@ -22,6 +22,8 @@ export function backTarget(
   if (from === '/reminders') return { href: '/reminders', label: '← 提醒' };
   if (from === '/archive') return { href: '/archive', label: '← 归档' };
   if (from === '/search') return { href: '/search', label: '← 搜索' };
+  if (from === '/today') return { href: '/today', label: '← 首页' };
+  if (from === '/graph-mobile') return { href: '/graph-mobile', label: '← 关系图' };
 
   if (from.startsWith('/contacts/')) return { href: from, label: '← 联系人' };
   if (from.startsWith('/projects/')) return { href: from, label: '← 项目' };
