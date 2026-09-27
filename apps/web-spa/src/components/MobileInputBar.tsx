@@ -361,7 +361,7 @@ export function MobileInputBar({ onSaved }: Props) {
               ref={inputRef}
               className="mobile-input-bar__textarea"
               rows={2}
-              placeholder="说了什么，记一下…（回车保存）"
+              placeholder="做了什么，记一下…（回车保存）"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onBlur={(e) => {
@@ -390,7 +390,7 @@ export function MobileInputBar({ onSaved }: Props) {
               aria-label="快速记录"
               data-testid="mobile-input-text"
             >
-              <span>说了什么，记一下…</span>
+              <span>做了什么，记一下…</span>
             </button>
           )
         ) : (

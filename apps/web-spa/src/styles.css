@@ -2418,13 +2418,13 @@ textarea.input-base {
 }
 
 .today-mobile__logo {
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
   opacity: 0.9;
 }
 
 .today-mobile__brand {
-  font-size: 18px;
+  font-size: 30px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -2437,8 +2437,8 @@ textarea.input-base {
 .today-mobile__hints {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: var(--text-sm);
+  gap: 8px;
+  font-size: 17px;
   color: #9ca3af;
 }
 

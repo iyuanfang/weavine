@@ -160,29 +160,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </button>
       )}
 
-      <div className="app-shell__brand">
-        <img src="/logo.svg" alt="Weavine" className="app-shell__brand-logo" />
-        <span className="app-shell__brand-text">Weavine</span>
-        <span className="app-shell__brand-tagline">编织遇见的人脉</span>
-        <button
-          type="button"
-          className="app-shell__close"
-          onClick={() => setDrawerOpen(false)}
-          aria-label="关闭菜单"
-        >
-          ✕
-        </button>
-      </div>
+      {/* Mobile drawer: no brand block, no close/collapse buttons — the
+          backdrop tap and system back close it, and the space goes to content. */}
+      {!isMobile && (
+        <>
+          <div className="app-shell__brand">
+            <img src="/logo.svg" alt="Weavine" className="app-shell__brand-logo" />
+            <span className="app-shell__brand-text">Weavine</span>
+            <span className="app-shell__brand-tagline">编织遇见的人脉</span>
+            <button
+              type="button"
+              className="app-shell__close"
+              onClick={() => setDrawerOpen(false)}
+              aria-label="关闭菜单"
+            >
+              ✕
+            </button>
+          </div>
 
-      <button
-        type="button"
-        className="app-shell__collapse"
-        onClick={toggleCollapsed}
-        aria-label={collapsed ? '展开菜单' : '收起菜单'}
-        title={collapsed ? '展开菜单' : '收起菜单'}
-      >
-        {collapsed ? '»' : '«'}
-      </button>
+          <button
+            type="button"
+            className="app-shell__collapse"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? '展开菜单' : '收起菜单'}
+            title={collapsed ? '展开菜单' : '收起菜单'}
+          >
+            {collapsed ? '»' : '«'}
+          </button>
+        </>
+      )}
 
       {isMobile && recentFeed.length > 0 && (
         <div className="app-shell__drawer-section">
