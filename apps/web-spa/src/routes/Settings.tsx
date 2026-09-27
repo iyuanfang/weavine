@@ -241,6 +241,12 @@ function CloudSyncPanel() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       console.log('[cloud sync] result:', result);
     },
+    onError: () => {
+      // The desktop backend wipes SyncState on a refresh-token 401 so the
+      // user sees the login form instead of an opaque 401 — refetch
+      // cloud-status so the panel swaps to the unlinked view immediately.
+      queryClient.invalidateQueries({ queryKey: ['cloud-status'] });
+    },
   });
 
   // Repair path: clear the push watermark, then sync. Recovers rows that a

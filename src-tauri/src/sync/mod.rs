@@ -222,6 +222,10 @@ async fn sync_once_with_conn(conn: &mut Connection) -> anyhow::Result<SyncResult
 }
 
 /// Get a valid access token, refreshing if necessary.
+///
+/// If refresh itself returns 401, the local session is dead (token rotated /
+/// revoked / expired) — we wipe SyncState so the UI falls back to the login
+/// form instead of bubbling an opaque 401.
 async fn get_token(conn: &Connection) -> anyhow::Result<String> {
     let server_url = config::get(conn, KEY_SERVER_URL)?
         .ok_or_else(|| anyhow::anyhow!("no server_url configured"))?;
@@ -234,15 +238,26 @@ async fn get_token(conn: &Connection) -> anyhow::Result<String> {
     // If it fails, refresh and retry.
     match api::manifest(&server_url, &access_token).await {
         Ok(_) => Ok(access_token),
-        Err(_) => {
-            // Access token expired — refresh
-            let resp = refresh_token(&server_url, &refresh_tok).await?;
-            config::set(conn, KEY_ACCESS_TOKEN, &resp.access_token)?;
-            if let Some(new_refresh) = resp.refresh_token {
-                config::set(conn, KEY_REFRESH_TOKEN, &new_refresh)?;
+        Err(_) => match refresh_token(&server_url, &refresh_tok).await {
+            Ok(resp) => {
+                config::set(conn, KEY_ACCESS_TOKEN, &resp.access_token)?;
+                if let Some(new_refresh) = resp.refresh_token {
+                    config::set(conn, KEY_REFRESH_TOKEN, &new_refresh)?;
+                }
+                Ok(resp.access_token)
             }
-            Ok(resp.access_token)
-        }
+            Err(api::RefreshError::Unauthorized(body)) => {
+                // Refresh token is dead — wipe the local session so the UI
+                // shows the login form on the next render. Local data is
+                // preserved (only SyncState is cleared).
+                let _ = config::clear_all(conn);
+                Err(anyhow::anyhow!(
+                    "登录已过期，请在「设置 → 云同步」重新登录（{}）",
+                    body
+                ))
+            }
+            Err(api::RefreshError::Other(e)) => Err(e),
+        },
     }
 }
 

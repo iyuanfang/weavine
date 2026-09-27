@@ -233,24 +233,71 @@ pub async fn login(server_url: &str, email: &str, password: &str) -> anyhow::Res
 }
 
 /// POST /api/auth/refresh
+///
+/// Returns a typed [`RefreshError`] so callers can distinguish a 401 (the
+/// refresh token has been rotated, revoked, or expired — meaning the local
+/// session is dead and the user must log in again) from transient network /
+/// server failures. The server's body is preserved verbatim in
+/// `RefreshError::Other` for diagnostics.
 pub async fn refresh_token(
     server_url: &str,
     refresh_tok: &str,
-) -> anyhow::Result<RefreshResp> {
-    let c = client()?;
-    let resp = c
+) -> Result<RefreshResp, RefreshError> {
+    let c = match client() {
+        Ok(c) => c,
+        Err(e) => return Err(RefreshError::Other(anyhow::anyhow!(e))),
+    };
+    let resp = match c
         .post(format!("{}/api/auth/refresh", server_url.trim_end_matches('/')))
         .json(&RefreshReq {
             refresh_token: refresh_tok.to_string(),
         })
         .send()
-        .await?;
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(anyhow::anyhow!("refresh failed ({}): {}", status, text));
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return Err(RefreshError::Other(anyhow::anyhow!(e))),
+    };
+    let status = resp.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(RefreshError::Unauthorized(body));
     }
-    Ok(resp.json::<RefreshResp>().await?)
+    if !resp.status().is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(RefreshError::Other(anyhow::anyhow!(
+            "refresh failed ({}): {}",
+            status,
+            text
+        )));
+    }
+    match resp.json::<RefreshResp>().await {
+        Ok(r) => Ok(r),
+        Err(e) => Err(RefreshError::Other(anyhow::anyhow!(e))),
+    }
+}
+
+/// Typed result of [`refresh_token`]. `Unauthorized` means the refresh
+/// token is dead and the local session must be cleared; `Other` is a
+/// transient/transport failure worth retrying.
+#[derive(Debug)]
+pub enum RefreshError {
+    /// Server returned 401 — refresh token is no longer valid. The local
+    /// session (server_url/access_token/refresh_token/...) should be wiped.
+    Unauthorized(String),
+    /// Any other failure: network error, 5xx, malformed body, etc.
+    Other(anyhow::Error),
+}
+
+impl std::fmt::Display for RefreshError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RefreshError::Unauthorized(body) => {
+                write!(f, "登录已过期：{}", body)
+            }
+            RefreshError::Other(e) => write!(f, "{}", e),
+        }
+    }
 }
 
 /// POST /api/sync/manifest
