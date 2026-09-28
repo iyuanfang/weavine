@@ -4,7 +4,7 @@
 // icon shapes (the `fill-active` class below keeps non-active shapes hollow).
 import type { ReactNode } from 'react';
 
-export type TabIconName = 'today' | 'contacts' | 'actions' | 'calendar' | 'more';
+export type TabIconName = 'today' | 'contacts' | 'actions' | 'calendar' | 'note';
 
 function Icon({ children, filled }: { children: ReactNode; filled: boolean }): ReactNode {
   return (
@@ -63,11 +63,16 @@ export function TabIcon({ name, active }: { name: TabIconName; active: boolean }
           {active && <circle cx="12" cy="15" r="2" fill="currentColor" stroke="none" />}
         </Icon>
       );
-    case 'more':
-      // three horizontal lines with dots (☰-ish)
+    case 'note':
+      // note page with folded corner + lines
       return (
         <Icon filled={false}>
-          <path d="M4 7h16M4 12h16M4 17h16" fill="none" />
+          <path
+            d="M6 3.5h8.5L19 8v12.5H6z"
+            fill={active ? 'var(--accent-soft, #ecfdf5)' : 'none'}
+          />
+          <path d="M14 3.5V8h5" fill="none" />
+          <path d="M9 12h6M9 15.5h6" fill="none" />
         </Icon>
       );
   }

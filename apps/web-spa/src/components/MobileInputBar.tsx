@@ -28,19 +28,32 @@ const KIND_LABEL: Record<QuickKind, string> = {
   note: '📝 笔记',
 };
 
+// Examples rotate through the placeholder while the field is empty — gives
+// the user a feel for what counts as a record without bloating the screen.
+const EXAMPLES = [
+  '明天下午 3 点和张三开会',
+  '今天和李四吃了午饭',
+  '后天前把方案发给王总',
+  '上周和王总聊了 Q4 计划',
+];
+
 interface Props {
   /** Invalidate-all callback after a successful save (queries refetch). */
   onSaved: () => void;
 }
 
 /**
- * Fixed bottom input bar of the mobile home screen — WeChat-style, fully
- * inline. No modal:
- *  - Text (default): tapping focuses a real textarea in place; the parsed
- *    preview (type/time/contact/summary) floats right above the bar as the
- *    user types, and 记录 commits.
- *  - Hold-to-talk (🎤): press and hold to record; release recognizes and
- *    drops the transcript into the same inline textarea; slide up cancels.
+ * Fixed bottom input bar of the mobile home screen — DeepSeek-style.
+ *
+ * ONE full-width rounded shell contains everything: the text field (or the
+ * hold-to-talk area in voice mode) with the wave/keyboard toggle icon
+ * embedded at its right edge. No floating buttons outside the shell.
+ *
+ * Text mode: tapping the placeholder expands an inline textarea; the parsed
+ * preview floats above with an 编辑 expander (type/time/contact editable);
+ * the 记录 button sits inside the shell.
+ * Voice mode: hold anywhere on the shell to record, release to recognize
+ * (transcript lands in the same textarea), slide up to cancel.
  */
 export function MobileInputBar({ onSaved }: Props) {
   const adapter = useAdapter();
@@ -50,10 +63,9 @@ export function MobileInputBar({ onSaved }: Props) {
   const [active, setActive] = useState(false);
   const [text, setText] = useState('');
   const [parsed, setParsed] = useState<ParsedQuick | null>(null);
-  // Editable overlay state — seeded from the parser, user-tweakable. Kept
-  // separate from `parsed` so re-parses (typing) don't clobber manual edits
-  // until the text itself changes enough to re-seed (same policy as
-  // QuickCapture's userOverride pattern).
+  // Editable overlay — seeded from the parser, user-tweakable. Kept separate
+  // from `parsed` so re-parses (typing) don't clobber manual edits until the
+  // text is fully cleared (same policy as QuickCapture).
   const [kind, setKind] = useState<QuickKind | null>(null);
   const [due, setDue] = useState<string | null>(null);
   const [contactId, setContactId] = useState<string | null>(null);
@@ -64,6 +76,7 @@ export function MobileInputBar({ onSaved }: Props) {
   const [contactNames, setContactNames] = useState<string[]>([]);
   const [contactList, setContactList] = useState<Array<{ id: string; nickname: string; name?: string | null }>>([]);
   const [contactLookup, setContactLookup] = useState<Record<string, string>>({});
+  const [exampleIdx, setExampleIdx] = useState(0);
   const [holding, setHolding] = useState(false);
   const [cancelHint, setCancelHint] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -85,24 +98,15 @@ export function MobileInputBar({ onSaved }: Props) {
       .catch(() => {});
   }, [adapter, userId]);
 
-  // Examples rotate through the field's placeholder when it's empty — gives
-  // the user a sense of what counts as a record without bloating the screen.
-  const EXAMPLES = [
-    '明天下午 3 点和张三开会',
-    '今天和李四吃了午饭',
-    '后天前把方案发给王总',
-    '上周和王总聊了 Q4 计划',
-  ];
-  const [exampleIdx, setExampleIdx] = useState(0);
+  // Rotate examples while idle.
   useEffect(() => {
     if (text) return;
     const id = window.setInterval(() => setExampleIdx((i) => (i + 1) % EXAMPLES.length), 4000);
     return () => window.clearInterval(id);
   }, [text]);
 
-  // Live parse while typing (same debounce as QuickCapture). Re-seeds the
-  // editable fields only when the text is fully cleared, so a user-picked
-  // kind/time/contact survives ongoing typing — mirrors QuickCapture.
+  // Live parse while typing. Re-seeds the editable fields only when the text
+  // is fully cleared, so a user-picked kind/time/contact survives typing.
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     const trimmed = text.trim();
@@ -272,9 +276,9 @@ export function MobileInputBar({ onSaved }: Props) {
     return d.toISOString();
   }
 
-  // The floating preview above the textarea. Collapsed: read-only summary,
-  // tap to expand. Expanded: type / time / contact all editable inline.
-  // No 记录 button here — the single confirm is the bar's 记录 (or Enter).
+  // Floating preview above the shell. Collapsed: read-only summary, tap to
+  // expand. Expanded: type / time / contact all editable inline. No 记录
+  // button here — the single confirm lives inside the shell (or Enter).
   const preview = (() => {
     if (!text.trim()) return null;
     const effKind: QuickKind = kind ?? parsed?.kind ?? 'note';
@@ -295,38 +299,29 @@ export function MobileInputBar({ onSaved }: Props) {
       return (
         <button
           type="button"
-          className="mobile-input-bar__preview"
+          className="mobile-input-shell__preview"
           data-testid="mobile-input-preview"
           onClick={() => setExpanded(true)}
         >
-          <span className="mobile-input-bar__preview-kind">{KIND_LABEL[effKind]}</span>
-          {time && <span className="mobile-input-bar__preview-meta">{time}</span>}
+          <span className="mobile-input-shell__preview-kind">{KIND_LABEL[effKind]}</span>
+          {time && <span className="mobile-input-shell__preview-meta">{time}</span>}
           {effContactId && (
-            <span className="mobile-input-bar__preview-meta">@{contactLookup[effContactId] ?? '?'}</span>
+            <span className="mobile-input-shell__preview-meta">@{contactLookup[effContactId] ?? '?'}</span>
           )}
-          <span className="mobile-input-bar__preview-summary">{summary}</span>
-          <span
-            className="mobile-input-bar__preview-edit"
-            aria-hidden="true"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded(true);
-            }}
-          >
-            编辑
-          </span>
+          <span className="mobile-input-shell__preview-summary">{summary}</span>
+          <span className="mobile-input-shell__preview-edit">编辑</span>
         </button>
       );
     }
 
     return (
-      <div className="mobile-input-bar__editor" data-testid="mobile-input-editor">
-        <div className="mobile-input-bar__editor-row">
+      <div className="mobile-input-shell__editor" data-testid="mobile-input-editor">
+        <div className="mobile-input-shell__editor-row">
           <select
             value={effKind}
             onChange={(e) => setKind(e.target.value as QuickKind)}
             aria-label="类型"
-            className="mobile-input-bar__editor-select"
+            className="mobile-input-shell__editor-select"
           >
             <option value="interaction">{KIND_LABEL.interaction}</option>
             <option value="action">{KIND_LABEL.action}</option>
@@ -338,10 +333,10 @@ export function MobileInputBar({ onSaved }: Props) {
             value={isoToLocalInput(effDue)}
             onChange={(e) => setDue(localInputToIso(e.target.value))}
             aria-label="时间"
-            className="mobile-input-bar__editor-time"
+            className="mobile-input-shell__editor-time"
           />
         </div>
-        <div className="mobile-input-bar__editor-row">
+        <div className="mobile-input-shell__editor-row">
           <SearchablePicker
             value={effContactId ?? ''}
             onChange={(v) => setContactId(v || null)}
@@ -354,9 +349,9 @@ export function MobileInputBar({ onSaved }: Props) {
             emptyText="没有匹配的联系人"
           />
         </div>
-        <div className="mobile-input-bar__editor-row mobile-input-bar__editor-row--summary">
-          <span className="mobile-input-bar__preview-summary">{summary}</span>
-          <button type="button" className="mobile-input-bar__editor-collapse" onClick={() => setExpanded(false)}>
+        <div className="mobile-input-shell__editor-row mobile-input-shell__editor-row--summary">
+          <span className="mobile-input-shell__preview-summary">{summary}</span>
+          <button type="button" className="mobile-input-shell__editor-collapse" onClick={() => setExpanded(false)}>
             收起
           </button>
         </div>
@@ -365,24 +360,23 @@ export function MobileInputBar({ onSaved }: Props) {
   })();
 
   return (
-    <div className={`mobile-input-bar${active ? ' mobile-input-bar--active' : ''}`} data-testid="mobile-input-bar">
+    <div className="mobile-input-shell-wrap" data-testid="mobile-input-bar">
       {preview}
-      {error && <div className="mobile-input-bar__error">{error}</div>}
-      {submitted && <div className="mobile-input-bar__submitted">已记录 ✓</div>}
+      {error && <div className="mobile-input-shell__error">{error}</div>}
+      {submitted && <div className="mobile-input-shell__submitted">已记录 ✓</div>}
 
-      <div className="mobile-input-bar__row">
+      {/* ONE full-width shell — input and icons live inside it. */}
+      <div className={`mobile-input-shell${active ? ' mobile-input-shell--active' : ''}`}>
         {mode === 'text' ? (
           active ? (
             <textarea
               ref={inputRef}
-              className="mobile-input-bar__textarea"
+              className="mobile-input-shell__input"
               rows={2}
               placeholder={`${EXAMPLES[exampleIdx]}（回车保存）`}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onBlur={(e) => {
-                // Collapse when empty and focus leaves — but not when the
-                // blur comes from tapping the preview/record (mousedown).
                 if (!e.target.value.trim()) setActive(false);
               }}
               onKeyDown={(e) => {
@@ -401,7 +395,7 @@ export function MobileInputBar({ onSaved }: Props) {
           ) : (
             <button
               type="button"
-              className="mobile-input-bar__field"
+              className="mobile-input-shell__placeholder"
               onClick={() => setActive(true)}
               aria-label="快速记录"
               data-testid="mobile-input-text"
@@ -412,7 +406,7 @@ export function MobileInputBar({ onSaved }: Props) {
         ) : (
           <button
             type="button"
-            className={`mobile-input-bar__hold${holding ? ' mobile-input-bar__hold--active' : ''}${cancelHint ? ' mobile-input-bar__hold--cancel' : ''}`}
+            className={`mobile-input-shell__hold${holding ? ' mobile-input-shell__hold--active' : ''}${cancelHint ? ' mobile-input-shell__hold--cancel' : ''}`}
             data-testid="mobile-input-hold"
             onPointerDown={startHold}
             onPointerUp={() => void finishHold(cancelHint)}
@@ -423,10 +417,11 @@ export function MobileInputBar({ onSaved }: Props) {
             {holding ? (cancelHint ? '松开取消' : '松手 发送') : '按住 说话'}
           </button>
         )}
+
         {mode === 'text' && active ? (
           <button
             type="button"
-            className="mobile-input-bar__send"
+            className="mobile-input-shell__send"
             onClick={() => void submit()}
             disabled={!text.trim() || submitting}
             aria-label="记录"
@@ -437,7 +432,7 @@ export function MobileInputBar({ onSaved }: Props) {
         ) : (
           <button
             type="button"
-            className="mobile-input-bar__mic"
+            className="mobile-input-shell__icon"
             onClick={() => {
               setMode(mode === 'text' ? 'voice' : 'text');
               setActive(false);
@@ -453,11 +448,11 @@ export function MobileInputBar({ onSaved }: Props) {
   );
 }
 
-// WeChat-style voice icon: a mic-less sound-wave bubble. Stroke follows
-// currentColor so the button's green/gray states just work.
+// WeChat-style voice icon: sound-wave bars. Stroke follows currentColor so
+// the button's green/gray states just work.
 function WaveIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
       <path d="M4 10v4" />
       <path d="M8 7v10" />
       <path d="M12 4.5v15" />
@@ -469,7 +464,7 @@ function WaveIcon() {
 
 function KeyboardIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
       <rect x="3" y="6.5" width="18" height="11" rx="2.5" />
       <path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M6.5 13.5h.01M17 13.5h.01M9.5 13.5h5" />
     </svg>

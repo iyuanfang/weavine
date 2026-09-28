@@ -23,7 +23,7 @@ const navItems = [
 ];
 
 // Bottom-nav tabs — on mobile the drawer must not repeat these four.
-const MOBILE_TAB_PATHS = new Set(['/today', '/contacts', '/actions', '/calendar']);
+const MOBILE_TAB_PATHS = new Set(['/today', '/contacts', '/actions', '/calendar', '/notes']);
 
 function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(

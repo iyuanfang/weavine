@@ -14,6 +14,7 @@ const primaryTabs: PrimaryTab[] = [
   { to: '/contacts', label: '人脉', icon: 'contacts', end: false },
   { to: '/actions', label: '待办', icon: 'actions', end: false },
   { to: '/calendar', label: '日程', icon: 'calendar', end: false },
+  { to: '/notes', label: '笔记', icon: 'note', end: false },
 ];
 
 function isFullScreenRoute(pathname: string): boolean {
@@ -46,17 +47,6 @@ export function BottomNav() {
           )}
         </NavLink>
       ))}
-      <button
-        type="button"
-        className="bottom-nav__tab"
-        onClick={() => window.dispatchEvent(new CustomEvent('weavine:open-drawer'))}
-        aria-label="打开更多"
-      >
-        <span className="bottom-nav__icon" aria-hidden="true">
-          <TabIcon name="more" active={false} />
-        </span>
-        <span className="bottom-nav__label">更多</span>
-      </button>
     </nav>
   );
 }
