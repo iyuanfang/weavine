@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAdapter } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { parseQuick } from '../lib/adapter/quick-capture';
+import { SearchablePicker } from './SearchablePicker';
 import {
   beginVoice,
   checkVoiceModel,
@@ -83,6 +84,21 @@ export function MobileInputBar({ onSaved }: Props) {
       })
       .catch(() => {});
   }, [adapter, userId]);
+
+  // Examples rotate through the field's placeholder when it's empty — gives
+  // the user a sense of what counts as a record without bloating the screen.
+  const EXAMPLES = [
+    '明天下午 3 点和张三开会',
+    '今天和李四吃了午饭',
+    '后天前把方案发给王总',
+    '上周和王总聊了 Q4 计划',
+  ];
+  const [exampleIdx, setExampleIdx] = useState(0);
+  useEffect(() => {
+    if (text) return;
+    const id = window.setInterval(() => setExampleIdx((i) => (i + 1) % EXAMPLES.length), 4000);
+    return () => window.clearInterval(id);
+  }, [text]);
 
   // Live parse while typing (same debounce as QuickCapture). Re-seeds the
   // editable fields only when the text is fully cleared, so a user-picked
@@ -324,19 +340,17 @@ export function MobileInputBar({ onSaved }: Props) {
             aria-label="时间"
             className="mobile-input-bar__editor-time"
           />
-          <select
+          <SearchablePicker
             value={effContactId ?? ''}
-            onChange={(e) => setContactId(e.target.value || null)}
-            aria-label="联系人"
-            className="mobile-input-bar__editor-select"
-          >
-            <option value="">无联系人</option>
-            {contactList.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nickname || c.name || '?'}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setContactId(v || null)}
+            options={contactList.map((c) => ({
+              id: c.id,
+              label: c.nickname || c.name || '?',
+              searchText: `${c.nickname ?? ''} ${c.name ?? ''}`.trim(),
+            }))}
+            placeholder="搜索或选择联系人…"
+            emptyText="没有匹配的联系人"
+          />
         </div>
         <div className="mobile-input-bar__editor-row mobile-input-bar__editor-row--summary">
           <span className="mobile-input-bar__preview-summary">{summary}</span>
@@ -361,7 +375,7 @@ export function MobileInputBar({ onSaved }: Props) {
               ref={inputRef}
               className="mobile-input-bar__textarea"
               rows={2}
-              placeholder="做了什么，记一下…（回车保存）"
+              placeholder={`${EXAMPLES[exampleIdx]}（回车保存）`}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onBlur={(e) => {

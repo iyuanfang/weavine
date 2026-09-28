@@ -25,11 +25,9 @@ const isWebRuntime =
   typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window);
 
 export function SettingsPage() {
-  const userId = useUserId();
-
-  if (!userId) {
-    return <div className="loading">正在加载用户…</div>;
-  }
+  // The page renders even when no local user is signed in (web anonymous
+  // visitors should be able to see "check for update" / Tauri version info).
+  // Components needing it (cloud sync, logout) gate themselves on userId.
 
   return (
     <div className="page page--wide">
