@@ -453,6 +453,11 @@ function VersionCard() {
     typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   const isAndroidRuntime =
     typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+  // Android APK builds are also Tauri (so __TAURI_INTERNALS__ is present),
+  // but they do NOT bundle the desktop updater plugin — the updater branch
+  // must be gated on desktop-Tauri only, otherwise Android hits
+  // "plugin updater not found" when checking for updates.
+  const isDesktopTauri = isTauriRuntime && !isAndroidRuntime;
 
   type Phase =
     | { kind: 'idle' }
@@ -475,7 +480,7 @@ function VersionCard() {
   const onCheck = async () => {
     setPhase({ kind: 'checking' });
     try {
-      if (isTauriRuntime) {
+      if (isDesktopTauri) {
         const latest = await fetchLatestDesktopUpdate();
         if (!latest || latest.version === currentVersion) {
           setPhase({ kind: 'latest' });

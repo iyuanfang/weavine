@@ -340,6 +340,8 @@ export function MobileInputBar({ onSaved }: Props) {
             aria-label="时间"
             className="mobile-input-bar__editor-time"
           />
+        </div>
+        <div className="mobile-input-bar__editor-row">
           <SearchablePicker
             value={effContactId ?? ''}
             onChange={(v) => setContactId(v || null)}

@@ -1915,6 +1915,20 @@ textarea.input-base {
     padding: 0;
   }
 
+  /* List pages: drop the hamburger's 70px top padding (the hamburger is
+     hidden on phones) and tighten sides — the stale padding plus .page's
+     own 8px pad made content overflow horizontally by a few px, which
+     showed up as a small "drag left" gap on 人脉/待办 etc. */
+  .app-shell__main {
+    padding: 14px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
+  }
+
+  .page {
+    max-width: 100%;
+    padding: 0;
+  }
+
   /* Shell hamburger/drawer are hidden on phones; the Today page renders its
      own top bar (☰ + 🕸️) and dispatches weavine:open-drawer. BUT the drawer
      itself must stay reachable — re-enable the drawer aside + backdrop so the
