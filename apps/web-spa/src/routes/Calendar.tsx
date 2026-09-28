@@ -83,7 +83,11 @@ export function Calendar() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // Touch devices never fire onMouseEnter — long-press / tap-to-reveal.
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Touch devices have no hover — start expanded there so the row
+  // action buttons (edit/delete) are always visible on phones.
+  const [expandedId, setExpandedId] = useState<string | null>(
+    () => (typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches ? '*' : null),
+  );
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [typeFilter, setTypeFilter] = useState<string>('all');

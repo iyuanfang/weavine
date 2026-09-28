@@ -2843,6 +2843,45 @@ textarea.input-base {
   min-width: 0;
 }
 
+/* Long body strings inside note cards (emails, URLs, paths) used to
+   blow the card past the screen edge on phones. Force ellipsis. */
+.notes-list__body,
+.notes-list__title,
+.notes-list__preview,
+.notes-list__meta,
+.notes-list__filter input {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-list__body--multiline {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tags / link pills inside a card row must shrink too. */
+.notes-list__tags,
+.notes-list__contacts,
+.notes-list__meta-row {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.notes-list__tag,
+.notes-list__contact {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 640px) {
   .notes-list .filter-panel,
   .notes-list .filter-panel__section {
@@ -3762,5 +3801,30 @@ textarea.input-base {
   }
   .detail-header-card .btn {
     white-space: nowrap;
+  }
+}
+
+
+/* ── Mobile catch-all: kill horizontal spill + always-visible actions ── */
+@media (max-width: 640px) {
+  /* Long unbroken strings (emails, URLs, paths, passwords) inside any
+     list card blow the card past the screen edge. Break them instead. */
+  .notes-list__item,
+  .notes-list__item *,
+  .layout-split__main *,
+  .row-card *,
+  .digest-row * {
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* Touch devices have no hover — action buttons (edit / delete) that
+     are gated on hover must always be visible. The inline
+     `opacity: hovered ? 1 : 0` would keep them invisible forever. */
+  .btn-sm.btn-ghost,
+  .btn-ghost[title="删除"],
+  .btn-ghost[title="编辑"] {
+    opacity: 1 !important;
   }
 }

@@ -582,7 +582,11 @@ function ActionRowBody({
   // Touch devices never fire onMouseEnter, so the action-menu buttons live
   // behind a per-row expanded state toggled by tap (long-press or a dedicated
   // expand handle) AND by :hover on devices that have it. CSS keeps both.
-  const [expanded, setExpanded] = useState(false);
+  // Touch devices have no hover — start expanded there so the row
+  // action buttons (edit/delete) are always visible on phones.
+  const [expanded, setExpanded] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches,
+  );
 
   const dueDate = action.due_at ? new Date(action.due_at) : null;
   const now = new Date();
