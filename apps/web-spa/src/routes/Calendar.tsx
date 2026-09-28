@@ -82,7 +82,8 @@ export function Calendar() {
   const userId = useUserId();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Touch devices never fire onMouseEnter — long-press / tap-to-reveal.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [monthOffset, setMonthOffset] = useState(0);
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -432,8 +433,12 @@ export function Calendar() {
                             key={event.id}
                             to={`/events/${event.id}?from=/calendar`}
                             className="row-card"
-                            onMouseEnter={() => setHoveredId(event.id)}
-                            onMouseLeave={() => setHoveredId(null)}
+                            onMouseEnter={() => setExpandedId(event.id)}
+      onMouseLeave={() => setExpandedId(null)}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button, a, input, textarea')) return;
+        setExpandedId((id) => (id === event.id ? null : event.id));
+      }}
                             style={{ textDecoration: 'none', color: 'inherit' }}
                           >
                             <span
@@ -542,7 +547,7 @@ export function Calendar() {
                               style={{
                                 padding: '2px 6px',
                                 fontSize: 'var(--text-sm)',
-                                opacity: hoveredId === event.id ? 1 : 0.55,
+                                opacity: expandedId === event.id ? 1 : 0.55,
                                 transition: `opacity var(--transition)`,
                               }}
                               title="编辑"
@@ -561,7 +566,7 @@ export function Calendar() {
                                 padding: '2px 6px',
                                 fontSize: 'var(--text-sm)',
                                 color: 'var(--danger)',
-                                opacity: hoveredId === event.id ? 1 : 0,
+                                opacity: expandedId === event.id ? 1 : 0,
                                 transition: `opacity var(--transition)`,
                               }}
                               title="删除"

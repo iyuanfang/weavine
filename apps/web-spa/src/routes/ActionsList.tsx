@@ -579,7 +579,10 @@ function ActionRowBody({
           user_id: action.user_id,
         }
       : null;
-  const [hovered, setHovered] = useState(false);
+  // Touch devices never fire onMouseEnter, so the action-menu buttons live
+  // behind a per-row expanded state toggled by tap (long-press or a dedicated
+  // expand handle) AND by :hover on devices that have it. CSS keeps both.
+  const [expanded, setExpanded] = useState(false);
 
   const dueDate = action.due_at ? new Date(action.due_at) : null;
   const now = new Date();
@@ -615,8 +618,15 @@ function ActionRowBody({
         touchAction: dragHandleProps ? 'none' : 'auto',
       }}
       {...(dragHandleProps ?? {})}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      onClick={(e) => {
+        // Touch devices: tapping the row (outside the action buttons) toggles
+        // the action menu. The button clicks below stopPropagation so this
+        // doesn't fire when the user is actually hitting them.
+        if ((e.target as HTMLElement).closest('button, a, input, textarea')) return;
+        setExpanded((v) => !v);
+      }}
     >
       <button
         type="button"
@@ -738,7 +748,7 @@ function ActionRowBody({
           style={{
             padding: '2px 6px',
             fontSize: 'var(--text-sm)',
-            opacity: hovered ? 1 : 0.55,
+            opacity: expanded ? 1 : 0.55,
             transition: `opacity var(--transition)`,
           }}
           title="编辑"
@@ -762,7 +772,7 @@ function ActionRowBody({
             padding: '2px 6px',
             fontSize: 'var(--text-sm)',
             color: 'var(--danger)',
-            opacity: hovered ? 1 : 0,
+            opacity: expanded ? 1 : 0,
             transition: `opacity var(--transition)`,
           }}
           title="删除"

@@ -2831,6 +2831,26 @@ textarea.input-base {
   min-width: 0;
 }
 
+/* Notes page cards/list must not push the page past the viewport. */
+.notes-list,
+.notes-list .layout-split,
+.notes-list .layout-split__main,
+.notes-list .card,
+.notes-list .list-card,
+.notes-list .row-card,
+.notes-list .digest-row {
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .notes-list .filter-panel,
+  .notes-list .filter-panel__section {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 640px) {
   .notes-list__filter input {
     max-width: none;
