@@ -237,7 +237,14 @@ export function NotesList() {
           </div>
         </FilterPanelShell>
 
-        <div>
+        {/* `layout-split__main`, matching the other five list pages
+            (ActionsList / Calendar / ContactsList / ProjectsList / Tags).
+            This was a bare `<div>`: it carried no `min-width: 0`, so as a grid
+            item its automatic minimum fell back to min-content and one pasted
+            URL in a note snippet widened the whole page to ~828px on a 375px
+            phone. It also silently opted out of the `.layout-split__main *`
+            overflow guards. */}
+        <div className="layout-split__main">
           {isLoading && notes.length === 0 && (
             <div
               style={{

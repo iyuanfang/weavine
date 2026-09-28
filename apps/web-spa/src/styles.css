@@ -134,8 +134,15 @@ button:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 160px 1fr;
+  /* `minmax(0, 1fr)`, not `1fr`: a bare `1fr` track resolves its automatic
+     minimum to min-content, so one unbreakable string anywhere on the page
+     (a pasted URL, a token, a long filename) widens the track past the
+     viewport and shoves the whole layout sideways. */
+  grid-template-columns: 160px minmax(0, 1fr);
   height: 100vh;
+  /* `dvh` so the Safari/Android address bar hiding does not resize the shell
+     under the bottom nav. Matches what the drawer already did. */
+  height: 100dvh;
 }
 
 .app-shell__nav {
@@ -169,7 +176,7 @@ button:focus-visible {
 }
 
 .app-shell:has(.app-shell__nav--collapsed) {
-  grid-template-columns: 64px 1fr;
+  grid-template-columns: 64px minmax(0, 1fr);
 }
 
 .app-shell:has(.app-shell__nav--collapsed) .page {
@@ -431,13 +438,28 @@ button:focus-visible {
   align-items: start;
 }
 
+/* The main column on every list page. `min-width: 0` is the reason the other
+   five list pages never spilled: it lets a grid item shrink below its
+   min-content width. NotesList used to render a BARE div here instead (fixed
+   there too, but the grid track below is the real guard). */
 .layout-split__main {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Every child of the split (filter sidebar, main column, mobile filter bar) is
+   a grid item: without this its automatic minimum is min-content, so one
+   unbreakable string stretches the track no matter what the track is written
+   as. Kept unbracketed on purpose — it must hold at every breakpoint. */
+.layout-split > * {
   min-width: 0;
 }
 
 @media (max-width: 900px) {
+  /* `minmax(0, 1fr)` — see the .app-shell note. A bare `1fr` here is what let
+     the notes list widen to 828px on a 375px phone. */
   .layout-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
 }
@@ -1404,7 +1426,7 @@ textarea.input-base {
 .mb-2 { margin-bottom: 8px; }
 .mb-4 { margin-bottom: 16px; }
 
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 
 /* ── Atomic layout primitives (reusable) ────────── */
 
@@ -1541,7 +1563,7 @@ textarea.input-base {
 
 @media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .app-shell__nav--desktop {
     display: none;
@@ -1582,12 +1604,17 @@ textarea.input-base {
     height: 100dvh;
     width: 280px;
     width: min(85vw, 320px);
-    z-index: 50;
+    /* 55, not 50: the bottom nav is z-index 50 and comes later in the DOM,
+       so at equal z it painted over the last 56px of the drawer — which is
+       exactly where the 近期 feed tail and 登出 sit. */
+    z-index: 55;
     transform: translateX(-100%);
     transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: var(--shadow-md);
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* Keep the last row clear of the home indicator / gesture bar. */
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
   .app-shell__nav--drawer.app-shell__nav--open {
     transform: translateX(0);
@@ -1623,7 +1650,7 @@ textarea.input-base {
     --page-pad: 4px;
   }
   .layout-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
   .filter-panel {
@@ -1649,7 +1676,7 @@ textarea.input-base {
 }
 
 @media (max-width: 640px) {
-  .grid-2 { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: minmax(0, 1fr); }
   .kpi-row { grid-template-columns: 1fr !important; }
   .page-header {
     flex-wrap: wrap;
@@ -1967,6 +1994,13 @@ textarea.input-base {
 
   .app-shell {
     padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Reminder toasts are fixed bottom-right at z-index 10000 (a desktop
+     value). On a phone that lands on top of the bottom nav and the home
+     indicator, so lift them clear of both. */
+  .reminder-toast-container {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
 
   .bottom-nav {
@@ -2563,6 +2597,18 @@ textarea.input-base {
   padding: 6px 0;
 }
 
+/* Focus feedback for the field lives on the SHELL: entering text mode turns
+   `.mobile-input-shell--active` green, so the pill *is* the focus ring.
+   The bare class above cannot switch that ring off — the global
+   `textarea:focus-visible` rule is (0,1,1) and outranks `(0,1,0)`, and an
+   outline never follows border-radius, so focusing the field painted a hard
+   right-angle box inside the 26px pill (read as "两个框" / a duplicated
+   frame). Match `:focus-visible` here so the override wins while keyboard
+   users still get the green pill. */
+.mobile-input-shell__input:focus-visible {
+  outline: none;
+}
+
 .mobile-input-shell__placeholder {
   flex: 1;
   min-width: 0;
@@ -2721,6 +2767,17 @@ textarea.input-base {
   color: var(--text, #111);
   font-size: var(--text-sm);
   font-family: inherit;
+}
+
+/* Same reason as `.mobile-input-shell__input`: a rectangular outline on an
+   8px-rounded control inside the floating sheet looks like a second box. Use
+   the site-wide `.input-base` focus language (border tint + soft ring)
+   instead of an outline that ignores the corner radius. */
+.mobile-input-shell__editor-select:focus-visible,
+.mobile-input-shell__editor-time:focus-visible {
+  outline: none;
+  border-color: var(--accent, #059669);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
 .mobile-input-shell__editor-collapse {
@@ -3419,6 +3476,17 @@ textarea.input-base {
 .markdown-view {
   line-height: 1.6;
   font-size: var(--text-base);
+  /* Load-bearing on phones, not cosmetic:
+     - `overflow-wrap: anywhere` is the ONLY value that lowers an element's
+       min-content width. `break-word` renders an identical wrap but still
+       reports the longest unbreakable run as min-content, so a pasted URL,
+       JWT fragment or `event:{uuid}:{lead}` token kept the block 700px+
+       wide on a 375px screen even while looking wrapped.
+     - `min-width: 0` stops this block from setting the parent's floor,
+       `max-width: 100%` from ever becoming the widest thing on the page. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
 }
 .markdown-view h1,
 .markdown-view h2,
@@ -3448,7 +3516,9 @@ textarea.input-base {
   background: var(--code-bg, rgba(0, 0, 0, 0.04));
   padding: 10px 12px;
   border-radius: 6px;
+  /* Code blocks scroll on their own instead of widening the page. */
   overflow-x: auto;
+  max-width: 100%;
 }
 .markdown-view pre code {
   background: transparent;
@@ -3458,6 +3528,7 @@ textarea.input-base {
   border-collapse: collapse;
   margin: 0.6em 0 1em;
   width: 100%;
+  max-width: 100%;
   font-size: 0.95em;
 }
 .markdown-view th,
@@ -3466,6 +3537,11 @@ textarea.input-base {
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
+  /* A table's width is decided by its cells' min-content (table-layout is
+     `auto`), so one long token in a cell used to push the table 72px past a
+     375px screen — with no scroll container to reach it. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .markdown-view th {
   background: var(--surface-alt, #f9fafb);
@@ -3474,6 +3550,15 @@ textarea.input-base {
 .markdown-view tbody tr:nth-child(even) td {
   background: var(--surface-alt, rgba(0, 0, 0, 0.02));
 }
+.markdown-view img {
+  /* User content of unknown width: markdown-it runs with `html: false`, so a
+     raw <img> tag is stripped, but `![](url)` still renders — and a pasted
+     screenshot is easily 2000px+ wide with no width attribute. */
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
 .markdown-view a.wikilink {
   color: var(--accent, #8b5cf6);
   text-decoration: none;
@@ -3808,15 +3893,47 @@ textarea.input-base {
 /* ── Mobile catch-all: kill horizontal spill + always-visible actions ── */
 @media (max-width: 640px) {
   /* Long unbroken strings (emails, URLs, paths, passwords) inside any
-     list card blow the card past the screen edge. Break them instead. */
+     list card blow the card past the screen edge. Break them instead.
+
+     `overflow-wrap: anywhere` rather than `break-word`: the visual wrap is
+     the same, but only `anywhere` also lowers the element's min-content
+     width — which is what the grid/flex parents actually measure. With
+     `break-word` this rule could not stop a 828px-wide notes list on a
+     375px phone. `word-break: break-word` stays as the legacy-WebView
+     fallback (Chrome <80 / old Android WebViews lack `anywhere`). */
   .notes-list__item,
   .notes-list__item *,
+  .note-detail,
+  .note-detail *,
+  .layout-split__main,
   .layout-split__main *,
   .row-card *,
   .digest-row * {
     max-width: 100%;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
     word-break: break-word;
+  }
+
+  /* The min-content floor of a scrollable page column. */
+  .page {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Note title input is sized `min(560px, 55vw)` INLINE (NoteDetail.tsx) —
+     on a 375px phone that resolves to 206px, barely half the row, so an
+     ordinary title already looks cut off. `!important` is required because
+     an inline style outranks any stylesheet rule. Scoped to .note-detail so
+     the other detail pages (which pass plain text titles) keep their layout. */
+  .note-detail .detail-header-card__info .cluster {
+    flex-wrap: wrap;
+  }
+  .note-detail .detail-header-card .page-title {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .note-detail .detail-header-card .page-title input {
+    width: 100% !important;
   }
 
   /* Touch devices have no hover — action buttons (edit / delete) that

@@ -1535,3 +1535,81 @@ WHERE user_id = $1 AND server_revision > $2      -- 原先没有 device_id 条�
 - **不需要新迁移、不涉及客户端**：纯服务端改写 + 一处日志截断，与既有上线次序（先跑 4 个迁移 → 服务端先发 → 客户端后发）无耦合，可单独发。
 
 
+## 20. 第六轮：移动端布局溢出（2026-09-28 已落地）
+
+> 触发：真机反馈「笔记页面，手机上，右边总是撑开屏幕」。
+
+### 20.1 根因链（三条叠加，缺一不可）
+
+1. **`grid-template-columns: 1fr` 的自动最小值是 min-content**。`1fr` 等价于 `minmax(auto, 1fr)`，而 `auto` 作为最小值解析为**内容的 min-content 宽度**。`.layout-split` 在 `≤900px` 的两个断点里都写成了裸 `1fr`，于是**一条不可断的长串就能把整列撑开**。桌面断点反而是对的（`160px minmax(0, 1fr)`）——移动断点丢掉了这层保护，属回归。
+2. **`overflow-wrap: break-word` 不能降低 min-content**。这是关键区别：`break-word` 只影响**布局时的换行**，元素的 min-content 仍报告为最长不可断片段；只有 `overflow-wrap: anywhere` 才会同时降低 min-content。上一轮的移动兜底用的是 `break-word`，**视觉上文字确实换行了、但父级测量的 min-content 没变**，所以完全没拦住溢出。同理，`word-break: break-word` 是 `overflow-wrap: break-word` 的废弃别名，也不降低 min-content。
+3. **NotesList 的主体是裸 `<div>`**。其余五个列表页（ActionsList / Calendar / ContactsList / ProjectsList / Tags）都渲染 `layout-split__main`，该类带 `min-width: 0`；`overflow` 非 `visible` 或显式 `min-width: 0` 才会让 grid/flex item 的最小尺寸回落到 0。笔记页两者都没有，于是它成为**唯一暴露**的页面。
+
+实测（无头 Chromium，375×812，`styles.css` 取 HEAD 版）：`.app-shell__main` 的 `scrollWidth = 841px`、`clientWidth = 375px`，文档 `scrollWidth = 846px` —— 卡片整体被推到屏幕右侧之外，正文被 `overflow-x: hidden` 直接裁掉（不是可滚动，是**内容丢失**）。
+
+### 20.2 修法
+
+| # | 位置 | 改动 |
+| --- | --- | --- |
+| 1 | `styles.css` `.layout-split`（两处 ≤900px 断点） | `1fr` → `minmax(0, 1fr)` |
+| 2 | `styles.css` `.app-shell` / `.app-shell:has(...)` / `@media ≤900px .app-shell` | 同上（`160px 1fr` → `160px minmax(0, 1fr)` 等），根骨架同族问题提前消除 |
+| 3 | `styles.css` **新增** `.layout-split > * { min-width: 0 }`（**不加断点**，每个断点都要成立） | 网格子项的通用下限保护——实测**单靠这一条就足以归零**，`minmax` 是第二道保险 |
+| 4 | `styles.css` `.grid-2` | 同上（`1fr 1fr` → `minmax(0, 1fr) minmax(0, 1fr)`） |
+| 5 | `styles.css` `.markdown-view` / `pre` / `table` / `th,td` / **新增 `img`** | 正文容器加 `overflow-wrap: anywhere` + `min-width: 0` + `max-width: 100%`；`pre` 加 `max-width: 100%`（内部 `overflow-x: auto` 保留，代码块自己横滚）；表格加 `max-width: 100%` 且单元格 `overflow-wrap: anywhere`（表格宽度由单元格 min-content 决定，`table-layout: auto` 下无法收缩）；`img` 此前**全仓无任何宽度约束**，`![](…)` 贴一张截图即可撑破页面 |
+| 6 | `styles.css` 移动兜底块 | `overflow-wrap: break-word` → **`anywhere`**，并保留 `word-break: break-word` 作为老 WebView（Chrome <80 无 `anywhere`）的降级；兜底范围补上 `.note-detail` / `.note-detail *`（笔记详情页不在 `.layout-split__main` 内，此前完全没被覆盖） |
+| 7 | `routes/NotesList.tsx` | 裸 `<div>` → `<div className="layout-split__main">`（与其它五个列表页对齐） |
+| 8 | `styles.css` `.note-detail` 标题行（≤640px） | 标题 `<input>` 的宽度是**内联** `min(560px, 55vw)`，375px 屏上只有 206px，普通标题已是「被截断」观感 → 窄屏改 `width: 100% !important`（内联样式必须用 `!important` 覆盖），并让 `h1` 占满该行 |
+
+### 20.3 同轮顺手修掉的两处手机端层级问题
+
+- **抽屉被底部导航压住**：`.app-shell__nav--drawer` 与 `.bottom-nav` 都是 `z-index: 50`，而 `BottomNav` 在 DOM 中靠后 → 抽屉最下方 56px（近期 feed 尾部、登出）被底部导航盖住点不到。抽屉提到 **55**，并补 `padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px))`。
+- **提醒浮层压住底部导航**：`.reminder-toast-container` 是 `position: fixed; bottom: 16px; z-index: 10000`（桌面值），手机上正好落在底部导航与 Home 手势条上 → 在 ≤640px 改 `bottom: calc(72px + env(safe-area-inset-bottom, 0px))`。
+- `.app-shell` 的 `height: 100vh` 补 `100dvh`（抽屉早已这么做，根骨架是遗漏）。
+
+另修掉一处**订阅泄漏**（不是布局，但同属手机端、同属「看着没问题」的一类）：`use-reminder-poller` 的 Tauri 分支只把**第一个** `listen` 句柄存进 `let unlisten`，并把真正的清理函数当成 async IIFE 的返回值 —— 而**没有任何人消费这个返回值**。后果：`unlistenSync` 永不释放（每次挂载泄漏一个 `weavine:sync-conflicts` 订阅；dev 下 StrictMode 双挂载直接翻倍，冲突事件被处理 N+1 次），且若卸载发生在 `await listen(...)` 期间，`unlisten` 还是 `null`，那个订阅也漏。改为「每个订阅一 resolve 就推进 `cleanups`，统一由 `disposeAll` 释放」，并在两个 `await` 之后各补一次 `cancelled` 检查。
+
+### 20.4 验证方法（可复用）
+
+不依赖后端与登录：把 `styles.css` 与真实 DOM 结构拼成一个静态复现页，用无头 Chromium 在 375×812 下测量 **`document.scrollWidth` 与「每个元素 `getBoundingClientRect().right` 超出 `clientWidth` 的量」**。只看 `document.scrollWidth` 会被 `overflow-x: hidden` 骗过（撑开被裁切、文档宽度仍报 375），必须同时看元素的几何边界。
+
+- 修复前：`main 841/375`，27 个元素越界。
+- 修复后：`main 375/375`，0 个元素越界；320 / 360 / 390 / 414 / 768 / 1024 / 1440 全部为 0。
+- 详情页残留 1 个「越界」元素是 `pre > code`，位于 `pre` 自身的 `overflow-x: auto` 内，属**预期的代码块横向滚动**，已用「排除滚动容器内部元素」的判据核对。
+- 对比截图：`notes-list.before/after`、`note-detail.before/after`（375×812）。
+
+### 20.5 已评估、本轮未改（需真机或产品拍板）
+
+| 项 | 现状 | 为什么不当场改 |
+| --- | --- | --- |
+| **键盘遮挡** | 移动端首页 `.today-mobile` 用 `calc(100dvh - …)` + `overflow: hidden`，且全仓无 `visualViewport` 监听 | `dvh` 不随软键盘收缩，键盘弹出时底部输入栏被遮且**页面无法滚动**（`overflow: hidden`）→ 首页「记录」主路径受影响。修法要引入 `visualViewport` 高度变量并改动首页高度模型，属行为变更 |
+| **`viewport-fit=cover` 缺失** | `apps/web-spa/index.html` 的 viewport meta 没有它 → **`env(safe-area-inset-*)` 恒为 0**，全仓 9 处安全区代码真机上是空转 | 加上后内容会延伸进刘海/手势区，而顶部的汉堡、今日顶栏、toast、搜索浮层等**尚未**补 `safe-area-inset-top`；不加则底部导航在安卓手势条/iPhone Home 条机型上被压。两种都需要真机确认，不能盲改 |
+| **输入框字号 < 16px** | `.input-base` = 14px、登录页 0.9rem、移动输入栏的类型/时间选择器 12px | iOS 聚焦会整页放大且可能不回弹。改成 16px 会动到桌面观感，宜只在 `(pointer: coarse)` 下提升 |
+| **641–900px 的「三不管」区间** | `≤900px` 收起桌面侧栏、`≤640px` 才出底部导航；中间区间只有汉堡抽屉。断点总数 640/720/768/900 四档且互不对齐 | 属布局体系调整，需要先定「平板/折叠屏展开态」的目标形态 |
+| **触屏可达性** | `ActionsList` / `Calendar` 的编辑/删除按钮靠 `opacity: hovered ? 1 : 0`；兜底只覆盖 `≤640px`，且用 `[title="删除"]` 这类中文属性选择器 | 641–1024px 的触屏设备（平板、触屏本）按钮可能永久不可见；另 `NoteDetail` / `MdEditor` / `GraphTab` 用内联 `mouseenter/mouseleave` 改样式，触屏上无 `mouseleave` → 高亮残留。修法应统一到 `:hover` 门控或 `@media (hover: hover)`，涉及多个组件 |
+| **Android 物理返回键** | **全仓零处理**（`back-button` / `onBackButton` / `exit-requested` 均无命中）；`AppShell` 只监听键盘的 `Escape`，而抽屉的注释写着「backdrop tap and system back close it」 | 抽屉/浮层打开时按返回键的行为未定义（离开页面还是关浮层）。且依赖 Tauri Android 把返回键映射成 webview 后退还是 `CloseRequested` —— 需真机确认后再决定是否引入 history 深度管理 |
+
+### 20.6 同轮追加：首页输入栏「两个框」（2026-09-28 已落地）
+
+> 触发：真机反馈「下面框重复了」—— 首页点开输入态后，圆角胶囊外壳内又出现一个**直角矩形**边框。
+
+**根因（层叠顺序，不是新样式）**：全局焦点环 `input/select/textarea/button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }` 的特异性是 **(0,1,1)**（元素 + 伪类），而 `.mobile-input-shell__input { outline: none }` 只有 **(0,1,0)** —— 于是类里的 `outline: none` 只在**非聚焦**时生效，一聚焦就被全局焦点环反超。两个叠加因素让它非常刺眼：
+
+1. **outline 不跟随 `border-radius`**。外壳是 26px 圆角胶囊，内部 textarea 的 `border-radius: 0`，焦点环便画成一个硬直角矩形，与外壳形成「双框」。
+2. **文本类控件在触摸聚焦时也匹配 `:focus-visible`**（Chrome 对 `input` / `textarea` 始终匹配，无论鼠标、键盘还是触摸）—— 所以手机上**点一下就出现**，不是只有键盘用户才看到。
+
+实测（无头 Chromium 375×812，聚焦 textarea）：`outline: solid 2px rgb(5, 150, 105)`、`outline-offset: 2px`、textarea `border-radius: 0`；同一页面对照 HEAD 版 CSS 复现出与真机截图一致的双框。
+
+**修法**
+
+| # | 位置 | 改动 |
+| --- | --- | --- |
+| 1 | `styles.css` **新增** `.mobile-input-shell__input:focus-visible { outline: none }`（(0,2,1)，稳胜全局规则） | 聚焦反馈**已经由外壳承担**：进入输入态即加 `.mobile-input-shell--active`（绿边框 + 绿柔光），胶囊本身就是焦点环，键盘用户不丢提示 |
+| 2 | `styles.css` **新增** `.mobile-input-shell__editor-select/-time:focus-visible` | 展开态编辑浮层里的 `select` / `datetime-local` 是 8px 圆角控件，同样会被全局焦点环画出直角方框 → 改用全站 `.input-base:focus` 的既有语言：`outline: none` + `border-color: var(--accent)` + `box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .12)` |
+
+**同类排查（全仓「内嵌无边框输入」）**：只有两处属于这一族，另一处本来就免疫 —— `QuickCapture` / `SearchablePicker` 用 `.input-base`，其 `.input-base:focus { outline: none; … }` 是 (0,2,0) > (0,1,1)，全局焦点环保留为它们的可见反馈；笔记详情标题 `<input>` 用**内联** `outline: none`（内联样式优先级最高）也免疫。
+
+**边界确认**：只有**文本输入类**控件会出现这个「双框」。实测触摸点击 `.mobile-input-shell__send` 后 `matches(':focus-visible') === false`（Chromium 按输入方式判定 modality，触摸点按钮不触发焦点环）→ 无需为按钮加例外。
+
+**验证**：探针 `probe-outline.mjs`（聚焦后读 computed）：修复前 `outlineStyle: solid` / 修复后 `none`；375×812 元素越界 0；对照截图 `today.before.png`（双框）与 `today.png`（单框）。`tsc --noEmit` + `vite build` 通过，纯 CSS 改动、无 TS 变动。
+
+

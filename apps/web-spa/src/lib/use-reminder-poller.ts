@@ -39,8 +39,22 @@ export function useReminderPoller() {
     if (!userId) return;
 
     if (isTauri()) {
-      let unlisten: (() => void) | null = null;
+      // Every subscription goes into `cleanups` the moment it resolves, so the
+      // outer disposer can always reach it. The previous shape kept only the
+      // FIRST handle in a `let unlisten` and let the async IIFE return the
+      // disposer — a returned value nothing consumed — which meant:
+      //   • `unlistenSync` was never called: each mount leaked a permanent
+      //     `weavine:sync-conflicts` listener, and every later conflict event
+      //     was handled N+1 times (React StrictMode double-mounts in dev);
+      //   • if unmount landed inside `await listen(...)`, `unlisten` was still
+      //     null when the disposer ran, so that subscription leaked too.
+      const cleanups: Array<() => void> = [];
       let cancelled = false;
+      const disposeAll = () => {
+        cancelled = true;
+        for (const fn of cleanups.splice(0)) fn();
+      };
+
       (async () => {
         // Eagerly request the OS notification permission so Android 13+ shows
         // the system prompt on first launch instead of silently rejecting
@@ -56,11 +70,13 @@ export function useReminderPoller() {
         try {
           const { listen } = await import("@tauri-apps/api/event");
           if (cancelled) return;
-          unlisten = await listen<Reminder>("weavine:reminder-fired", (event) => {
+          const unlistenFired = await listen<Reminder>("weavine:reminder-fired", (event) => {
             const r = event.payload;
             if (!r) return;
             window.dispatchEvent(new CustomEvent("weavine:reminder", { detail: r }));
           });
+          cleanups.push(unlistenFired);
+          if (cancelled) return disposeAll();
           const unlistenSync = await listen<Array<{ kind: string; row_id: string; reason: string }>>(
             "weavine:sync-conflicts",
             (event) => {
@@ -69,19 +85,16 @@ export function useReminderPoller() {
               window.dispatchEvent(new CustomEvent("weavine:sync-conflicts", { detail: payload }));
             },
           );
-          return () => {
-            cancelled = true;
-            if (unlisten) unlisten();
-            unlistenSync();
-          };
+          cleanups.push(unlistenSync);
+          // Unmount may have happened while the second `await` was in flight;
+          // `cancelled` was already flipped, so release what we just took.
+          if (cancelled) disposeAll();
         } catch (e) {
           console.warn("reminder poller: failed to subscribe to tauri event", e);
         }
       })();
-      return () => {
-        cancelled = true;
-        if (unlisten) unlisten();
-      };
+
+      return disposeAll;
     }
 
     let timerId: ReturnType<typeof setInterval> | null = null;
