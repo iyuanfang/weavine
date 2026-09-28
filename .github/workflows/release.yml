@@ -300,9 +300,14 @@ jobs:
         # into the freshly generated project, so the installed APK shows the
         # green Weavine logo instead of Tauri's default yellow/blue.
         run: |
-          pnpm exec tauri icon apps/web-spa/public/icon-512.png \
-            -o src-tauri/gen/android/app/src/main/res
+          # tauri icon -o writes to <out>/android/... (and <out>/ios/...). Point
+          # -o at a scratch dir, then copy ONLY the android/ subtree into the
+          # project's res/ — writing -o directly at res/ would create an illegal
+          # res/android/ resource qualifier dir and AAPT2 fails.
+          pnpm exec tauri icon apps/web-spa/public/icon-512.png -o /tmp/tauri-icons
+          cp -r /tmp/tauri-icons/android/* src-tauri/gen/android/app/src/main/res/
           ls src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/
+          cat src-tauri/gen/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
 
       - name: Inject frontendDist assets into Gradle config
         # src-tauri/gen/android/ is gitignored, so we patch build.gradle.kts

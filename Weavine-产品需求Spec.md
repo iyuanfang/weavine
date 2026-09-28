@@ -1680,11 +1680,34 @@ WHERE user_id = $1 AND server_revision > $2      -- 原先没有 device_id 条�
 
 - 源图：`src-tauri/icons/icon.png`（512，自带圆角卡片）→ 先用 sharp 放大 1.28 倍居中裁剪，得到**全出血**版本（四角被推出画布），保证自适应遮罩只裁到背景渐变。
 - `npx tauri icon <manifest.json>`：`default` = 全出血图（用于 legacy）、`android_bg` = 同图高斯模糊 + 0.92 亮度、`android_fg` = **全出血图满幅**。
-  - 「前景满幅」是刻意的：logo 主体在画面中央，圆形 / 方圆角遮罩裁掉的只有四角背景；试过把前景缩到 66%/72% 再叠模糊底，反而会在遮罩里露出一个可见的方块（「方中带方」）。
+  - ~~「前景满幅」是刻意的：logo 主体在画面中央，圆形 / 方圆角遮罩裁掉的只有四角背景；试过把前景缩到 66%/72% 再叠模糊底，反而会在遮罩里露出一个可见的方块（「方中带方」）。~~ **❌ 这条结论是错的，2026-09-29 实测推翻，见本节末尾的修正。**
 - 手写 legacy 位图（圆角方 + 圆形 + 8% 留白，5 档密度），比 Tauri 默认的「带透明边的方图」在 Android 7 / 老 launcher 上更一致。
 - 新增 `mipmap-anydpi-v26/ic_launcher.xml` **和** `ic_launcher_round.xml`（两个都要，否则 roundIcon 会退回 legacy 位图）；`AndroidManifest` 补 `android:roundIcon="@mipmap/ic_launcher_round"`；删除两个模板 vector。
 
 **注意**：launcher 会缓存图标，**必须卸载后重装**才能看到新图标。
+
+#### 20.10.1 修正（2026-09-29）：满幅前景会被遮罩裁掉图形
+
+上一轮判「遮罩只裁四角背景」时，用的预览图**没有按 Android 的真实规则模拟**（只是把整图裁成圆形），所以看不出问题。按规范复算 —— 108dp 画布，遮罩只显示中心 **72dp**（66.7%）—— 结论完全相反：
+
+| 前景内容 | 圆形遮罩下 | 方圆角遮罩下 |
+| --- | --- | --- |
+| 满幅 100%（旧） | **叶子顶部、蝴蝶结左右两端被切** | 同样被切 |
+| 安全区 64%（新） | 完整 | 完整 |
+
+实测数据：`mipmap-xxxhdpi/ic_launcher_foreground.png` 内容 bbox = **1024/1024 = 100%**（`trim` 无法裁掉任何像素，因为背景渐变铺满），而遮罩可见区只有 66.7% —— 必然裁到图形。
+
+**修法**（脚本 `mobile-repro/fix-android-foreground.cjs`，逻辑已并入 `install-android-icons.cjs`）：
+
+1. 前景内容缩到画布 **64%**（`SAFE_CONTENT = 0.64`）居中，四周透明；
+2. 对缩小的图叠一层**径向羽化**（`FEATHER_FROM = 0.82`，圆形渐变 alpha 82%→100% 渐隐），让它融进背景的模糊层，避免「方中带方」的硬边 —— 这正是上一轮担心的那个问题，用羽化而不是「满幅」来解。
+3. **background 层不动**（`tauri icon` 生成的模糊版），legacy 位图不动。
+
+校验工具 `mobile-repro/simulate-adaptive.cjs`：读**仓库里真实的 res 文件**，按 108dp/72dp 规则施加 circle / squircle / square 三种遮罩出图。修复前后对照见 `android-icon-sim.png`。
+
+> **⚠️ `tauri icon` 会覆盖前景。** Tauri 的 `icon` 命令生成的是满幅前景（就是本 bug 的版本），每次换 logo 跑完 `tauri icon` **必须重跑一次 `install-android-icons.cjs`**，否则图形又被裁。
+> 另外它有两个坑：① 默认输出目录是 `src-tauri/icons/`，若在别的目录执行会把整套图标（含 Windows 的 `Square150x150Logo.png`、`icon.icns`、`ios/`）写进 cwd；② 这些文件名含**大写字母**，落在 `res/` 下会让 aapt2 报非法资源名、**构建直接失败**。
+
 
 ### 20.11 Android 原生工程入库 + 软键盘
 
