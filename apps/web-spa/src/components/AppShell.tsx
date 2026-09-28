@@ -134,9 +134,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // branch of the Today page renders its own top bar, so the shell hamburger
   // is hidden there (CSS) and the event is the bridge.
   useEffect(() => {
-    const open = () => setDrawerOpen(true);
-    window.addEventListener('weavine:open-drawer', open);
-    return () => window.removeEventListener('weavine:open-drawer', open);
+    // Toggle, not open: the bottom-nav 更多 tab dispatches this too, and a
+    // second tap there must CLOSE the drawer (WeChat 更多 behaviour).
+    const toggle = () => setDrawerOpen((o) => !o);
+    window.addEventListener('weavine:open-drawer', toggle);
+    return () => window.removeEventListener('weavine:open-drawer', toggle);
   }, []);
 
   const nav = (

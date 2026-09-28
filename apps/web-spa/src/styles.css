@@ -1634,7 +1634,11 @@ textarea.input-base {
   }
   .filter-panel__section {
     flex-shrink: 0;
-    min-width: 160px;
+    min-width: 120px;
+  }
+  .filter-panel {
+    max-width: 100%;
+    min-width: 0;
   }
   .filter-panel__divider {
     display: none;
@@ -1908,11 +1912,29 @@ textarea.input-base {
 }
 
 @media (max-width: 640px) {
+  /* Kill rubber-banding and horizontal drag at the root: the WebView's
+     elastic overscroll was letting every page (incl. the locked home) be
+     pulled up/left with dead space. */
+  html, body {
+    overscroll-behavior: none;
+    overflow-x: hidden;
+  }
+
   /* Today-mobile must not scroll at all — kill the shell scroll + bounce. */
   .app-shell__main:has(.today-mobile) {
     overflow: hidden;
     overscroll-behavior: none;
     padding: 0;
+  }
+
+  /* List rows / cards must never exceed the viewport — the right-side
+     badges (高/低) etc. pushed rows a few px past the edge. */
+  .layout-split__main,
+  .card,
+  .row-card,
+  .digest-row {
+    max-width: 100%;
+    min-width: 0;
   }
 
   /* List pages: drop the hamburger's 70px top padding (the hamburger is
@@ -2822,7 +2844,15 @@ textarea.input-base {
   gap: 8px;
   margin-bottom: 12px;
   flex: 1;
-  min-width: 200px;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .notes-list__filter input {
+    max-width: none;
+    min-width: 0;
+    flex: 1;
+  }
 }
 .notes-list__filter input {
   flex: 1;
