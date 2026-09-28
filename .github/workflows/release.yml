@@ -293,6 +293,17 @@ jobs:
             cargo tauri android init --ci
           fi
 
+      - name: Apply green launcher icons to the fresh android project
+        # gen/android is untracked (it broke the build when committed — the
+        # tracked res/ merged with the freshly generated template). tauri
+        # icon writes the adaptive-icon foreground/background layers straight
+        # into the freshly generated project, so the installed APK shows the
+        # green Weavine logo instead of Tauri's default yellow/blue.
+        run: |
+          pnpm exec tauri icon apps/web-spa/public/icon-512.png \
+            -o src-tauri/gen/android/app/src/main/res
+          ls src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/
+
       - name: Inject frontendDist assets into Gradle config
         # src-tauri/gen/android/ is gitignored, so we patch build.gradle.kts
         # on every CI run. Without this, the web-spa dist/ never gets
