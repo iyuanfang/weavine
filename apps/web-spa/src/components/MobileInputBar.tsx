@@ -83,6 +83,9 @@ export function MobileInputBar({ onSaved }: Props) {
   const debounceRef = useRef<number | null>(null);
   const handleRef = useRef<VoiceRecordingHandle<Blob | string> | null>(null);
   const startYRef = useRef(0);
+  /** Monotonic id for parse requests — see the stale-reply guard below. */
+  const parseSeqRef = useRef(0);
+  const submittedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -105,12 +108,22 @@ export function MobileInputBar({ onSaved }: Props) {
     return () => window.clearInterval(id);
   }, [text]);
 
+  // The 已记录 ✓ flash schedules a timeout; clear it so it cannot write state
+  // after the component is gone.
+  useEffect(
+    () => () => {
+      if (submittedTimerRef.current) window.clearTimeout(submittedTimerRef.current);
+    },
+    [],
+  );
+
   // Live parse while typing. Re-seeds the editable fields only when the text
   // is fully cleared, so a user-picked kind/time/contact survives typing.
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     const trimmed = text.trim();
     if (!trimmed) {
+      parseSeqRef.current += 1;
       setParsed(null);
       setKind(null);
       setDue(null);
@@ -118,9 +131,16 @@ export function MobileInputBar({ onSaved }: Props) {
       setError(null);
       return;
     }
+    const seq = ++parseSeqRef.current;
     debounceRef.current = window.setTimeout(() => {
       parseQuick(trimmed, contactNames, userId)
         .then((p) => {
+          // Out-of-order guard: `parsed` also feeds `submit`, so a late reply
+          // for an earlier sentence can create an entity the user never
+          // described (easiest to hit on the PWA, where parse is a network
+          // call). Clearing the field bumps the seq too, so a reply landing
+          // after a clear is dropped as well.
+          if (seq !== parseSeqRef.current) return;
           setParsed(p);
           setKind((prev) => (prev === null ? p.kind : prev));
           setDue((prev) => (prev === null ? p.due : prev));
@@ -128,6 +148,7 @@ export function MobileInputBar({ onSaved }: Props) {
           setError(null);
         })
         .catch((e: unknown) => {
+          if (seq !== parseSeqRef.current) return;
           setParsed(null);
           setError(e instanceof Error ? e.message : String(e));
         });
@@ -195,7 +216,7 @@ export function MobileInputBar({ onSaved }: Props) {
       setContactId(null);
       setExpanded(false);
       setActive(false);
-      window.setTimeout(() => setSubmitted(false), 1500);
+      submittedTimerRef.current = window.setTimeout(() => setSubmitted(false), 1500);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -205,9 +226,24 @@ export function MobileInputBar({ onSaved }: Props) {
 
   const startHold = (e: React.PointerEvent) => {
     if (handleRef.current) return;
-    if (!beginVoice()) return;
+    if (!beginVoice()) {
+      // The global lock is held by another recorder (the ⌘K capture panel,
+      // or a press whose pointerup never arrived). Ignoring the press
+      // silently made the button look dead.
+      setError('正在录音，请稍候再试');
+      return;
+    }
     e.preventDefault();
     startYRef.current = e.clientY;
+    // Keep receiving pointer events even when the finger slides off the
+    // button: without capture, the browser is free to re-classify the
+    // gesture as a pan / system edge swipe and send `pointercancel` instead
+    // of `pointerup`.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // best effort — capture may be unsupported or the pointer already gone
+    }
     setHolding(true);
     setCancelHint(false);
     setError(null);
@@ -412,6 +448,12 @@ export function MobileInputBar({ onSaved }: Props) {
             onPointerUp={() => void finishHold(cancelHint)}
             onPointerLeave={() => holding && void finishHold(cancelHint)}
             onPointerMove={onPointerMove}
+            // The gesture can end without a pointerup: a pan being
+            // recognised, a system edge swipe, an incoming call. Treat that
+            // as a cancel so the recorder and the global voice lock are
+            // always released — otherwise the button sticks on 「松手 发送」
+            // and 按住说话 stays dead until a reload.
+            onPointerCancel={() => void finishHold(true)}
             onContextMenu={(e) => e.preventDefault()}
           >
             {holding ? (cancelHint ? '松开取消' : '松手 发送') : '按住 说话'}
@@ -434,6 +476,11 @@ export function MobileInputBar({ onSaved }: Props) {
             type="button"
             className="mobile-input-shell__icon"
             onClick={() => {
+              // A second finger on this button while the other holds the mic
+              // would unmount the hold button mid-recording: no pointerup
+              // ever arrives, the recorder keeps running and the global
+              // voice lock stays held.
+              if (holding || handleRef.current) void finishHold(true);
               setMode(mode === 'text' ? 'voice' : 'text');
               setActive(false);
             }}

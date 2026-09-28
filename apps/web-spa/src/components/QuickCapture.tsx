@@ -78,9 +78,13 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   const [contactId, setContactId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [selectedKind, setSelectedKind] = useState<QuickKind | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<number | null>(null);
   const handleRef = useRef<VoiceRecordingHandle<Blob | string> | null>(null);
+  /** Monotonic id for parse requests — see the stale-reply guard below. */
+  const parseSeqRef = useRef(0);
+  const closeTimerRef = useRef<number | null>(null);
   // Once the user manually picks a contact via the picker, the parser
   // stops overwriting contactId on subsequent re-runs (which fire every
   // 250ms while the user types in the textarea). Reset on textarea clear
@@ -99,23 +103,59 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
   }, [adapter, userId]);
 
   useEffect(() => {
-    requestAnimationFrame(() => inputRef.current?.focus());
+    const raf = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
   }, []);
+
+  // Closing the panel mid-recording used to leave the MediaRecorder running
+  // (the OS microphone indicator stays lit until the 15s cap) and the global
+  // voice lock held — which silently disabled 按住说话 on the home screen for
+  // as long as the recording lasted.
+  useEffect(
+    () => () => {
+      if (handleRef.current) {
+        handleRef.current.stop();
+        handleRef.current = null;
+        endVoice();
+      }
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     const trimmed = text.trim();
     if (!trimmed) {
+      // Invalidate any in-flight parse and drop the whole editable state.
+      // Keeping it used to be harmless, but now that a manual pick survives
+      // re-parses (see below) a stale kind/time/contact would leak into the
+      // next sentence — and `userOverrideContactRef` must be released here
+      // too, exactly as the comment above promises.
+      parseSeqRef.current += 1;
+      userOverrideContactRef.current = false;
       setParsed(null);
+      setSelectedKind(null);
+      setEditedDue(null);
+      setContactId(null);
       setError(null);
       return;
     }
+    const seq = ++parseSeqRef.current;
     debounceRef.current = window.setTimeout(() => {
       parseQuick(trimmed, contactNames, userId)
         .then((p) => {
+          // Out-of-order guard: a slower earlier request must not overwrite
+          // the parse of what the user has typed since. `parsed` is also what
+          // `submit` falls back on, so a stale reply creates the wrong entity.
+          if (seq !== parseSeqRef.current) return;
           setParsed(p);
-          setSelectedKind(p.kind);
-          setEditedDue(p.due);
+          // Same rule as MobileInputBar: a manual pick survives re-parses,
+          // instead of the form snapping back to the parser's guess a
+          // quarter second after the user changed the dropdown.
+          setSelectedKind((prev) => (prev === null ? p.kind : prev));
+          setEditedDue((prev) => (prev === null ? p.due : prev));
           // The parser can only set contactId if the user hasn't manually
           // picked one since the last text-clear. Otherwise a user who
           // selects a contact, then keeps typing in the textarea, would
@@ -127,6 +167,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           setError(null);
         })
         .catch((e: unknown) => {
+          if (seq !== parseSeqRef.current) return;
           setParsed(null);
           setSelectedKind(null);
           setError(e instanceof Error ? e.message : String(e));
@@ -211,11 +252,12 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
 
   const submit = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || submitting) return;
     if (!userId) {
       setError('本地用户尚未就绪，请稍候再试');
       return;
     }
+    setSubmitting(true);
     try {
       const p = parsed ?? (await parseQuick(trimmed, contactNames, userId));
       const summary = p.summary || trimmed;
@@ -261,9 +303,13 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
           break;
       }
       setSubmitted(true);
-      window.setTimeout(onClose, 400);
+      closeTimerRef.current = window.setTimeout(onClose, 400);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      // Without this, the 400ms 「已记录 ✓」 window accepted a second tap (or
+      // Enter) and created the same record twice.
+      setSubmitting(false);
     }
   };
 
@@ -550,7 +596,7 @@ export function QuickCapture({ onClose, initialText = '' }: Props) {
             type="button"
             className="btn btn-primary"
             onClick={submit}
-            disabled={!text.trim()}
+            disabled={!text.trim() || submitting || submitted}
           >
             记录
           </button>

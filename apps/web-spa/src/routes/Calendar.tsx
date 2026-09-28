@@ -195,7 +195,7 @@ export function Calendar() {
         }
         subtitle={
           <>
-            {visible.length} 个日程 · {days} 天
+            {visible.length} 个日程
             {!isCurrentMonth && (
               <button
                 type="button"

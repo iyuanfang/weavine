@@ -99,8 +99,25 @@ export function useReminderPoller() {
 
     let timerId: ReturnType<typeof setInterval> | null = null;
     let cancelled = false;
+    // These two guards cover the async body, not just the bootstrap below:
+    // a tick that outlived its component still called `fire(...)` (system
+    // notification for a screen the user had already left), and a tick slower
+    // than POLL_INTERVAL_MS overlapped the next one — the same reminder was
+    // fired twice, because `dispatched` is only persisted after the round
+    // trip.
+    let inFlight = false;
 
     async function tick() {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        await runTick();
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    async function runTick() {
       let sound: ReminderSound = "default";
       try {
         const all = await adapter.settings.list(userId!);
@@ -120,9 +137,11 @@ export function useReminderPoller() {
         console.warn("reminder poller: list failed", e);
         return;
       }
+      if (cancelled) return;
       const now = Date.now();
       const due: Reminder[] = [];
       for (const r of reminders) {
+        if (cancelled) return;
         if (r.dispatched || r.dismissed) continue;
         if (new Date(r.trigger_at).getTime() > now) continue;
         due.push(r);
@@ -135,6 +154,7 @@ export function useReminderPoller() {
           }
         }
       }
+      if (cancelled) return;
       for (const r of due) {
         window.dispatchEvent(new CustomEvent("weavine:reminder", { detail: r }));
       }

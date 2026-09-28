@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { MobileMenuButton } from './MobileMenuButton';
+
 export function PageHeader({
   title,
   subtitle,
@@ -14,7 +16,7 @@ export function PageHeader({
   return (
     <div className="page-header">
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, minWidth: 0 }}>
-        {back}
+        {back ?? <MobileMenuButton />}
         <div style={{ minWidth: 0 }}>
           <h1 className="page-title">{title}</h1>
           {subtitle && <p className="page-subtitle">{subtitle}</p>}

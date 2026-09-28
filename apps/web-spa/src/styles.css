@@ -455,6 +455,28 @@ button:focus-visible {
   min-width: 0;
 }
 
+/* And the same trap repeats one level deeper on list pages (待办/日程/项目 …):
+   inside the main column the per-status <section> is a grid item of the
+   `display:grid;gap:16` list, and dnd-kit wraps every row in a bare grid item
+   of the inner `gap:6` grid. Both default to `min-width: auto`, so ONE
+   `white-space: nowrap` row title (inline style in ActionsList/ActionRowBody)
+   propagated its full text width — 309px for a 22-char title — all the way up
+   to the grid track. Measured on the real build at 375px: the track resolved
+   to 472.8px and the row card ended at x=484.8, i.e. 109.8px past the
+   viewport, where `.app-shell__main { overflow-x: hidden }` sliced the right
+   border off — reported by the user as「待办列表右边框被遮住」. Note
+   `.layout-split__main`/`.row-card` already carry `min-width: 0`; the boxes in
+   between are what leak. Anchoring on the boxes themselves (not on a page
+   class) keeps this honest for every list page, and `.cluster` already wraps,
+   so the badges reflow instead of spilling once the title ellipsizes. */
+.section,
+.section > *,
+.section > * > *,
+.row-card,
+.row-card > * {
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
   /* `minmax(0, 1fr)` — see the .app-shell note. A bare `1fr` here is what let
      the notes list widen to 828px on a 375px phone. */
@@ -472,6 +494,20 @@ button:focus-visible {
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
+}
+
+/* The title block takes the remaining width, so a leading element — the phone
+   drawer button, or a back link — sits next to the title instead of the
+   `space-between` spreading three items across the row. */
+.page-header > div:first-of-type {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Phone-only drawer entry (see MobileMenuButton). Hidden from 641px up, where
+   the shell's own hamburger is visible. */
+.page-header__menu {
+  display: none;
 }
 
 .page-title {
@@ -705,9 +741,32 @@ button:focus-visible {
   font-size: var(--text-sm);
   color: var(--muted);
   white-space: nowrap;
+  /* Both flexible AND ellipsizing: as a flex item its automatic minimum was
+     min-content, so a long company name kept the row at full text width and
+     painted past the card (measured +63.6px past a 375px viewport on 人脉). */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The name line of a contact row (nickname + real name + · + company).
+   `.row-card__line` is the flex container; on phones it wraps so the metas
+   drop to a second line instead of stretching the first one. */
+.row-card__line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
 }
 
 @media (max-width: 640px) {
+  /* Contact rows: wrap the nickname + real name + company line so a long
+     company name cannot stretch the row past the screen edge. */
+  .row-card__line {
+    flex-wrap: wrap;
+    gap: 2px 8px;
+  }
+
   .row-card--mobile-stacked,
   .row-card--mobile-stacked > a {
     flex-wrap: wrap;
@@ -1571,7 +1630,9 @@ textarea.input-base {
   .app-shell__hamburger {
     display: flex;
     position: fixed;
-    top: 14px;
+    /* Clears the status bar / notch on tablets and landscape phones (the
+       hamburger is the only nav entry between 641 and 900px). */
+    top: calc(16px + env(safe-area-inset-top, 0px));
     left: 14px;
     z-index: 30;
     width: 40px;
@@ -1592,7 +1653,7 @@ textarea.input-base {
     color: var(--accent);
   }
   .app-shell__main {
-    padding: 70px 18px 24px;
+    padding: calc(72px + env(safe-area-inset-top, 0px)) 18px 24px;
   }
   .app-shell__nav--drawer {
     display: flex;
@@ -1613,7 +1674,9 @@ textarea.input-base {
     box-shadow: var(--shadow-md);
     overflow-y: auto;
     overscroll-behavior: contain;
-    /* Keep the last row clear of the home indicator / gesture bar. */
+    /* Keep the first row clear of the status bar / notch, and the last row
+       clear of the home indicator / gesture bar. */
+    padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   }
   .app-shell__nav--drawer.app-shell__nav--open {
@@ -1683,9 +1746,25 @@ textarea.input-base {
     align-items: flex-start;
     gap: 12px;
   }
-  .page-header > div:first-child {
-    flex: 1 1 100%;
+  .page-header > div:first-of-type {
     min-width: 0;
+  }
+  /* The title keeps sharing the first row with the drawer button (base rule
+     gives it `flex: 1 1 auto`); only the actions wrap below. */
+  .page-header__menu {
+    display: grid;
+    place-items: center;
+    align-self: center;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border, rgba(0, 0, 0, 0.10));
+    border-radius: 10px;
+    background: var(--surface, #fff);
+    color: var(--text, #111);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
   }
   .page-title {
     white-space: nowrap;
@@ -1701,10 +1780,14 @@ textarea.input-base {
 
 .login-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   background: var(--bg);
-  padding: 1.5rem;
+  /* Standalone PWA / Tauri: keep the card clear of the status bar, the notch
+     and the home indicator. */
+  padding: calc(1.5rem + env(safe-area-inset-top, 0px)) 1.5rem
+    calc(1.5rem + env(safe-area-inset-bottom, 0px));
 }
 .login-card {
   width: min(100%, 380px);
@@ -1969,7 +2052,7 @@ textarea.input-base {
      own 8px pad made content overflow horizontally by a few px, which
      showed up as a small "drag left" gap on 人脉/待办 etc. */
   .app-shell__main {
-    padding: 14px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(24px + env(safe-area-inset-bottom, 0px));
     overflow-x: hidden;
   }
 
@@ -2307,7 +2390,7 @@ textarea.input-base {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 12vh;
+  padding-top: calc(12vh + env(safe-area-inset-top, 0px));
   padding-left: 16px;
   padding-right: 16px;
   animation: backdrop-fade-in 160ms ease;
@@ -2423,7 +2506,10 @@ textarea.input-base {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px 0;
+  /* The 14px of air (plus the safe-area inset on notched devices) keeps the
+     ☰ / 🔍 / ⊕ row clear of the status bar — the dark status-bar icons used
+     to sit right on top of them. */
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 14px 0;
   position: relative;
   z-index: 30;
 }
@@ -2638,6 +2724,11 @@ textarea.input-base {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  /* Hold-to-talk: without this the browser is free to re-classify the
+     gesture as a pan/scroll mid-press, fire `pointercancel` and never send
+     `pointerup` — the recorder then stays open and the button sticks on
+     「松手 发送」 until the page is reloaded. */
+  touch-action: none;
 }
 
 .mobile-input-shell__hold--active {
@@ -2822,7 +2913,7 @@ textarea.input-base {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px 0;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 14px 0;
   flex-shrink: 0;
 }
 
@@ -3132,11 +3223,11 @@ textarea.input-base {
 .note-edit__tab.is-active {
   background: var(--surface-1, #ffffff);
   border-color: var(--border, #e5e7eb);
-  color: var(--text-base, #1f2937);
+  color: var(--text, #111827);
   font-weight: 600;
 }
 .note-edit__tab:not(.is-active):hover {
-  color: var(--text-base, #1f2937);
+  color: var(--text, #111827);
 }
 .note-edit__preview {
   border-top: 1px solid var(--border, #e5e7eb);
@@ -3172,7 +3263,7 @@ textarea.input-base {
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 13px;
-  color: var(--text-base, #1f2937);
+  color: var(--text, #111827);
   cursor: pointer;
   min-width: 28px;
   text-align: center;
@@ -3275,7 +3366,7 @@ textarea.input-base {
   margin-left: 4px;
 }
 .cm-md-list {
-  color: var(--text-base, #1f2937);
+  color: var(--text, #111827);
 }
 .cm-md-hr {
   text-align: center;
@@ -3331,7 +3422,7 @@ textarea.input-base {
   padding: 8px 12px;
   text-align: left;
   font-size: 14px;
-  color: var(--text-base, #1f2937);
+  color: var(--text, #111827);
   cursor: pointer;
   border-radius: 4px;
   display: flex;

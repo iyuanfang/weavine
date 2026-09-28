@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAdapter } from '../lib/adapter';
+import { useUserId } from '../lib/auth';
 import { useQuickCapture } from '../App';
 import { QuickCreateContact } from './QuickCreateContact';
 import { GraphQuickActionForm } from './GraphQuickActionForm';
@@ -201,6 +202,9 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
   const navigate = useNavigate();
   const adapter = useAdapter();
   const queryClient = useQueryClient();
+  // `notes.delete` is keyed by (user_id, id) — the graph has no other use for
+  // the user id, so it reads it here instead of threading a prop through.
+  const userId = useUserId() ?? '';
   const quickCapture = useQuickCapture();
   const isMobile = useIsMobile();
   const dims: Layout = isMobile ? LAYOUT.mobile : LAYOUT.desktop;
@@ -454,7 +458,7 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
   const confirmDelete = async () => {
     if (!confirmTarget) return;
     const s = confirmTarget;
-    const rawId = s.id.replace(/^(event|action|project):/, '');
+    const rawId = s.id.replace(/^(event|action|project|note|interaction):/, '');
     try {
       if (s.kind === 'event') {
         await adapter.events.delete(rawId);
@@ -462,10 +466,20 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         await adapter.actions.delete(rawId);
       } else if (s.kind === 'project') {
         await adapter.projects.delete(rawId);
+      } else if (s.kind === 'note') {
+        // Was missing: the − badge renders for every satellite kind on
+        // touch devices (isHovered || isMobile), so tapping it on a note
+        // promised a delete in the confirm dialog and then silently did
+        // nothing — the row stayed on the graph with no error.
+        if (userId) await adapter.notes.delete(userId, rawId);
+      } else if (s.kind === 'interaction') {
+        await adapter.interactions.delete(rawId);
       }
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['actions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['notes'] });
+      queryClient.invalidateQueries({ queryKey: ['interactions'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
     } finally {
       setConfirmTarget(null);

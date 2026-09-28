@@ -78,7 +78,7 @@ export function MobileGraphPage() {
         <button
           type="button"
           className="today-mobile__topbar-btn"
-          onClick={() => navigate('/today')}
+          onClick={() => navigate('/today', { replace: true })}
           aria-label="关闭关系图"
           data-testid="mobile-graph-close"
         >

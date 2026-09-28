@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { Avatar } from '../components/Avatar';
+import { MobileMenuButton } from '../components/MobileMenuButton';
 import { ImportancePicker } from '../components/ImportancePicker';
 import { ReminderCountdown } from '../components/ReminderCountdown';
 import { FilterPanelShell } from '../components/FilterPanelShell';
@@ -202,6 +203,7 @@ export function ContactsList() {
   return (
     <div className="page page--wide">
       <div className="page-header">
+        <MobileMenuButton />
         <div>
           <h1 className="page-title">联系人</h1>
           <p className="page-subtitle">
@@ -499,7 +501,11 @@ function ContactRow({
         <Avatar name={displayName} src={avatarUrl} size={40} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          {/* .row-card__line: on phones the nowrap title + two nowrap metas
+              (name, ·, company) could not shrink, so the company name painted
+              past the card. The class lets the line wrap and the metas
+              ellipsize — see styles.css. */}
+          <div className="row-card__line">
             <ReminderCountdown
               importance={c.importance}
               lastInteractionIso={c.last_interaction_at}

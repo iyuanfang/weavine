@@ -23,7 +23,10 @@ src-tauri/vc-runtime/
 
 # Tauri
 src-tauri/target/
-src-tauri/gen/android/
+# The Android project is TRACKED on purpose: it carries our edits to
+# AndroidManifest / MainActivity / gradle (soft-keyboard mode, window insets),
+# which a blind `tauri android init` would silently overwrite. iOS is fully
+# regenerated, so it stays ignored.
 src-tauri/gen/ios/
 
 # Local integration test artifacts
@@ -35,7 +38,7 @@ tsconfig.tsbuildinfo
 .sisyphus/
 
 # Tauri generated bindings (regenerated on build)
-src-tauri/gen/
+src-tauri/gen/schemas/
 
 tauri-dist/
 .playwright-mcp/

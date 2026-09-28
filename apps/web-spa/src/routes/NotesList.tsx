@@ -3,6 +3,7 @@ import { useInfiniteList, useScrollSentinel } from '../lib/useInfiniteList';
 import { useNavigate } from 'react-router-dom';
 
 import { FilterPanelShell } from '../components/FilterPanelShell';
+import { MobileMenuButton } from '../components/MobileMenuButton';
 import { useAdapter, isTauri } from '../lib/adapter';
 import { useUserId } from '../lib/auth';
 import { mdEditorUrl } from '../lib/md-path';
@@ -94,6 +95,7 @@ export function NotesList() {
   return (
     <div className="page page--wide notes-list">
       <header className="page-header">
+        <MobileMenuButton />
         <div>
           <h1 className="page-title">笔记</h1>
           <p className="page-subtitle">

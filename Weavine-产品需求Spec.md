@@ -1612,4 +1612,197 @@ WHERE user_id = $1 AND server_revision > $2      -- 原先没有 device_id 条�
 
 **验证**：探针 `probe-outline.mjs`（聚焦后读 computed）：修复前 `outlineStyle: solid` / 修复后 `none`；375×812 元素越界 0；对照截图 `today.before.png`（双框）与 `today.png`（单框）。`tsc --noEmit` + `vite build` 通过，纯 CSS 改动、无 TS 变动。
 
+### 20.7 第七轮：移动端代码审查（2026-09-28 已落地）
 
+> 触发：用户「再 review 代码，看看」+「左上的三要下移一点，右上也是」+「android 安装后的图标不是 logo 的图标」+「待办列表右边框还是被遮住」。
+
+审查方法：两个方向并行（移动端 React 交互逻辑 / 移动端 CSS + Android-Tauri 适配），**每条发现都回到源码核对后才动手**；下方只列已确认并修复的。
+
+| # | 位置 | 缺陷（触发 → 后果） | 修法 |
+| --- | --- | --- | --- |
+| 1 | `MobileInputBar.tsx` 按住说话 | 只有 `pointerdown/up/leave/move`。浏览器一旦把手势判成 pan / 系统边缘滑动就发 `pointercancel` 而**不发 `pointerup`** → `holding`、`handleRef`、全局 `voiceInFlight` 三重卡死，按钮永久停在「松手 发送」且**按压无反应，只能重载页面** | 按钮补 `onPointerCancel={() => void finishHold(true)}`；`startHold` 里 `setPointerCapture`；`.mobile-input-shell__hold { touch-action: none }` |
+| 2 | 同上 · 切换模式 | 按住录音时第二指点右侧键盘图标 → hold 按钮被卸载，`pointerup` 无处可去 → 同上三重卡死，且 UI 上看不到提示 | 切换前 `if (holding \|\| handleRef.current) void finishHold(true)` |
+| 3 | 同上 · 录音锁 | `beginVoice()` 返回 false 时**静默 return**，用户以为按钮坏了 | 写 `setError('正在录音，请稍候再试')` |
+| 4 | `QuickCapture.tsx` | 解析回包**无条件** `setSelectedKind/setEditedDue`，手改类型/时间后继续打字就被弹回（与 `MobileInputBar` 的 `prev === null` 策略相反） | 改为 `setSelectedKind(prev => prev === null ? p.kind : prev)`（due 同理），并在文本清空时复位四个可编辑字段 |
+| 5 | 同上 | `userOverrideContactRef` 注释说「Reset on textarea clear」，但全文**没有任何一处写回 false** → 手选过一次联系人后，解析出的新联系人永远被忽略，记录静默挂到上一个人 | 清空分支补 `userOverrideContactRef.current = false` |
+| 6 | 同上 | `submit` 无「提交中」守卫，按钮 `disabled` 只看文本 → 真机双击 / 先回车再点按钮会**创建两条** | 加 `submitting`，并入 `disabled` |
+| 7 | 同上 | 面板卸载不停录音（`handleRef` 只在 `release()` 清） → 麦克风指示常亮至 15s 上限，`voiceInFlight` 被占，首页「按住说话」同期间歇性失效 | 卸载 effect：`stop()` + `endVoice()` + 清 debounce/关闭定时器 |
+| 8 | `MobileInputBar.tsx` / `QuickCapture.tsx` | 两处 `parseQuick` 都没有请求序号，慢的旧请求回包会覆盖新文本的解析结果；`parsed` 又是 `submit` 的兜底 → **创建出的记录属于上一句话**（PWA 走网络请求时最易命中） | 各自加 `parseSeqRef`，回包与 catch 都先比对序号；文本清空时 `seq += 1` 作废在途请求 |
+| 9 | `use-reminder-poller.ts`（非 Tauri 分支） | `cancelled` 只在初始化后检查过一次，`tick()` 内部从不检查 → 卸载后仍 `fire()` 系统通知；且 `tick` 慢于 30s 时与下一次**重叠**，同一提醒可弹两次（`dispatched` 要等往返才落库） | `tick` 门外加 `cancelled \|\| inFlight` 双闸；`runTick` 在每个 `await` 之后与 `fire()` 之前补 `cancelled` 检查 |
+| 10 | `HomeGraph.tsx` `confirmDelete` | 只处理 `event/action/project`；而 − 徽标在触屏上**对每种卫星节点都渲染**（`isHovered \|\| isMobile`）→ 在笔记/互动上点删除，弹窗承诺「此操作不可恢复」，确认后**什么都没发生**（静默假删除） | 补 `note`（`notes.delete(userId, id)`）与 `interaction` 分支，id 前缀正则同步扩到五个 kind，并 invalidate `notes`/`interactions` |
+| 11 | `MobileGraphPage.tsx` 关闭按钮 | `navigate('/today')` 是入栈跳转 → 历史栈 `[today, graph-mobile, today]`，Android 物理返回键又回到刚关掉的关系图 | 改 `navigate('/today', { replace: true })` |
+| 12 | `styles.css` × 5 处 | `color: var(--text-base, #1f2937)` —— `--text-base` 是 **14px**（长度），`color` 声明因此非法被整条丢弃，fallback 也永不生效（笔记编辑器 tab 选中态、工具栏、slash 菜单、`.cm-md-list`） | 改为 `var(--text, #111827)` |
+| 13 | `MobileInputBar.tsx` | `setTimeout(() => setSubmitted(false), 1500)` 无清理，卸载后仍写 state | 存入 `submittedTimerRef`，卸载 effect 清理 |
+
+验证：`npm run build`（`tsc --noEmit` + `vite build`）通过；`today.html` 375×812 元素越界 0。
+
+### 20.8 手机端抽屉入口闭环（P0，导航回归）
+
+**问题（逐环核实）**：`styles.css` 的 ≤640px 块内 `.app-shell__hamburger { display: none }`（并且 `≤900` 块里的 `display: flex` 被它覆盖）→ 手机上没有任何汉堡；`BottomNav` 五格是 今天/人脉/待办/日程/笔记，**没有「更多」**；全仓唯一派发 `weavine:open-drawer` 的地方是 `Today.tsx` 首页的 ☰；抽屉本身又会过滤掉这五个 tab → **只剩 项目 / 标签 / 归档 / 设置**。而全仓没有任何页面链接到 `/projects`、`/tags`、`/settings`。
+
+⇒ 手机端**不先退回「今天」就打不开抽屉**，项目 / 标签 / 设置不可达（设置里是服务器地址、音频、归档保留期等）。
+
+**修法**：新增 `components/MobileMenuButton.tsx` —— 一个派发**同一个** `weavine:open-drawer` 事件的 ☰ 按钮，由 CSS 控制只在 ≤640 显示（≥641 由 shell 汉堡接管）。
+
+- 接入 `PageHeader`：`{back ?? <MobileMenuButton />}` —— 有返回按钮的页面（各种 Edit/New）让位给返回，不挤两个图标。
+- `ContactsList` / `NotesList` 是手写 `.page-header` 的两个页面，各自在 header 首位插入该按钮。
+- 配套 CSS 改动：`.page-header > div:first-child` → **`:first-of-type`**（`first-child` 会被新增的 button 破坏），并把标题块的 `flex: 1 1 auto; min-width: 0` 从 ≤640 断点**提到基础规则**（否则 `space-between` 会把「☰ + 标题 + 操作」三项均匀分布，标题跑到中间）。
+
+验证：`actions-list.html`（含 ☰ 的真实 header DOM）375×812 元素越界 0、`<401px` 内 ☰ 与标题同行、操作按钮换行；截图 `actions-header-375.png`。
+
+### 20.9 顶部安全区（「左上的三要下移一点」）
+
+`index.html` 的 viewport meta 补 `viewport-fit=cover` —— 在此之前全站 **15 处** `env(safe-area-inset-*)` 恒为 `0px`，底部导航在安卓手势条 / iPhone Home 条机型上是被压住的。
+
+同时给贴顶元素补 `env(safe-area-inset-top, 0px)` 并抬高基础值（用户要求的「下移一点」）：
+
+| 元素 | 改动 |
+| --- | --- |
+| `.today-mobile__topbar`（首页 ☰/🔍/⊕） | `padding: 8px…` → `calc(16px + inset) 14px 0` |
+| `.mobile-graph__topbar` | `10px` → `calc(16px + inset)` |
+| `.app-shell__hamburger`（641–900px） | `top: 14px` → `calc(16px + inset)` |
+| `.app-shell__main` | ≤900 `70px` → `calc(72px + inset)`；≤640 `14px` → `calc(16px + inset)` |
+| `.app-shell__nav--drawer` | 新增 `padding-top: env(safe-area-inset-top, 0px)`（底部已有） |
+| `.search-palette` | `padding-top: 12vh` → `calc(12vh + inset)` |
+| `.login-shell` | `min-height: 100vh` 补 `100dvh`，padding 上下加 inset |
+
+⚠️ **Android 侧仍不完整（见 20.12）**：`targetSdk = 36` 时系统强制 edge-to-edge，而 Android 的 `env(safe-area-inset-*)` 只映射 display cutout、拿不到系统栏高度 → 状态栏遮挡需要**原生 insets**（把 `WindowInsets` 灌给 WebView），这不是 CSS 能解决的。上面那 `16px` 的基础值是有意留的静态余量。
+
+### 20.10 Android 图标（「安装后不是 logo 的图标」）
+
+**现状核查**：`mipmap-*/ic_launcher.png` 内容其实是 logo，但 ——
+
+1. **没有 `mipmap-anydpi-v26/`** → 图标不是 adaptive icon，Android 8+ 只会用 legacy 位图，国产 ROM 会自行套一层白底/圆角壳，观感就是「白卡片里一个小 logo」；
+2. `AndroidManifest` 没有 `android:roundIcon` → 圆形图标的机型用不到 `ic_launcher_round.png`；
+3. `drawable-v24/ic_launcher_foreground.xml`、`drawable/ic_launcher_background.xml` 是 Android Studio 模板残留（绿色机器人 / 模板底），一旦有人接上 adaptive 就会显示机器人。
+
+**修法**（生成脚本留在 `mobile-repro/`，可重跑）：
+
+- 源图：`src-tauri/icons/icon.png`（512，自带圆角卡片）→ 先用 sharp 放大 1.28 倍居中裁剪，得到**全出血**版本（四角被推出画布），保证自适应遮罩只裁到背景渐变。
+- `npx tauri icon <manifest.json>`：`default` = 全出血图（用于 legacy）、`android_bg` = 同图高斯模糊 + 0.92 亮度、`android_fg` = **全出血图满幅**。
+  - 「前景满幅」是刻意的：logo 主体在画面中央，圆形 / 方圆角遮罩裁掉的只有四角背景；试过把前景缩到 66%/72% 再叠模糊底，反而会在遮罩里露出一个可见的方块（「方中带方」）。
+- 手写 legacy 位图（圆角方 + 圆形 + 8% 留白，5 档密度），比 Tauri 默认的「带透明边的方图」在 Android 7 / 老 launcher 上更一致。
+- 新增 `mipmap-anydpi-v26/ic_launcher.xml` **和** `ic_launcher_round.xml`（两个都要，否则 roundIcon 会退回 legacy 位图）；`AndroidManifest` 补 `android:roundIcon="@mipmap/ic_launcher_round"`；删除两个模板 vector。
+
+**注意**：launcher 会缓存图标，**必须卸载后重装**才能看到新图标。
+
+### 20.11 Android 原生工程入库 + 软键盘
+
+- `.gitignore` 原本同时忽略 `src-tauri/gen/android/`、`src-tauri/gen/ios/`、`src-tauri/gen/`（父目录），导致原生工程完全不入库：`AndroidManifest.xml` / `MainActivity.kt` / `build.gradle.kts` 全在生成目录里，改了会被 `tauri android init` 覆盖，也无法 review。现收窄为只忽略 `src-tauri/gen/schemas/` 与 `src-tauri/gen/ios/`，把 android 工程纳入版本控制（45 个文件；`build/`、`.gradle/`、`local.properties` 由工程自带的 `.gitignore` 排除）。
+- activity 补 `android:windowSoftInputMode="adjustResize"`：`.today-mobile` 是 `calc(100dvh - …) + overflow: hidden`，键盘弹出时若不 resize，输入栏会被键盘盖住且页面无法滚动（首页「记录」主路径）。
+
+### 20.12 已评估、仍未改（需真机或产品拍板）
+
+| 项 | 现状 | 为什么不当场改 |
+| --- | --- | --- |
+| **Android 15+ edge-to-edge insets** | `targetSdk = 36`、无 `WindowInsets` 处理、`env()` 取不到系统栏 → 顶栏/底部导航可能被系统栏压住 | 需改 `MainActivity.kt`（给 WebView 灌 insets 或转成 CSS 变量），本机无 Android 构建/真机验证，改了无法证明 |
+| **抽屉焦点泄漏** | 抽屉关闭时只是 `translateX(-100%)` + `aria-hidden`，仍在 Tab 序列里（≤900 就有 `display:flex`） | 应改用 `inert`（React 18 需手动透传属性），涉及 a11y 行为，宜和「返回键关抽屉」一起做 |
+| **物理返回键** | 仍**零处理**（`AppShell` 只监听 `Escape`）；开抽屉按返回键会直接退页/退出 | 依赖 Tauri Android 把返回键映射成 `popstate` 还是 `CloseRequested`，需真机确认 |
+| **`isMobile`(640) 与 CSS 断点(900) 不一致** | 641–900px 抽屉渲染「桌面版内容」且拿不到「近期」feed（`enabled: isMobile && drawerOpen`） | 属布局体系调整，需先定平板/折叠屏的目标形态 |
+| **输入框 < 16px** | `.input-base` 14px、笔记编辑器选择器 12px | iOS 聚焦整页放大；改成 16px 会动桌面观感，宜只在 `(pointer: coarse)` 下提升 |
+| **触摸目标 < 44px** | `.app-shell__close` 28×28、`.search-palette__clear` 22×22、`.tag-picker__chip button` 16×16、`.mobile-input-shell__editor-collapse` ≈24px | 需逐个调整热区（可不动视觉），涉及多组件 |
+| **hover-only 控件** | 触屏兜底是「硬编码选择器白名单 + `!important`」（`.btn-sm.btn-ghost` / `[title="删除"]`），新增控件会静默不可达 | 应迁移到 `@media (hover: hover)` 门控，涉及 ActionsList / Calendar / NoteDetail / MdEditor / GraphTab |
+| **死 CSS** | `.more-sheet*`（≈110 行，已下线弹层）、`.search-fab`、`.notes-list__tabs/__filter-row/__badge/__snippet/__link`、`.app-shell__user-settings`、`.kpi-row`（类名不存在）均零引用 | 删除需先确认无动态拼接（`note-list-item--${variant}` 这类是活的），宜单独一轮清理 |
+| **待办页「右边框被遮住」** | ~~未复现~~ → **已复现并修复，见 §20.13**（此前用**手写静态复现页**测不到，是因为漏掉了 `.section` 与 dnd-kit 包装 div 两层 `min-width: auto` 的 grid item） | 已在真实构建产物上复现：卡片 472.8px / 越界 109.8px → 修复后 351px / 越界 0 |
+
+
+
+
+
+### 20.13 第八轮：「待办列表右边框被遮住」复现与修复（2026-09-28 已落地）
+
+用户第三次报「待办列表右边框还是被遮住了」。前一轮判定「未复现」是**方法错了**：当时的复现页是手写的 `actions-list.html`，把 `.row-card` 直接塞进 `.layout-split__main`，**丢掉了真实 DOM 里的两层包装**（每状态一个 `<section class="section section--drop">`，以及 dnd-kit `useDraggable` 给每行套的裸 `<div ref={setNodeRef}>`）。这两层都是 **grid item**，默认 `min-width: auto` —— 缺了它们，溢出就被"修好"了。
+
+#### 20.13.1 复现（真实构建产物，非手写页）
+
+工具：`mobile-repro/serve-dist.mjs`（静态伺服 `apps/web-spa/dist` + SPA 回退）+ `mobile-repro/probe-real.mjs`（Playwright 拦截 `**/api/**` 造数据、注入 localStorage 会话、加载真实路由）。**不再需要后端**，也不需要手抄 DOM。
+
+375×812 实测：
+
+| 元素 | 修复前 | 修复后 |
+| --- | --- | --- |
+| `.section--drop` | 472.8px（`min-width: auto`，grid item） | 351px |
+| dnd-kit 包装 `div` | 472.8px（`min-width: auto`，grid item） | 351px |
+| `.row-card` | 472.8px，右边缘 **484.8**，越界 **109.8px** | 351px，右边缘 363，距视口 12px |
+| 被祖先裁掉的元素数 | **29** | **0** |
+
+`.app-shell__main { overflow-x: hidden }`（≤640）把越界部分**裁掉**——所以用户看到的是「右边框不见了 / 右侧内容被切」，而不是"能左右拖"。
+
+#### 20.13.2 根因
+
+`bisect-row.mjs`（逐个 `display:none` 后量行宽）给出的贡献排序：
+
+- **标题 div（+121.8px，决定性）**：`ActionRowBody` 里标题是**内联样式** `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`。`nowrap` 让它的 min-content = 整段文字宽（22 字标题 = 309.1px）。
+- `.cluster--row`（+107.6px）：内联 `flex-shrink: 0`，`高 ✎ 🗑` 共 95.6px，不可压缩（这个是对的，本来就该保留）。
+- 优先级 pill「高」（+45.2px）、复选框 18px（+30px）。
+
+这些 min-content 沿 **`.row-card` → dnd 包装 div → `section--drop` → `.layout-split__main` → `.layout-split` 轨道**逐层上传。**`.layout-split__main` 与 `.row-card` 早已有 `min-width: 0`（第五轮加的），但中间那两层 grid item 没有** —— 断链就断在这里。
+
+> 一句话：`min-width: 0` 只加在"链子的两头"没用，**链子上每一个 grid/flex item 都得能缩**。
+
+#### 20.13.3 修法
+
+```css
+/* styles.css，紧跟 .layout-split > * 之后，刻意不套断点 */
+.section,
+.section > *,
+.section > * > *,
+.row-card,
+.row-card > * {
+  min-width: 0;
+}
+```
+
+行内 `white-space: nowrap` 保持不动——链路可缩之后它正好退化成"省略号"，这正是原意。`.cluster` 本来就是 `flex-wrap: wrap`，所以徽标会换行到第二行，而不是溢出卡片。
+
+顺带修掉**同族**的一处（用户没报但同一病因）：`/contacts` 里昵称行 `<div style="display:flex;align-items:baseline;gap:8">` 内是两个 `nowrap` 的 `.row-card__meta`（真名、`·`、公司名），`min-width: auto` 导致公司名把行撑到 439px、越界 **63.6px**。修法：该行改用类 `row-card__line`（`ContactsList.tsx`），`.row-card__meta` 加 `min-width: 0; overflow: hidden; text-overflow: ellipsis`，≤640 时 `.row-card__line { flex-wrap: wrap }`。
+
+#### 20.13.4 验证
+
+`sweep-pages.mjs`（真实产物 × 多宽度 × 多路由，同时测「被祖先 overflow 裁掉」与「溢出父级 padding box」）：
+
+| 宽度 | 路由 | 结果 |
+| --- | --- | --- |
+| 320 / 375 / 900 / 1280 | `/actions /today /contacts /projects /calendar /notes /tags /search /archive /settings /graph` | **全部 0 越界**，`documentElement.scrollWidth == clientWidth` |
+
+桌面无回归（1280 下 `.app-shell__main` scrollWidth 1120 < 1280）。`tsc --noEmit` 通过。
+
+> 探针有一类**已知误报**要过滤：`text-overflow: ellipsis` 的元素即使文本被省略，其内联盒 `getBoundingClientRect()` 仍是全宽 —— 这属于**设计行为**，不是缺陷（`sweep-pages.mjs` 已按"裁剪祖先带 `ellipsis` + `nowrap`"跳过）。
+
+#### 20.13.5 方法论沉淀
+
+1. **复现页必须照抄真实 DOM 的包装层**。少一层 `min-width: auto` 的 grid item，溢出就"自愈"，得出"未复现"的错误结论。**优先用 `serve-dist.mjs` + `probe-real.mjs` 跑真实构建产物**（拦 API 造假数据即可，无需后端）。
+2. 量「溢出」要分两种：**越出视口**（`rect.right > clientWidth`）与**被祖先 `overflow` 裁掉**（`rect.right > 最近裁剪祖先的 padding box 右缘`）。只看 `document.scrollWidth` 会被 `overflow-x: hidden` 骗过；只看视口会漏掉"卡片没越屏但右边框被父级吃掉"。
+3. 定位元凶用 `bisect-row.mjs` 的**逐个隐藏 + 重量行宽**，比读 CSS 快得多。
+4. 判据记牢：**`min-width: 0` 必须覆盖"轨道 → 叶子"整条链上的每个 grid/flex item**；`.layout-split > *` 只覆盖了第一层。
+
+
+### 20.14 第九轮：日历页副标题精简（2026-09-29 已落地）
+
+用户反馈：「上面展示 5 个日程就够了，还那么时间干嘛」。指日历页头部副标题。
+
+**现状（缺陷）**：`Calendar.tsx` 副标题写的是 `{visible.length} 个日程 · {days} 天`，而 `days` 是 **`string[]`**（当月有日程的日期键，`Object.keys(groups).filter(...).sort()`）。React 渲染**字符串数组不插分隔符**，于是屏幕上出现：
+
+```
+5 个日程 · 2026-09-132026-09-142026-09-152026-09-172026-09-28 天
+```
+
+即用户看到的那串粘连日期。**这本身是个渲染 bug**（数组直接当 ReactNode 用），不只是信息冗余。
+
+**修法**：副标题只保留日程数，`days` 变量本身仍被月视图列表使用（`.length === 0` 判断 + `days.map` 分组渲染），不动。
+
+```tsx
+// apps/web-spa/src/routes/Calendar.tsx
+subtitle={
+  <>
+    {visible.length} 个日程
+    {!isCurrentMonth && (<button …>回到本月</button>)}
+  </>
+}
+```
+
+桌面端与移动端共用同一个 `PageHeader`，两端同时生效。
+
+**判据（可复用）**：`ReactNode` 位置**不要直接放数组**——字符串数组会无分隔拼接，元素数组会报 key 警告。要拼接日期/标签列表就先 `.join('、')` 或显式 `.map` 渲染。
+
+**验证**：`sweep-pages.mjs`（真实构建产物，`EVENTS=5` 复现用户截图场景：本月 5 个日程跨 5 天）→ 副标题显示「5 个日程」，375 / 1280 均 0 越界；`tsc --noEmit` 通过。
