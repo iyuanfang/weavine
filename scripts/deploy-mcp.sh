@@ -11,15 +11,15 @@
 #   scripts/deploy-mcp.sh                   # full deploy (build + restart + verify)
 #   scripts/deploy-mcp.sh --verify-only     # just run the 6 tests against existing binary
 #
-# Required SSH: root@47.79.43.80 with /home/yf/.ssh/id_ed25519
+# Required SSH: `qc` host alias in ~/.ssh/config (root@47.79.43.80, key
+# ~/.ssh/quickcrat_deploy). Override with PROD=<user@host>.
 # Required env on prod: /etc/weavine-mcp.env (WEAVINE_MCP_TRANSPORT=http, etc.)
 
 set -euo pipefail
 
-PROD=root@47.79.43.80
-SSH_KEY=${SSH_KEY:-/home/yf/.ssh/id_ed25519}
-SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new $PROD"
-SCP="scp -i $SSH_KEY -o StrictHostKeyChecking=accept-new"
+PROD=${PROD:-qc}
+SSH="ssh -o StrictHostKeyChecking=accept-new $PROD"
+SCP="scp -o StrictHostKeyChecking=accept-new"
 
 REPO_REMOTE=/www/weavine/repo
 BIN_REMOTE=/www/weavine/weavine-mcp
@@ -60,9 +60,11 @@ deploy() {
 
     echo
     echo "═══ 3. backup current + install ═══"
+    # $ts_human is expanded LOCALLY (unescaped) — escaping it used to make
+    # the remote evaluate an unset var and name every backup ".bak".
     $SSH "
         set -e
-        mv -f $BIN_REMOTE $BIN_BACKUP_BASE.\$ts_human.bak
+        mv -f $BIN_REMOTE $BIN_BACKUP_BASE.$ts_human.bak
         cp -f $REPO_REMOTE/target/release/weavine-mcp $BIN_REMOTE
         chmod 755 $BIN_REMOTE
         ls -la $BIN_REMOTE

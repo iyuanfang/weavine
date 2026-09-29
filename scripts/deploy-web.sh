@@ -7,19 +7,21 @@ set -euo pipefail
 # Why this script exists:
 #   - The web-spa is served as static files by nginx on wy, from
 #     /home/ubuntu/weavine/apps/web-spa/dist (SPA routes + hashed assets).
-#   - Deploy = build locally → backup remote dist → rsync new dist in place.
+#   - Deploy = build locally → backup remote dist → tar-over-ssh new dist in
+#     place (no rsync: Git Bash on Windows doesn't ship it).
 #   - nginx picks up new files automatically (no reload needed).
 #
-# Usage (run from WSL — the Windows side has no key for this host):
+# Usage (run from Git Bash on Windows — uses the `wy` alias in ~/.ssh/config):
 #   scripts/deploy-web.sh                            # build + deploy
 #   DIST_DIR=/path scripts/deploy-web.sh             # deploy an existing dist
 #
-# Required SSH: default key of the invoking user → ubuntu@110.42.215.153.
+# Required SSH: `wy` host alias → ubuntu@110.42.215.153 (key
+# ~/.ssh/weavine_11042). Override with PROD=<user@host>.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WEB_DIR="$REPO_ROOT/apps/web-spa"
 DIST_DIR="${DIST_DIR:-$WEB_DIR/dist}"
-PROD=${PROD:-ubuntu@110.42.215.153}
+PROD=${PROD:-wy}
 SSH="ssh -o StrictHostKeyChecking=accept-new $PROD"
 REMOTE_DIST="/home/ubuntu/weavine/apps/web-spa/dist"
 APP_BASE_URL="${APP_BASE_URL:-https://www.weavine.com}"
@@ -43,8 +45,17 @@ TS=$(date +%s)
 echo "→ Backing up remote dist -> dist.${TS}.bak"
 $SSH "cp -r '$REMOTE_DIST' '${REMOTE_DIST}.bak.${TS}'"
 
-echo "→ rsync $DIST_DIR/ -> $PROD:$REMOTE_DIST/"
-rsync -a --chmod=D755,F644 --delete "$DIST_DIR/" "$PROD:$REMOTE_DIST/"
+# tar-over-ssh replaces rsync (not available in Git Bash). The backup above
+# is the safety net, so a clean replace of the dist dir is safe: delete,
+# recreate, extract, make world-readable for nginx.
+echo "→ Uploading $DIST_DIR/ -> $PROD:$REMOTE_DIST/ (tar over ssh)"
+tar -C "$DIST_DIR" -czf - . | $SSH "
+    set -e
+    rm -rf '$REMOTE_DIST'
+    mkdir -p '$REMOTE_DIST'
+    tar -C '$REMOTE_DIST' -xzf -
+    chmod -R u=rwX,go=rX '$REMOTE_DIST'
+"
 
 # Prune old dist backups (keep latest 3).
 $SSH "ls -1dt ${REMOTE_DIST}.bak.* 2>/dev/null | tail -n +4 | xargs -r rm -rf --"

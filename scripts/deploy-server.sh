@@ -4,21 +4,22 @@
 # Why this script exists:
 #   - wy has 2 cores / 3.7 GB RAM; build ON prod for glibc compat, with
 #     memory-safe release settings (lto=false, codegen-units=256).
-#   - Deploy = rsync sources → cargo build on prod → backup binary →
+#   - Deploy = tar sources over ssh → cargo build on prod → backup binary →
 #     restart weavine-server.service → smoke verify.
 #   - server/.env.production is MANAGED ON THE SERVER (never synced from
-#     local — it holds secrets, and rsync --delete-excluded has already
-#     eaten it once; see git history before touching the flags).
+#     local — it holds secrets, and a careless sync has already eaten it
+#     once; see git history before touching the flags).
 #
-# Usage (run from WSL — the Windows side has no key for this host):
+# Usage (run from Git Bash on Windows — uses the `wy` alias in ~/.ssh/config):
 #   scripts/deploy-server.sh                # full deploy
 #   scripts/deploy-server.sh --verify-only  # smoke tests only
 #
-# Required SSH: default key of the invoking user → ubuntu@110.42.215.153.
+# Required SSH: `wy` host alias → ubuntu@110.42.215.153 (key
+# ~/.ssh/weavine_11042). Override with PROD=<user@host>.
 
 set -euo pipefail
 
-PROD=${PROD:-ubuntu@110.42.215.153}
+PROD=${PROD:-wy}
 SSH="ssh -o StrictHostKeyChecking=accept-new $PROD"
 REPO_REMOTE=/home/ubuntu/weavine
 BIN_REMOTE=$REPO_REMOTE/target/release/weavine-server
@@ -35,8 +36,8 @@ main() {
 
 deploy() {
     echo "═══ 1. pack + ship sources → $PROD:$REPO_REMOTE (never touches .env.production) ═══"
-    # tar over ssh, NOT rsync: rsync from /mnt/d (drvfs) has silently skipped
-    # changed files (checksum/mtime confusion), leaving prod on stale code.
+    # tar over ssh (scp the tarball, extract remotely): plain file transfer,
+    # no rsync needed — Git Bash on Windows doesn't ship it.
     local tarball
     tarball="/tmp/weavine-src-$(date +%s).tar.gz"
     (cd "$(dirname "$0")/.." && tar czf "$tarball" \
@@ -54,7 +55,11 @@ deploy() {
         --config profile.release.lto=false --config profile.release.codegen-units=256 \
         --manifest-path server/Cargo.toml --features ocr,stt' > /tmp/weavine-build.log 2>&1 &"
     echo "    build started; waiting…"
-    while $SSH "pgrep -f 'cargo build' > /dev/null"; do sleep 15; done
+    # [c] trick: `pgrep -f 'cargo build'` also matches THIS ssh's remote
+    # command line (`bash -c pgrep -f 'cargo build'`), which made the wait
+    # loop spin forever. The bracket pattern matches "cargo build" but not
+    # its own literal text.
+    while $SSH "pgrep -f '[c]argo build' > /dev/null"; do sleep 15; done
     $SSH "grep -E 'Finished|^error' /tmp/weavine-build.log | tail -2"
     $SSH "test -x $BIN_REMOTE" || { echo "✗ build produced no binary"; exit 1; }
 

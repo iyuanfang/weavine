@@ -9,7 +9,7 @@ DIST_DIR="$LANDING_DIR/dist"
 # The /www/weavine/landing/ path is a leftover from an earlier deploy scheme
 # and is NOT what nginx reads — point REMOTE_PATH at the real root.
 REMOTE_PATH="${REMOTE_PATH:-/home/ubuntu/weavine/apps/landing/dist/}"
-SERVER="${SERVER:?SERVER env var required, e.g. SERVER=user@weavine.example.com}"
+SERVER="${SERVER:-wy}"
 SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=accept-new}"
 
 if [ ! -f "$DIST_DIR/index.html" ]; then
@@ -17,11 +17,16 @@ if [ ! -f "$DIST_DIR/index.html" ]; then
   (cd "$LANDING_DIR" && pnpm install --frozen-lockfile && pnpm build)
 fi
 
+# tar-over-ssh replaces rsync (not available in Git Bash on Windows). The
+# remote dir is replaced wholesale, mirroring rsync --delete.
 echo "→ Uploading to $SERVER:$REMOTE_PATH"
-rsync -avz --delete \
-  -e "ssh $SSH_OPTS" \
-  "$DIST_DIR/" \
-  "$SERVER:$REMOTE_PATH"
+tar -C "$DIST_DIR" -czf - . | ssh $SSH_OPTS "$SERVER" "
+    set -e
+    rm -rf '$REMOTE_PATH'
+    mkdir -p '$REMOTE_PATH'
+    tar -C '$REMOTE_PATH' -xzf -
+    chmod -R u=rwX,go=rX '$REMOTE_PATH'
+"
 
 echo "→ Reloading nginx on $SERVER"
 ssh $SSH_OPTS "$SERVER" 'sudo nginx -t && sudo systemctl reload nginx'
