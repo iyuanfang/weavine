@@ -498,15 +498,15 @@ export function ActionsList() {
                     setCollapsed((prev) => {
                       const next = new Set(prev);
                       if (next.has(status)) {
-                        // Collapse it — all-collapsed is allowed.
-                        next.add(status);
-                      } else {
-                        // Expand it and collapse every other section so at
-                        // most one is open at a time.
+                        // Currently collapsed → expand it; the accordion
+                        // collapses every other section so at most one is open.
                         STATUS_ORDER.forEach((s) => {
                           if (s !== status) next.add(s);
                         });
                         next.delete(status);
+                      } else {
+                        // Currently expanded → collapse it (all-collapsed ok).
+                        next.add(status);
                       }
                       return next;
                     });
