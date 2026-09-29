@@ -45,10 +45,13 @@ const PRIORITY_COLORS: Record<number, string> = {
 const STATUS_ORDER = ['inbox', 'open', 'waiting', 'done'] as const;
 type StatusKey = (typeof STATUS_ORDER)[number];
 
-function useLocalStorageSet(key: string) {
+function useLocalStorageSet(key: string, defaultValue?: string[]) {
   const [set, setSet] = useState<Set<string>>(() => {
-    if (typeof localStorage === 'undefined') return new Set();
+    if (typeof localStorage === 'undefined') return new Set(defaultValue ?? []);
     const raw = localStorage.getItem(key);
+    // First visit (no stored choice): use the caller's default. After that,
+    // the user's own collapsed set wins.
+    if (raw === null && defaultValue) return new Set(defaultValue);
     return new Set(raw ? (JSON.parse(raw) as string[]) : []);
   });
 
@@ -68,7 +71,12 @@ export function ActionsList() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [collapsed, setCollapsed] = useLocalStorageSet('weavine:actions:collapsed');
+  // Accordion: default 展开「进行中」，其余收起；任意时刻最多展开一个。
+  const [collapsed, setCollapsed] = useLocalStorageSet('weavine:actions:collapsed', [
+    'inbox',
+    'waiting',
+    'done',
+  ]);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -489,8 +497,17 @@ export function ActionsList() {
                   const toggle = () => {
                     setCollapsed((prev) => {
                       const next = new Set(prev);
-                      if (next.has(status)) next.delete(status);
-                      else next.add(status);
+                      if (next.has(status)) {
+                        // Collapse it — all-collapsed is allowed.
+                        next.add(status);
+                      } else {
+                        // Expand it and collapse every other section so at
+                        // most one is open at a time.
+                        STATUS_ORDER.forEach((s) => {
+                          if (s !== status) next.add(s);
+                        });
+                        next.delete(status);
+                      }
                       return next;
                     });
                   };

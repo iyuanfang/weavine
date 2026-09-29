@@ -293,6 +293,20 @@ jobs:
             cargo tauri android init --ci
           fi
 
+      - name: Force adjustResize for the soft keyboard
+        # Without an explicit windowSoftInputMode the Android system picks
+        # pan for the generated MainActivity — the whole webview slides up
+        # and the bottom input bar stays buried under the keyboard. Web
+        # browsers resize the viewport, so wap behaves; the APK must too.
+        run: |
+          MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          if grep -q "windowSoftInputMode" "$MANIFEST"; then
+            sed -i 's/android:windowSoftInputMode="[^"]*"/android:windowSoftInputMode="adjustResize"/' "$MANIFEST"
+          else
+            sed -i 's|android:name=".MainActivity"|android:name=".MainActivity"\n            android:windowSoftInputMode="adjustResize"|' "$MANIFEST"
+          fi
+          grep -n "windowSoftInputMode" "$MANIFEST"
+
       - name: Apply green launcher icons to the fresh android project
         # gen/android is untracked (it broke the build when committed — the
         # tracked res/ merged with the freshly generated template). tauri

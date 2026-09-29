@@ -255,14 +255,16 @@ export function TodayPage() {
             ☰
           </button>
           <span style={{ flex: 1 }} />
-          <Link
-            to="/search"
-            className="today-mobile__topbar-btn"
-            aria-label="搜索"
-            data-testid="today-mobile-search"
-          >
-            🔍
-          </Link>
+          {!quickMenuOpen && (
+            <Link
+              to="/search"
+              className="today-mobile__topbar-btn"
+              aria-label="搜索"
+              data-testid="today-mobile-search"
+            >
+              🔍
+            </Link>
+          )}
           <button
             type="button"
             className="today-mobile__topbar-btn"
@@ -284,6 +286,12 @@ export function TodayPage() {
               </Link>
               <Link to="/actions/new?from=/today" className="today-mobile__quick-item" onClick={() => setQuickMenuOpen(false)}>
                 ✅ 新建待办
+              </Link>
+              <Link to="/events/new?from=/today" className="today-mobile__quick-item" onClick={() => setQuickMenuOpen(false)}>
+                📅 新建日程
+              </Link>
+              <Link to="/notes/new" className="today-mobile__quick-item" onClick={() => setQuickMenuOpen(false)}>
+                📝 新建笔记
               </Link>
               <Link to="/graph-mobile" className="today-mobile__quick-item" onClick={() => setQuickMenuOpen(false)}>
                 🕸️ 关系图
