@@ -691,6 +691,31 @@ jobs:
             artifacts/**/*.sig
             artifacts/**/latest*.json
 
+      # Distribute the installers to wy's download dir directly from the
+      # runner — wy→GitHub pulls took hours (rate-limited, reset connections);
+      # runner→wy scp takes a minute or two. Landing links go live only after
+      # this step, so they never point at 404s.
+      - name: Upload installers to wy downloads
+        env:
+          SSH_KEY: ${{ secrets.WY_SSH_PRIVATE_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DEST="/home/ubuntu/weavine/www-downloads/v${VERSION}"
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/wy_key
+          chmod 600 ~/.ssh/wy_key
+          WY=ubuntu@110.42.215.153
+          STAGE=wy-upload; rm -rf "$STAGE"; mkdir -p "$STAGE"
+          # Installers + updater sigs. *.app.tar.gz excluded: macOS updater
+          # payload, not linked from anywhere.
+          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.deb' \
+                -o -name '*.AppImage' -o -name '*.apk' -o -name '*.sig' \) \
+                ! -name '*.app.tar.gz' -exec cp -v {} "$STAGE/" \;
+          test -n "$(find "$STAGE" -type f -print -quit)" || { echo "no installers staged"; exit 1; }
+          ssh -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new "$WY" "mkdir -p '$DEST'"
+          scp -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new "$STAGE"/* "$WY:$DEST/"
+          ssh -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new "$WY" "ls -la '$DEST'"
+
       - name: Upload release-debug.log on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -755,3 +780,32 @@ jobs:
           scp -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new \
             latest.json latest-android.json \
             ubuntu@110.42.215.153:/home/ubuntu/weavine/www-downloads/
+
+      # Re-point the landing page's hardcoded download links + release badge
+      # at this tag, rebuild, deploy. Runs LAST: the /downloads/vX dir is
+      # populated by the "Upload installers to wy downloads" step above.
+      - name: Set up pnpm (landing)
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node (landing)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deploy landing page with release version
+        env:
+          SSH_KEY: ${{ secrets.WY_SSH_PRIVATE_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i -E "s/v[0-9]+\.[0-9]+\.[0-9]+/v${VERSION}/g" apps/landing/src/pages/index.astro
+          grep -c "v${VERSION}" apps/landing/src/pages/index.astro
+          pnpm install --frozen-lockfile --filter landing
+          (cd apps/landing && pnpm build)
+          test -s apps/landing/dist/index.html
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/wy_key
+          chmod 600 ~/.ssh/wy_key
+          # The runner has no ~/.ssh/config 'wy' alias — pass the host directly.
+          SERVER=ubuntu@110.42.215.153 bash scripts/deploy-landing.sh
