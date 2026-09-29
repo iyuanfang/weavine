@@ -145,7 +145,8 @@ jobs:
           find target/release/bundle -maxdepth 4 -type f || true
           mkdir -p linux-out
           # Use xargs so empty result is not an error
-          find target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' \) -print0 2>/dev/null \
+          # *.sig: updater signatures (createUpdaterArtifacts) — latest.json needs them
+          find target/release/bundle -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.sig' \) -print0 2>/dev/null \
             | xargs -0 -r -I {} cp -v {} linux-out/ 2>&1 || echo "No .deb or .AppImage files found to stage"
           echo "Staged artifacts:"
           ls -la linux-out/ || true
@@ -212,7 +213,8 @@ jobs:
           echo "Bundle directory tree:"
           find target/release/bundle -maxdepth 4 -type f || true
           mkdir -p macos-out
-          find target/release/bundle -type f \( -name '*.dmg' -o -name '*.app' \) -print0 2>/dev/null \
+          # *.app.tar.gz + *.sig: macOS updater artifacts (createUpdaterArtifacts)
+          find target/release/bundle -type f \( -name '*.dmg' -o -name '*.app' -o -name '*.app.tar.gz' -o -name '*.sig' \) -print0 2>/dev/null \
             | xargs -0 -r -I {} cp -rv {} macos-out/ 2>&1 || echo "No .dmg or .app files found to stage"
           echo "Staged artifacts:"
           ls -la macos-out/ || true
@@ -695,3 +697,61 @@ jobs:
         with:
           name: release-debug-log
           path: release-debug.log
+
+      # Assemble latest.json (Tauri updater) + latest-android.json (APK banner)
+      # from the artifacts and push them to wy. Replaces the never-registered
+      # update-manifest.yml workflow (v1.7.9 and earlier needed hand-built
+      # manifests for exactly that reason).
+      - name: Build updater manifests + upload to wy
+        env:
+          SSH_KEY: ${{ secrets.WY_SSH_PRIVATE_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BASE="https://www.weavine.com/downloads/v${VERSION}"
+          python3 - "$VERSION" "$BASE" << 'PY'
+          import glob, hashlib, json, os, sys
+          version, base = sys.argv[1], sys.argv[2]
+          def one(pattern):
+              m = sorted(glob.glob(f"artifacts/**/{pattern}", recursive=True))
+              return m[0] if m else None
+          sig_exe = one("*_x64-setup.exe.sig")
+          exe = one("*_x64-setup.exe")
+          sig_appimage = one("*.AppImage.sig")
+          appimage = None if sig_appimage is None else one("*.AppImage")
+          sig_dmg = one("*.app.tar.gz.sig")
+          dmg = None if sig_dmg is None else one("*.app.tar.gz")
+          platforms = {}
+          if sig_exe and exe:
+              platforms["windows-x86_64"] = {
+                  "signature": open(sig_exe).read().strip(),
+                  "url": f"{base}/{os.path.basename(exe)}",
+              }
+          if sig_appimage and appimage:
+              platforms["linux-x86_64"] = {
+                  "signature": open(sig_appimage).read().strip(),
+                  "url": f"{base}/{os.path.basename(appimage)}",
+              }
+          if sig_dmg and dmg:
+              platforms["darwin-aarch64"] = {
+                  "signature": open(sig_dmg).read().strip(),
+                  "url": f"{base}/{os.path.basename(dmg)}",
+              }
+          latest = {"version": version, "pub_date": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), "platforms": platforms}
+          with open("latest.json", "w") as f:
+              json.dump(latest, f, indent=1)
+          print(open("latest.json").read())
+          apk = one("*.apk")
+          if apk:
+              h = hashlib.sha256(open(apk, "rb").read()).hexdigest()
+              android = {"version": version, "apk_url": f"{base}/{os.path.basename(apk)}", "sha256": h}
+              with open("latest-android.json", "w") as f:
+                  json.dump(android, f)
+              print(open("latest-android.json").read())
+          PY
+          if [ ! -s latest.json ]; then echo "latest.json empty — sig missing?"; exit 1; fi
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/wy_key
+          chmod 600 ~/.ssh/wy_key
+          scp -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new \
+            latest.json latest-android.json \
+            ubuntu@110.42.215.153:/home/ubuntu/weavine/www-downloads/
