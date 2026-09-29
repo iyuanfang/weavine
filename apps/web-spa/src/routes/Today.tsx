@@ -164,9 +164,9 @@ function TodayMobileHints({
   return (
     <div className="today-mobile__hints today-mobile__hints--echo">
       <Link to={meta.href(latest.id)} className="today-mobile__hint-echo">
-        <span className="today-mobile__hint-check">✓</span>
+        <span className="today-mobile__hint-icon">{meta.icon}</span>
         <span className="today-mobile__hint-echo-text">
-          已记下：{latest.title || '一条记录'}
+          {latest.title || '一条记录'}
           <span className="today-mobile__hint-ago">{ago}</span>
         </span>
       </Link>
