@@ -108,6 +108,18 @@ export function MobileInputBar({ onSaved }: Props) {
     return () => window.clearInterval(id);
   }, [text]);
 
+  // Home hint lines ("今天见了谁？") focus the input — switch to text mode,
+  // expand the shell, and put the cursor in the textarea.
+  useEffect(() => {
+    const focus = () => {
+      setMode('text');
+      setActive(true);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    window.addEventListener('weavine:focus-input', focus);
+    return () => window.removeEventListener('weavine:focus-input', focus);
+  }, []);
+
   // The 已记录 ✓ flash schedules a timeout; clear it so it cannot write state
   // after the component is gone.
   useEffect(

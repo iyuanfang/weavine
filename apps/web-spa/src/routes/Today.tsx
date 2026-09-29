@@ -77,6 +77,110 @@ function relativeDueLabel(dueAt: Date, now: Date): string {
   return formatDate(dueAt);
 }
 
+// ── Mobile hero hints: a small dialogue, not a dashboard ────────────────
+// States:
+//   A  brand-new (no contacts at all) → the 3 scope questions, tappable
+//   B  returning, nothing recorded today → one time-aware capture prompt
+//   C  records today → echo the latest one back, plus today's count
+// Overdue/nudges deliberately stay OUT — the 待办 tab owns urgency.
+
+interface HintRecord {
+  kind: 'interaction' | 'action' | 'event' | 'note';
+  id: string;
+  title: string;
+  created_at: string;
+}
+
+const HINT_KIND_META: Record<HintRecord['kind'], { icon: string; href: (id: string) => string }> = {
+  interaction: { icon: '💬', href: (id) => `/interactions/${id}?from=/today` },
+  action: { icon: '✅', href: (id) => `/actions/${id}?from=/today` },
+  event: { icon: '📅', href: (id) => `/events/${id}?from=/today` },
+  note: { icon: '📝', href: (id) => `/notes/${id}?from=/today` },
+};
+
+function timeAgoShort(ms: number): string {
+  if (ms < 2 * 60_000) return '刚刚';
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)} 分钟前`;
+  return `${Math.floor(ms / 3_600_000)} 小时前`;
+}
+
+function TodayMobileHints({
+  now,
+  records,
+  isNewUser,
+}: {
+  now: Date;
+  records: HintRecord[];
+  isNewUser: boolean;
+}) {
+  // State A — brand-new workspace: the 3 scope questions become shortcuts.
+  if (isNewUser) {
+    return (
+      <div className="today-mobile__hints">
+        <button
+          type="button"
+          className="today-mobile__hint-line"
+          onClick={() => window.dispatchEvent(new CustomEvent('weavine:focus-input'))}
+        >
+          今天见了谁？
+        </button>
+        <Link to="/actions?from=/today" className="today-mobile__hint-line">
+          明天要做什么？
+        </Link>
+        <Link to="/contacts?from=/today" className="today-mobile__hint-line">
+          哪些人脉需要维护？
+        </Link>
+      </div>
+    );
+  }
+
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const todays = records
+    .filter((r) => new Date(r.created_at).getTime() >= dayStart)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  // State B — returning, nothing today: one time-aware prompt.
+  if (todays.length === 0) {
+    const h = now.getHours();
+    const prompt =
+      h < 12 ? '今天要见谁？顺手记一句' : h < 18 ? '今天见了谁？一句话的事' : '今天见了谁？趁还记得';
+    return (
+      <div className="today-mobile__hints">
+        <button
+          type="button"
+          className="today-mobile__hint-line"
+          onClick={() => window.dispatchEvent(new CustomEvent('weavine:focus-input'))}
+        >
+          {prompt}
+        </button>
+      </div>
+    );
+  }
+
+  // State C — echo the latest record back, then the day's count.
+  const latest = todays[0];
+  const meta = HINT_KIND_META[latest.kind];
+  const ago = timeAgoShort(now.getTime() - new Date(latest.created_at).getTime());
+  return (
+    <div className="today-mobile__hints today-mobile__hints--echo">
+      <Link to={meta.href(latest.id)} className="today-mobile__hint-echo">
+        <span className="today-mobile__hint-check">✓</span>
+        <span className="today-mobile__hint-echo-text">
+          已记下：{latest.title || '一条记录'}
+          <span className="today-mobile__hint-ago">{ago}</span>
+        </span>
+      </Link>
+      <button
+        type="button"
+        className="today-mobile__hint-count"
+        onClick={() => window.dispatchEvent(new CustomEvent('weavine:open-drawer'))}
+      >
+        今天共 {todays.length} 条 · 查看今天 →
+      </button>
+    </div>
+  );
+}
+
 export function TodayPage() {
   const adapter = useAdapter();
   const userId = useUserId();
@@ -139,7 +243,7 @@ export function TodayPage() {
     queryFn: async () => {
       const r = await adapter.notes.list(userId!);
       const top = r.items.slice(0, 5);
-      return Promise.all(
+      const graph = await Promise.all(
         top.map(async (n) => {
           try {
             const links = await adapter.notes.listEntityLinks(userId!, n.id);
@@ -155,6 +259,8 @@ export function TodayPage() {
           }
         }),
       );
+      // Full list (unsliced) feeds the mobile hints' "今天已记" stats.
+      return { graph, all: r.items };
     },
     enabled: Boolean(userId),
   });
@@ -242,6 +348,36 @@ export function TodayPage() {
   // + hint, status chips, and the fixed bottom input bar. Desktop keeps the
   // full dashboard below.
   if (isMobile) {
+    // Hint records: everything created today across the four capture kinds —
+    // this is what the hero's dynamic dialogue reflects.
+    const dayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const hintRecords: HintRecord[] = [
+      ...(interactionsQuery.data ?? []).map((i) => ({
+        kind: 'interaction' as const,
+        id: i.id,
+        title: i.summary,
+        created_at: i.created_at,
+      })),
+      ...(actionsQuery.data ?? []).map((a) => ({
+        kind: 'action' as const,
+        id: a.id,
+        title: a.title,
+        created_at: a.created_at,
+      })),
+      ...(eventsQuery.data ?? []).map((e) => ({
+        kind: 'event' as const,
+        id: e.id,
+        title: e.title,
+        created_at: e.created_at,
+      })),
+      ...(notesQuery.data?.all ?? []).map((n) => ({
+        kind: 'note' as const,
+        id: n.id,
+        title: n.title,
+        created_at: n.created_at,
+      })),
+    ].filter((r) => new Date(r.created_at).getTime() >= dayStartMs);
+
     return (
       <div className="page today-mobile" data-testid="today-mobile">
         <div className="today-mobile__topbar">
@@ -304,11 +440,11 @@ export function TodayPage() {
           <img src="/logo.svg" alt="" className="today-mobile__logo" />
           <div className="today-mobile__brand">织遇</div>
           <div className="today-mobile__tagline">编织遇见的人脉</div>
-          <div className="today-mobile__hints">
-            <span>今天见了谁？</span>
-            <span>明天要做什么？</span>
-            <span>哪些人脉需要维护？</span>
-          </div>
+          <TodayMobileHints
+            now={now}
+            records={hintRecords}
+            isNewUser={contacts.length === 0}
+          />
         </div>
 
         <div className="today-mobile__spacer" />
@@ -379,7 +515,7 @@ export function TodayPage() {
             events={eventsQuery.data ?? []}
             actions={actionsQuery.data ?? []}
             projects={projectsQuery.data ?? []}
-            notes={notesQuery.data ?? []}
+            notes={notesQuery.data?.graph ?? []}
             interactions={interactionsQuery.data ?? []}
             preparing={false}
           />
