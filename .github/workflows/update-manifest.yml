@@ -2,6 +2,10 @@
 # latest-android.json (APK banner) after a release is published, then push
 # them to wy so clients see the new version immediately.
 #
+# Re-touched 2026-09-29: GitHub had never registered this workflow (it was
+# absent from the Actions registry since introduction), so release publishes
+# never triggered it. Editing the file on push re-registers it.
+#
 # Requires repo secrets:
 #   WY_SSH_PRIVATE_KEY — SSH private key authorized for ubuntu@110.42.215.153
 #   (the same key used by scripts/deploy-web.sh)
