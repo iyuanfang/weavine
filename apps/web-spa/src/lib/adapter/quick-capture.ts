@@ -1,16 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import { isTauri } from './index';
-import { getAccessToken } from '../auth/storage';
 import type { ParsedQuick } from '../quick-types';
-
-const VITE_API_BASE: string = (() => {
-  if (typeof import.meta === 'undefined') return '';
-  const env = (import.meta as unknown as Record<string, unknown>).env as
-    | Record<string, string | undefined>
-    | undefined;
-  return env?.VITE_API_BASE ?? '';
-})();
+import { parseQuick as parseQuickLocal } from '../quick/parse';
 
 export async function parseQuick(
   text: string,
@@ -20,6 +12,8 @@ export async function parseQuick(
   const trimmed = text.trim();
   if (!trimmed) throw new Error('quick-capture: empty text');
 
+  // Tauri: native parser, runs in-process. Single source of truth lives in
+  // `src-tauri/src/quick.rs`.
   if (isTauri) {
     return invoke<ParsedQuick>('quick_parse', {
       user_id: userId,
@@ -28,24 +22,12 @@ export async function parseQuick(
     });
   }
 
-  const url = VITE_API_BASE.replace(/\/+$/, '') + '/api/quick/parse';
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = getAccessToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ text: trimmed, contact_names }),
-  });
-  if (!resp.ok) {
-    let msg = '';
-    try {
-      msg = await resp.text();
-    } catch {
-      msg = `HTTP ${resp.status}`;
-    }
-    throw new Error(`POST /api/quick/parse: ${resp.status} — ${msg}`);
-  }
-  return resp.json() as Promise<ParsedQuick>;
+  // Browser / wap: parse locally so every onChange does NOT round-trip
+  // through /api/quick/parse. The mirror lives in
+  // `apps/web-spa/src/lib/quick/parse.ts` and is unit-tested to stay
+  // aligned with the Rust counterpart. Server endpoint is kept for parity
+  // / future remote use; we don't call it from the keystroke path anymore.
+  void contact_names; // browser parser takes resolved contact objects, not names
+  void userId; // unused on local path
+  return parseQuickLocal(trimmed);
 }

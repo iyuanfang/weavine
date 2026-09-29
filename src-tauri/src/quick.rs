@@ -27,17 +27,22 @@ pub struct QuickItem {
     pub confidence: f32,
 }
 
+// Keyword lists are tuned for the common short input the quick-capture bar
+// produces (one or two short clauses, often voice transcript). We deliberately
+// avoid single-character / single-syllable Chinese tokens (e.g. bare "记得",
+// "要") — they match far too much incidental text and used to drag nearly
+// every input into Action.
 const KIND_KEYWORDS_EVENT: &[&str] = &[
-    "开会", "约", "meeting", "meet", "conference", "sync",
-    "standup", "1:1", "一对一", "碰头",
+    "开会", "会议", "约", "meeting", "meet", "conference", "sync",
+    "standup", "1:1", "一对一", "碰头", "面谈",
 ];
 const KIND_KEYWORDS_ACTION: &[&str] = &[
-    "待办", "记得", "要", "todo", "task", "remind", "follow up",
-    "别忘了", "记得做",
+    "待办", "别忘了", "记得做", "提醒我", "帮我做", "todo", "task",
+    "remind", "follow up",
 ];
 const KIND_KEYWORDS_INTERACTION: &[&str] = &[
-    "吃饭", "通话", "打电话", "聊", "call", "dinner", "lunch", "chat",
-    "coffee", "喝咖啡", "见面", "联系",
+    "吃饭", "通话", "打电话", "喝咖啡", "见面", "dinner", "lunch",
+    "chat", "coffee", "call",
 ];
 const KIND_KEYWORDS_NOTE: &[&str] = &[
     "记一下", "记一笔", "想法", "灵感", "备注", "备忘", "随手记",
@@ -50,18 +55,27 @@ fn classify_kind(s: &str, due: Option<DateTime<Utc>>, now: DateTime<Utc>) -> (Ki
     let interaction_hits = KIND_KEYWORDS_INTERACTION.iter().filter(|k| s.contains(*k)).count();
     let note_hits = KIND_KEYWORDS_NOTE.iter().filter(|k| s.contains(*k)).count();
     let max = event_hits.max(action_hits).max(interaction_hits).max(note_hits);
+
+    // No keyword hit at all → pick based on whether we parsed a time.
+    // With a time, "明天和张三" reads as a planned meeting → event.
+    // Without, "刚才电梯里碰到他" reads as a note to self → note.
+    // (Earlier versions defaulted to Action, which was the "everything is a
+    // todo" complaint.)
     if max == 0 {
-        return (Kind::Action, 0.6);
+        return if due.is_some() {
+            (Kind::Event, 0.55)
+        } else {
+            (Kind::Note, 0.55)
+        };
     }
 
-    // Time tie-breaker: future = schedule (event), past = interaction log.
-    // Applies ONLY to interaction-keyword inputs ("吃饭"/"聊"/"通话"): they're social
-    // and need disambiguation by time. Event-keyword inputs ("开会"/"会议") stay as
-    // event regardless of time — a past meeting is still a past event, not interaction.
-    // "明天下午和张三吃饭" parses due = tomorrow afternoon → future → upgrade to event.
-    // "上周和张三吃饭" parses due = last week → past → keep as interaction.
+    // Two-way time tie-breaker for interaction-keyword inputs.
+    //   future ("明天下午吃饭")  → upgrade to Event
+    //   past   ("上周和张三吃饭") → keep Interaction
+    // Event-keyword inputs ("开会"/"会议") stay as Event regardless of time —
+    // a past meeting is still a past event, not an interaction.
     if let Some(d) = due {
-        if interaction_hits > 0 && event_hits == 0 && d > now {
+        if interaction_hits > 0 && event_hits == 0 && action_hits == 0 && d > now {
             return (Kind::Event, 0.85);
         }
     }
@@ -152,7 +166,9 @@ if let Some(suffix) = cap.get(3).map(|m| m.as_str()) {
 }
 
 fn chrono_parse(s: &str, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
-    let local_now = Local::now();
+    // Anchor "today" to the caller's `now`, not Local::now(), so unit tests
+    // and offline replays don't shift relative to real wall-clock time.
+    let local_now = now.with_timezone(&Local);
     let local_today = local_now.date_naive();
     let lower = s.to_lowercase();
 
@@ -394,5 +410,132 @@ mod tests {
     fn note_keyword_with_event_keyword_prefers_note() {
         let item = parse("记一下明天的会议要点", &[], now());
         assert_eq!(item.kind, Kind::Note);
+    }
+
+    #[test]
+    fn no_keyword_with_future_time_routes_to_event() {
+        // "周二下午三点" parses a time, no keyword hit → was Action (0.6),
+        // now Event.
+        let item = parse("周二下午三点", &[], now());
+        assert_eq!(item.kind, Kind::Event);
+    }
+
+    #[test]
+    fn no_keyword_no_time_routes_to_note() {
+        // The legacy "everything is a todo" complaint: bare narrative with no
+        // marker should be a note, not a todo.
+        let item = parse("刚才电梯里碰到张三", &[], now());
+        assert_eq!(item.kind, Kind::Note);
+    }
+
+    #[test]
+    fn bare_contact_no_time_routes_to_note() {
+        let item = parse("张三", &[], now());
+        assert_eq!(item.kind, Kind::Note);
+    }
+
+    #[test]
+    fn action_keyword_no_longer_matches_bare_yi_yao() {
+        // "要" used to be an Action trigger on its own and dragged "明天下午
+        // 三点要和张三吃饭" into Action. Now "要" alone is no longer a
+        // keyword — interaction+future wins, route to event.
+        let item = parse("明天下午三点要和张三吃饭", &[], now());
+        assert_eq!(item.kind, Kind::Event);
+    }
+
+    #[test]
+    fn action_keyword_still_routes_to_action() {
+        let item = parse("别忘了周三给我爸打电话", &[], now());
+        // "别忘了" is Action, "打电话" is Interaction, "周三" parses a future
+        // time. Tie-breaker: action_hits == 0 condition fails (action_hits=1),
+        // so we don't upgrade to Event. Then max: action=1, interaction=1, so
+        // it lands on the action branch (action checked first in the
+        // action_hits == max branch).
+        assert_eq!(item.kind, Kind::Action);
+    }
+
+    #[test]
+    fn past_interaction_keyword_with_action_word_does_not_upgrade_to_event() {
+        // Tie-breaker now guards on action_hits == 0 so that an Action cue
+        // ("记得做") plus a past interaction doesn't get mis-routed.
+        let item = parse("上周和张三吃饭", &[], now());
+        assert_eq!(item.kind, Kind::Interaction);
+    }
+
+    // ── Cross-language alignment corpus ────────────────────────────────────
+    //
+    // Emits a JSON file that the web SPA test (`apps/web-spa/src/lib/quick/
+    // parse.test.ts`) reads to assert its mirror parser agrees on kind.
+    // If you add/remove/change a corpus entry, re-run this test so the JSON
+    // is regenerated; if you only edit one side, the consumer test fails
+    // loudly.
+
+    #[derive(serde::Serialize)]
+    struct CorpusEntry {
+        text: &'static str,
+        kind: &'static str,
+    }
+
+    const CORPUS: &[CorpusEntry] = &[
+        CorpusEntry { text: "明天下午和张三吃饭", kind: "event" },
+        CorpusEntry { text: "上周和张三吃饭", kind: "interaction" },
+        CorpusEntry { text: "明天开会", kind: "event" },
+        CorpusEntry { text: "上周开会", kind: "event" },
+        CorpusEntry { text: "和张三吃饭", kind: "interaction" },
+        CorpusEntry { text: "开会", kind: "event" },
+        CorpusEntry { text: "记一下今天在读的书", kind: "note" },
+        CorpusEntry { text: "idea: support wikilinks in notes", kind: "note" },
+        CorpusEntry { text: "记一下明天的会议要点", kind: "note" },
+        CorpusEntry { text: "周二下午三点", kind: "event" },
+        CorpusEntry { text: "刚才电梯里碰到张三", kind: "note" },
+        CorpusEntry { text: "张三", kind: "note" },
+        CorpusEntry { text: "明天下午三点要和张三吃饭", kind: "event" },
+        CorpusEntry { text: "别忘了周三给我爸打电话", kind: "action" },
+    ];
+
+    #[test]
+    fn emit_cross_language_corpus() {
+        // Computed expected kind from CORPUS, then written to disk so the
+        // TS counterpart can pin to the same expectations. Tests that
+        // mutate CORPUS will see this assertion catch drift before the
+        // TS side runs.
+        for entry in CORPUS {
+            let item = parse(entry.text, &[], now());
+            assert_eq!(
+                item.kind.as_str(),
+                entry.kind,
+                "corpus entry {:?} expected {} but got {:?}",
+                entry.text,
+                entry.kind,
+                item.kind,
+            );
+        }
+
+        // Path resolution: `CARGO_MANIFEST_DIR` is src-tauri/, the web-spa
+        // dir is two levels up + apps/web-spa/.
+        let dest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("apps")
+            .join("web-spa")
+            .join("src")
+            .join("lib")
+            .join("quick")
+            .join("corpus.json");
+
+        let body = serde_json::to_string_pretty(
+            &CORPUS
+                .iter()
+                .map(|c| serde_json::json!({ "text": c.text, "kind": c.kind }))
+                .collect::<Vec<_>>(),
+        )
+        .expect("serialize corpus");
+
+        std::fs::write(&dest, body).unwrap_or_else(|e| {
+            panic!(
+                "failed to write corpus to {}: {}",
+                dest.display(),
+                e
+            )
+        });
     }
 }
