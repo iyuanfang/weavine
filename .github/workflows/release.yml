@@ -706,11 +706,12 @@ jobs:
           chmod 600 ~/.ssh/wy_key
           WY=ubuntu@110.42.215.153
           STAGE=wy-upload; rm -rf "$STAGE"; mkdir -p "$STAGE"
-          # Installers + updater sigs. *.app.tar.gz excluded: macOS updater
-          # payload, not linked from anywhere.
+          # Installers + updater payloads/sigs. The macOS .app.tar.gz IS the
+          # darwin updater download target (latest.json links it) — don't
+          # exclude it, or mac auto-update 404s.
           find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.deb' \
-                -o -name '*.AppImage' -o -name '*.apk' -o -name '*.sig' \) \
-                ! -name '*.app.tar.gz' -exec cp -v {} "$STAGE/" \;
+                -o -name '*.AppImage' -o -name '*.apk' -o -name '*.sig' \
+                -o -name '*.app.tar.gz' \) -exec cp -v {} "$STAGE/" \;
           test -n "$(find "$STAGE" -type f -print -quit)" || { echo "no installers staged"; exit 1; }
           ssh -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new "$WY" "mkdir -p '$DEST'"
           scp -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new "$STAGE"/* "$WY:$DEST/"
