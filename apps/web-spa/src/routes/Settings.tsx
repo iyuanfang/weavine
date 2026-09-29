@@ -474,7 +474,8 @@ function VersionCard() {
         latestVersion: string;
         apkUrl: string;
       }
-    | { kind: 'downloading-android'; latestVersion: string; apkUrl: string };
+    | { kind: 'downloading-android'; latestVersion: string; apkUrl: string }
+    | { kind: 'browser-download-android'; latestVersion: string; apkUrl: string };
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
 
   const onCheck = async () => {
@@ -528,6 +529,18 @@ function VersionCard() {
     const { apkUrl, latestVersion } = phase;
     setPhase({ kind: 'downloading-android', apkUrl, latestVersion });
     try {
+      if (isTauriRuntime) {
+        // The blob + <a download> trick below is a dead end inside the
+        // Android WebView: Tauri's WebView has no download handler for
+        // blob: URLs, so fetch succeeds, the anchor click goes nowhere and
+        // the package installer never appears. Hand the URL to the system
+        // browser instead — it downloads via DownloadManager and the user
+        // installs from the notification, the standard sideload flow.
+        const { openUrl } = await import('@tauri-apps/plugin-opener');
+        await openUrl(apkUrl);
+        setPhase({ kind: 'browser-download-android', apkUrl, latestVersion });
+        return;
+      }
       const resp = await fetch(apkUrl);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const blob = await resp.blob();
@@ -628,6 +641,32 @@ function VersionCard() {
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
           下载 v{phase.latestVersion} APK 中…
         </p>
+      )}
+
+      {phase.kind === 'browser-download-android' && (
+        <>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--accent, #059669)', margin: '8px 0 0' }}>
+            已跳转到浏览器开始下载 v{phase.latestVersion}。
+          </p>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
+            下载完成后下拉通知栏点开 APK 按提示安装；若提示「未知来源」，允许浏览器安装即可。
+          </p>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginTop: 10 }}
+            onClick={async () => {
+              try {
+                const { openUrl } = await import('@tauri-apps/plugin-opener');
+                await openUrl(phase.apkUrl);
+              } catch {
+                setPhase({ kind: 'ready-android', apkUrl: phase.apkUrl, latestVersion: phase.latestVersion });
+              }
+            }}
+          >
+            没有弹出？重新打开下载
+          </button>
+        </>
       )}
 
       {(phase.kind === 'idle' || phase.kind === 'error' || phase.kind === 'latest') && (
