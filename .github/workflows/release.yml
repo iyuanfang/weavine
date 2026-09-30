@@ -318,7 +318,11 @@ jobs:
           grep -n "windowSoftInputMode" "$MANIFEST"
 
           GRADLE=src-tauri/gen/android/app/build.gradle.kts
-          sed -i 's/compileSdk = 3[0-9]/compileSdk = 35/; s/targetSdk = 3[0-9]/targetSdk = 35/' "$GRADLE"
+          # compileSdk stays at the template value (36) — androidx deps ship
+          # AAR metadata requiring minCompileSdk 36, and lowering it fails
+          # checkAarMetadata (seen in the first v1.7.11 attempt). Only
+          # targetSdk drives edge-to-edge enforcement.
+          sed -i 's/targetSdk = 3[0-9]/targetSdk = 35/' "$GRADLE"
           echo "=== sdk versions after pin ==="
           grep -n "Sdk = " "$GRADLE" | head -5
 
@@ -389,7 +393,15 @@ jobs:
           echo "=== patched manifest ==="
           head -12 "$MANIFEST"
 
-      - name: Verify default MainActivity is in place
+      - name: Apply the native soft-keyboard bridge to MainActivity
+        # `cargo tauri android init` regenerates MainActivity.kt from Tauri's
+        # template every run (gen/android is untracked), so the edge-to-edge
+        # keyboard fix has to be re-applied here on every build. See the
+        # override file's header for the full reasoning: Tauri's template calls
+        # enableEdgeToEdge(), an edge-to-edge window is never resized for the
+        # IME (so the adjustResize step above cannot work), and the webview does
+        # not report the keyboard to the page either (tauri-apps/tauri#10631) —
+        # without this the bottom input bar stays buried under the keyboard.
         run: |
           if [ "${{ matrix.flavor }}" = "local" ]; then
             PKG="com/weavine/desktop/local"
@@ -401,8 +413,14 @@ jobs:
             echo "FATAL: $DEST missing — cargo tauri android init did not produce it"
             exit 1
           fi
-          echo "=== MainActivity.kt (head 5) ==="
-          head -5 "$DEST"
+          PKG_NAME=$(grep -m1 '^package ' "$DEST" | sed 's/^package *//; s/[[:space:]]*$//')
+          if [ -z "$PKG_NAME" ]; then
+            echo "FATAL: could not read the package name from $DEST"
+            exit 1
+          fi
+          sed "s/__PACKAGE__/$PKG_NAME/" src-tauri/android-overrides/MainActivity.kt > "$DEST"
+          echo "=== MainActivity.kt after patch (package $PKG_NAME) ==="
+          cat "$DEST"
 
       # GitHub runner images pre-install a newer NDK and export NDK_HOME /
       # ANDROID_NDK_HOME pointing at it. tauri-cli picks up those env vars
