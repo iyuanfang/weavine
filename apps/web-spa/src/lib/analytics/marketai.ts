@@ -55,6 +55,14 @@ export function trackIdentify(input: {
   if (typeof window === 'undefined') return;
   const queue = window.marketai;
   if (!queue || typeof queue.push !== 'function') return;
+  // 已绑定同一邮箱则跳过：tracker.js init 会从 localStorage 的 mai_email
+  // 自动 re-identify，重复 push 只会产生冗余 identify 事件（云状态查询、
+  // 路由重挂载都会反复调到这里）
+  try {
+    if (localStorage.getItem('mai_email') === input.email) return;
+  } catch {
+    /* private mode — still push */
+  }
   const props: Record<string, unknown> = { email: input.email };
   if (input.first_name) props.first_name = input.first_name;
   if (input.last_name) props.last_name = input.last_name;

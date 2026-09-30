@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { useAdapter } from '../lib/adapter';
 import { checkAndInstallDesktopUpdate, fetchLatestAndroidVersion, fetchLatestDesktopUpdate } from '../lib/app-updater';
 import { useUserId } from '../lib/auth';
+import { trackIdentify } from '../lib/analytics/marketai';
 import type {
   ArchiveSummary,
   CreateContactInput,
@@ -213,7 +214,9 @@ function CloudSyncPanel() {
         email: input.email,
         password: input.password,
       }),
-    onSuccess: () => {
+    onSuccess: (_data, input) => {
+      // 连接云账号即绑定 MarketAI 身份：此后该设备的行为数据归属此邮箱
+      trackIdentify({ email: input.email });
       queryClient.invalidateQueries({ queryKey: ['cloud-status'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['actions'] });

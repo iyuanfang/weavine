@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 
 import { isTauri } from '../lib/adapter';
@@ -9,6 +9,7 @@ import { useAdapter } from '../lib/adapter';
 import { useQuickCapture, useGlobalSearch } from '../App';
 import { UpdateBanner } from './UpdateBanner';
 import { BottomNav } from './BottomNav';
+import { trackIdentify } from '../lib/analytics/marketai';
 
 const navItems = [
   { to: '/today', label: '今天', icon: '🎯', end: true },
@@ -61,8 +62,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
   const adapter = useAdapter();
+  const navigate = useNavigate();
   const userId = user?.id ?? '';
   const [now] = useState(() => Date.now());
+
+  // 云账号身份：已连接时左下角显示云账号 email（而非「本地用户」占位符），
+  // 并作为桌面端/Android 的 MarketAI 身份来源——桌面壳没有登录页，
+  // 云同步的 user_email 是唯一可靠的身份信号。
+  const cloudStatusQuery = useQuery({
+    queryKey: ['cloud-status'],
+    queryFn: () => adapter.cloud.status(),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const cloudEmail = cloudStatusQuery.data?.linked
+    ? cloudStatusQuery.data.user_email
+    : null;
+  useEffect(() => {
+    if (cloudEmail) trackIdentify({ email: cloudEmail });
+  }, [cloudEmail]);
 
   // 近期 mixed timeline for the mobile drawer (same content as the desktop
   // drawer's nav, plus a time-ordered recent feed).
@@ -257,15 +275,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ))}
       </nav>
 
-      <div className="app-shell__user">
-        <span className="app-shell__user-name">
-          {userLoading ? '加载中…' : user?.name ?? user?.email ?? '未登录'}
-        </span>
+      <div
+        className="app-shell__user"
+        onClick={() => navigate('/settings')}
+        style={{ cursor: 'pointer' }}
+        title="账号与云同步"
+      >
+        {cloudEmail ? (
+          <>
+            <span style={{ color: 'var(--accent, #059669)', fontSize: 11 }} title="已连接云同步">☁</span>
+            <span className="app-shell__user-name" style={{ fontSize: 12 }}>{cloudEmail}</span>
+          </>
+        ) : (
+          <span className="app-shell__user-name">
+            {userLoading ? '加载中…' : user?.name ?? user?.email ?? '未登录'}
+          </span>
+        )}
         {!isTauri && (
           <button
             type="button"
             className="app-shell__user-logout"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               clearSession();
               // SPA nav, not a full reload. See SearchPalette.tsx for the
               // full explanation of why `window.location.href` blanks the
