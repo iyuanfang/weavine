@@ -48,7 +48,11 @@ export function MobileGraphPage() {
     enabled: Boolean(userId),
   });
   const notesQuery = useQuery({
-    queryKey: ['notes', userId, 'for-home-graph'],
+    // DISTINCT key — Today's 'for-home-graph' query with the same key caches
+    // {graph, all}, and this page consumed that object as an array, crashing
+    // HomeGraph with "TypeError: i is not iterable" (and, in the other
+    // direction, silently emptying Today's graph).
+    queryKey: ['notes', userId, 'for-mobile-graph-page'],
     queryFn: async () => {
       const r = await adapter.notes.list(userId);
       const top = r.items.slice(0, 5);

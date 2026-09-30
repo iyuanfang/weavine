@@ -199,6 +199,19 @@ const SAT_TYPES: readonly EntityGraphNodeType[] = ['contact', 'event', 'action',
 const DEFAULT_VISIBLE: ReadonlySet<EntityGraphNodeType> = new Set(['contact', 'event', 'action']);
 
 export function HomeGraph({ contacts, events, actions, projects, notes, interactions, preparing }: Props) {
+  // Defensive defaults: callers SHOULD pass `?? []` (both current ones do),
+  // but this component is rendered on the highest-traffic surface and a
+  // stale-bundle mix (SW cache-first served an old caller alongside fresh
+  // code) produced `TypeError: i is not iterable` in production. Never
+  // trust the props here.
+  contacts ??= [];
+  events ??= [];
+  actions ??= [];
+  projects ??= [];
+  // notes additionally guards against the {graph, all} shape leaking in via
+  // a shared react-query cache entry (see MobileGraphPage's distinct key).
+  notes = Array.isArray(notes) ? notes : (notes as unknown as { graph?: HomeNote[] })?.graph ?? [];
+  interactions ??= [];
   const navigate = useNavigate();
   const adapter = useAdapter();
   const queryClient = useQueryClient();
@@ -260,7 +273,9 @@ export function HomeGraph({ contacts, events, actions, projects, notes, interact
         id: `note:${n.id}`,
         kind: 'note',
         label: n.title,
-        linkedContactIds: n.linkedContactIds,
+        // Older callers (and older cached bundles) may omit the links array;
+        // `?? []` keeps `.some(...)` downstream from crashing the same way.
+        linkedContactIds: n.linkedContactIds ?? [],
         href: `/notes/${n.id}?tab=graph`,
         // HomeNote may not always carry `updated_at` (older callers); fall
         // back to '' so it sorts to the end of the list rather than crashing.
