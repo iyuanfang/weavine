@@ -809,4 +809,9 @@ jobs:
           echo "$SSH_KEY" > ~/.ssh/wy_key
           chmod 600 ~/.ssh/wy_key
           # The runner has no ~/.ssh/config 'wy' alias — pass the host directly.
-          SERVER=ubuntu@110.42.215.153 bash scripts/deploy-landing.sh
+          # deploy-landing.sh takes its ssh options from SSH_OPTS; IdentitiesOnly
+          # keeps the runner's agent keys (github checkout key) out of the
+          # handshake — offering them first triggered "Too many authentication
+          # failures" before our key was ever tried.
+          SSH_OPTS="-i ~/.ssh/wy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+            SERVER=ubuntu@110.42.215.153 bash scripts/deploy-landing.sh
