@@ -1713,6 +1713,9 @@ WHERE user_id = $1 AND server_revision > $2      -- 原先没有 device_id 条�
 
 - `.gitignore` 原本同时忽略 `src-tauri/gen/android/`、`src-tauri/gen/ios/`、`src-tauri/gen/`（父目录），导致原生工程完全不入库：`AndroidManifest.xml` / `MainActivity.kt` / `build.gradle.kts` 全在生成目录里，改了会被 `tauri android init` 覆盖，也无法 review。现收窄为只忽略 `src-tauri/gen/schemas/` 与 `src-tauri/gen/ios/`，把 android 工程纳入版本控制（45 个文件；`build/`、`.gradle/`、`local.properties` 由工程自带的 `.gitignore` 排除）。
 - activity 补 `android:windowSoftInputMode="adjustResize"`：`.today-mobile` 是 `calc(100dvh - …) + overflow: hidden`，键盘弹出时若不 resize，输入栏会被键盘盖住且页面无法滚动（首页「记录」主路径）。
+  > **第十一轮修正**：`adjustResize` 是**空操作**（窗口 edge-to-edge，见 §20.15.1），它现在的作用只是「钉住模式、不让系统退回 `adjustPan`」。真正抬升输入栏的是 §20.15.2 的原生 insets 桥。
+
+> **⚠️ 状态与本文不符（2026-09-30 实测）**：上面说的「把 android 工程纳入版本控制」**没有落地** —— `git ls-files src-tauri/gen` = **0**，工作区里连 `src-tauri/gen/android/` 都不存在（只有 `schemas/`）。`.gitignore` 不再忽略它，但也没有文件被跟踪；CI 每次 `cargo tauri android init` 重新生成后**重放补丁**（manifest / MainActivity / 图标 / gradle），所以「跟踪工程文件」这条路实际被放弃了。两条路只能选一条：要么真的入库（并去掉 CI 里会覆盖它们的补丁），要么把 `.gitignore` 那段「TRACKED on purpose」的注释改掉。现状是注释与事实相反 —— 待拍板。
 
 ### 20.12 已评估、仍未改（需真机或产品拍板）
 
@@ -1829,3 +1832,172 @@ subtitle={
 **判据（可复用）**：`ReactNode` 位置**不要直接放数组**——字符串数组会无分隔拼接，元素数组会报 key 警告。要拼接日期/标签列表就先 `.join('、')` 或显式 `.map` 渲染。
 
 **验证**：`sweep-pages.mjs`（真实构建产物，`EVENTS=5` 复现用户截图场景：本月 5 个日程跨 5 天）→ 副标题显示「5 个日程」，375 / 1280 均 0 越界；`tsc --noEmit` 通过。
+
+
+### 20.15 第十轮：Android 首页输入栏被软键盘遮挡（2026-09-30 已落地）
+
+用户报「android 首页 输入框，点击后，还是被软键盘遮挡，不会自己向上」。此前另一个 agent 已在 CI 里注入 `android:windowSoftInputMode="adjustResize"`（实测无效），并进一步提出「把 targetSdk 钉到 35 + 主题加 `windowOptOutEdgeToEdgeEnforcement`」。
+
+#### 20.15.1 结论先行
+
+**CSS 本来是对的，缺的是「把视口变矮」这件事本身。**
+
+| 事实 | 证据（可复现） |
+| --- | --- |
+| 布局能自己适应矮视口 | `mobile-repro/keyboard-probe.mjs` 把窗口 812→512（= adjustResize 的效果）：输入栏 415–477.8，底边离键盘 34px，**完全可见** |
+| 视口根本不会变矮 | 同一探针模拟 edge-to-edge 的真实情形（只有 visual viewport 缩到 512，窗口不变）：输入栏底边 777.8 → **被埋 265.8px**，与用户现象一致 |
+| `adjustResize` 注定无效 | tauri-cli 2.11.3 的模板 `MainActivity.kt` 本体就是 `enableEdgeToEdge()` + `super.onCreate()`；edge-to-edge 窗口不会为 IME 重排窗口 |
+| 页面侧拿不到任何信号 | Android WebView 不把键盘高度报给 `visualViewport`（tauri-apps/tauri#10631，**至今 open**，2026-04-13 仍在更新、11 个 👍）⇒ 纯前端的 CSS/JS 救不了 APK |
+
+#### 20.15.2 修法
+
+原生侧（真正起作用的一半）：新增 `src-tauri/android-overrides/MainActivity.kt`，在 `enableEdgeToEdge()` 之后取 IME inset 作为内容视图的底部 padding —— 这是 Android 官方给 edge-to-edge 的 `adjustResize` 替代做法。WebView 真的变矮 ⇒ `100dvh` 跟着缩 ⇒ 20.15.1 第一行那种「已验证可用的布局」接管。两处细节：
+
+- padding 只取 **`getInsets(Type.ime()).bottom`**（只算键盘）。**不要写 `ime.bottom - systemBars.bottom`**：`ime.bottom` 的量法是「窗口底边 → 键盘顶边」，减掉导航栏会让内容往键盘里多探一个导航栏的高度，正好埋掉要修的输入栏。**也不要用 `systemBars() or ime()` 的并集**（第十一轮先改成并集、又改回单取 IME）：并集在键盘收起时会把导航栏高度算成 padding，而本页底部导航是 `position: fixed` 铺满的、`env(safe-area-inset-bottom)` 在 Android 恒为 0，留位反而在深色底导下面露出一条窗口背景色（浅色模式=白条）。第十一轮的完整论证与证据见 §20.16.2。
+- 把 IME 从下发给子树的 insets 里剔除（`setInsets(Type.ime(), Insets.NONE)`），否则 Chromium 会再缩一次 `dvh`，输入栏被抬两次。
+
+`src-tauri/gen/android/` 不入库（CI 每次 `cargo tauri android init` 重新生成），所以 CI 里新增一步，在生成之后把该文件覆盖过去（包名从生成文件里读，`local` / `cloud` 两个 flavor 都照顾到）。
+
+Web 侧（兜底，且是网页版/iOS 的正解）：新增 `apps/web-spa/src/lib/use-soft-keyboard.ts`，把 `visualViewport` 算出的键盘高度写成 `--kb-inset`；`.app-shell` 的 `100dvh` 与 `.login-shell` 的 `min-height` 各自减去它。
+**不会重复抬升**：引擎若已经把布局视口缩了，`innerHeight === visualViewport.height`，差值就是 0，`--kb-inset` 保持未设置（`.today-mobile` 因此改为 `height: 100%`，跟随父级，而不是自己再算一遍 `100dvh - 56px` —— 否则会减两次，输入栏被甩到键盘上方 300px）。
+`index.html` 同时补 `interactive-widget=resizes-content`，明确要「缩布局视口」而不是 Chromium 默认的 `resizes-visual`。
+
+#### 20.15.3 为什么「钉 targetSdk 35 + 主题 opt-out」不成立
+
+1. **`enableEdgeToEdge()` 是运行时调用，版本无关**：它在 Android 14 及以下也照样把窗口置为 edge-to-edge（这正是它的兼容作用）。所以「targetSdk 决定是否 edge-to-edge」这个前提在本项目里不成立，钉 SDK 也改不回来。
+2. **opt-out 是死路**：Google 官方行为变更写明，targetSdk 36 时 `windowOptOutEdgeToEdgeEnforcement` 已弃用并停用（Android 16 设备上无效）；Android 官方对 target 35 的定位就是「临时退出项」，Android 17 延续同一模型、没有新增退路。而 Google Play 自 **2026-08-31** 起要求「新应用和应用更新必须 target Android 16 (API 36) 以上」。
+3. **顺带把 `compileSdk` 降到 35 有构建风险**：模板里的 `androidx.webkit:webkit:1.14.0` / `androidx.lifecycle:lifecycle-process:2.10.0` 等依赖可能要求 compileSdk 36，AGP 会以「dependency requires compileSdk 36」直接失败（失败是响亮的，不会静默）。
+
+真要留那个 opt-out 也无妨（两个机制不会互相打架：窗口若真被重排，IME inset 相对窗口已为 0，padding 自然是 0），但没有必要。
+
+> **第十一轮已按此结论回退**：CI 里 `targetSdk` 的 `sed` 钉版与主题 opt-out 已删除，只保留 manifest 的 `windowSoftInputMode="adjustResize"`（并如实注释它**不是**键盘修复、而是防止系统退回 `adjustPan`）。见 §20.16.1。
+
+#### 20.15.4 顺带修掉的一个既有缺陷（与键盘无关）
+
+回归扫描发现 `/today` 在 320/375/414 下横向被切 **87.4px**（4 个元素）。用 `EXTRA_CSS` 把 `.today-mobile` 高度还原成改动前的值复测，**数字一模一样 ⇒ 属既有缺陷，非本轮引入**。根因：
+
+`.today-mobile__hero` 是 `align-items: center` 的列容器，`.today-mobile__hints` 因此是 **shrink-to-fit**（宽度 = 自身 max-content）；而它内部 echo 行的 `max-width: 100%` 是**循环百分比**（父级宽度未定 ⇒ 按 `none` 处理）。于是最新一条记录标题够长时，整块被撑到文字原始宽度，`overflow: hidden` 把 echo 行和计数行**两端各切掉约 87px**。修法：`.today-mobile__hints { width: 100%; min-width: 0 }`，把盒子钉到父级，让内部早已写好的 `ellipsis` 生效。
+
+> 判据：**「父级 `align-items: center` + 子级 `max-width: 100%`」= 循环百分比**。想让省略号生效，必须先给这个盒子一个确定的宽度。
+
+#### 20.15.5 验证
+
+- `keyboard-probe.mjs`（真实构建产物，375×812，键盘 300px）：键盘关闭 → 输入栏 715–777.8（与原状一致，无回归）；窗口变矮 → 415–477.8 ✅；**只有视觉视口变矮 → `--kb-inset=300px`、输入栏 415–477.8 ✅（修复前 777.8 / 被埋 265.8px）**。
+- `sweep-pages.mjs`：320 / 375 / 414 / 900 / 1280 × `/today /actions /calendar /contacts /notes /search` → **全绿**（0 越界）；`tsc --noEmit` 通过。
+- 原生侧**本机无法验证**（无 JDK / Android SDK / NDK / rust-android target），需打包后在真机确认；构建失败会在 CI 响亮报错。
+
+#### 20.15.6 遗留（待真机 / 待拍板）
+
+- 真机验证要点：首页输入栏点击后是否抬到键盘之上；键盘收起后是否回位；顶部/底部安全区是否仍正常（本轮未动 `env()` 相关）。
+- 若真机上 `--kb-inset` 与原生 padding 同时生效（不该发生，见 20.15.3 末尾），表现为输入栏被抬得过高 —— 这是可肉眼识别的，不是静默故障。
+- 仍不在本次范围：搜索浮层（`position: fixed`，键盘弹出时列表底部会被遮，但列表本身可滚动）、键盘弹出时底部导航被覆盖（固定定位，属预期）。
+- `src-tauri/gen/android` 里的 `res/` 若再出现 `tauri icon` 写进来的大写文件名（`Square150x150Logo.png` 等），aapt2 会报非法资源名 —— CI 已用 `-o /tmp/tauri-icons` 规避。
+
+
+### 20.16 第十一轮：CI 归位（去钉版）+ 图标修复进 CI（2026-09-30）
+
+用户只说「你都来做」，指第十轮末尾列出的两件待决策项。两件都做了，过程中又发现并修掉第三件。
+
+#### 20.16.1 CI：撤掉「钉 targetSdk 35 + 主题 opt-out」
+
+`.github/workflows/release.yml` 里那段 `sed`（`targetSdk = 35` + 往所有 `themes.xml` 追加 `android:windowOptOutEdgeToEdgeEnforcement`）**已删**，理由见 §20.15.3（运行时 `enableEdgeToEdge()` 与 targetSdk 无关；opt-out 在 target 36 已停用；Play 自 2026-08-31 起要求 API 36）。
+
+保留的部分与它的新身份：
+
+- manifest 的 `android:windowSoftInputMode="adjustResize"` **留着**，但注释改成实话 —— 它不是键盘修复（edge-to-edge 窗口不会为 IME 重排），作用是**钉住模式**，防止 `adjustUnspecified` 给一个不可 resize 的窗口选 `adjustPan`（整窗上移），那会和原生 padding、页面的 `--kb-inset` 三方打架。
+- 步骤名从 `Force adjustResize for the soft keyboard` 改为 `Pin windowSoftInputMode so the system cannot pick adjustPan`，免得下一个读 CI 的人再顺着旧注释去钉 SDK。
+
+#### 20.16.2 原生桥：一处真错误 + 三处「差一点就写错」
+
+`MainActivity.kt` 原来写 `ime.bottom - systemBars.bottom`。**这是错的**：`ime.bottom` 是「窗口底边 → 键盘顶边」的距离，本来就把键盘压在导航栏上的那一条算在内；再减一次，内容就会往键盘里多探一个导航栏的高度 —— 正好把要修的输入栏埋回去。改成只取 `getInsets(Type.ime()).bottom`。
+
+中间一度改成并集 `systemBars() or ime()`（Android 官方根视图示例的写法），又改回单取 IME —— 并集在**键盘收起时**会把导航栏高度当成 padding，而本页底部导航是 `position: fixed` 铺满的、`env(safe-area-inset-bottom)` 在 Android 恒为 0，于是深色底导下面会露出一条窗口背景色（浅色模式 = 白条）。判据：**这个 padding 的语义是「给键盘留位」，不是「给系统栏留位」**；后者要动就得连底导的配色一起改，属视觉决策。
+
+另外两处：
+
+- `findViewById` 改成空安全（`?: return`），监听器仍在 `super.onCreate()` 之后安装；
+- **不要为了省事返回 `WindowInsetsCompat.CONSUMED`**（差一点就这么写了）。它会连带把 **display cutout 的 insets** 也拦在子树外，而 Android WebView 的 `env(safe-area-inset-*)` 正是从那里来的（WebView 消费/不到 insets ⇒ `env()` 报 0，这是 Android 上的经典坑）—— 抽屉、搜索浮层、登录页都靠它，那会是一个比键盘更广的回归。所以只剔 IME：`Builder(insets).setInsets(Type.ime(), Insets.NONE).build()`。
+
+**证据（第十一轮补的，之前只有推断）**：
+
+| 结论 | 依据 |
+| --- | --- |
+| WebView 是 `android.R.id.content` 的 `MATCH_PARENT` 子视图 ⇒ 给它加 padding 确实会缩短 WebView | wry 源码 `src/android/main_pipe.rs` 的 "Set content view" 调用：`activity.setContentView(webview)` → `PhoneWindow.setContentView(View)` → decor 内容框的 MATCH_PARENT 子视图 |
+| 用到的 androidx API 在模板自己的版本里都存在 | 模板依赖 `androidx.core:core-ktx:1.9.0`（从 CLI 二进制里读出来）；对着该版本 AAR 的 `classes.jar` 核过 `Type.ime()` / `getInsets(int)` / `Builder.setInsets(int, Insets)` 都在 |
+| `setInsets(Type.ime(), …)` 不会运行时抛异常 | 读 `WindowInsetsCompat$BuilderImpl` 的 class 常量池，IME 相关的异常消息只有一条 `"Ignoring visibility inset not available for IME"`，属于 `setInsetsIgnoringVisibility`；`setInsets` 没有守卫 |
+| `WryActivity` 是 `AppCompatActivity` | wry 源码 `src/android/kotlin/WryActivity.kt` ⇒ appcompat/core 一定在编译类路径上 |
+| 在原生 padding 生效的前提下，缩短后的视口布局是对的 | `keyboard-probe.mjs` 第 A 态（窗口变矮 300px）：输入栏 415–477.8，**被埋 0px** |
+
+**Web 兜底加了一道互斥闸门**（`use-soft-keyboard.ts` 的 `nativeBridgeOwnsKeyboard`）：Android 壳里由原生负责抬升，`--kb-inset` 直接关闭。理由不是"引擎不会报键盘"，而是**不许赌**——万一某个未来版本的 Android WebView 开始通过 `visualViewport` 报键盘（tauri#10631 说今天不报），原生 padding + Web 兜底会叠成两倍，输入栏被顶到键盘上方一个键盘高的地方。判定复用 App 自己的两个信号（`isTauri` + `osStr()==='android'`），并加了单测（`__tests__/use-soft-keyboard.test.ts`，4 例：浏览器/浏览器-Android/桌面壳 → off，Android 壳 → on）。
+
+> **顶层 inset 故意没做**：首页是「深色 hero 铺到状态栏后面」的设计，给内容视图加顶部 padding 会把那条深色换成窗口背景色（`Theme.MaterialComponents.DayNight` ⇒ 浅色模式白、深色模式近黑）。而 Android 的 WebView 只把 `env(safe-area-inset-top)` 映射到屏幕凹口，取不到状态栏高度 ⇒ ☰ / 🔍 距窗口顶 16px、被状态栏压掉一截的问题**在 APK 里仍然存在**（第十轮那次用 `env()` 的修复对网页版有效、对 APK 无效）。要真修，得原生给顶部 padding 或把 inset 注成 CSS 变量让页面自己决定，属视觉决策，等真机确认后再动。
+
+#### 20.16.3 图标：不改生成物，改 CI（`scripts/make-android-icons.mjs`）
+
+上一轮（§20.10.1）的修法有两个致命前提：「`gen/android` 是跟踪文件」以及「本机能跑 sharp 的脚本」。第一个在 `6f6f262` 之后就不成立了，第二个 CI 里根本没有 —— 也就是说 **v1.7.11 打出来的 APK 里仍是满幅前景，图形照样被遮罩切**。（这是上一轮的疏漏，此处记账。）
+
+本轮把它挪进仓库、交给 CI：
+
+```bash
+pnpm exec tauri icon apps/web-spa/public/icon-512.png -o /tmp/tauri-icons
+cp -r /tmp/tauri-icons/android/* src-tauri/gen/android/app/src/main/res/
+node scripts/make-android-icons.mjs /tmp/tauri-icons src-tauri/gen/android/app/src/main/res
+```
+
+本机想手动重算：`pnpm icons:android`（= 上面三步，输出到 `.runtime/tauri-icons`，该目录已在 `.gitignore` 里；前提是本地先 `cargo tauri android init` 生成了工程）。
+
+脚本同时重建**两层**（都写进 `res/mipmap-<density>/`，`mipmap-anydpi-v26/ic_launcher.xml` 无需改）：
+
+| 层 | 做法 | 为什么 |
+| --- | --- | --- |
+| foreground | 图形缩到画布 **64%** 居中 + 径向羽化（`FEATHER_FROM=0.82`，82%→100% 渐隐） | 遮罩只显示中心 72dp（半径 33.3%），保证区更小（66dp ⇒ 30.6%） |
+| background | 从图形四角取色生成的**对角渐变**（`#0f7272 → #17678e → #3247b4`） | 前景缩小后，`tauri icon` 那层「整图模糊」会以**烟雾状光斑**露出来（大图标下最明显）；渐变保留了品牌色场且看起来是刻意的 |
+
+**试过并否掉的方案**（都有出图证据，别再走一遍）：
+
+- **纯 XML `<inset android:inset="16.7%">` 包一层**（零图片处理，最诱人）：四边各缩 16.7%，语义与「把图形放进安全区」完全一致，`InsetDrawable` 的 fraction 确实是按 bounds 算的（读过 AOSP 源码）。但**硬边**会在圆形遮罩里露出一圈方框 —— 因为背景是模糊整图，方框边正好切在模糊图形上。
+- **硬边 + 平色背景**、**硬边 + 对角渐变背景**：方框依旧可见（图形自身的渐变/暗角与背景对不上）。
+- 结论：**羽化是必需的**，所以必须有像素处理 ⇒ 只能放在有图片库的地方。`sharp` 已显式加进根 `devDependencies`（原先只是 astro 的可选依赖，靠不住）；CI 的 `pnpm install --frozen-lockfile` 用 hoisted linker，根 `node_modules/sharp` 一定有。
+
+**自检（脚本自己会失败）**：逐档量两个半径并打印「满幅 → 修复后」，任一超限即 `exit 1`：
+
+```
+mipmap-xxxhdpi canvas 432px · art 276px · mark 44.9%->28.4% (limit 33.3%) · opaque 70.5%->29.1% (limit 30.6%) · corners clear · bg gradient OK
+```
+
+- `mark`：细节（与自身模糊版的高通差 ≥40）的最大半径，限 33.3%（遮罩可见圆）——`tauri icon` 的满幅前景实测 **44.9%**，这就是「叶子顶、蝴蝶结两端被切」的量化证据；
+- `opaque`：半透明以上像素的最大半径，限 30.6%（66dp 安全圆）——满幅版 **70.5%**；
+- `corners`：四角必须全透明；
+- `bg gradient`：背景必须是不透明、且从 `from` 走到 `to` 的渐变。**这条抓过一个真 bug**：`stop-color` 一度传的是 RGB 数组（模板串成 `stop-color="15,114,114"`），librsvg 不为非法颜色报错、直接按黑色填充 ⇒ 图标会变成**纯黑底**。守卫就是为这类「静默画错」加的。
+- 反例已验：把 `SAFE_CONTENT` 改成 0.9，五档全 FAIL、退出码 1（守卫不是死代码）。
+
+阈值 40 的来历：先用 20，结果**羽化边缘的重采样噪声**也超阈（最远处那 2 个像素是 `alpha=0`、模糊半径内的残留），报出假的 32%；提到 40 后干净地区分「真细节」（100+）与噪声。
+
+#### 20.16.4 验证（以及**什么还没有被验证**）
+
+已经验过的：
+
+- **图标**：`node scripts/make-android-icons.mjs` 对**真实的 `tauri icon` 产物**跑通，五档全绿（退出码 0）；反例退出码 1。用 `mobile-repro/verify-icons.mjs` 把生成后的 `res/` 两层按 108dp/72dp 规则合成，施加 4 种遮罩（圆 / 方圆 / 圆角方 / 方）出图 `icons-mask-verify.png`：修复前图形被切，修复后完整；按 48/72/192px 真实尺寸出图 `icon-final-sizes.png`。
+- **键盘（web 侧）**：`keyboard-probe.mjs` 三态全绿——第 A 态「窗口变矮 300px」（= 原生 padding 干的事）输入栏 **被埋 0px**；第 B 态「只有视觉视口变矮」`--kb-inset=300px`、被埋 0px。`sweep-pages.mjs` 320/375/414/900/1280 × 6 路由 **ALL CLEAN**。`tsc --noEmit` 通过；`vitest run` 5 文件 / 58 例全绿（含新增的闸门 4 例）。
+- **键盘（原生侧，静态核对）**：见 20.16.2 的证据表——挂载点、API 存在性、IME 不抛异常，都有源码/字节码依据。
+
+**没有被验证的（必须说清楚）**：
+
+1. **这份 Kotlin 从未被编译过**。本机无 JDK / Android SDK / NDK / rust-android target，`cargo tauri android build` 跑不起来；第一次真正的编译发生在 CI。语法与 API 已逐条核对（20.16.2），但「编译通过」这件事只有 CI 能证。
+2. **真机行为没验过**。结论链条是「wry 用 setContentView 挂 WebView」+「padding 会缩短它」+「缩短后的布局在 375×512 下输入栏在位」（A 态已证）——每一环都有依据，但三环连起来在真机上的效果没有人见过。
+3. **API ≤ 29 上的削 IME 可能是空操作**：老平台没有独立的 IME inset（键盘高度是折在 systemWindowInsets 里的），`setInsets(Type.ime(), NONE)` 那时未必能真的剔掉 ⇒ 理论上 Android 10 及以下可能出现「Chromium 再缩一次 ⇒ 抬起两倍」。可见、非静默；若真出现，修法是给那段加版本判断。
+
+**真机验收步骤（60 秒）**：
+
+1. 先用**新的** APK（旧的是 8/17 的，图标与键盘修复都在它之后），且必须**卸载后重装**（launcher 缓存图标）。
+2. `adb logcat -s WeavineInsets`（`MainActivity.kt` 里留了一行日志）。点一下首页输入框，应看到 `ime bottom NNNpx -> content paddingBottom (was 0px)`；键盘收起应再打一条 `-> 0px`。**没有这条日志 = insets 监听器没生效**，直接定位到 20.16.2 的挂载点问题，不用猜。
+3. 看输入栏位置：在键盘上方 = 修好；完全没动 = 第 2 步的日志能告诉你是没收到还是收到了没生效；**被顶到键盘上方一个键盘高** = 两边都生效了（闸门没起作用），此时把 `use-soft-keyboard.ts` 的闸门扩大或改用 `setInsetsIgnoringVisibility`。
+4. 顺带看两条已知的、本轮**没有**改的观感问题：☰ / 🔍 仍会被状态栏压一截（顶部 inset 属视觉决策，见 20.16.2 末尾）。
+
+#### 20.16.5 遗留
+
+- **真机验收**（上面第 1–4 步）——本轮的键盘修复严格来说仍是「有依据的未验证」。
+- 顶层 inset（☰ / 🔍 被状态栏压住）与底部 inset 的最终观感，都要真机看一眼再定。
+- `.gitignore` 里「android 工程 TRACKED on purpose」的注释与事实相反（§20.11）。
+- 搜索浮层、底部导航在键盘弹出时的表现，仍未在本轮范围。
+- 顺带发现（未改）：`TauriActivity` 把 wry 的 `handleBackNavigation` 置为 `false`（`android-codegen/TauriActivity.kt`），所以**系统返回键不会在 SPA 内后退，而是直接退出 Activity**。想让返回键走 `webView.goBack()`（配合 `history.pushState` 的 popstate）只需在 `MainActivity` 里 `override val handleBackNavigation = true`——属行为变更，等拍板。
