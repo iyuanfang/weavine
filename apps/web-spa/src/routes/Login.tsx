@@ -55,6 +55,15 @@ export function LoginPage() {
       .then((r) => {
         if (cancelled) return;
         setAuthed(r.ok);
+        // 会话恢复（token 还在、没走登录表单）也要上报身份：桌面端/Android
+        // 升级后带着旧 token 自动登录，唯一能拿到 email 的地方就是这里
+        if (r.ok) {
+          r.json()
+            .then((me: { email?: string | null }) => {
+              if (me?.email) trackIdentify({ email: me.email });
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {
         if (cancelled) return;
