@@ -300,6 +300,14 @@ jobs:
         # pan for the generated MainActivity — the whole webview slides up
         # and the bottom input bar stays buried under the keyboard. Web
         # browsers resize the viewport, so wap behaves; the APK must too.
+        #
+        # adjustResize alone is NOT enough: the tauri CLI (2.11) generates
+        # the project with targetSdk = 36, and Android 15+ enforces
+        # edge-to-edge for apps targeting 35+, which silently ignores
+        # adjustResize (observed on a real device in v1.7.10). Pin
+        # targetSdk 35 and opt out of edge-to-edge enforcement — with
+        # targetSdk 35 the opt-out is honored on Android 15 AND 16, and
+        # adjustResize resizes the WebView again.
         run: |
           MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
           if grep -q "windowSoftInputMode" "$MANIFEST"; then
@@ -308,6 +316,26 @@ jobs:
             sed -i 's|android:name=".MainActivity"|android:name=".MainActivity"\n            android:windowSoftInputMode="adjustResize"|' "$MANIFEST"
           fi
           grep -n "windowSoftInputMode" "$MANIFEST"
+
+          GRADLE=src-tauri/gen/android/app/build.gradle.kts
+          sed -i 's/compileSdk = 3[0-9]/compileSdk = 35/; s/targetSdk = 3[0-9]/targetSdk = 35/' "$GRADLE"
+          echo "=== sdk versions after pin ==="
+          grep -n "Sdk = " "$GRADLE" | head -5
+
+          # The opt-out is a theme attribute; apply it to every style in the
+          # generated values resources (including values-night for dark mode).
+          # Unknown-in-context items are ignored at runtime, so
+          # blanket-appending is safe. Fail loudly if nothing matched — a
+          # silent miss here ships a build with the keyboard bug again.
+          PATCHED=0
+          while IFS= read -r F; do
+            if ! grep -q windowOptOutEdgeToEdgeEnforcement "$F"; then
+              sed -i 's|</style>|    <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>\n  </style>|' "$F"
+            fi
+            echo "=== $F ==="
+            grep -n "windowOptOutEdgeToEdgeEnforcement" "$F" && PATCHED=1
+          done < <(find src-tauri/gen/android/app/src/main/res -name 'themes.xml' -o -name 'styles.xml')
+          [ "$PATCHED" -eq 1 ] || { echo "ERROR: no themes.xml/styles.xml found to opt out of edge-to-edge"; exit 1; }
 
       - name: Apply green launcher icons to the fresh android project
         # gen/android is untracked (it broke the build when committed — the
@@ -545,6 +573,9 @@ jobs:
 
       - name: Stage Android APK
         if: always() && steps.build.outcome == 'success'
+        env:
+          ANDROID_RELEASE_KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
         run: |
           # Run staging in a script so exit codes propagate. The previous
           # `{ ...; } 2>&1 | tee` subshell lost exit codes from inside the
@@ -564,14 +595,32 @@ jobs:
           find src-tauri/gen/android -name '*.apk' 2>&1 | head -40 || true
           echo "=== anywhere in workspace looking for *.apk ==="
           find . -path ./node_modules -prune -o -path ./.gradle -prune -o -name '*.apk' -print 2>&1 | head -40 || true
-          if [ ! -f ~/.android/debug.keystore ]; then
-            echo "Generating debug.keystore"
-            keytool -genkey -v \
-              -keystore ~/.android/debug.keystore \
-              -alias androiddebugkey \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass android -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+          # ── Signing identity ────────────────────────────────────────────
+          # The release keystore (PKCS12) comes from repo secrets so every
+          # build has the SAME signature — required for app 备案, in-place
+          # upgrades, and store listings. The debug keystore below is only a
+          # fallback for runs before the secrets were added.
+          if [ -n "${ANDROID_RELEASE_KEYSTORE:-}" ]; then
+            echo "$ANDROID_RELEASE_KEYSTORE" | base64 -d > ~/.android/weavine-release.p12
+            KS_ARGS=(--ks "$HOME/.android/weavine-release.p12" --ks-type PKCS12
+                     --ks-key-alias weavine
+                     --ks-pass "pass:$ANDROID_RELEASE_KEYSTORE_PASSWORD"
+                     --key-pass "pass:$ANDROID_RELEASE_KEYSTORE_PASSWORD")
+            echo "Signing with weavine release keystore (fingerprint is registered for app 备案)"
+          else
+            if [ ! -f ~/.android/debug.keystore ]; then
+              echo "Generating debug.keystore (fallback — set ANDROID_RELEASE_KEYSTORE secrets!)"
+              keytool -genkey -v \
+                -keystore ~/.android/debug.keystore \
+                -alias androiddebugkey \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -storepass android -keypass android \
+                -dname "CN=Android Debug,O=Android,C=US" 2>&1 | tail -2
+            fi
+            KS_ARGS=(--ks "$HOME/.android/debug.keystore"
+                     --ks-key-alias androiddebugkey
+                     --ks-pass pass:android
+                     --key-pass pass:android)
           fi
           BT_SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
           BT="$BT_SDK/build-tools/34.0.0"
@@ -587,11 +636,7 @@ jobs:
               OUT=android-out/Weavine_${ABI}-release.apk
               echo "  ${ABI}: zipalign + apksigner -> $OUT"
               "$BT/zipalign" -p -f 4 "$u" android-out/${ABI}-aligned.apk
-              "$BT/apksigner" sign \
-                --ks ~/.android/debug.keystore \
-                --ks-pass pass:android \
-                --ks-key-alias androiddebugkey \
-                --key-pass pass:android \
+              "$BT/apksigner" sign "${KS_ARGS[@]}" \
                 --out "$OUT" \
                 android-out/${ABI}-aligned.apk
               "$BT/apksigner" verify "$OUT" && echo "    ${ABI}: signature verified OK"
@@ -619,11 +664,7 @@ jobs:
                   name=$(basename "$apk")
                   mv "android-out/$name" "android-out/$name.unsigned"
                   "$BT/zipalign" -p -f 4 "android-out/$name.unsigned" "android-out/$name.aligned"
-                  "$BT/apksigner" sign \
-                    --ks ~/.android/debug.keystore \
-                    --ks-pass pass:android \
-                    --ks-key-alias androiddebugkey \
-                    --key-pass pass:android \
+                  "$BT/apksigner" sign "${KS_ARGS[@]}" \
                     --out "android-out/$name" \
                     "android-out/$name.aligned"
                   rm "android-out/$name.unsigned" "android-out/$name.aligned"

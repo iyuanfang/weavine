@@ -63,3 +63,6 @@ apps/web-spa/public/crop-test/
 .runtime/
 .zcode/
 latest*.json
+
+# android release keystore - never commit
+keystore/
