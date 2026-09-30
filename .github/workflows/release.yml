@@ -295,19 +295,22 @@ jobs:
             cargo tauri android init --ci
           fi
 
-      - name: Force adjustResize for the soft keyboard
-        # Without an explicit windowSoftInputMode the Android system picks
-        # pan for the generated MainActivity — the whole webview slides up
-        # and the bottom input bar stays buried under the keyboard. Web
-        # browsers resize the viewport, so wap behaves; the APK must too.
+      - name: Pin windowSoftInputMode so the system cannot pick adjustPan
+        # This is NOT what fixes the keyboard — an edge-to-edge window is never
+        # resized for the IME (that is what the MainActivity insets bridge
+        # below is for). It pins the mode so the framework cannot fall back to
+        # *panning* the whole window when the keyboard opens
+        # (adjustUnspecified may choose adjustPan for a window it cannot
+        # resize), which would fight both the insets padding and the page's own
+        # `--kb-inset`.
         #
-        # adjustResize alone is NOT enough: the tauri CLI (2.11) generates
-        # the project with targetSdk = 36, and Android 15+ enforces
-        # edge-to-edge for apps targeting 35+, which silently ignores
-        # adjustResize (observed on a real device in v1.7.10). Pin
-        # targetSdk 35 and opt out of edge-to-edge enforcement — with
-        # targetSdk 35 the opt-out is honored on Android 15 AND 16, and
-        # adjustResize resizes the WebView again.
+        # Do NOT "fix" the SDK levels here. Pinning targetSdk 35 and adding
+        # android:windowOptOutEdgeToEdgeEnforcement was tried in v1.7.11 and
+        # cannot work: tauri-cli's template calls enableEdgeToEdge() at runtime,
+        # so the window is edge-to-edge on every Android version regardless of
+        # targetSdk; the opt-out attribute is deprecated and ignored from
+        # targetSdk 36 (Android 16); and Play has required API 36 for app
+        # updates since 2026-08-31.
         run: |
           MANIFEST=src-tauri/gen/android/app/src/main/AndroidManifest.xml
           if grep -q "windowSoftInputMode" "$MANIFEST"; then
@@ -317,36 +320,11 @@ jobs:
           fi
           grep -n "windowSoftInputMode" "$MANIFEST"
 
-          GRADLE=src-tauri/gen/android/app/build.gradle.kts
-          # compileSdk stays at the template value (36) — androidx deps ship
-          # AAR metadata requiring minCompileSdk 36, and lowering it fails
-          # checkAarMetadata (seen in the first v1.7.11 attempt). Only
-          # targetSdk drives edge-to-edge enforcement.
-          sed -i 's/targetSdk = 3[0-9]/targetSdk = 35/' "$GRADLE"
-          echo "=== sdk versions after pin ==="
-          grep -n "Sdk = " "$GRADLE" | head -5
-
-          # The opt-out is a theme attribute; apply it to every style in the
-          # generated values resources (including values-night for dark mode).
-          # Unknown-in-context items are ignored at runtime, so
-          # blanket-appending is safe. Fail loudly if nothing matched — a
-          # silent miss here ships a build with the keyboard bug again.
-          PATCHED=0
-          while IFS= read -r F; do
-            if ! grep -q windowOptOutEdgeToEdgeEnforcement "$F"; then
-              sed -i 's|</style>|    <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>\n  </style>|' "$F"
-            fi
-            echo "=== $F ==="
-            grep -n "windowOptOutEdgeToEdgeEnforcement" "$F" && PATCHED=1
-          done < <(find src-tauri/gen/android/app/src/main/res -name 'themes.xml' -o -name 'styles.xml')
-          [ "$PATCHED" -eq 1 ] || { echo "ERROR: no themes.xml/styles.xml found to opt out of edge-to-edge"; exit 1; }
-
-      - name: Apply green launcher icons to the fresh android project
-        # gen/android is untracked (it broke the build when committed — the
-        # tracked res/ merged with the freshly generated template). tauri
-        # icon writes the adaptive-icon foreground/background layers straight
-        # into the freshly generated project, so the installed APK shows the
-        # green Weavine logo instead of Tauri's default yellow/blue.
+      - name: Apply the Weavine launcher icons to the fresh android project
+        # gen/android is untracked (CI regenerates it via `tauri android init`).
+        # tauri icon writes the adaptive-icon layers straight into the fresh
+        # project, so the installed APK shows the Weavine logo instead of
+        # Tauri's default yellow/blue.
         run: |
           # tauri icon -o writes to <out>/android/... (and <out>/ios/...). Point
           # -o at a scratch dir, then copy ONLY the android/ subtree into the
@@ -354,7 +332,13 @@ jobs:
           # res/android/ resource qualifier dir and AAPT2 fails.
           pnpm exec tauri icon apps/web-spa/public/icon-512.png -o /tmp/tauri-icons
           cp -r /tmp/tauri-icons/android/* src-tauri/gen/android/app/src/main/res/
-          ls src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/
+          # tauri icon's foreground is full-bleed (the artwork covers 100% of
+          # the 108dp canvas) while a launcher mask only reveals the central
+          # 72dp — the mark would come out sliced. The script rebuilds both
+          # adaptive layers and fails the build if the artwork does not fit
+          # (see its header for the geometry and the reasoning).
+          node scripts/make-android-icons.mjs /tmp/tauri-icons src-tauri/gen/android/app/src/main/res
+          ls -l src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/
           cat src-tauri/gen/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
 
       - name: Inject frontendDist assets into Gradle config
