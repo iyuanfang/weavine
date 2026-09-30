@@ -1,0 +1,18 @@
+{
+  "build": {
+    "beforeBuildCommand": "pnpm --dir apps/web-spa run build:tauri"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "icon": [
+      "icons/icon.png"
+    ],
+    "android": {
+      "minSdkVersion": 24
+    }
+  }
+}

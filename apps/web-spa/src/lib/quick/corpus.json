@@ -1,0 +1,58 @@
+[
+  {
+    "kind": "event",
+    "text": "明天下午和张三吃饭"
+  },
+  {
+    "kind": "interaction",
+    "text": "上周和张三吃饭"
+  },
+  {
+    "kind": "event",
+    "text": "明天开会"
+  },
+  {
+    "kind": "event",
+    "text": "上周开会"
+  },
+  {
+    "kind": "interaction",
+    "text": "和张三吃饭"
+  },
+  {
+    "kind": "event",
+    "text": "开会"
+  },
+  {
+    "kind": "note",
+    "text": "记一下今天在读的书"
+  },
+  {
+    "kind": "note",
+    "text": "idea: support wikilinks in notes"
+  },
+  {
+    "kind": "note",
+    "text": "记一下明天的会议要点"
+  },
+  {
+    "kind": "event",
+    "text": "周二下午三点"
+  },
+  {
+    "kind": "note",
+    "text": "刚才电梯里碰到张三"
+  },
+  {
+    "kind": "note",
+    "text": "张三"
+  },
+  {
+    "kind": "event",
+    "text": "明天下午三点要和张三吃饭"
+  },
+  {
+    "kind": "action",
+    "text": "别忘了周三给我爸打电话"
+  }
+]

@@ -1,0 +1,89 @@
+# update-manifest.yml — generate latest.json (Tauri updater) and
+# latest-android.json (APK banner) after a release is published, then push
+# them to wy so clients see the new version immediately.
+#
+# Re-touched 2026-09-29: GitHub had never registered this workflow (it was
+# absent from the Actions registry since introduction), so release publishes
+# never triggered it. Editing the file on push re-registers it.
+#
+# Requires repo secrets:
+#   WY_SSH_PRIVATE_KEY — SSH private key authorized for ubuntu@110.42.215.153
+#   (the same key used by scripts/deploy-web.sh)
+#
+# The Tauri updater signature files (.sig) are produced by the release job
+# because TAURI_SIGNING_PRIVATE_KEY is already a repo secret there.
+
+name: update-manifest
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag (e.g. v1.7.0)'
+        required: true
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release assets
+        uses: robinraju/release-downloader@v1.11
+        with:
+          tag: ${{ github.event.release.tag_name || inputs.version && format('v{0}', inputs.version) || github.ref_name }}
+          fileName: '*'
+          out-file-path: assets
+
+      - name: Build latest.json (Tauri updater format)
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          BASE="https://www.weavine.com/downloads/$VERSION"
+          SIG_EXE=$(find assets -name 'Weavine_*_x64-setup.exe.sig' | head -1)
+          SIG_APPIMAGE=$(find assets -name '*.AppImage.sig' -o -name '*x64.AppImage.sig' | head -1)
+          SIG_DMG=$(find assets -name '*.app.tar.gz.sig' | head -1)
+          EXE=$(find assets -name 'Weavine_*_x64-setup.exe' | head -1)
+          APPIMAGE=$(find assets -name '*.AppImage' | grep -v sig | head -1)
+          DMG=$(find assets -name '*.app.tar.gz' | head -1)
+          [ -n "$EXE" ] || EXE=$(find assets -name '*.exe' | grep -v sig | head -1)
+          {
+            echo '{'
+            echo "  \"version\": \"$VERSION\","
+            echo '  "platforms": {'
+            if [ -n "$EXE" ] && [ -n "$SIG_EXE" ]; then
+              echo "    \"windows-x86_64\": { \"signature\": \"$(cat "$SIG_EXE")\", \"url\": \"$BASE/$(basename "$EXE")\" },"
+            fi
+            if [ -n "$APPIMAGE" ] && [ -n "$SIG_APPIMAGE" ]; then
+              echo "    \"linux-x86_64\": { \"signature\": \"$(cat "$SIG_APPIMAGE")\", \"url\": \"$BASE/$(basename "$APPIMAGE")\" },"
+            fi
+            if [ -n "$DMG" ] && [ -n "$SIG_DMG" ]; then
+              echo "    \"darwin-aarch64\": { \"signature\": \"$(cat "$SIG_DMG")\", \"url\": \"$BASE/$(basename "$DMG")\" },"
+            fi
+            echo '  }'
+            echo '}'
+          } | sed 's/,}/\n  }/' > latest.json
+          cat latest.json
+
+      - name: Build latest-android.json
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          APK=$(find assets -name '*.apk' | head -1)
+          echo "{\"version\":\"$VERSION\",\"apk_url\":\"https://www.weavine.com/downloads/v$VERSION/$(basename "$APK")\",\"sha256\":\"$(sha256sum "$APK" | awk '{print $1}')\"}" > latest-android.json
+          cat latest-android.json
+
+      - name: Upload both manifests to wy
+        env:
+          SSH_KEY: ${{ secrets.WY_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/wy_key
+          chmod 600 ~/.ssh/wy_key
+          scp -i ~/.ssh/wy_key -o StrictHostKeyChecking=accept-new \
+            latest.json latest-android.json \
+            ubuntu@110.42.215.153:/home/ubuntu/weavine/www-downloads/

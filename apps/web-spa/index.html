@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- `interactive-widget=resizes-content`: when an engine *does* learn about
+         the soft keyboard, prefer shrinking the layout viewport over the
+         visual-only default — the whole shell is laid out with `100dvh`, so a
+         shrinking viewport is what lifts the bottom input bar above the
+         keyboard. (Chromium's default is `resizes-visual`.) -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#2563eb" />
+    <title>Weavine · 人脉管理</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+
+    <!-- Typography: Plus Jakarta Sans (display) + Manrope (body Latin) + Noto Sans SC (CJK) + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+
+    <link rel="stylesheet" href="/src/styles.css" />
+
+    <!--
+      MarketAI web analytics — page views / clicks / sign_up stream to the
+      MarketAI workspace provisioned for Weavine (workspace_id e1531914-caeb-45bb-9009-f6604bd6e44a).
+      One workspace, three sites (Web / Windows / Android) so KPIs can be
+      filtered per platform. The site key is picked at runtime from the UA:
+      the Tauri desktop shell and the Android webview load this same bundle.
+      Rotate keys via MarketAI admin → /tracking.
+      data-mai-privacy="strict": click text and page title are NOT collected —
+      this is a content app (notes/schedule/contacts); clickable rows carry
+      user content and must never reach the analytics store.
+    -->
+    <script>
+      (function () {
+        var keys = {
+          web: "mA5lLo7NmIzfJvbYncCHW0den1ayRcim",
+          win: "AabwuMkgNfX09bKdR-65X6IcRSmwPJJf",
+          android: "iVwQzegCRYpWPapaeNkwgbyggErsLrQL"
+        };
+        // Tauri 壳(Windows/Android)在 document-start 注入 __TAURI_INTERNALS__,
+        // 普通浏览器没有——用运行时特征而非 UA 区分(UA 的 Windows NT 会误判
+        // Windows 上的网页访客)
+        var isTauri = typeof window.__TAURI_INTERNALS__ !== "undefined";
+        var platform = !isTauri ? "web"
+          : (/android/i.test(navigator.userAgent || "") ? "android" : "win");
+        var s = document.createElement("script");
+        s.async = true;
+        s.src = "https://marketai.financialagent.cc/api/v1/track.js";
+        s.setAttribute("data-site-key", keys[platform]);
+        // 内容型应用:不采集点击文字与页面标题,防止笔记/日程/联系人内容进入分析端
+        s.setAttribute("data-mai-privacy", "strict");
+        document.head.appendChild(s);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
