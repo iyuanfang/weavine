@@ -19,6 +19,8 @@ import { osStr } from './install-id';
  *     is never lifted twice);
  *   - lifts the shell where only the visual viewport shrank — iOS webviews,
  *     Chrome, standalone PWAs;
+ *   - ignores a pinch-zoom, which shrinks the visual viewport for a reason that
+ *     has nothing to do with a keyboard (see `readInset`);
  *   - **switched off entirely inside the Android shell**, where the native
  *     inset bridge owns the lift (see `nativeBridgeOwnsKeyboard`).
  *
@@ -51,11 +53,24 @@ export function nativeBridgeOwnsKeyboard(): boolean {
   return isTauri && osStr() === 'android';
 }
 
-function readInset(): number {
+/**
+ * Keyboard height in CSS pixels, or 0 when there is no keyboard.
+ *
+ * Exported for `__tests__/use-soft-keyboard.test.ts`.
+ */
+export function readInset(): number {
   const vv = window.visualViewport;
   if (!vv) return 0;
-  // `offsetTop` covers pinch-zoom/pan: the visual viewport can be scrolled
-  // inside the layout viewport without the keyboard being involved.
+  // A pinch-zoom (or a trackpad / ctrl-scroll zoom gesture) shrinks the visual
+  // viewport by far more than a keyboard does, and from `height` alone the two
+  // are indistinguishable — unguarded, zooming in reports a keyboard and
+  // shrinks the whole shell by the zoom amount. Engines hold `scale` at exactly
+  // 1 across a keyboard-driven shrink (both Chromium's `resizes-visual` and
+  // Safari keep it), so the deviation is a clean discriminator. Erring towards
+  // 0 is the safe direction: it can only suppress a lift, never invent one.
+  if (typeof vv.scale === 'number' && Math.abs(vv.scale - 1) > 0.01) return 0;
+  // `offsetTop` covers the panning half of the same gesture: the visual
+  // viewport can be scrolled inside the layout viewport with no keyboard.
   const inset = window.innerHeight - vv.height - vv.offsetTop;
   return inset > MIN_INSET_PX ? Math.round(inset) : 0;
 }

@@ -259,7 +259,11 @@ function repointAdaptiveBackground(field) {
     const p = path.join(anydpi, f);
     const src = fs.readFileSync(p, 'utf8');
     const next = src.replace(
-      /<background[^>]*\/>/,
+      // Global on purpose: the CLI binary also carries an
+      // `<adaptive-icon>` variant with a second `<background/>`, and the
+      // platform keeps the last one it parses — leaving a stale `@color/…`
+      // behind would silently put the icon back on flat white.
+      /<background[^>]*\/>/g,
       '<background android:drawable="@mipmap/ic_launcher_background"/>',
     );
     if (!next.includes('@mipmap/ic_launcher_background')) {
