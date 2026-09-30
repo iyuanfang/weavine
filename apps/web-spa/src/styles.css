@@ -143,6 +143,13 @@ button:focus-visible {
   /* `dvh` so the Safari/Android address bar hiding does not resize the shell
      under the bottom nav. Matches what the drawer already did. */
   height: 100dvh;
+  /* Soft keyboard. `--kb-inset` is published by useSoftKeyboard() when the
+     engine shrinks only the VISUAL viewport (Chromium's default) — the shell
+     then has to give up that much height or the bottom input bar stays buried
+     under the keyboard. It stays unset (fallback 0px) when the engine already
+     resized the layout viewport, which is also the case on Android once
+     MainActivity.kt applies the IME inset natively. */
+  height: calc(100dvh - var(--kb-inset, 0px));
 }
 
 .app-shell__nav {
@@ -1780,7 +1787,7 @@ textarea.input-base {
 
 .login-shell {
   min-height: 100vh;
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--kb-inset, 0px));
   display: grid;
   place-items: center;
   background: var(--bg);
@@ -2490,11 +2497,15 @@ textarea.input-base {
 
 /* ── Mobile single-screen home (Today page, ≤640px) ─────────── */
 .today-mobile {
-  /* Exactly one viewport minus the bottom nav — content is designed to fit,
-     and overflow:hidden plus overscroll-behavior:none kill any scrolling or
+  /* Fill the app shell's content box — one viewport minus the bottom nav
+     (`.app-shell` reserves that as padding) and minus `--kb-inset` while the
+     soft keyboard is up. Deriving from the parent instead of recomputing
+     `100dvh - 56px` is what keeps the two in step: recomputing here would
+     subtract the keyboard a second time and fling the input bar far above it.
+     overflow:hidden plus overscroll-behavior:none kill any scrolling or
      rubber-banding. */
-  height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
-  max-height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
   display: flex;
@@ -2608,6 +2619,15 @@ textarea.input-base {
   font-size: 17px;
   color: #9ca3af;
   margin-top: 14px;
+  /* The hero centres its children (`align-items: center`), so this column
+     would otherwise be sized to its own max-content — an indefinite width,
+     against which the echo row's `max-width: 100%` cannot resolve (cyclic
+     percentage → treated as none). A long latest-record title then sized the
+     whole block to the raw text width and `overflow: hidden` sliced ~87px off
+     BOTH ends of the echo row and its count line. Pin the box to the hero so
+     the ellipsis inside it can do its job. */
+  width: 100%;
+  min-width: 0;
 }
 
 /* Hint lines are buttons/links now — reset chrome, keep the quiet look. */

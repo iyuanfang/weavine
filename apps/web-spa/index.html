@@ -2,7 +2,15 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- `interactive-widget=resizes-content`: when an engine *does* learn about
+         the soft keyboard, prefer shrinking the layout viewport over the
+         visual-only default — the whole shell is laid out with `100dvh`, so a
+         shrinking viewport is what lifts the bottom input bar above the
+         keyboard. (Chromium's default is `resizes-visual`.) -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="theme-color" content="#2563eb" />
     <title>Weavine · 人脉管理</title>
     <link rel="manifest" href="/manifest.json" />

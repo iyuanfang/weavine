@@ -17,6 +17,7 @@ import { ReminderToastContainer, type ReminderToastItem } from './components/Rem
 import { useGlobalShortcut } from './hooks/useGlobalShortcut';
 import { RegisterSW } from './lib/register-sw';
 import { useReminderPoller } from './lib/use-reminder-poller';
+import { useSoftKeyboard } from './lib/use-soft-keyboard';
 import { mdEditorUrl } from './lib/md-path';
 
 import {
@@ -85,6 +86,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
 export function AppInner({ children }: { children?: ReactNode }) {
   const adapter = useAdapter();
+  // Publishes the soft-keyboard height as `--kb-inset` (see the hook for why
+  // the Android APK needs the native half of this).
+  useSoftKeyboard();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickInitial, setQuickInitial] = useState('');
   const [pendingReminders, setPendingReminders] = useState<ReminderToastItem[]>([]);
