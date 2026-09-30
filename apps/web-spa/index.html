@@ -33,6 +33,9 @@
       filtered per platform. The site key is picked at runtime from the UA:
       the Tauri desktop shell and the Android webview load this same bundle.
       Rotate keys via MarketAI admin → /tracking.
+      data-mai-privacy="strict": click text and page title are NOT collected —
+      this is a content app (notes/schedule/contacts); clickable rows carry
+      user content and must never reach the analytics store.
     -->
     <script>
       (function () {
@@ -51,6 +54,8 @@
         s.async = true;
         s.src = "https://marketai.financialagent.cc/api/v1/track.js";
         s.setAttribute("data-site-key", keys[platform]);
+        // 内容型应用:不采集点击文字与页面标题,防止笔记/日程/联系人内容进入分析端
+        s.setAttribute("data-mai-privacy", "strict");
         document.head.appendChild(s);
       })();
     </script>
