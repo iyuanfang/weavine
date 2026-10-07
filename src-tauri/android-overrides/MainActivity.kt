@@ -36,12 +36,21 @@
 //     throws for the IME mask ("Ignoring visibility inset not available for
 //     IME") — `setInsets` does not.
 //
-// SCOPE: IME ONLY, AND ONLY THE IME IS STRIPPED FROM THE SUBTREE
-//   - Only the IME is reserved. The navigation bar is deliberately left out: the
-//     page draws its own full-bleed bottom edge and `env(safe-area-inset-bottom)`
-//     is 0 on Android by design, so reserving the nav bar here would paint a
-//     strip of window background under the app's dark bottom navigation. (If
-//     content should ever clear the nav bar, OR in `Type.systemBars()`.)
+// SCOPE: IME + NAVIGATION BAR
+//   - The bottom padding is max(ime.bottom, navigationBars.bottom). Reserving
+//     the IME alone (the previous behavior) left the webview flush with the
+//     physical screen bottom whenever the keyboard was closed, and the system
+//     navigation bar painted OVER the bottom of the menu: invisible on 3-button
+//     devices (~48dp covered of a 56dp nav), partially covered on gesture-bar
+//     devices. That is the "很多机型底部菜单看不到" report from v1.8.0 device
+//     testing.
+//   - Why not let the page handle it with env(safe-area-inset-bottom): that
+//     value is 0 in the Android WebView (source-checked at the time of the
+//     first bridge), so the CSS fallback cannot lift the menu. The padding has
+//     to happen here.
+//   - The window-background strip this padding reveals is set to WHITE, which
+//     matches the app's light surface — the bottom navigation is white, so the
+//     strip reads as part of the nav.
 //   - The subtree keeps every other inset. Do NOT return
 //     `WindowInsetsCompat.CONSUMED`: that would also stop the display-cutout
 //     insets from reaching the webview, and on Android the webview's
@@ -79,12 +88,18 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
 
     val content = findViewById<View>(android.R.id.content) ?: return
+    // The strip of padding revealed under the page (see SCOPE above) shows this
+    // view's background — keep it in the app's light surface color so it blends
+    // with the bottom navigation.
+    content.setBackgroundColor(android.graphics.Color.WHITE)
     ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
       val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-      if (view.paddingBottom != ime) {
-        Log.i(TAG, "ime bottom ${ime}px -> content paddingBottom (was ${view.paddingBottom}px)")
+      val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+      val bottom = maxOf(ime, nav)
+      if (view.paddingBottom != bottom) {
+        Log.i(TAG, "ime=$ime nav=$nav -> content paddingBottom (was ${view.paddingBottom}px)")
       }
-      view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, ime)
+      view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, bottom)
       WindowInsetsCompat.Builder(insets)
         .setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
         .build()
