@@ -1,0 +1,18 @@
+[Unit]
+Description=weavine-web (Rust web server + SPA host)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/www/weavine
+ExecStart=/www/weavine/weavine-web
+Restart=on-failure
+RestartSec=3s
+Environment=WEB_DB_PATH=/www/weavine/weavine-web.db
+Environment=WEAVINE_SPA_DIR=/www/weavine/spa
+Environment=WEAVINE_JWT_SECRET=ab80fb1164c1cfcca6ebda298c4aa7af4723994be87c41f19c5289c3bc1e0f83
+Environment=RUST_LOG=info,weavine_lib=debug
+
+[Install]
+WantedBy=multi-user.target

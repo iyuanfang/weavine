@@ -1,0 +1,531 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+
+import { useAdapter } from '../lib/adapter';
+import { useUserId } from '../lib/auth';
+import { parseQuick } from '../lib/adapter/quick-capture';
+import { SearchablePicker } from './SearchablePicker';
+import {
+  beginVoice,
+  checkVoiceModel,
+  endVoice,
+  isAndroidTauri,
+  recognizeCloud,
+  recognizeLocal,
+  recognizeSpeech,
+  recognizeWeb,
+  recordAudio,
+  speechRecognitionAvailable,
+  voiceMode,
+} from '../lib/voice';
+import type { VoiceRecordingHandle } from '../lib/voice';
+import type { ParsedQuick, QuickKind } from '../lib/quick-types';
+
+const KIND_LABEL: Record<QuickKind, string> = {
+  event: '📅 日程',
+  action: '✅ 待办',
+  interaction: '💬 互动',
+  note: '📝 笔记',
+};
+
+// Examples rotate through the placeholder while the field is empty — gives
+// the user a feel for what counts as a record without bloating the screen.
+const EXAMPLES = [
+  '明天下午 3 点和张三开会',
+  '今天和李四吃了午饭',
+  '后天前把方案发给王总',
+  '上周和王总聊了 Q4 计划',
+];
+
+interface Props {
+  /** Invalidate-all callback after a successful save (queries refetch). */
+  onSaved: () => void;
+}
+
+/**
+ * Fixed bottom input bar of the mobile home screen — DeepSeek-style.
+ *
+ * ONE full-width rounded shell contains everything: the text field (or the
+ * hold-to-talk area in voice mode) with the wave/keyboard toggle icon
+ * embedded at its right edge. No floating buttons outside the shell.
+ *
+ * Text mode: tapping the placeholder expands an inline textarea; the parsed
+ * preview floats above with an 编辑 expander (type/time/contact editable);
+ * the 记录 button sits inside the shell.
+ * Voice mode: hold anywhere on the shell to record, release to recognize
+ * (transcript lands in the same textarea), slide up to cancel.
+ */
+export function MobileInputBar({ onSaved }: Props) {
+  const adapter = useAdapter();
+  const queryClient = useQueryClient();
+  const userId = useUserId() ?? '';
+  const [mode, setMode] = useState<'text' | 'voice'>('text');
+  const [active, setActive] = useState(false);
+  const [text, setText] = useState('');
+  const [parsed, setParsed] = useState<ParsedQuick | null>(null);
+  // Editable overlay — seeded from the parser, user-tweakable. Kept separate
+  // from `parsed` so re-parses (typing) don't clobber manual edits until the
+  // text is fully cleared (same policy as QuickCapture).
+  const [kind, setKind] = useState<QuickKind | null>(null);
+  const [due, setDue] = useState<string | null>(null);
+  const [contactId, setContactId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [contactNames, setContactNames] = useState<string[]>([]);
+  const [contactList, setContactList] = useState<Array<{ id: string; nickname: string; name?: string | null }>>([]);
+  const [contactLookup, setContactLookup] = useState<Record<string, string>>({});
+  const [exampleIdx, setExampleIdx] = useState(0);
+  const [holding, setHolding] = useState(false);
+  const [cancelHint, setCancelHint] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const debounceRef = useRef<number | null>(null);
+  const handleRef = useRef<VoiceRecordingHandle<Blob | string> | null>(null);
+  const startYRef = useRef(0);
+  /** Monotonic id for parse requests — see the stale-reply guard below. */
+  const parseSeqRef = useRef(0);
+  const submittedTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    adapter.contacts
+      .list({ user_id: userId })
+      .then((data: { items: Array<{ id: string; nickname: string; name?: string | null }> }) => {
+        setContactList(data.items);
+        setContactNames(data.items.flatMap((c) => [c.nickname, ...(c.name ? [c.name] : [])]));
+        const lookup: Record<string, string> = {};
+        for (const c of data.items) lookup[c.id] = c.nickname || c.name || '?';
+        setContactLookup(lookup);
+      })
+      .catch(() => {});
+  }, [adapter, userId]);
+
+  // Rotate examples while idle.
+  useEffect(() => {
+    if (text) return;
+    const id = window.setInterval(() => setExampleIdx((i) => (i + 1) % EXAMPLES.length), 4000);
+    return () => window.clearInterval(id);
+  }, [text]);
+
+  // Home hint lines ("今天见了谁？") focus the input — switch to text mode,
+  // expand the shell, and put the cursor in the textarea.
+  useEffect(() => {
+    const focus = () => {
+      setMode('text');
+      setActive(true);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    window.addEventListener('weavine:focus-input', focus);
+    return () => window.removeEventListener('weavine:focus-input', focus);
+  }, []);
+
+  // The 已记录 ✓ flash schedules a timeout; clear it so it cannot write state
+  // after the component is gone.
+  useEffect(
+    () => () => {
+      if (submittedTimerRef.current) window.clearTimeout(submittedTimerRef.current);
+    },
+    [],
+  );
+
+  // Live parse while typing. Re-seeds the editable fields only when the text
+  // is fully cleared, so a user-picked kind/time/contact survives typing.
+  useEffect(() => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    const trimmed = text.trim();
+    if (!trimmed) {
+      parseSeqRef.current += 1;
+      setParsed(null);
+      setKind(null);
+      setDue(null);
+      setContactId(null);
+      setError(null);
+      return;
+    }
+    const seq = ++parseSeqRef.current;
+    debounceRef.current = window.setTimeout(() => {
+      parseQuick(trimmed, contactNames, userId)
+        .then((p) => {
+          // Out-of-order guard: `parsed` also feeds `submit`, so a late reply
+          // for an earlier sentence can create an entity the user never
+          // described (easiest to hit on the PWA, where parse is a network
+          // call). Clearing the field bumps the seq too, so a reply landing
+          // after a clear is dropped as well.
+          if (seq !== parseSeqRef.current) return;
+          setParsed(p);
+          setKind((prev) => (prev === null ? p.kind : prev));
+          setDue((prev) => (prev === null ? p.due : prev));
+          setContactId((prev) => (prev === null ? p.contact_id : prev));
+          setError(null);
+        })
+        .catch((e: unknown) => {
+          if (seq !== parseSeqRef.current) return;
+          setParsed(null);
+          setError(e instanceof Error ? e.message : String(e));
+        });
+    }, 250);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [text, contactNames, userId]);
+
+  const submit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || submitting) return;
+    if (!userId) {
+      setError('本地用户尚未就绪，请稍候再试');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const p = parsed ?? (await parseQuick(trimmed, contactNames, userId));
+      const effKind = kind ?? p.kind;
+      const effDue = due ?? p.due;
+      const effContactId = contactId ?? p.contact_id;
+      const summary = p.summary || trimmed;
+      const nowIso = new Date().toISOString();
+      switch (effKind) {
+        case 'event':
+          await adapter.events.create({
+            user_id: userId,
+            title: summary,
+            type: '其他',
+            start_at: effDue ?? nowIso,
+            contact_id: effContactId,
+          });
+          queryClient.invalidateQueries({ queryKey: ['events', userId] });
+          break;
+        case 'action':
+          await adapter.actions.create({
+            user_id: userId,
+            title: summary,
+            due_at: effDue,
+            contact_id: effContactId,
+          });
+          queryClient.invalidateQueries({ queryKey: ['actions', userId] });
+          break;
+        case 'interaction':
+          await adapter.interactions.create({
+            user_id: userId,
+            summary,
+            occurred_at: effDue ?? nowIso,
+            contact_id: effContactId,
+          });
+          queryClient.invalidateQueries({ queryKey: ['interactions', userId] });
+          break;
+        case 'note':
+          await adapter.notes.create(userId, { title: summary.slice(0, 80), body: text });
+          queryClient.invalidateQueries({ queryKey: ['notes', userId] });
+          break;
+      }
+      onSaved();
+      setSubmitted(true);
+      setText('');
+      setParsed(null);
+      setKind(null);
+      setDue(null);
+      setContactId(null);
+      setExpanded(false);
+      setActive(false);
+      submittedTimerRef.current = window.setTimeout(() => setSubmitted(false), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startHold = (e: React.PointerEvent) => {
+    if (handleRef.current) return;
+    if (!beginVoice()) {
+      // The global lock is held by another recorder (the ⌘K capture panel,
+      // or a press whose pointerup never arrived). Ignoring the press
+      // silently made the button look dead.
+      setError('正在录音，请稍候再试');
+      return;
+    }
+    e.preventDefault();
+    startYRef.current = e.clientY;
+    // Keep receiving pointer events even when the finger slides off the
+    // button: without capture, the browser is free to re-classify the
+    // gesture as a pan / system edge swipe and send `pointercancel` instead
+    // of `pointerup`.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // best effort — capture may be unsupported or the pointer already gone
+    }
+    setHolding(true);
+    setCancelHint(false);
+    setError(null);
+    const handle = recordAudio();
+    handleRef.current = handle as VoiceRecordingHandle<Blob | string>;
+  };
+
+  const finishHold = async (cancel: boolean) => {
+    const handle = handleRef.current;
+    if (!handle) return;
+    handleRef.current = null;
+    setHolding(false);
+    setCancelHint(false);
+    endVoice();
+    if (cancel) {
+      handle.stop();
+      return;
+    }
+    try {
+      const blob = (await handle.promise) as Blob;
+      if (blob.size === 0) throw new Error('录音为空，请重试');
+      let transcript: string;
+      if (isAndroidTauri()) {
+        if (voiceMode() === 'local') {
+          const status = await checkVoiceModel();
+          if (!status.ready) throw new Error(status.error ?? '语音模型尚未就绪，请稍后重试');
+          transcript = await recognizeLocal(blob);
+        } else {
+          transcript = await recognizeCloud(blob);
+        }
+      } else {
+        try {
+          transcript = await recognizeWeb(blob);
+        } catch (webErr) {
+          if (!speechRecognitionAvailable()) throw webErr;
+          console.warn('[voice] server STT failed, falling back to browser recognition', webErr);
+          transcript = await recognizeSpeech().promise;
+        }
+      }
+      setMode('text');
+      setActive(true);
+      setText(transcript);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!holding) return;
+    setCancelHint(startYRef.current - e.clientY > 80);
+  };
+
+  function isoToLocalInput(iso: string | null): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function localInputToIso(local: string): string | null {
+    if (!local) return null;
+    const d = new Date(local);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString();
+  }
+
+  // Floating preview above the shell. Collapsed: read-only summary, tap to
+  // expand. Expanded: type / time / contact all editable inline. No 记录
+  // button here — the single confirm lives inside the shell (or Enter).
+  const preview = (() => {
+    if (!text.trim()) return null;
+    const effKind: QuickKind = kind ?? parsed?.kind ?? 'note';
+    const effDue = due ?? parsed?.due ?? null;
+    const effContactId = contactId ?? parsed?.contact_id ?? null;
+    const summary = parsed?.summary || text.trim();
+    const time = effDue
+      ? new Date(effDue).toLocaleString('zh-CN', {
+          month: 'numeric',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })
+      : null;
+
+    if (!expanded) {
+      return (
+        <button
+          type="button"
+          className="mobile-input-shell__preview"
+          data-testid="mobile-input-preview"
+          onClick={() => setExpanded(true)}
+        >
+          <span className="mobile-input-shell__preview-kind">{KIND_LABEL[effKind]}</span>
+          {time && <span className="mobile-input-shell__preview-meta">{time}</span>}
+          {effContactId && (
+            <span className="mobile-input-shell__preview-meta">@{contactLookup[effContactId] ?? '?'}</span>
+          )}
+          <span className="mobile-input-shell__preview-summary">{summary}</span>
+          <span className="mobile-input-shell__preview-edit">编辑</span>
+        </button>
+      );
+    }
+
+    return (
+      <div className="mobile-input-shell__editor" data-testid="mobile-input-editor">
+        <div className="mobile-input-shell__editor-row">
+          <select
+            value={effKind}
+            onChange={(e) => setKind(e.target.value as QuickKind)}
+            aria-label="类型"
+            className="mobile-input-shell__editor-select"
+          >
+            <option value="interaction">{KIND_LABEL.interaction}</option>
+            <option value="action">{KIND_LABEL.action}</option>
+            <option value="event">{KIND_LABEL.event}</option>
+            <option value="note">{KIND_LABEL.note}</option>
+          </select>
+          <input
+            type="datetime-local"
+            value={isoToLocalInput(effDue)}
+            onChange={(e) => setDue(localInputToIso(e.target.value))}
+            aria-label="时间"
+            className="mobile-input-shell__editor-time"
+          />
+        </div>
+        <div className="mobile-input-shell__editor-row">
+          <SearchablePicker
+            value={effContactId ?? ''}
+            onChange={(v) => setContactId(v || null)}
+            options={contactList.map((c) => ({
+              id: c.id,
+              label: c.nickname || c.name || '?',
+              searchText: `${c.nickname ?? ''} ${c.name ?? ''}`.trim(),
+            }))}
+            placeholder="搜索或选择联系人…"
+            emptyText="没有匹配的联系人"
+          />
+        </div>
+        <div className="mobile-input-shell__editor-row mobile-input-shell__editor-row--summary">
+          <span className="mobile-input-shell__preview-summary">{summary}</span>
+          <button type="button" className="mobile-input-shell__editor-collapse" onClick={() => setExpanded(false)}>
+            收起
+          </button>
+        </div>
+      </div>
+    );
+  })();
+
+  return (
+    <div className="mobile-input-shell-wrap" data-testid="mobile-input-bar">
+      {preview}
+      {error && <div className="mobile-input-shell__error">{error}</div>}
+      {submitted && <div className="mobile-input-shell__submitted">已记录 ✓</div>}
+
+      {/* ONE full-width shell — input and icons live inside it. */}
+      <div className={`mobile-input-shell${active ? ' mobile-input-shell--active' : ''}`}>
+        {mode === 'text' ? (
+          active ? (
+            <textarea
+              ref={inputRef}
+              className="mobile-input-shell__input"
+              rows={2}
+              placeholder={`${EXAMPLES[exampleIdx]}（回车保存）`}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onBlur={(e) => {
+                if (!e.target.value.trim()) setActive(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  void submit();
+                }
+                if (e.key === 'Escape') {
+                  setText('');
+                  setActive(false);
+                }
+              }}
+              data-testid="mobile-input-textarea"
+              autoFocus
+            />
+          ) : (
+            <button
+              type="button"
+              className="mobile-input-shell__placeholder"
+              onClick={() => setActive(true)}
+              aria-label="快速记录"
+              data-testid="mobile-input-text"
+            >
+              <span>做了什么，记一下…</span>
+            </button>
+          )
+        ) : (
+          <button
+            type="button"
+            className={`mobile-input-shell__hold${holding ? ' mobile-input-shell__hold--active' : ''}${cancelHint ? ' mobile-input-shell__hold--cancel' : ''}`}
+            data-testid="mobile-input-hold"
+            onPointerDown={startHold}
+            onPointerUp={() => void finishHold(cancelHint)}
+            onPointerLeave={() => holding && void finishHold(cancelHint)}
+            onPointerMove={onPointerMove}
+            // The gesture can end without a pointerup: a pan being
+            // recognised, a system edge swipe, an incoming call. Treat that
+            // as a cancel so the recorder and the global voice lock are
+            // always released — otherwise the button sticks on 「松手 发送」
+            // and 按住说话 stays dead until a reload.
+            onPointerCancel={() => void finishHold(true)}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            {holding ? (cancelHint ? '松开取消' : '松手 发送') : '按住 说话'}
+          </button>
+        )}
+
+        {mode === 'text' && active ? (
+          <button
+            type="button"
+            className="mobile-input-shell__send"
+            onClick={() => void submit()}
+            disabled={!text.trim() || submitting}
+            aria-label="记录"
+            data-testid="mobile-input-send"
+          >
+            记录
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="mobile-input-shell__icon"
+            onClick={() => {
+              // A second finger on this button while the other holds the mic
+              // would unmount the hold button mid-recording: no pointerup
+              // ever arrives, the recorder keeps running and the global
+              // voice lock stays held.
+              if (holding || handleRef.current) void finishHold(true);
+              setMode(mode === 'text' ? 'voice' : 'text');
+              setActive(false);
+            }}
+            aria-label={mode === 'text' ? '切换到按住说话' : '切换到键盘输入'}
+            data-testid={mode === 'text' ? 'mobile-input-voice-toggle' : 'mobile-input-text-toggle'}
+          >
+            {mode === 'text' ? <WaveIcon /> : <KeyboardIcon />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// WeChat-style voice icon: sound-wave bars. Stroke follows currentColor so
+// the button's green/gray states just work.
+function WaveIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 10v4" />
+      <path d="M8 7v10" />
+      <path d="M12 4.5v15" />
+      <path d="M16 7v10" />
+      <path d="M20 10v4" />
+    </svg>
+  );
+}
+
+function KeyboardIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+      <rect x="3" y="6.5" width="18" height="11" rx="2.5" />
+      <path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M6.5 13.5h.01M17 13.5h.01M9.5 13.5h5" />
+    </svg>
+  );
+}

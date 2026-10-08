@@ -1,0 +1,17 @@
+[Unit]
+Description=Weavine PaddleOCR sidecar
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/weavine
+ExecStart=/home/ubuntu/paddle-venv/bin/python /home/ubuntu/weavine/deploy/paddle_sidecar.py
+Restart=always
+RestartSec=5
+# Paddle predictor + models stay well under this; cap so a leak cannot
+# starve the other services on the 3.6G box.
+MemoryMax=1200M
+
+[Install]
+WantedBy=multi-user.target
