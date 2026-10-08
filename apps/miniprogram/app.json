@@ -1,0 +1,11 @@
+{
+  "pages": ["pages/share/share"],
+  "window": {
+    "navigationBarTitleText": "织遇 · 分享",
+    "navigationBarBackgroundColor": "#f5f6f8",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f6f8"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

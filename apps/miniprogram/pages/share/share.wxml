@@ -1,0 +1,49 @@
+<view class="wrap">
+  <block wx:if="{{loading}}">
+    <view class="loading">加载中…</view>
+  </block>
+
+  <block wx:elif="{{failed}}">
+    <view class="failed">
+      <view class="failed__icon">🔗</view>
+      <view>{{failText}}</view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="kind">{{kindLabel}}</view>
+    <view class="title">{{title}}</view>
+
+    <view class="card">
+      <block wx:if="{{isEvent}}">
+        <view class="meta-row" wx:if="{{when}}">🕒 {{when}}</view>
+        <view class="meta-row" wx:if="{{location}}">📍 {{location}}</view>
+
+        <view class="rsvp" wx:if="{{!rsvpDone}}">
+          <view class="rsvp__title">回应邀请</view>
+          <input
+            class="rsvp__input"
+            placeholder="你的称呼"
+            maxlength="40"
+            value="{{rsvpName}}"
+            bindinput="onNameInput"
+          />
+          <view class="rsvp__btns">
+            <button class="rsvp__btn rsvp__btn--yes" data-r="yes" bindtap="rsvp">参加</button>
+            <button class="rsvp__btn" data-r="maybe" bindtap="rsvp">可能</button>
+            <button class="rsvp__btn" data-r="no" bindtap="rsvp">不去</button>
+          </view>
+          <view class="rsvp__error" wx:if="{{rsvpError}}">{{rsvpError}}</view>
+        </view>
+        <view class="rsvp__done" wx:if="{{rsvpDone}}">已回应，谢谢！</view>
+      </block>
+
+      <view class="content">{{content}}</view>
+    </view>
+
+    <view class="brand">
+      由 <text class="brand__link" bindtap="copyLink">织遇 Weavine</text> 记录 · 编织遇见的人脉
+    </view>
+    <view class="views">{{viewCount}} 次浏览</view>
+  </block>
+</view>

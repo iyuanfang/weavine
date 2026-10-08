@@ -6,6 +6,7 @@ import { EVENT_PRESETS, categoryMeta } from '../components/categoryPresets';
 import { useAdapter } from '../lib/adapter';
 import { BacklinksPanel } from '../components/BacklinksPanel';
 import { GraphTab } from '../components/GraphTab';
+import { ShareButton } from '../components/ShareButton';
 import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import { ContactPickOrCreateModal } from '../components/ContactPickOrCreateModal';
 import { useUserId } from '../lib/auth';
@@ -133,6 +134,7 @@ export function EventDetail() {
             >
               {deleteMutation.isPending ? '删除中…' : '删除'}
             </button>
+            <ShareButton entityType="event" entityId={id as string} />
           </>
         }
       />

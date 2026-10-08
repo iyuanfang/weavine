@@ -119,6 +119,13 @@ async fn main() {
         .route("/api/notes/:id", get(handlers::note::get).put(handlers::note::update).delete(handlers::note::delete))
         .route("/api/notes/:id/entities", get(handlers::note::list_entity_links))
         .route("/api/entities/:entity_type/:entity_id/graph", get(handlers::graph::entity_graph))
+        // Sharing (per-item links + anonymous event RSVP; public page at /s/:token)
+        .route("/api/share", post(handlers::share::create))
+        .route("/api/share/:token", delete(handlers::share::revoke).put(handlers::share::refresh))
+        .route("/api/share/:token/meta", get(handlers::share::owner_meta))
+        .route("/api/public/share/:token", get(handlers::share::public_get))
+        .route("/api/public/share/:token/rsvp", post(handlers::share::public_rsvp))
+        .route("/s/:token", get(handlers::share::public_page))
         // Events
         .route("/api/events/upcoming", get(handlers::event::upcoming))
         .route("/api/events", get(handlers::event::list).post(handlers::event::create))

@@ -1,0 +1,19 @@
+{
+  "description": "织遇分享页小程序 — 渲染分享的日程邀请与笔记（weavine.com/s/:token 的原生形态）",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "enhance": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.4.10",
+  "appid": "touristappid",
+  "projectname": "weavine-share",
+  "condition": {}
+}

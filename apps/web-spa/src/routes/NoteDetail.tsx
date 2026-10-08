@@ -176,6 +176,7 @@ import { MarkdownView } from '../components/MarkdownView';
 import { MarkdownEditor, EditorToolbar } from '../components/MarkdownEditor';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { GraphTab } from '../components/GraphTab';
+import { ShareButton } from '../components/ShareButton';
 import { DetailHeaderCard, EntityIconBadge } from '../components/DetailHeaderCard';
 import { backTarget } from '../lib/backNavigation';
 import type {
@@ -913,6 +914,7 @@ if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey && !e.altKey) {
             >
               导出文件
             </button>
+            <ShareButton entityType="note" entityId={id as string} />
             <button type="button" className="btn btn-danger" onClick={onDelete}>
               删除
             </button>

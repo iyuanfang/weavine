@@ -21,6 +21,7 @@ pub mod quick;
 pub mod reminder;
 pub mod search;
 pub mod setting;
+pub mod share;
 pub mod sync;
 pub mod storage;
 pub mod tag;
